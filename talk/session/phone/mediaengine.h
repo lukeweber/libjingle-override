@@ -36,6 +36,7 @@
 #include <string>
 #include <vector>
 
+#include "talk/base/sigslot.h"
 #include "talk/base/sigslotrepeater.h"
 #include "talk/session/phone/codec.h"
 #include "talk/session/phone/devicemanager.h"
@@ -60,7 +61,8 @@ class VideoCapturer;
 // subclassed to support different media componentry backends.
 // It supports voice and video operations in the same class to facilitate
 // proper synchronization between both media types.
-class MediaEngineInterface {
+class MediaEngineInterface : public sigslot::has_slots<>
+ {
  public:
   // Bitmask flags for options that may be supported by the media engine
   // implementation.  This can be converted to and from an
@@ -163,14 +165,16 @@ class MediaEngineInterface {
   virtual bool RegisterVideoProcessor(VideoProcessor* video_processor) = 0;
   virtual bool UnregisterVideoProcessor(VideoProcessor* video_processor) = 0;
   virtual bool RegisterVoiceProcessor(uint32 ssrc,
-                                      VoiceProcessor* video_processor,
+                                      VoiceProcessor* voice_processor,
                                       MediaProcessorDirection direction) = 0;
   virtual bool UnregisterVoiceProcessor(uint32 ssrc,
-                                        VoiceProcessor* video_processor,
+                                        VoiceProcessor* voice_processor,
                                         MediaProcessorDirection direction) = 0;
 
   sigslot::repeater2<VideoCapturer*, CaptureResult>
       SignalVideoCaptureResult;
+
+  sigslot::signal0<> SignalTerminate;
 };
 
 
@@ -196,9 +200,11 @@ class CompositeMediaEngine : public MediaEngineInterface {
     SignalVideoCaptureResult.repeat(video_.SignalCaptureResult);
     return true;
   }
+
   virtual void Terminate() {
     video_.Terminate();
     voice_.Terminate();
+    SignalTerminate();
   }
 
   virtual int GetCapabilities() {

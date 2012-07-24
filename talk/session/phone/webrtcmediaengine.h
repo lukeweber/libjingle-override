@@ -39,16 +39,23 @@ class VideoCaptureModule;
 
 namespace cricket {
 
+#if defined(HAVE_WEBRTC_VIDEO) && defined(HAVE_WEBRTC_VOICE)
 typedef CompositeMediaEngine<WebRtcVoiceEngine, WebRtcVideoEngine>
         WebRtcCompositeMediaEngine;
+#else //Voice Engine only 
+typedef CompositeMediaEngine<WebRtcVoiceEngine, NullVideoEngine>
+        WebRtcCompositeMediaEngine;
+#endif
 
 class WebRtcMediaEngine : public WebRtcCompositeMediaEngine {
  public:
   WebRtcMediaEngine(webrtc::AudioDeviceModule* adm,
       webrtc::AudioDeviceModule* adm_sc) {
     voice_.SetAudioDeviceModule(adm, adm_sc);
+#ifdef HAVE_WEBRTC_VIDEO
     video_.SetVoiceEngine(&voice_);
     video_.EnableTimedRender();
+#endif
   }
 };
 

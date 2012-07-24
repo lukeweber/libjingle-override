@@ -343,12 +343,16 @@ struct IceStateMessage : public talk_base::MessageData {
 namespace webrtc {
 
 cricket::VideoCapturer* CreateVideoCapturer(VideoCaptureModule* vcm) {
+#ifdef HAVE_WEBRTC_VIDEO
   cricket::WebRtcVideoCapturer* video_capturer =
       new cricket::WebRtcVideoCapturer;
   if (!video_capturer->Init(vcm)) {
     delete video_capturer;
     video_capturer = NULL;
   }
+#else
+ cricket::VideoCapturer* video_capturer = NULL;
+#endif
   return video_capturer;
 }
 

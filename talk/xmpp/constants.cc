@@ -193,6 +193,12 @@ const StaticQName QN_GOOGLE_ALLOW_NON_GOOGLE_ID_XMPP_LOGIN =
 const StaticQName QN_GOOGLE_AUTH_SERVICE =
     { NS_GOOGLE_AUTH_PROTOCOL, "service" };
 
+// Tuenti tags
+const char NS_TUENTI[] = "http://tuenti.com/jabber";
+const StaticQName QN_TUENTI_DATA = { NS_TUENTI, "tuentidata" };
+const StaticQName QN_TUENTI_CAPS = { NS_TUENTI, "capabilities" };
+const StaticQName QN_TUENTI_VOICE = { NS_TUENTI, "voice_1" };
+
 const StaticQName QN_DIALBACK_RESULT = { NS_DIALBACK, "result" };
 const StaticQName QN_DIALBACK_VERIFY = { NS_DIALBACK, "verify" };
 

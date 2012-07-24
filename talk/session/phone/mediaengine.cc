@@ -29,7 +29,7 @@
 
 #if defined(HAVE_LINPHONE)
 #include "talk/session/phone/linphonemediaengine.h"
-#elif defined(ANDROID)
+#elif defined(ANDROID_MEDIA_ENGINE)
 #include "talk/session/phone/androidmediaengine.h"
 #else
 #if defined(HAVE_WEBRTC_VOICE)
@@ -47,24 +47,29 @@ namespace cricket {
 
 const int MediaEngineInterface::kDefaultAudioDelayOffset = 0;
 
-#if defined(HAVE_WEBRTC_VIDEO)
+#if defined(HAVE_WEBRTC_VIDEO) 
 template<>
 CompositeMediaEngine<WebRtcVoiceEngine, WebRtcVideoEngine>::
     CompositeMediaEngine() {
   video_.SetVoiceEngine(&voice_);
 }
+#endif
+
+#if defined(HAVE_WEBRTC_VOICE) && !defined(HAVE_WEBRTC_VIDEO)
+#define VIDEO_ENG_NAME NullVideoEngine
+#else
 #define VIDEO_ENG_NAME WebRtcVideoEngine
 #endif
 
 MediaEngineInterface* MediaEngineFactory::Create() {
 #if defined(HAVE_LINPHONE)
   return new LinphoneMediaEngine("", "");
-#elif defined(ANDROID)
+#elif defined(ANDROID_MEDIA_ENGINE)
   return AndroidMediaEngineFactory::Create();
 #elif defined(AUDIO_ENG_NAME) && defined(VIDEO_ENG_NAME)
   return new CompositeMediaEngine<AUDIO_ENG_NAME, VIDEO_ENG_NAME>();
 #else
-  return new NullMediaEngine();
+ return new NullMediaEngine();
 #endif
 }
 

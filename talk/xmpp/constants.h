@@ -166,6 +166,12 @@ extern const StaticQName QN_GOOGLE_AUTH_CLIENT_USES_FULL_BIND_RESULT;
 extern const StaticQName QN_GOOGLE_ALLOW_NON_GOOGLE_ID_XMPP_LOGIN;
 extern const StaticQName QN_GOOGLE_AUTH_SERVICE;
 
+// Tuenti non-standard
+extern const char NS_TUENTI[];
+extern const StaticQName QN_TUENTI_DATA;
+extern const StaticQName QN_TUENTI_CAPS;
+extern const StaticQName QN_TUENTI_VOICE;
+
 extern const StaticQName QN_DIALBACK_RESULT;
 extern const StaticQName QN_DIALBACK_VERIFY;
 

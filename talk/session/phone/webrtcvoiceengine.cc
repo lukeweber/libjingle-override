@@ -109,15 +109,15 @@ static void LogMultiline(talk_base::LoggingSeverity sev, char* text) {
 // WebRtcVoiceEngine
 const WebRtcVoiceEngine::CodecPref WebRtcVoiceEngine::kCodecPrefs[] = {
   { "ISAC",   16000,  1, 103 },
-  { "ISAC",   32000,  1, 104 },
-  { "CELT",   32000,  1, 109 },
-  { "CELT",   32000,  2, 110 },
-  { "speex",  16000,  1, 107 },
-  { "G722",   16000,  1, 9 },
+   // { "ISAC",   32000,  1, 104 },
+   // { "CELT",   32000,  1, 109 },
+   // { "CELT",   32000,  2, 110 },
+   // { "speex",  16000,  1, 107 },
+   // { "G722",   16000,  1, 9 },
   { "ILBC",   8000,   1, 102 },
-  { "speex",  8000,   1, 108 },
-  { "PCMU",   8000,   1, 0 },
-  { "PCMA",   8000,   1, 8 },
+   // { "speex",  8000,   1, 108 },
+   // { "PCMU",   8000,   1, 0 },
+   // { "PCMA",   8000,   1, 8 },
   { "CN",     32000,  1, 106 },
   { "CN",     16000,  1, 105 },
   { "CN",     8000,   1, 13 },
@@ -376,15 +376,18 @@ bool WebRtcVoiceEngine::InitInternal() {
     LOG(LS_INFO) << ToString(*it);
   }
 
-#if defined(LINUX) && !defined(HAVE_LIBPULSE)
+
+#if defined(LINUX) && !defined(HAVE_LIBPULSE) && !defined(ANDROID)
   voe_wrapper_sc_->hw()->SetAudioDeviceLayer(webrtc::kAudioLinuxAlsa);
 #endif
 
+#ifndef ANDROID
   // Initialize the VoiceEngine instance that we'll use to play out sound clips.
   if (voe_wrapper_sc_->base()->Init(adm_sc_) == -1) {
     LOG_RTCERR0_EX(Init, voe_wrapper_sc_->error());
     return false;
   }
+#endif
 
   // On Windows, tell it to use the default sound (not communication) devices.
   // First check whether there is a valid sound device for playback.
@@ -425,8 +428,8 @@ void WebRtcVoiceEngine::Terminate() {
     is_dumping_aec_ = false;
   }
 
-  voe_wrapper_sc_->base()->Terminate();
   voe_wrapper_->base()->Terminate();
+  voe_wrapper_sc_->base()->Terminate();
   desired_local_monitor_enable_ = false;
 }
 
@@ -511,12 +514,12 @@ bool WebRtcVoiceEngine::ApplyOptions(const AudioOptions& options_in) {
   WebRtcAudioOptions options = WebRtcAudioOptions(options_in);
 #if defined(IOS) || defined(ANDROID)
   // Use speakerphone mode with comfort noise generation for mobile.
-  options.ec_mode = kEcAecm;
+  options.ec_mode = webrtc::kEcAecm;
   // On mobile, GIPS recommends fixed AGC (not adaptive)
-  options.agc_mode = kAgcFixedDigital;
+  options.agc_mode = webrtc::kAgcFixedDigital;
   // On mobile, GIPS recommends moderate aggressiveness.
   options.noise_suppression.Set(true);
-  options.ns_mode = kNsModerateSuppression;
+  options.ns_mode = webrtc::kNsModerateSuppression;
   // No typing detection support on iOS or Android.
   options.typing_detection.Set(false);
 #elif CHROMEOS  // IOS || ANDROID
@@ -534,10 +537,12 @@ bool WebRtcVoiceEngine::ApplyOptions(const AudioOptions& options_in) {
       LOG_RTCERR2(SetEcStatus, echo_cancellation, options.ec_mode);
       return false;
     }
+#ifndef ANDROID
     if (voep->SetEcMetricsStatus(echo_cancellation) == -1) {
       LOG_RTCERR1(SetEcMetricsStatus, echo_cancellation);
       return false;
     }
+#endif
     if (options.ec_mode == webrtc::kEcAecm) {
       if (voep->SetAecmMode(options.aecm_mode, true) != 0) {
         LOG_RTCERR2(SetAecmMode, options.aecm_mode, true);

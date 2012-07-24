@@ -533,6 +533,7 @@ static bool CreateMediaContentAnswer(
 
   answer->set_rtcp_mux(options.rtcp_mux_enabled && offer->rtcp_mux());
 
+#ifdef HAVE_SRTP
   if (secure_policy != SEC_DISABLED) {
     CryptoParams crypto;
     if (SelectCrypto(offer, &crypto)) {
@@ -542,6 +543,7 @@ static bool CreateMediaContentAnswer(
       answer->AddCrypto(crypto);
     }
   }
+#endif
 
   if (answer->cryptos().empty() &&
       (offer->crypto_required() || secure_policy == SEC_REQUIRED)) {
