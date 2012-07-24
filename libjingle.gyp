@@ -31,7 +31,7 @@
       }
     },
     'include_dirs': [
-#      './',
+      './',
 #      '../../third_party/openssl/include',
       '../../testing/gtest/include',
       '../../third_party/libyuv/include',
@@ -230,8 +230,6 @@
         'talk/base/httprequest.h',
         'talk/base/ipaddress.cc',
         'talk/base/ipaddress.h',
-        'talk/base/json.cc',
-        'talk/base/json.h',
         'talk/base/linked_ptr.h',
         'talk/base/md5.cc',
         'talk/base/md5.h',
@@ -349,12 +347,6 @@
         'talk/xmpp/xmpptask.cc',
         'talk/xmpp/xmpptask.h',
       ],
-      'dependencies': [
-        '<(DEPTH)/third_party/jsoncpp/jsoncpp.gyp:jsoncpp',
-      ],
-      'export_dependent_settings': [
-        '<(DEPTH)/third_party/jsoncpp/jsoncpp.gyp:jsoncpp',
-      ],
       'conditions': [
         ['OS=="win"', {
           'sources': [
@@ -398,18 +390,6 @@
             'talk/base/macutils.h',
           ],
         }],
-        #Dependency of peerconnection
-        #['OS=="android"', {
-        #  'sources!': [
-        #    # These depend on jsoncpp which we don't load because we probably
-        #    # don't actually need this code at all.
-        #    'talk/base/json.cc',
-        #    'talk/base/json.h',
-        #  ],
-        #  'dependencies!': [
-        #    '<(DEPTH)/third_party/jsoncpp/jsoncpp.gyp:jsoncpp',
-        #  ],
-        #}],
       ],
     },  # target libjingle
     # This has to be is a separate project due to a bug in MSVS:
