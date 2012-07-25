@@ -372,6 +372,11 @@
           'sources': [
             'talk/base/unixfilesystem.cc',
             'talk/base/unixfilesystem.h',
+            'talk/base/openssladapter.cc',
+            'talk/base/openssldigest.cc',
+            'talk/base/opensslidentity.cc',
+            'talk/base/opensslstreamadapter.cc',
+            'talk/base/posix.cc',
           ],
         }],
         ['OS=="linux"', {
@@ -694,6 +699,12 @@
         'talk/session/phone/webrtcvoe.h',
         'talk/session/phone/webrtcvoiceengine.cc',
         'talk/session/phone/webrtcvoiceengine.h',
+#Remove these examples files once they're moved into src directory as part of
+#our project, or simply deprecated
+        'talk/examples/login/jingleinfotask.cc',
+        'talk/examples/login/xmppauth.cc',
+        'talk/examples/login/xmpppump.cc',
+        'talk/examples/login/xmppsocket.cc',
       ],
       'dependencies': [
         '<(DEPTH)/third_party/libsrtp/libsrtp.gyp:libsrtp',
