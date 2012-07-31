@@ -326,6 +326,8 @@
         'talk/xmpp/constants.h',
         'talk/xmpp/jid.cc',
         'talk/xmpp/jid.h',
+        'talk/xmpp/pingtask.cc',
+        'talk/xmpp/pingtask.h',
         'talk/xmpp/plainsaslhandler.h',
         'talk/xmpp/prexmppauth.h',
         'talk/xmpp/saslcookiemechanism.h',
