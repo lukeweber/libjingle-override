@@ -1,0 +1,35 @@
+LIBJINGLE_CPPFLAGS := -DHAMMER_TIME=1 \
+	-DGTEST_RELATIVE_PATH \
+	-DDISABLE_DYNAMIC_CAST \
+	-D_REENTRANT \
+	-DPOSIX \
+	-DOS_LINUX=OS_LINUX \
+	-DLINUX \
+	-DANDROID \
+	-DEXPAT_RELATIVE_PATH \
+	-DSRTP_RELATIVE_PATH \
+	-DXML_STATIC \
+	-DFEATURE_ENABLE_SSL \
+	-DHAVE_OPENSSL_SSL_H=1 \
+	-DFEATURE_ENABLE_VOICEMAIL \
+	-DFEATURE_ENABLE_PSTN \
+	-DHAVE_SRTP \
+	-DNO_SOUND_SYSTEM \
+   	-DWEBRTC_RELATIVE_PATH \
+   	-DEXPAT_RELATIVE_PATH \
+   	-DHAVE_WEBRTC_VOICE \
+	'-DSTUN_ADDRESS="stun.l.google.com"' \
+	'-DSTUN_PORT=19302'\
+	'-DPMUC_DOMAIN="groupchat.google.com"'
+	
+
+LIBJINGLE_C_INCLUDE:= \
+	$(LOCAL_PATH)/source \
+	$(EXPAT_C_INCLUDE) \
+	$(LOCAL_PATH)/../openssl/include \
+	$(LOCAL_PATH)/../libsrtp/srtp/ \
+	$(LOCAL_PATH)/../libsrtp/srtp/include \
+	$(LOCAL_PATH)/../libsrtp/srtp/crypto/include \
+	$(LOCAL_PATH)/../libsrtp/config \
+	$(LOCAL_PATH)/../../testing/gtest/include
+
