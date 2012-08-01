@@ -184,9 +184,9 @@ LOCAL_C_INCLUDES := \
 LOCAL_C_INCLUDES += $(LIBJINGLE_C_INCLUDE)
 
 #single big lib build
-LOCAL_SHARED_LIBRARIES := \
-	libstlport_shared \
-	libwebrtc_voice
+# LOCAL_SHARED_LIBRARIES := \
+	# libstlport_shared \
+	# libwebrtc_voice
 
 LOCAL_LDLIBS := \
 	-llog \
@@ -214,4 +214,4 @@ LOCAL_CFLAGS += \
 	-DHAVE_UINT8_T \
 	-DHAVE_UINT_T
 
-include $(BUILD_SHARED_LIBRARY)
+include $(BUILD_STATIC_LIBRARY)
