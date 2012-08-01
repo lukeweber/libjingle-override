@@ -174,6 +174,7 @@ LOCAL_SRC_FILES += \
 
 LOCAL_C_INCLUDES := \
 	$(MY_THIRD_PARTY_PATH)/openssl/openssl/include \
+	$(MY_THIRD_PARTY_PATH)/openssl/config/android \
 	$(MY_THIRD_PARTY_PATH)/libsrtp/source/config \
 	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp/include \
 	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp/crypto/include \
