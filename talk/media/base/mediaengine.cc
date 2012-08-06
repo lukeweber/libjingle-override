@@ -29,7 +29,7 @@
 
 #if defined(HAVE_LINPHONE)
 #include "talk/media/other/linphonemediaengine.h"
-#elif defined(ANDROID)
+#elif defined(ANDROID_MEDIA_ENGINE)
 #include "talk/media/other/androidmediaengine.h"
 #else
 #if defined(HAVE_WEBRTC_VOICE)

@@ -150,7 +150,7 @@ LOCAL_SRC_FILES += \
 		talk/media/base/streamparams.cc \
 		talk/media/base/videocapturer.cc \
 		talk/media/base/videocommon.cc \
-		talk/media/base/videoframe.cc
+		talk/media/base/videoframe.cc \
 		talk/media/devices/devicemanager.cc \
 		talk/media/devices/dummydevicemanager.cc \
 		talk/media/devices/filevideocapturer.cc \
