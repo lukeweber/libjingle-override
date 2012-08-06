@@ -28,7 +28,7 @@
 
 #include <string>
 
-#include "talk/session/phone/webrtcvideocapturer.h"
+#include "talk/media/webrtc/webrtcvideocapturer.h"
 
 namespace webrtc {
 
@@ -44,15 +44,6 @@ VideoTrack::VideoTrack(const std::string& label,
     : MediaStreamTrack<LocalVideoTrackInterface>(label),
       video_device_(NULL) {
   video_device_.reset(video_device);
-}
-
-void VideoTrack::SetRenderer(VideoRendererWrapperInterface* renderer) {
-  video_renderer_ = renderer;
-  Notifier<LocalVideoTrackInterface>::FireOnChanged();
-}
-
-VideoRendererWrapperInterface* VideoTrack::GetRenderer() {
-  return video_renderer_.get();
 }
 
   // Get the VideoCapture device associated with this track.

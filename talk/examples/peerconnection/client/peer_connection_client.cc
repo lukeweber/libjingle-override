@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2011, Google Inc.
+ * Copyright 2012, Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -43,6 +43,8 @@ namespace {
 
 // This is our magical hangup signal.
 const char kByeMessage[] = "BYE";
+// Delay between server connection retries, in milliseconds
+const int kReconnectDelay = 2000;
 
 talk_base::AsyncSocket* CreateClientSocket(int family) {
 #ifdef WIN32
@@ -310,8 +312,6 @@ bool PeerConnectionClient::GetHeaderValue(const std::string& data, size_t eoh,
 bool PeerConnectionClient::ReadIntoBuffer(talk_base::AsyncSocket* socket,
                                           std::string* data,
                                           size_t* content_length) {
-  LOG(INFO) << __FUNCTION__;
-
   char buffer[0xffff];
   do {
     int bytes = socket->Recv(buffer, sizeof(buffer));
@@ -325,7 +325,6 @@ bool PeerConnectionClient::ReadIntoBuffer(talk_base::AsyncSocket* socket,
   if (i != std::string::npos) {
     LOG(INFO) << "Headers received";
     if (GetHeaderValue(*data, i, "\r\nContent-Length: ", content_length)) {
-      LOG(INFO) << "Expecting " << *content_length << " bytes.";
       size_t total_response_size = (i + 4) + *content_length;
       if (data->length() >= total_response_size) {
         ret = true;
@@ -349,7 +348,6 @@ bool PeerConnectionClient::ReadIntoBuffer(talk_base::AsyncSocket* socket,
 }
 
 void PeerConnectionClient::OnRead(talk_base::AsyncSocket* socket) {
-  LOG(INFO) << __FUNCTION__;
   size_t content_length = 0;
   if (ReadIntoBuffer(socket, &control_data_, &content_length)) {
     size_t peer_id = 0, eoh = 0;
@@ -476,8 +474,6 @@ bool PeerConnectionClient::ParseServerResponse(const std::string& response,
                                                size_t content_length,
                                                size_t* peer_id,
                                                size_t* eoh) {
-  LOG(INFO) << response;
-
   int status = GetResponseStatus(response.c_str());
   if (status != 200) {
     LOG(LS_ERROR) << "Received error from server";
@@ -512,7 +508,6 @@ void PeerConnectionClient::OnClose(talk_base::AsyncSocket* socket, int err) {
 #endif
     if (socket == hanging_get_.get()) {
       if (state_ == CONNECTED) {
-        LOG(INFO) << "Issuing  a new hanging get";
         hanging_get_->Close();
         hanging_get_->Connect(server_address_);
       }
@@ -520,8 +515,17 @@ void PeerConnectionClient::OnClose(talk_base::AsyncSocket* socket, int err) {
       callback_->OnMessageSent(err);
     }
   } else {
-    LOG(WARNING) << "Failed to connect to the server";
-    Close();
-    callback_->OnDisconnected();
+    if (socket == control_socket_.get()) {
+      LOG(WARNING) << "Connection refused; retrying in 2 seconds";
+      talk_base::Thread::Current()->PostDelayed(kReconnectDelay, this, 0);
+    } else {
+      Close();
+      callback_->OnDisconnected();
+    }
   }
+}
+
+void PeerConnectionClient::OnMessage(talk_base::Message* msg) {
+  // ignore msg; there is currently only one supported message ("retry")
+  DoConnect();
 }

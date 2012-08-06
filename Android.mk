@@ -137,40 +137,39 @@ LOCAL_SRC_FILES += \
 
 #webrtc code
 LOCAL_SRC_FILES += \
-		talk/session/phone/audiomonitor.cc \
-		talk/session/phone/call.cc \
-		talk/session/phone/channel.cc \
-		talk/session/phone/channelmanager.cc \
-		talk/session/phone/codec.cc \
-		talk/session/phone/constants.cc \
-		talk/session/phone/currentspeakermonitor.cc \
-		talk/session/phone/dataengine.cc \
-		talk/session/phone/devicemanager.cc \
-		talk/session/phone/dummydevicemanager.cc \
-		talk/session/phone/filemediaengine.cc \
-		talk/session/phone/mediaengine.cc \
-		talk/session/phone/mediamessages.cc \
-		talk/session/phone/mediamonitor.cc \
-		talk/session/phone/mediasession.cc \
-		talk/session/phone/mediasessionclient.cc \
-		talk/session/phone/rtcpmuxfilter.cc \
-		talk/session/phone/rtpdump.cc \
-		talk/session/phone/rtputils.cc \
-		talk/session/phone/soundclip.cc \
-		talk/session/phone/srtpfilter.cc \
-		talk/session/phone/ssrcmuxfilter.cc \
-		talk/session/phone/streamparams.cc \
-		talk/session/phone/typingmonitor.cc \
-		talk/session/phone/webrtcvoiceengine.cc \
-		talk/session/phone/filevideocapturer.cc \
-		talk/session/phone/webrtcvideoengine.cc \
-		talk/session/phone/webrtcvideoframe.cc \
 		talk/app/webrtc/audiotrack.cc \
 		talk/app/webrtc/videotrack.cc \
 		talk/app/webrtc/videotrackrenderers.cc \
-		talk/session/phone/videocapturer.cc \
-		talk/session/phone/videocommon.cc \
-		talk/session/phone/videoframe.cc
+		talk/media/base/codec.cc \
+		talk/media/base/constants.cc \
+		talk/media/base/dataengine.cc \
+		talk/media/base/filemediaengine.cc \
+		talk/media/base/mediaengine.cc \
+		talk/media/base/rtpdump.cc \
+		talk/media/base/rtputils.cc \
+		talk/media/base/streamparams.cc \
+		talk/media/base/videocapturer.cc \
+		talk/media/base/videocommon.cc \
+		talk/media/base/videoframe.cc
+		talk/media/devices/devicemanager.cc \
+		talk/media/devices/dummydevicemanager.cc \
+		talk/media/devices/filevideocapturer.cc \
+		talk/media/webrtc/webrtcvideoframe.cc \
+		talk/media/webrtc/webrtcvoiceengine.cc \
+		talk/session/media/audiomonitor.cc \
+		talk/session/media/call.cc \
+		talk/session/media/channel.cc \
+		talk/session/media/channelmanager.cc \
+		talk/session/media/currentspeakermonitor.cc \
+		talk/session/media/mediamessages.cc \
+		talk/session/media/mediamonitor.cc \
+		talk/session/media/mediasession.cc \
+		talk/session/media/mediasessionclient.cc \
+		talk/session/media/rtcpmuxfilter.cc \
+		talk/session/media/soundclip.cc \
+		talk/session/media/srtpfilter.cc \
+		talk/session/media/ssrcmuxfilter.cc \
+		talk/session/media/typingmonitor.cc \
 
 LOCAL_C_INCLUDES := \
 	$(MY_THIRD_PARTY_PATH)/openssl/openssl/include \
