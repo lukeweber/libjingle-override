@@ -35,7 +35,7 @@
 #include "talk/base/sigslot.h"
 #include "talk/base/thread.h"
 #include "talk/p2p/base/session.h"
-#include "talk/session/phone/mediasession.h"
+#include "talk/session/media/mediasession.h"
 
 namespace cricket {
 
@@ -52,7 +52,8 @@ namespace webrtc {
 class MediaStreamSignaling;
 
 class WebRtcSession : public cricket::BaseSession,
-                      public MediaProviderInterface,
+                      public AudioProviderInterface,
+                      public VideoProviderInterface,
                       public JsepInterface {
  public:
   WebRtcSession(cricket::ChannelManager* channel_manager,
@@ -120,16 +121,21 @@ class WebRtcSession : public cricket::BaseSession,
     return false;
   }
 
+  // AudioMediaProviderInterface implementation.
+  virtual void SetAudioPlayout(const std::string& name, bool enable);
+  virtual void SetAudioSend(const std::string& name, bool enable);
+
+  // Implements VideoMediaProviderInterface.
+  virtual bool SetCaptureDevice(const std::string& name,
+                                cricket::VideoCapturer* camera);
+  virtual void SetVideoPlayout(const std::string& name,
+                               bool enable,
+                               cricket::VideoRenderer* renderer);
+  virtual void SetVideoSend(const std::string& name, bool enable);
+
  private:
   virtual void OnMessage(talk_base::Message* msg);
 
-  // Implements MediaProviderInterface.
-  virtual bool SetCaptureDevice(const std::string& name,
-                                cricket::VideoCapturer* camera);
-  virtual void SetLocalRenderer(const std::string& name,
-                                cricket::VideoRenderer* renderer);
-  virtual void SetRemoteRenderer(const std::string& name,
-                                 cricket::VideoRenderer* renderer);
 
   // Transport related callbacks, override from cricket::BaseSession.
   virtual void OnTransportRequestSignaling(cricket::Transport* transport);
@@ -151,11 +157,11 @@ class WebRtcSession : public cricket::BaseSession,
   // and notify observers. Called when a new local candidate have been found.
   void ProcessNewLocalCandidate(const std::string& content_name,
                                 const cricket::Candidates& candidates);
-  // Returns a label for a local ice candidate given the content name.
+  // Returns the media index for a local ice candidate given the content name.
   // Returns false if the local session description does not have a media
   // content called  |content_name|.
-  bool GetLocalCandidateLabel(const std::string& content_name,
-                              std::string* label);
+  bool GetLocalCandidateMediaIndex(const std::string& content_name,
+                                   int* sdp_mline_index);
   // Uses all remote candidates in |remote_desc| in this session.
   bool UseCandidatesInSessionDescription(
       const SessionDescriptionInterface* remote_desc);
@@ -164,6 +170,9 @@ class WebRtcSession : public cricket::BaseSession,
   bool ReadyToEnableBundle() const;
   void RemoveUnusedChannelsAndTransports(
       const cricket::SessionDescription* desc);
+  // Copy the candidates from |saved_candidates_| to |dest_desc|.
+  // The |saved_candidates_| will be cleared after this function call.
+  void CopySavedCandidates(SessionDescriptionInterface* dest_desc);
 
   talk_base::scoped_ptr<cricket::VoiceChannel> voice_channel_;
   talk_base::scoped_ptr<cricket::VideoChannel> video_channel_;
@@ -174,6 +183,8 @@ class WebRtcSession : public cricket::BaseSession,
   IceCandidateObserver * ice_observer_;
   talk_base::scoped_ptr<SessionDescriptionInterface> local_desc_;
   talk_base::scoped_ptr<SessionDescriptionInterface> remote_desc_;
+  // Candidates that arrived before the remote description was set.
+  std::vector<IceCandidateInterface*> saved_candidates_;
   std::string session_id_;
   uint64 session_version_;
 };
