@@ -36,7 +36,7 @@
 #include "talk/app/webrtc/videotrackrenderers.h"
 #include "talk/base/scoped_ptr.h"
 #include "talk/base/scoped_ref_ptr.h"
-#include "talk/session/phone/videocapturer.h"
+#include "talk/media/base/videocapturer.h"
 
 #ifdef WEBRTC_RELATIVE_PATH
 #include "modules/video_capture/main/interface/video_capture.h"

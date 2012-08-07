@@ -78,6 +78,7 @@ LOCAL_SRC_FILES :=\
 		talk/xmllite/xmlprinter.cc \
 		talk/xmpp/constants.cc \
 		talk/xmpp/jid.cc \
+		talk/xmpp/pingtask.cc \
 		talk/xmpp/saslmechanism.cc \
 		talk/xmpp/xmppclient.cc \
 		talk/xmpp/xmppengineimpl.cc \
@@ -150,7 +151,7 @@ LOCAL_SRC_FILES += \
 		talk/media/base/streamparams.cc \
 		talk/media/base/videocapturer.cc \
 		talk/media/base/videocommon.cc \
-		talk/media/base/videoframe.cc
+		talk/media/base/videoframe.cc \
 		talk/media/devices/devicemanager.cc \
 		talk/media/devices/dummydevicemanager.cc \
 		talk/media/devices/filevideocapturer.cc \
