@@ -43,7 +43,7 @@
 #include "talk/media/webrtc/webrtcvoe.h"
 #include "talk/session/media/channel.h"
 #ifdef WEBRTC_RELATIVE_PATH
-#include "voice_engine/main/interface/voe_base.h"
+#include "voice_engine/include/voe_base.h"
 #else
 #include "third_party/webrtc/files/include/voe_base.h"
 #endif  // WEBRTC_RELATIVE_PATH
