@@ -623,7 +623,7 @@
         'HAVE_WEBRTC_VOICE',
       ],
       'include_dirs': [
-        '<(DEPTH)/third_party/webrtc/modules/interface',
+        '<(DEPTH)/third_party/webrtc',
       ],
       'sources': [
         'talk/app/webrtc/audiotrack.cc',
