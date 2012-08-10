@@ -119,6 +119,7 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
   if (SignalVideoFrame.is_empty()) {
     return;
   }
+#ifdef HAVE_WEBRTC_VIDEO
   WebRtcVideoFrame i420_frame;
   if (!i420_frame.Init(captured_frame, captured_frame->width,
                        captured_frame->height)) {
@@ -127,6 +128,7 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
     return;
   }
   SignalVideoFrame(this, &i420_frame);
+#endif
 }
 
 // Get the distance between the supported and desired formats.
