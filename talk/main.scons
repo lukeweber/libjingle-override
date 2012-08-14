@@ -555,6 +555,11 @@ linux_common_env.Replace(
   RPATH = [],
 )
 
+mac_env.Replace(
+  RPATH = [],
+)
+
+
 # Enable the optional DBus-GLib code if the build machine has the required
 # dependency.
 linux_common_env.EnableFeatureWherePackagePresent('have_dbus_glib',

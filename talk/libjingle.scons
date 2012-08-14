@@ -1,6 +1,11 @@
 import talk
 Import("env")
 
+#Needed so mac can compile
+env.Replace(
+  RPATH = [],
+)
+
 talk.Library(env, name = "expat",
              cppdefines = [
                "XML_STATIC",
@@ -12,6 +17,7 @@ talk.Library(env, name = "expat",
              ],
              includedirs = [
                "third_party/expat-2.0.1/lib",
+               "third_party/expat-2.0.1/",
              ],
              win_cppdefines = [
                "COMPILED_FROM_DSP",
@@ -34,6 +40,7 @@ talk.Library(env, name = "gunit",
                "EXPAT_RELATIVE_PATH",
                "GTEST_RELATIVE_PATH",
                "SRTP_RELATIVE_PATH",
+               "GTEST_HAS_RTTI=0",
              ],
 )
 talk.Library(env, name = "srtp",
@@ -134,6 +141,7 @@ talk.Library(env, name = "jingle",
                "GTEST_RELATIVE_PATH",
                "SRTP_RELATIVE_PATH",
                "XML_STATIC",
+               "HAS_OPENSSL_1_0",
              ],
              srcs = [
                "base/asyncfile.cc",
@@ -394,6 +402,7 @@ talk.Library(env, name = "unittest_main",
                "EXPAT_RELATIVE_PATH",
                "GTEST_RELATIVE_PATH",
                "SRTP_RELATIVE_PATH",
+               "GTEST_HAS_RTTI=0",
              ],
 )
 talk.App(env, name = "login",

@@ -30,8 +30,10 @@
 #include <algorithm>
 
 #include "talk/base/logging.h"
-#include "talk/media/webrtc/webrtcvideoframe.h"
 
+#ifdef HAVE_WEBRTC_VIDEO
+#include "talk/media/webrtc/webrtcvideoframe.h"
+#endif
 
 namespace cricket {
 
