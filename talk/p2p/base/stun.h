@@ -75,9 +75,7 @@ enum StunAttributeValueType {
   STUN_VALUE_UINT64               = 4,
   STUN_VALUE_BYTE_STRING          = 5,
   STUN_VALUE_ERROR_CODE           = 6,
-  STUN_VALUE_UINT16_LIST          = 7,
-  STUN_VALUE_UINT8                = 8,
-  STUN_VALUE_UINT16               = 9,
+  STUN_VALUE_UINT16_LIST          = 7
 };
 
 // These are the types of STUN addresses defined in RFC 5389.
@@ -134,8 +132,6 @@ const size_t kStunMessageIntegritySize = 20;
 class StunAttribute;
 class StunAddressAttribute;
 class StunXorAddressAttribute;
-class StunUInt8Attribute;
-class StunUInt16Attribute;
 class StunUInt32Attribute;
 class StunUInt64Attribute;
 class StunByteStringAttribute;
@@ -167,8 +163,6 @@ class StunMessage {
 
   // Gets the desired attribute value, or NULL if no such attribute type exists.
   const StunAddressAttribute* GetAddress(int type) const;
-  const StunUInt8Attribute* GetUInt8(int type) const;
-  const StunUInt16Attribute* GetUInt16(int type) const;
   const StunUInt32Attribute* GetUInt32(int type) const;
   const StunUInt64Attribute* GetUInt64(int type) const;
   const StunByteStringAttribute* GetByteString(int type) const;
@@ -347,48 +341,6 @@ class StunXorAddressAttribute : public StunAddressAttribute {
  private:
   talk_base::IPAddress GetXoredIP() const;
   StunMessage* owner_;
-};
-
-// Implements STUN attributes that record a 8-bit integer.
-class StunUInt8Attribute : public StunAttribute {
- public:
-  static const uint16 SIZE = 1;
-  StunUInt8Attribute(uint16 type, uint8 value);
-  explicit StunUInt8Attribute(uint16 type);
-
-  virtual StunAttributeValueType value_type() const {
-    return STUN_VALUE_UINT8;
-  }
-
-  uint8 value() const { return bits_; }
-  void SetValue(uint8 bits) { bits_ = bits; }
-
-  virtual bool Read(talk_base::ByteBuffer* buf);
-  virtual bool Write(talk_base::ByteBuffer* buf) const;
-
- private:
-  uint8 bits_;
-};
-
-// Implements STUN attributes that record a 16-bit integer.
-class StunUInt16Attribute : public StunAttribute {
- public:
-  static const uint16 SIZE = 2;
-  StunUInt16Attribute(uint16 type, uint16 value);
-  explicit StunUInt16Attribute(uint16 type);
-
-  virtual StunAttributeValueType value_type() const {
-    return STUN_VALUE_UINT16;
-  }
-
-  uint16 value() const { return bits_; }
-  void SetValue(uint16 bits) { bits_ = bits; }
-
-  virtual bool Read(talk_base::ByteBuffer* buf);
-  virtual bool Write(talk_base::ByteBuffer* buf) const;
-
- private:
-  uint16 bits_;
 };
 
 // Implements STUN attributes that record a 32-bit integer.
@@ -589,8 +541,8 @@ enum TurnMessageType {
 
 // TURN specific attributes, rfc5766
 enum TurnAttributeType {
-  TURN_ATTR_CHANNEL_NUMBER      = 0x000C, // UInt16
-  TURN_ATTR_LIFETIME            = 0x000D, // UInt8
+  TURN_ATTR_CHANNEL_NUMBER      = 0x000C, // ByteString, 4 bytes
+  TURN_ATTR_LIFETIME            = 0x000D, // UInt32
   TURN_ATTR_XOR_PEER_ADDRESS    = 0x0012, // Address
   TURN_ATTR_DATA                = 0x0013, // ByteString
   TURN_ATTR_XOR_RELAYED_ADDRESS = 0x0016, // Address
@@ -605,8 +557,8 @@ class TurnMessage : public StunMessage {
  protected:
   virtual StunAttributeValueType GetAttributeValueType(int type) const {
     switch (type) {
-      case TURN_ATTR_CHANNEL_NUMBER:       return STUN_VALUE_UINT16;
-      case TURN_ATTR_LIFETIME:             return STUN_VALUE_UINT8;
+      case TURN_ATTR_CHANNEL_NUMBER:       return STUN_VALUE_BYTE_STRING;
+      case TURN_ATTR_LIFETIME:             return STUN_VALUE_UINT32;
       case TURN_ATTR_XOR_PEER_ADDRESS:     return STUN_VALUE_XOR_ADDRESS;
       case TURN_ATTR_DATA:                 return STUN_VALUE_BYTE_STRING;
       case TURN_ATTR_XOR_RELAYED_ADDRESS:  return STUN_VALUE_XOR_ADDRESS;

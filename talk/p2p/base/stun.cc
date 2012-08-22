@@ -114,14 +114,6 @@ const StunAddressAttribute* StunMessage::GetAddress(int type) const {
   }
 }
 
-const StunUInt8Attribute* StunMessage::GetUInt8(int type) const {
-  return static_cast<const StunUInt8Attribute*>(GetAttribute(type));
-}
-
-const StunUInt16Attribute* StunMessage::GetUInt16(int type) const {
-  return static_cast<const StunUInt16Attribute*>(GetAttribute(type));
-}
-
 const StunUInt32Attribute* StunMessage::GetUInt32(int type) const {
   return static_cast<const StunUInt32Attribute*>(GetAttribute(type));
 }
