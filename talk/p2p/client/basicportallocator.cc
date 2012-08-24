@@ -45,7 +45,7 @@
 using talk_base::CreateRandomId;
 using talk_base::CreateRandomString;
 
-namespace {
+namespace cricket {
 
 const uint32 MSG_CONFIG_START = 1;
 const uint32 MSG_CONFIG_READY = 2;
@@ -224,6 +224,11 @@ BasicPortAllocator::BasicPortAllocator(
       relay_address_tcp_(relay_address_tcp),
       relay_address_ssl_(relay_address_ssl) {
   Construct();
+  LOG(INFO) << "LOGT Constructed with addresses";
+  LOG(INFO) << "stun_address_(" << stun_address.ToString() << ")";
+  LOG(INFO) << "relay_address_udp_(" << relay_address_udp.ToString() << ")";
+  LOG(INFO) << "relay_address_tcp_(" << relay_address_tcp.ToString() << ")";
+  LOG(INFO) << "relay_address_ssl_(" << relay_address_ssl.ToString() << ")";
 }
 
 void BasicPortAllocator::Construct() {
@@ -594,11 +599,13 @@ void BasicPortAllocatorSession::MaybeSignalCandidatesAllocationDone() {
       return;
   }
 
+  LOG(INFO) << "LOGT BasicPortAllocatorSession::MaybeSignalCandidatesAllocationDone";
   SignalCandidatesAllocationDone(this);
 }
 
 void BasicPortAllocatorSession::OnPortDestroyed(
     PortInterface* port) {
+  LOG(INFO) << "LOGT BasicPortAllocatorSession::OnPortDestroyed";
   ASSERT(talk_base::Thread::Current() == network_thread_);
   for (std::vector<PortData>::iterator iter = ports_.begin();
        iter != ports_.end(); ++iter) {
@@ -629,6 +636,7 @@ void BasicPortAllocatorSession::OnAddressError(Port* port) {
 
 void BasicPortAllocatorSession::OnConnectionCreated(Port* port,
                                                     Connection* conn) {
+  LOG(INFO) << "LOGT BasicPortAllocatorSession::OnConnectionCreated";
   conn->SignalStateChange.connect(this,
     &BasicPortAllocatorSession::OnConnectionStateChange);
 }
@@ -730,6 +738,7 @@ void AllocationSequence::DisableEquivalentPhases(talk_base::Network* network,
 }
 
 void AllocationSequence::Start() {
+  LOG(INFO) << "LOGT AllocationSequence::Start";
   state_ = kRunning;
   session_->network_thread()->PostDelayed(ALLOCATION_STEP_DELAY,
                                           this,
@@ -737,11 +746,13 @@ void AllocationSequence::Start() {
 }
 
 void AllocationSequence::Stop() {
+  LOG(INFO) << "LOGT AllocationSequence::Stop";
   state_ = kStopped;
   session_->network_thread()->Clear(this, MSG_ALLOCATION_PHASE);
 }
 
 void AllocationSequence::OnMessage(talk_base::Message* msg) {
+  LOG(INFO) << "LOGT AllocationSequence::OnMessage";
   ASSERT(talk_base::Thread::Current() == session_->network_thread());
   if (msg)
     ASSERT(msg->message_id == MSG_ALLOCATION_PHASE);
@@ -755,27 +766,30 @@ void AllocationSequence::OnMessage(talk_base::Message* msg) {
 
     if (step_of_phase_[phase] != step_)
       continue;
-
     LOG_J(LS_INFO, network_) << "Allocation Phase=" << PHASE_NAMES[phase]
                              << " (Step=" << step_ << ")";
 
     switch (phase) {
     case PHASE_UDP:
+      LOG(INFO) << "LOGT AllocationSequence::OnMessage - PHASE_UDP";
       CreateUDPPorts();
       CreateStunPorts();
       EnableProtocol(PROTO_UDP);
       break;
 
     case PHASE_RELAY:
+      LOG(INFO) << "LOGT AllocationSequence::OnMessage - PHASE_RELAY";
       CreateRelayPorts();
       break;
 
     case PHASE_TCP:
+      LOG(INFO) << "LOGT AllocationSequence::OnMessage - PHASE_TCP";
       CreateTCPPorts();
       EnableProtocol(PROTO_TCP);
       break;
 
     case PHASE_SSLTCP:
+      LOG(INFO) << "LOGT AllocationSequence::OnMessage - PHASE_SSLTCP";
       state_ = kCompleted;
       EnableProtocol(PROTO_SSLTCP);
       break;
@@ -803,6 +817,21 @@ void AllocationSequence::OnMessage(talk_base::Message* msg) {
 }
 
 void AllocationSequence::EnableProtocol(ProtocolType proto) {
+  LOG(INFO) << "LOGT AllocationSequence::EnableProtocol";
+  switch(proto) { 
+    case PROTO_UDP:
+      LOG(INFO) << "LOGT AllocationSequence::EnableProtocol - PROTO_UDP";
+      break;
+    case PROTO_TCP:
+      LOG(INFO) << "LOGT AllocationSequence::EnableProtocol - PROTO_TCP";
+      break;
+    case PROTO_SSLTCP:
+      LOG(INFO) << "LOGT AllocationSequence::EnableProtocol - PROTO_SSLTCP";
+      break;
+    default:
+      LOG(INFO) << "LOGT AllocationSequence::EnableProtocol - PROTO_???";
+      break;
+  }
   if (!ProtocolEnabled(proto)) {
     protocols_.push_back(proto);
     session_->OnProtocolEnabled(this, proto);

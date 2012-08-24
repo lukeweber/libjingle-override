@@ -465,18 +465,14 @@ void CallClient::InitMedia() {
   // TODO: Decide if the relay address should be specified here.
   talk_base::SocketAddress stun_addr;
   talk_base::SocketAddress relay_addr_udp;
-  if (!stun_addr.FromString(stunserver_)) {
+  if (!stunserver_.empty() && !stun_addr.FromString(stunserver_)) {
     stun_addr.Clear();
   }
-  if (!relay_addr_udp.FromString(relayserver_)) {
+  if (!relayserver_.empty() && !relay_addr_udp.FromString(relayserver_)) {
     relay_addr_udp.Clear();
   }
   talk_base::SocketAddress relay_addr_tcp(relay_addr_udp);
   talk_base::SocketAddress relay_addr_ssl(relay_addr_udp);
-  /*talk_base::SocketAddress stun_addr("10.0.25.203", 19302);
-  talk_base::SocketAddress relay_addr_udp("10.0.25.203", 19304);
-  talk_base::SocketAddress relay_addr_tcp("10.0.25.203", 19304);
-  talk_base::SocketAddress relay_addr_ssl("10.0.25.203", 19304);*/
   
   port_allocator_ =  new cricket::BasicPortAllocator(
       network_manager_, stun_addr, relay_addr_udp, relay_addr_tcp, relay_addr_ssl);
