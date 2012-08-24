@@ -529,43 +529,38 @@ class RelayMessage : public StunMessage {
   }
 };
 
-// TURN message types, rfc5766
+// "TURN" STUN methods.
 enum TurnMessageType {
-  TURN_ALLOCATE           = 0x0003,
-  TURN_REFRESH            = 0x0004,
-  TURN_SEND               = 0x0006,
-  TURN_DATA               = 0x0007,
-  TURN_CREATE_PERMISSION  = 0x0008,
-  TURN_CHANNEL_BIND       = 0x0009
+  STUN_REFRESH_REQUEST                  = 0x0004,
+  STUN_REFRESH_RESPONSE                 = 0x0104,
+  STUN_REFRESH_ERROR_RESPONSE           = 0x0114,  
+  STUN_CREATE_PERMISSION_REQUEST        = 0x0008,
+  STUN_CREATE_PERMISSION_RESPONSE       = 0x0108,
+  STUN_CREATE_PERMISSION_ERROR_RESPONSE = 0x0118,
+  STUN_CHANNEL_BIND_REQUEST             = 0x0009,
+  STUN_CHANNEL_BIND_RESPONSE            = 0x0109,
+  STUN_CHANNEL_BIND_ERROR_RESPONSE      = 0x0119,
 };
 
-// TURN specific attributes, rfc5766
+// "TURN"-specific STUN attributes.
 enum TurnAttributeType {
-  TURN_ATTR_CHANNEL_NUMBER      = 0x000C, // ByteString, 4 bytes
-  TURN_ATTR_LIFETIME            = 0x000D, // UInt32
-  TURN_ATTR_XOR_PEER_ADDRESS    = 0x0012, // Address
-  TURN_ATTR_DATA                = 0x0013, // ByteString
-  TURN_ATTR_XOR_RELAYED_ADDRESS = 0x0016, // Address
-  TURN_ATTR_EVEN_PORT           = 0x0018, // ByteString, 1 byte
-  TURN_ATTR_REQUESTED_TRANSPORT = 0x0019, // ByteString, 4 bytes
-  TURN_ATTR_DONT_FRAGMENT       = 0x001A, // No content, Length = 0
-  TURN_ATTR_RESERVATION_TOKEN   = 0x0022  // ByteString, 8 bytes
+  STUN_ATTR_CHANNEL_NUMBER        = 0x000c,  // UInt32
+  STUN_ATTR_XOR_PEER_ADDRESS      = 0x0012,  // XorAddress
+  STUN_ATTR_XOR_RELAYED_ADDRESS   = 0x0016,  // XorAddress
+  STUN_ATTR_REQUESTED_TRANSPORT   = 0x0019,  // UInt32
 };
 
-// A TURN message, rfc 5766
+// A "TURN" STUN message.
 class TurnMessage : public StunMessage {
  protected:
   virtual StunAttributeValueType GetAttributeValueType(int type) const {
     switch (type) {
-      case TURN_ATTR_CHANNEL_NUMBER:       return STUN_VALUE_BYTE_STRING;
-      case TURN_ATTR_LIFETIME:             return STUN_VALUE_UINT32;
-      case TURN_ATTR_XOR_PEER_ADDRESS:     return STUN_VALUE_XOR_ADDRESS;
-      case TURN_ATTR_DATA:                 return STUN_VALUE_BYTE_STRING;
-      case TURN_ATTR_XOR_RELAYED_ADDRESS:  return STUN_VALUE_XOR_ADDRESS;
-      case TURN_ATTR_EVEN_PORT:            return STUN_VALUE_BYTE_STRING;
-      case TURN_ATTR_REQUESTED_TRANSPORT:  return STUN_VALUE_BYTE_STRING;
-      case TURN_ATTR_DONT_FRAGMENT:        return STUN_VALUE_BYTE_STRING;
-      case TURN_ATTR_RESERVATION_TOKEN:    return STUN_VALUE_BYTE_STRING;
+      case STUN_ATTR_LIFETIME:            return STUN_VALUE_UINT32;
+      case STUN_ATTR_MAGIC_COOKIE:        return STUN_VALUE_BYTE_STRING;
+      case STUN_ATTR_CHANNEL_NUMBER:      return STUN_VALUE_UINT32;
+      case STUN_ATTR_REQUESTED_TRANSPORT: return STUN_VALUE_UINT32;
+      case STUN_ATTR_XOR_RELAYED_ADDRESS: return STUN_VALUE_XOR_ADDRESS;
+      case STUN_ATTR_ALTERNATE_SERVER:    return STUN_VALUE_ADDRESS;
       default: return StunMessage::GetAttributeValueType(type);
     }
   }

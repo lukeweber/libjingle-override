@@ -72,6 +72,11 @@ class HttpPortAllocatorBase : public BasicPortAllocator {
       stun_hosts_ = hosts;
     }
   }
+  void SetTurnHosts(const std::vector<talk_base::SocketAddress>& hosts) {
+    if (!hosts.empty()) {
+      turn_hosts_ = hosts;
+    }
+  }
   void SetRelayHosts(const std::vector<std::string>& hosts) {
     if (!hosts.empty()) {
       relay_hosts_ = hosts;
@@ -87,6 +92,10 @@ class HttpPortAllocatorBase : public BasicPortAllocator {
     return relay_hosts_;
   }
 
+  const std::vector<talk_base::SocketAddress>& turn_hosts() const {
+    return turn_hosts_;
+  }
+
   const std::string& relay_token() const {
     return relay_token_;
   }
@@ -97,6 +106,7 @@ class HttpPortAllocatorBase : public BasicPortAllocator {
 
  private:
   std::vector<talk_base::SocketAddress> stun_hosts_;
+  std::vector<talk_base::SocketAddress> turn_hosts_;
   std::vector<std::string> relay_hosts_;
   std::string relay_token_;
   std::string agent_;
@@ -113,6 +123,7 @@ class HttpPortAllocatorSessionBase : public BasicPortAllocatorSession {
       const std::string& ice_ufrag,
       const std::string& ice_pwd,
       const std::vector<talk_base::SocketAddress>& stun_hosts,
+      const std::vector<talk_base::SocketAddress>& turn_hosts,
       const std::vector<std::string>& relay_hosts,
       const std::string& relay,
       const std::string& agent);
@@ -144,6 +155,7 @@ class HttpPortAllocatorSessionBase : public BasicPortAllocatorSession {
 
   std::vector<std::string> relay_hosts_;
   std::vector<talk_base::SocketAddress> stun_hosts_;
+  std::vector<talk_base::SocketAddress> turn_hosts_;
   std::string relay_token_;
   std::string agent_;
   int attempts_;
@@ -172,6 +184,7 @@ class HttpPortAllocatorSession : public HttpPortAllocatorSessionBase {
       const std::string& ice_ufrag,
       const std::string& ice_pwd,
       const std::vector<talk_base::SocketAddress>& stun_hosts,
+      const std::vector<talk_base::SocketAddress>& turn_hosts,
       const std::vector<std::string>& relay_hosts,
       const std::string& relay,
       const std::string& agent);

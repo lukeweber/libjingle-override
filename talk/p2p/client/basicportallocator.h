@@ -49,7 +49,8 @@ class BasicPortAllocator : public PortAllocator {
                      const talk_base::SocketAddress& stun_server,
                      const talk_base::SocketAddress& relay_server_udp,
                      const talk_base::SocketAddress& relay_server_tcp,
-                     const talk_base::SocketAddress& relay_server_ssl);
+                     const talk_base::SocketAddress& relay_server_ssl,
+                     const talk_base::SocketAddress& turn_server_udp);
   virtual ~BasicPortAllocator();
 
   talk_base::NetworkManager* network_manager() { return network_manager_; }
@@ -69,6 +70,9 @@ class BasicPortAllocator : public PortAllocator {
   }
   const talk_base::SocketAddress& relay_address_ssl() const {
     return relay_address_ssl_;
+  }
+  const talk_base::SocketAddress& turn_address_udp() const {
+    return turn_address_udp_;
   }
 
   // Returns the best (highest priority) phase that has produced a port that
@@ -102,6 +106,7 @@ class BasicPortAllocator : public PortAllocator {
   const talk_base::SocketAddress relay_address_udp_;
   const talk_base::SocketAddress relay_address_tcp_;
   const talk_base::SocketAddress relay_address_ssl_;
+  const talk_base::SocketAddress turn_address_udp_;
   int best_writable_phase_;
   bool allow_tcp_listen_;
 };
@@ -188,6 +193,7 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
 // Records configuration information useful in creating ports.
 struct PortConfiguration : public talk_base::MessageData {
   talk_base::SocketAddress stun_address;
+  talk_base::SocketAddress turn_address;
   std::string username;
   std::string password;
 
@@ -209,6 +215,8 @@ struct PortConfiguration : public talk_base::MessageData {
 
   // Adds another relay server, with the given ports and modifier, to the list.
   void AddRelay(const PortList& ports, int priority_modifier);
+
+  void AddTurn(const talk_base::SocketAddress& turn_address);
 
   // Determines whether the given relay server supports the given protocol.
   static bool SupportsProtocol(const PortConfiguration::RelayServer& relay,

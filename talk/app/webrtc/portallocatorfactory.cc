@@ -69,8 +69,17 @@ cricket::PortAllocator* PortAllocatorFactory::CreatePortAllocator(
   }
   allocator->SetStunHosts(stun_hosts);
 
+  std::vector<talk_base::SocketAddress> turn_hosts;
+  typedef std::vector<TurnConfiguration>::const_iterator TurnIt;
+  for (TurnIt turn_it = turn.begin(); turn_it != turn.end(); ++turn_it) {
+    turn_hosts.push_back(turn_it->server);
+  }
+  allocator->SetTurnHosts(turn_hosts);
+
+#if 0
   if (turn.size() > 0)
     LOG(LS_INFO) << "Not using turn server params";
+#endif
 
   // TODO - Enable TURN support once WebRtcSession can handle
   // relay candidates.
