@@ -55,7 +55,7 @@ static const SocketAddress kRelayTcpIntAddr("99.99.99.2", 5002);
 static const SocketAddress kRelayTcpExtAddr("99.99.99.3", 5003);
 static const SocketAddress kRelaySslTcpIntAddr("99.99.99.2", 5004);
 static const SocketAddress kRelaySslTcpExtAddr("99.99.99.3", 5005);
-static const SocketAddress kTurnAddr("99.99.99.3", 5010);
+static const SocketAddress kTurnAddr("", 0);
 
 // Minimum and maximum port for port range tests.
 static const int kMinPort = 10000;
