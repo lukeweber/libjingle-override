@@ -475,7 +475,8 @@ void CallClient::InitMedia() {
   talk_base::SocketAddress relay_addr_ssl(relay_addr_udp);
   
   port_allocator_ =  new cricket::BasicPortAllocator(
-      network_manager_, stun_addr, relay_addr_udp, relay_addr_tcp, relay_addr_ssl);
+      network_manager_, stun_addr, relay_addr_udp, relay_addr_tcp,
+      relay_addr_ssl, talk_base::SocketAddress());
 
   if (portallocator_flags_ != 0) {
     port_allocator_->set_flags(portallocator_flags_);

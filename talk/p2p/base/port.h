@@ -241,6 +241,9 @@ class Port : public PortInterface, public talk_base::MessageHandler,
   bool MaybeIceRoleConflict(
       const talk_base::SocketAddress& addr, IceMessage* stun_msg);
 
+  // Called when one of our connections deletes itself.
+  void OnConnectionDestroyed(Connection* conn);
+
  protected:
   // Fills in the local address of the port.
   void AddAddress(const talk_base::SocketAddress& address,
@@ -253,8 +256,8 @@ class Port : public PortInterface, public talk_base::MessageHandler,
   // Called when a packet is received from an unknown address that is not
   // currently a connection.  If this is an authenticated STUN binding request,
   // then we will signal the client.
-  void OnReadPacket(const char* data, size_t size,
-                    const talk_base::SocketAddress& addr);
+  virtual void OnReadPacket(const char* data, size_t size,
+                            const talk_base::SocketAddress& addr);
 
   // If the given data comprises a complete and correct STUN message then the
   // return value is true, otherwise false. If the message username corresponds
@@ -269,9 +272,6 @@ class Port : public PortInterface, public talk_base::MessageHandler,
   bool IsCompatibleAddress(const talk_base::SocketAddress& addr);
 
  private:
-  // Called when one of our connections deletes itself.
-  void OnConnectionDestroyed(Connection* conn);
-
   // Checks if this port is useless, and hence, should be destroyed.
   void CheckTimeout();
 
@@ -396,7 +396,7 @@ class Connection : public talk_base::MessageHandler,
 
   // Called when this connection should try checking writability again.
   uint32 last_ping_sent() const { return last_ping_sent_; }
-  void Ping(uint32 now);
+  virtual void Ping(uint32 now);
 
   // Called whenever a valid ping is received on this connection.  This is
   // public because the connection intercepts the first ping for us.
@@ -423,7 +423,7 @@ class Connection : public talk_base::MessageHandler,
   Connection(Port* port, size_t index, const Candidate& candidate);
 
   // Called back when StunRequestManager has a stun packet to send
-  void OnSendStunPacket(const void* data, size_t size, StunRequest* req);
+  virtual void OnSendStunPacket(const void* data, size_t size, StunRequest* req);
 
   // Callbacks from ConnectionRequest
   void OnConnectionRequestResponse(ConnectionRequest* req,

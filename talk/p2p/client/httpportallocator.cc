@@ -128,12 +128,14 @@ HttpPortAllocatorSessionBase::HttpPortAllocatorSessionBase(
     const std::string& ice_ufrag,
     const std::string& ice_pwd,
     const std::vector<talk_base::SocketAddress>& stun_hosts,
+    const std::vector<talk_base::SocketAddress>& turn_hosts,
     const std::vector<std::string>& relay_hosts,
     const std::string& relay_token,
     const std::string& user_agent)
     : BasicPortAllocatorSession(allocator, content_name, component,
                                 ice_ufrag, ice_pwd),
       relay_hosts_(relay_hosts), stun_hosts_(stun_hosts),
+      turn_hosts_(turn_hosts),
       relay_token_(relay_token), agent_(user_agent), attempts_(0) {
 }
 
@@ -146,6 +148,8 @@ void HttpPortAllocatorSessionBase::GetPortConfigurations() {
   // configs will have unresolved stun ips and will be discarded by the
   // AllocationSequence.
   PortConfiguration* config = new PortConfiguration(stun_hosts_[0]);
+  if (!turn_hosts_.empty())
+    config->AddTurn(turn_hosts_[0]);
   ConfigReady(config);
   TryCreateRelaySession();
 }
@@ -210,7 +214,8 @@ void HttpPortAllocatorSessionBase::ReceiveSessionResponse(
   PortConfiguration* config = new PortConfiguration(stun_hosts_[0],
                                                     map["username"],
                                                     map["password"]);
-
+  if (!turn_hosts_.empty())
+    config->AddTurn(turn_hosts_[0]);
   PortConfiguration::PortList ports;
   if (!relay_udp_port.empty()) {
     talk_base::SocketAddress address(relay_ip, atoi(relay_udp_port.c_str()));
@@ -250,8 +255,8 @@ PortAllocatorSession* HttpPortAllocator::CreateSessionInternal(
     const std::string& ice_ufrag, const std::string& ice_pwd) {
   return new HttpPortAllocatorSession(this, content_name, component,
                                       ice_ufrag, ice_pwd, stun_hosts(),
-                                      relay_hosts(), relay_token(),
-                                      user_agent());
+                                      turn_hosts(), relay_hosts(),
+                                      relay_token(), user_agent());
 }
 
 // HttpPortAllocatorSession
@@ -263,11 +268,12 @@ HttpPortAllocatorSession::HttpPortAllocatorSession(
     const std::string& ice_ufrag,
     const std::string& ice_pwd,
     const std::vector<talk_base::SocketAddress>& stun_hosts,
+    const std::vector<talk_base::SocketAddress>& turn_hosts,
     const std::vector<std::string>& relay_hosts,
     const std::string& relay,
     const std::string& agent)
     : HttpPortAllocatorSessionBase(allocator, content_name, component,
-                                   ice_ufrag, ice_pwd, stun_hosts,
+                                   ice_ufrag, ice_pwd, stun_hosts, turn_hosts,
                                    relay_hosts, relay, agent) {
 }
 

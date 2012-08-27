@@ -86,17 +86,22 @@ enum StunAddressFamily {
   STUN_ADDRESS_IPV6              = 2
 };
 
-// These are the types of STUN error codes defined in RFC 5389.
+// These are the types of STUN error codes defined in RFC 5389 and RFC 5766
 enum StunErrorCode {
-  STUN_ERROR_TRY_ALTERNATE        = 300,
-  STUN_ERROR_BAD_REQUEST          = 400,
-  STUN_ERROR_UNAUTHORIZED         = 401,
-  STUN_ERROR_UNKNOWN_ATTRIBUTE    = 420,
-  STUN_ERROR_STALE_CREDENTIALS    = 430,
-  STUN_ERROR_STALE_NONCE          = 438,
-  STUN_ERROR_ROLE_CONFLICT        = 487,
-  STUN_ERROR_SERVER_ERROR         = 500,
-  STUN_ERROR_GLOBAL_FAILURE       = 600
+  STUN_ERROR_TRY_ALTERNATE                  = 300,
+  STUN_ERROR_BAD_REQUEST                    = 400,
+  STUN_ERROR_UNAUTHORIZED                   = 401,
+  STUN_ERROR_FORBIDDEN                      = 403,
+  STUN_ERROR_UNKNOWN_ATTRIBUTE              = 420,
+  STUN_ERROR_STALE_CREDENTIALS              = 430,
+  STUN_ERROR_ALLOCATION_MISMATCH            = 437,
+  STUN_ERROR_STALE_NONCE                    = 438,
+  STUN_ERROR_WRONG_CREDENTIALS              = 441,
+  STUN_ERROR_UNSUPPORTED_TRANSPORT_PROTOCOL = 442,
+  STUN_ERROR_ALLOCATION_QUOTA_REACHED       = 486,
+  STUN_ERROR_ROLE_CONFLICT                  = 487,
+  STUN_ERROR_SERVER_ERROR                   = 500,
+  STUN_ERROR_GLOBAL_FAILURE                 = 600
 };
 
 // Strings for the error codes above.
@@ -519,6 +524,43 @@ class RelayMessage : public StunMessage {
       case STUN_ATTR_SOURCE_ADDRESS2:     return STUN_VALUE_ADDRESS;
       case STUN_ATTR_DATA:                return STUN_VALUE_BYTE_STRING;
       case STUN_ATTR_OPTIONS:             return STUN_VALUE_UINT32;
+      default: return StunMessage::GetAttributeValueType(type);
+    }
+  }
+};
+
+// "TURN" STUN methods.
+enum TurnMessageType {
+  STUN_REFRESH_REQUEST                  = 0x0004,
+  STUN_REFRESH_RESPONSE                 = 0x0104,
+  STUN_REFRESH_ERROR_RESPONSE           = 0x0114,  
+  STUN_CREATE_PERMISSION_REQUEST        = 0x0008,
+  STUN_CREATE_PERMISSION_RESPONSE       = 0x0108,
+  STUN_CREATE_PERMISSION_ERROR_RESPONSE = 0x0118,
+  STUN_CHANNEL_BIND_REQUEST             = 0x0009,
+  STUN_CHANNEL_BIND_RESPONSE            = 0x0109,
+  STUN_CHANNEL_BIND_ERROR_RESPONSE      = 0x0119,
+};
+
+// "TURN"-specific STUN attributes.
+enum TurnAttributeType {
+  STUN_ATTR_CHANNEL_NUMBER        = 0x000c,  // UInt32
+  STUN_ATTR_XOR_PEER_ADDRESS      = 0x0012,  // XorAddress
+  STUN_ATTR_XOR_RELAYED_ADDRESS   = 0x0016,  // XorAddress
+  STUN_ATTR_REQUESTED_TRANSPORT   = 0x0019,  // UInt32
+};
+
+// A "TURN" STUN message.
+class TurnMessage : public StunMessage {
+ protected:
+  virtual StunAttributeValueType GetAttributeValueType(int type) const {
+    switch (type) {
+      case STUN_ATTR_LIFETIME:            return STUN_VALUE_UINT32;
+      case STUN_ATTR_MAGIC_COOKIE:        return STUN_VALUE_BYTE_STRING;
+      case STUN_ATTR_CHANNEL_NUMBER:      return STUN_VALUE_UINT32;
+      case STUN_ATTR_REQUESTED_TRANSPORT: return STUN_VALUE_UINT32;
+      case STUN_ATTR_XOR_RELAYED_ADDRESS: return STUN_VALUE_XOR_ADDRESS;
+      case STUN_ATTR_ALTERNATE_SERVER:    return STUN_VALUE_ADDRESS;
       default: return StunMessage::GetAttributeValueType(type);
     }
   }

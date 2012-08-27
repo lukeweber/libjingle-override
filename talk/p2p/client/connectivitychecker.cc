@@ -55,7 +55,8 @@ class TestHttpPortAllocator : public HttpPortAllocator {
       const std::string& ice_pwd) {
     return new TestHttpPortAllocatorSession(this, content_name, component,
                                             ice_ufrag, ice_pwd,
-                                            stun_hosts(), relay_hosts(),
+                                            stun_hosts(), turn_hosts(),
+                                            relay_hosts(),
                                             relay_token(), user_agent());
   }
 };

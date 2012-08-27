@@ -110,6 +110,7 @@ LOCAL_SRC_FILES += \
 		talk/p2p/base/rawtransport.cc \
 		talk/p2p/base/rawtransportchannel.cc \
 		talk/p2p/base/relayport.cc \
+		talk/p2p/base/turnport.cc \
 		talk/p2p/base/session.cc \
 		talk/p2p/base/sessiondescription.cc \
 		talk/p2p/base/sessionmanager.cc \

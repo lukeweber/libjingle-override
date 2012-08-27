@@ -41,6 +41,7 @@
 #include "talk/p2p/base/stunport.h"
 #include "talk/p2p/base/tcpport.h"
 #include "talk/p2p/base/udpport.h"
+#include "talk/p2p/base/turnport.h"
 
 using talk_base::CreateRandomId;
 using talk_base::CreateRandomString;
@@ -54,6 +55,9 @@ const uint32 MSG_ALLOCATION_PHASE = 4;
 const uint32 MSG_SHAKE = 5;
 const uint32 MSG_SEQUENCEOBJECTS_CREATED = 6;
 
+// Based on my personal testing the timeout values in P2P
+// is way too aggressive, not enough time given for in-progress to complete
+// const uint32 ALLOCATE_DELAY = 1000;
 const uint32 ALLOCATE_DELAY = 250;
 const uint32 ALLOCATION_STEP_DELAY = 1 * 1000;
 
@@ -61,8 +65,9 @@ const int PHASE_UDP = 0;
 const int PHASE_RELAY = 1;
 const int PHASE_TCP = 2;
 const int PHASE_SSLTCP = 3;
+const int PHASE_TURN = 4;
 
-const int kNumPhases = 4;
+const int kNumPhases = 5;
 
 // Modifiers of the above constants
 const int RELAY_PRIMARY_PRIORITY_MODIFIER = 0;  // pref = 0.0
@@ -114,7 +119,8 @@ const uint32 DISABLE_ALL_PHASES =
   PORTALLOCATOR_DISABLE_UDP
   | PORTALLOCATOR_DISABLE_TCP
   | PORTALLOCATOR_DISABLE_STUN
-  | PORTALLOCATOR_DISABLE_RELAY;
+  | PORTALLOCATOR_DISABLE_RELAY
+  | PORTALLOCATOR_DISABLE_TURN;
 
 // Performs the allocation of ports, in a sequenced (timed) manner, for a given
 // network and IP address.
@@ -156,8 +162,12 @@ class AllocationSequence : public talk_base::MessageHandler {
 
   // Returns true if AllocationSequence has got all expect candidates.
   bool HasAllCandidates() {
+    LOG(INFO) << __FUNCTION__ << " state " << state_ << " " << allocated_candidates_ << "/" << expected_candidates_;
+#if 0 // Fix this, needs more investigation
     return (state_ == kCompleted &&
             allocated_candidates_ == expected_candidates_);
+#endif
+    return (allocated_candidates_ == expected_candidates_);
   }
   // Signal from AllocationSequence, when it's done with allocating ports.
   // This signal is useful, when port allocation fails which doesn't result
@@ -178,6 +188,7 @@ class AllocationSequence : public talk_base::MessageHandler {
   void CreateTCPPorts();
   void CreateStunPorts();
   void CreateRelayPorts();
+  void CreateTurnPorts();
   bool running() { return state_ == kRunning; }
 
   BasicPortAllocatorSession* session_;
@@ -216,13 +227,15 @@ BasicPortAllocator::BasicPortAllocator(
     const talk_base::SocketAddress& stun_address,
     const talk_base::SocketAddress& relay_address_udp,
     const talk_base::SocketAddress& relay_address_tcp,
-    const talk_base::SocketAddress& relay_address_ssl)
+    const talk_base::SocketAddress& relay_address_ssl,
+    const talk_base::SocketAddress& turn_address_udp)
     : network_manager_(network_manager),
       socket_factory_(NULL),
       stun_address_(stun_address),
       relay_address_udp_(relay_address_udp),
       relay_address_tcp_(relay_address_tcp),
-      relay_address_ssl_(relay_address_ssl) {
+      relay_address_ssl_(relay_address_ssl),
+      turn_address_udp_(turn_address_udp){
   Construct();
   LOG(INFO) << "LOGT Constructed with addresses";
   LOG(INFO) << "stun_address_(" << stun_address.ToString() << ")";
@@ -233,6 +246,8 @@ BasicPortAllocator::BasicPortAllocator(
 
 void BasicPortAllocator::Construct() {
   best_writable_phase_ = -1;
+  // For testing, also helps in sending OFFER Quicker 
+  // best_writable_phase_ = PHASE_TURN;
   allow_tcp_listen_ = true;
 }
 
@@ -372,6 +387,8 @@ void BasicPortAllocatorSession::GetPortConfigurations() {
     ports.push_back(ProtocolAddress(
         allocator_->relay_address_ssl(), PROTO_SSLTCP));
   config->AddRelay(ports, RELAY_PRIMARY_PRIORITY_MODIFIER);
+  if (!allocator_->turn_address_udp().IsNil())
+  config->AddTurn(allocator_->turn_address_udp());
 
   ConfigReady(config);
 }
@@ -439,6 +456,10 @@ void BasicPortAllocatorSession::DoAllocate() {
           networks[i]->ip().family() == AF_INET6) {
         // Skip IPv6 networks unless the flag's been set.
         continue;
+      }
+      if (!config || config->turn_address.IsNil()) {
+        // No TURN ports specified in this config.
+        sequence_flags |= PORTALLOCATOR_DISABLE_TURN;
       }
 
       // Disable phases that would only create ports equivalent to
@@ -758,7 +779,7 @@ void AllocationSequence::OnMessage(talk_base::Message* msg) {
     ASSERT(msg->message_id == MSG_ALLOCATION_PHASE);
 
   const char* const PHASE_NAMES[kNumPhases] = {
-    "Udp", "Relay", "Tcp", "SslTcp"
+    "Udp", "Relay", "Tcp", "SslTcp", "Turn"
   };
 
   // Perform all of the phases in the current step.
@@ -772,9 +793,9 @@ void AllocationSequence::OnMessage(talk_base::Message* msg) {
     switch (phase) {
     case PHASE_UDP:
       LOG(INFO) << "LOGT AllocationSequence::OnMessage - PHASE_UDP";
+      EnableProtocol(PROTO_UDP);
       CreateUDPPorts();
       CreateStunPorts();
-      EnableProtocol(PROTO_UDP);
       break;
 
     case PHASE_RELAY:
@@ -786,12 +807,19 @@ void AllocationSequence::OnMessage(talk_base::Message* msg) {
       LOG(INFO) << "LOGT AllocationSequence::OnMessage - PHASE_TCP";
       CreateTCPPorts();
       EnableProtocol(PROTO_TCP);
+      CreateTCPPorts();
       break;
 
     case PHASE_SSLTCP:
       LOG(INFO) << "LOGT AllocationSequence::OnMessage - PHASE_SSLTCP";
       state_ = kCompleted;
       EnableProtocol(PROTO_SSLTCP);
+      break;
+
+    case PHASE_TURN:
+      LOG(INFO) << "LOGT AllocationSequence::OnMessage - PHASE_TURN";
+      state_ = kCompleted;
+      CreateTurnPorts();
       break;
 
     default:
@@ -966,6 +994,41 @@ void AllocationSequence::CreateRelayPorts() {
   }
 }
 
+void AllocationSequence::CreateTurnPorts() {
+  if (flags_ & PORTALLOCATOR_DISABLE_TURN) {
+     LOG(LS_VERBOSE) << "AllocationSequence: Turn ports disabled, skipping.";
+     return;
+  }
+
+  // If BasicPortAllocatorSession::OnAllocate left TURN ports enabled then we
+  // ought to have an address for them here.
+  ASSERT(config_ && !config_->turn_address.IsNil());
+  if (!(config_ && !config_->turn_address.IsNil())) {
+    LOG(LS_WARNING)
+        << "AllocationSequence: No TURN server configured, skipping.";
+    return;
+  }
+
+  TurnPort* port = TurnPort::Create(session_->network_thread(),
+                                    session_->socket_factory(),
+                                    network_, ip_,
+                                    session_->allocator()->min_port(),
+                                    session_->allocator()->max_port(),
+                                    session_->username(),
+                                    session_->password());
+  if (port) {
+    session_->AddAllocatedPort(port, this, PRIORITY_RELAY, false);
+    // Add the addresses of this protocol.
+    ProtocolAddress addr (config_->turn_address, PROTO_UDP);
+    port->AddServerAddress(addr);
+    port->AddExternalAddress(addr);
+    // Increment expected candidate count.
+    ++expected_candidates_;
+  }
+  // Start fetching an address for this port.
+  port->PrepareAddress();
+}
+
 // PortConfiguration
 PortConfiguration::PortConfiguration(
     const talk_base::SocketAddress& stun_address)
@@ -987,6 +1050,11 @@ void PortConfiguration::AddRelay(const PortList& ports, int priority_modifier) {
   relay.priority_modifier = priority_modifier;
   relays.push_back(relay);
 }
+
+void PortConfiguration::AddTurn(const talk_base::SocketAddress& turn_addr) {
+  turn_address = turn_addr;
+}
+
 
 bool PortConfiguration::SupportsProtocol(
     const PortConfiguration::RelayServer& relay, ProtocolType type) {

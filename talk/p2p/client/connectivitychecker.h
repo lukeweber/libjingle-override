@@ -120,12 +120,13 @@ class TestHttpPortAllocatorSession : public HttpPortAllocatorSession {
       const std::string& ice_ufrag,
       const std::string& ice_pwd,
       const std::vector<talk_base::SocketAddress>& stun_hosts,
+      const std::vector<talk_base::SocketAddress>& turn_hosts,
       const std::vector<std::string>& relay_hosts,
       const std::string& relay_token,
       const std::string& user_agent)
       : HttpPortAllocatorSession(
           allocator, content_name, component, ice_ufrag, ice_pwd, stun_hosts,
-          relay_hosts, relay_token, user_agent) {
+          turn_hosts, relay_hosts, relay_token, user_agent) {
   }
   void set_proxy(const talk_base::ProxyInfo& proxy) {
     proxy_ = proxy;

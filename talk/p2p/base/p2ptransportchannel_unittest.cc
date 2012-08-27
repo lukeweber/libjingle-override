@@ -81,6 +81,7 @@ static const SocketAddress kRelayTcpIntAddr("99.99.99.2", 5002);
 static const SocketAddress kRelayTcpExtAddr("99.99.99.3", 5003);
 static const SocketAddress kRelaySslTcpIntAddr("99.99.99.2", 5004);
 static const SocketAddress kRelaySslTcpExtAddr("99.99.99.3", 5005);
+static const SocketAddress kTurnAddr("99.99.99.3", 5005);
 
 // Based on ICE_UFRAG_LENGTH
 static const char* kIceUfrag[4] = {"TESTICEUFRAG0000", "TESTICEUFRAG0001",
@@ -132,10 +133,10 @@ class P2PTransportChannelTestBase : public testing::Test,
     ep2_.role_ = cricket::ROLE_CONTROLLED;
     ep1_.allocator_.reset(new cricket::BasicPortAllocator(
         &ep1_.network_manager_, kStunAddr, kRelayUdpIntAddr,
-        kRelayTcpIntAddr, kRelaySslTcpIntAddr));
+        kRelayTcpIntAddr, kRelaySslTcpIntAddr, kTurnAddr));
     ep2_.allocator_.reset(new cricket::BasicPortAllocator(
         &ep2_.network_manager_, kStunAddr, kRelayUdpIntAddr,
-        kRelayTcpIntAddr, kRelaySslTcpIntAddr));
+        kRelayTcpIntAddr, kRelaySslTcpIntAddr, kTurnAddr));
     SetAllocatorFlags(0, cricket::PORTALLOCATOR_ENABLE_SHARED_UFRAG);
     SetAllocatorFlags(1, cricket::PORTALLOCATOR_ENABLE_SHARED_UFRAG);
   }
