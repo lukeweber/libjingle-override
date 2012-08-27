@@ -77,7 +77,7 @@ void TurnServer::SendStunError(const StunMessage& msg, talk_base::AsyncPacketSoc
                    const talk_base::SocketAddress& remote_addr, int error_code,
                    const char* error_desc, const std::string& magic_cookie) {
   std::cout << "LOGT TurnServer::SendStunError" << std::endl;
-  TurnMessage err_msg;
+  RelayMessage err_msg;
   err_msg.SetType(GetStunErrorResponseType(msg.type()));
   err_msg.SetTransactionID(msg.transaction_id());
 
@@ -278,7 +278,7 @@ void TurnServer::OnExternalPacket(
 
   // The first packet should always be a STUN / TURN packet.  If it isn't, then
   // we should just ignore this packet.
-  TurnMessage msg;
+  RelayMessage msg;
   talk_base::ByteBuffer buf(bytes, size);
   if (!msg.Read(&buf)) {
     LOG(LS_WARNING) << "Dropping packet: first packet not STUN";
@@ -356,7 +356,7 @@ void TurnServer::HandleStunAllocate(
     talk_base::AsyncPacketSocket* socket) {
   std::cout << "LOGT TurnServer::HandleStunAllocate1" << std::endl;
   // Make sure this is a valid STUN request.
-  TurnMessage request;
+  RelayMessage request;
   std::string username;
   if (!HandleStun(bytes, size, ap.source(), socket, &username, &request))
     return;
@@ -421,7 +421,7 @@ void TurnServer::HandleStun(
   std::cout << "LOGT TurnServer::HandleStun2" << std::endl;
 
   // Make sure this is a valid STUN request.
-  TurnMessage request;
+  RelayMessage request;
   std::string username;
   if (!HandleStun(bytes, size, int_conn->addr_pair().source(),
                   int_conn->socket(), &username, &request))
@@ -451,7 +451,7 @@ void TurnServer::HandleStunAllocate(
   // Create a response message that includes an address with which external
   // clients can communicate.
 
-  TurnMessage response;
+  RelayMessage response;
   response.SetType(STUN_ALLOCATE_RESPONSE);
   response.SetTransactionID(request.transaction_id());
 
@@ -525,7 +525,7 @@ void TurnServer::HandleStunSend(
     int_conn->set_default_destination(ext_addr);
     int_conn->Lock();
 
-    TurnMessage response;
+    RelayMessage response;
     response.SetType(STUN_SEND_RESPONSE);
     response.SetTransactionID(request.transaction_id());
 
@@ -643,7 +643,7 @@ void TurnServerConnection::Send(
 
   // Wrap the given data in a data-indication packet.
 
-  TurnMessage msg;
+  RelayMessage msg;
   msg.SetType(STUN_DATA_INDICATION);
 
   StunByteStringAttribute* magic_cookie_attr =

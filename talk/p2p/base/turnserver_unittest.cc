@@ -130,7 +130,7 @@ class TurnServerTest : public testing::Test {
     talk_base::TestClient::Packet* packet = client->NextPacket();
     if (packet) {
       talk_base::ByteBuffer buf(packet->buf, packet->size);
-      msg = new TurnMessage();
+      msg = new RelayMessage();
       msg->Read(&buf);
       delete packet;
     }
@@ -147,7 +147,7 @@ class TurnServerTest : public testing::Test {
   }
 
   static StunMessage* CreateStunMessage(int type) {
-    StunMessage* msg = new TurnMessage();
+    StunMessage* msg = new RelayMessage();
     msg->SetType(type);
     msg->SetTransactionID(
         talk_base::CreateRandomString(kStunTransactionIdLength));
