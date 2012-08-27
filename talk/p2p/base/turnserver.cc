@@ -69,7 +69,7 @@ void TurnServer::SendStun(const StunMessage& msg,
   std::cout << "LOGT TurnServer::SendStun" << std::endl;
   talk_base::ByteBuffer buf;
   msg.Write(&buf);
-  Send(socket, buf.Data(), buf.Length(), addr);
+  TurnServer::Send(socket, buf.Data(), buf.Length(), addr);
 }
 
 // Constructs a STUN error response and sends it on the given socket.
@@ -97,7 +97,7 @@ void TurnServer::SendStunError(const StunMessage& msg, talk_base::AsyncPacketSoc
   err_code->SetReason(error_desc);
   err_msg.AddAttribute(err_code);
 
-  SendStun(err_msg, socket, remote_addr);
+  TurnServer::SendStun(err_msg, socket, remote_addr);
 }
 
 TurnServer::TurnServer(talk_base::Thread* thread)

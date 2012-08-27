@@ -297,56 +297,36 @@ TEST_F(TurnServerTest, TestReallocate) {
 // Send a request from another client and see that it arrives at the first
 // client in the binding.
 TEST_F(TurnServerTest, TestRemoteBind) {
-  std::cout << "LOGT A" << std::endl;
   Allocate();
-  std::cout << "LOGT B" << std::endl;
 
   talk_base::scoped_ptr<StunMessage> req(
       CreateStunMessage(STUN_BINDING_REQUEST)), res;
   AddUsernameAttr(req.get(), username_);
-  std::cout << "LOGT C" << std::endl;
 
   Send2(req.get());
-  std::cout << "LOGT D" << std::endl;
   res.reset(Receive1());
-  std::cout << "LOGT E" << std::endl;
 
   ASSERT_TRUE(res.get() != NULL);
-  std::cout << "LOGT F" << std::endl;
   EXPECT_EQ(STUN_DATA_INDICATION, res->type());
-  std::cout << "LOGT G" << std::endl;
 
   const StunByteStringAttribute* recv_data =
       res->GetByteString(STUN_ATTR_DATA);
-  std::cout << "LOGT H" << std::endl;
   ASSERT_TRUE(recv_data != NULL);
-  std::cout << "LOGT I" << std::endl;
 
   talk_base::ByteBuffer buf(recv_data->bytes(), recv_data->length());
-  std::cout << "LOGT J" << std::endl;
   talk_base::scoped_ptr<StunMessage> res2(new StunMessage());
-  std::cout << "LOGT K" << std::endl;
   EXPECT_TRUE(res2->Read(&buf));
-  std::cout << "LOGT L" << std::endl;
   EXPECT_EQ(STUN_BINDING_REQUEST, res2->type());
-  std::cout << "LOGT M" << std::endl;
   EXPECT_EQ(req->transaction_id(), res2->transaction_id());
-  std::cout << "LOGT N" << std::endl;
 
   const StunAddressAttribute* src_addr =
       res->GetAddress(STUN_ATTR_SOURCE_ADDRESS2);
-  std::cout << "LOGT O" << std::endl;
   ASSERT_TRUE(src_addr != NULL);
-  std::cout << "LOGT P" << std::endl;
   EXPECT_EQ(1, src_addr->family());
-  std::cout << "LOGT Q" << std::endl;
   EXPECT_EQ(client2_addr.ipaddr(), src_addr->ipaddr());
-  std::cout << "LOGT R" << std::endl;
   EXPECT_EQ(client2_addr.port(), src_addr->port());
-  std::cout << "LOGT S" << std::endl;
 
   EXPECT_TRUE(Receive2() == NULL);
-  std::cout << "LOGT T" << std::endl;
 }
 
 // Send a complete nonsense message to the established connection and verify
