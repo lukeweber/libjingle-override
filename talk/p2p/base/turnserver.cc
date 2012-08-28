@@ -67,6 +67,7 @@ void TurnServer::SendStun(const StunMessage& msg,
               talk_base::AsyncPacketSocket* socket,
               const talk_base::SocketAddress& addr) {
   std::cout << "LOGT TurnServer::SendStun" << std::endl;
+  std::cout << "LOGT RES = " << msg.ToString() << std::endl;
   talk_base::ByteBuffer buf;
   msg.Write(&buf);
   TurnServer::Send(socket, buf.Data(), buf.Length(), addr);
@@ -77,7 +78,7 @@ void TurnServer::SendStunError(const StunMessage& msg, talk_base::AsyncPacketSoc
                    const talk_base::SocketAddress& remote_addr, int error_code,
                    const char* error_desc, const std::string& magic_cookie) {
   std::cout << "LOGT TurnServer::SendStunError" << std::endl;
-  RelayMessage err_msg;
+  TurnMessage err_msg;
   err_msg.SetType(GetStunErrorResponseType(msg.type()));
   err_msg.SetTransactionID(msg.transaction_id());
 
@@ -278,7 +279,7 @@ void TurnServer::OnExternalPacket(
 
   // The first packet should always be a STUN / TURN packet.  If it isn't, then
   // we should just ignore this packet.
-  RelayMessage msg;
+  TurnMessage msg;
   talk_base::ByteBuffer buf(bytes, size);
   if (!msg.Read(&buf)) {
     LOG(LS_WARNING) << "Dropping packet: first packet not STUN";
@@ -331,6 +332,7 @@ bool TurnServer::HandleStun(
   // Parse this into a stun message. Eat the message if this fails.
   talk_base::ByteBuffer buf(bytes, size);
   if (!msg->Read(&buf)) {
+    std::cout << "LOGT TurnServer::HandleStun1 FAILED" << std::endl;
     return false;
   }
 
@@ -356,7 +358,7 @@ void TurnServer::HandleStunAllocate(
     talk_base::AsyncPacketSocket* socket) {
   std::cout << "LOGT TurnServer::HandleStunAllocate1" << std::endl;
   // Make sure this is a valid STUN request.
-  RelayMessage request;
+  TurnMessage request;
   std::string username;
   if (!HandleStun(bytes, size, ap.source(), socket, &username, &request))
     return;
@@ -421,7 +423,7 @@ void TurnServer::HandleStun(
   std::cout << "LOGT TurnServer::HandleStun2" << std::endl;
 
   // Make sure this is a valid STUN request.
-  RelayMessage request;
+  TurnMessage request;
   std::string username;
   if (!HandleStun(bytes, size, int_conn->addr_pair().source(),
                   int_conn->socket(), &username, &request))
@@ -447,11 +449,12 @@ void TurnServer::HandleStun(
 void TurnServer::HandleStunAllocate(
     TurnServerConnection* int_conn, const StunMessage& request) {
   std::cout << "LOGT TurnServer::HandleStunAllocate2" << std::endl;
+  std::cout << "LOGT REQ = " << request.ToString() << std::endl;
 
   // Create a response message that includes an address with which external
   // clients can communicate.
 
-  RelayMessage response;
+  TurnMessage response;
   response.SetType(STUN_ALLOCATE_RESPONSE);
   response.SetTransactionID(request.transaction_id());
 
@@ -466,7 +469,7 @@ void TurnServer::HandleStunAllocate(
       external_sockets_[index]->GetLocalAddress();
 
   StunAddressAttribute* addr_attr =
-      StunAttribute::CreateAddress(STUN_ATTR_MAPPED_ADDRESS);
+      StunAttribute::CreateXorAddress(STUN_ATTR_XOR_RELAYED_ADDRESS);
   addr_attr->SetIP(ext_addr.ipaddr());
   addr_attr->SetPort(ext_addr.port());
   response.AddAttribute(addr_attr);
@@ -525,7 +528,7 @@ void TurnServer::HandleStunSend(
     int_conn->set_default_destination(ext_addr);
     int_conn->Lock();
 
-    RelayMessage response;
+    TurnMessage response;
     response.SetType(STUN_SEND_RESPONSE);
     response.SetTransactionID(request.transaction_id());
 
@@ -643,7 +646,7 @@ void TurnServerConnection::Send(
 
   // Wrap the given data in a data-indication packet.
 
-  RelayMessage msg;
+  TurnMessage msg;
   msg.SetType(STUN_DATA_INDICATION);
 
   StunByteStringAttribute* magic_cookie_attr =

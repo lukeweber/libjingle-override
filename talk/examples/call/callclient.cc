@@ -342,10 +342,12 @@ CallClient::CallClient(buzz::XmppClient* xmpp_client,
                        const std::string& caps_node,
                        const std::string& version,
                        const char *stunserver,
-                       const char *relayserver)
+                       const char *relayserver,
+                       const char *turnserver)
     : xmpp_client_(xmpp_client),
       stunserver_(stunserver),
       relayserver_(relayserver),
+      turnserver_(turnserver),
       worker_thread_(NULL),
       media_engine_(NULL),
       data_engine_(NULL),
@@ -465,18 +467,22 @@ void CallClient::InitMedia() {
   // TODO: Decide if the relay address should be specified here.
   talk_base::SocketAddress stun_addr;
   talk_base::SocketAddress relay_addr_udp;
+  talk_base::SocketAddress turn_addr_udp;
   if (!stunserver_.empty() && !stun_addr.FromString(stunserver_)) {
     stun_addr.Clear();
   }
   if (!relayserver_.empty() && !relay_addr_udp.FromString(relayserver_)) {
     relay_addr_udp.Clear();
   }
+  if (!turnserver_.empty() && !turn_addr_udp.FromString(turnserver_)) {
+    turn_addr_udp.Clear();
+  }
   talk_base::SocketAddress relay_addr_tcp(relay_addr_udp);
   talk_base::SocketAddress relay_addr_ssl(relay_addr_udp);
   
   port_allocator_ =  new cricket::BasicPortAllocator(
       network_manager_, stun_addr, relay_addr_udp, relay_addr_tcp,
-      relay_addr_ssl, talk_base::SocketAddress());
+      relay_addr_ssl, turn_addr_udp);
 
   if (portallocator_flags_ != 0) {
     port_allocator_->set_flags(portallocator_flags_);

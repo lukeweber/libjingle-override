@@ -27,6 +27,7 @@
 
 #include "talk/p2p/base/stun.h"
 
+#include <iostream>
 #include <cstring>
 
 #include "talk/base/byteorder.h"
@@ -376,6 +377,54 @@ bool StunMessage::Write(ByteBuffer* buf) const {
   }
 
   return true;
+}
+
+std::string StunMessage::ToString() const {
+  std::stringstream stream;
+  int attr_count = attrs_->size();
+  stream << "{AttributeCount:" << attr_count << ",";
+  //std::string displaystring = "{AttributeCount:"+attr_count+",\n";
+  stream << "StunAttributes:[";
+  for (int i = 0; i < attr_count; ++i) {
+    if(i != 0) {
+      stream << ",";
+    }
+    switch((*attrs_)[i]->type()){
+      //StunAttributeType
+      case STUN_ATTR_MAPPED_ADDRESS:stream << "STUN_ATTR_MAPPED_ADDRESS";break;
+      case STUN_ATTR_USERNAME:stream << "STUN_ATTR_USERNAME";break;
+      case STUN_ATTR_MESSAGE_INTEGRITY:stream << "STUN_ATTR_MESSAGE_INTEGRITY";break;
+      case STUN_ATTR_ERROR_CODE:stream << "STUN_ATTR_ERROR_CODE";break;
+      case STUN_ATTR_UNKNOWN_ATTRIBUTES:stream << "STUN_ATTR_UNKNOWN_ATTRIBUTES";break;
+      case STUN_ATTR_REALM:stream << "STUN_ATTR_REALM";break;
+      case STUN_ATTR_NONCE:stream << "STUN_ATTR_NONCE";break;
+      case STUN_ATTR_XOR_MAPPED_ADDRESS:stream << "STUN_ATTR_XOR_MAPPED_ADDRESS";break;
+      case STUN_ATTR_SOFTWARE:stream << "STUN_ATTR_SOFTWARE";break;
+      case STUN_ATTR_ALTERNATE_SERVER:stream << "STUN_ATTR_ALTERNATE_SERVER";break;
+      case STUN_ATTR_FINGERPRINT:stream << "STUN_ATTR_FINGERPRINT";break;
+      //RelayAttributeType:
+      case STUN_ATTR_LIFETIME:stream << "STUN_ATTR_LIFETIME";break;
+      case STUN_ATTR_MAGIC_COOKIE:stream << "STUN_ATTR_MAGIC_COOKIE";break;
+      case STUN_ATTR_BANDWIDTH:stream << "STUN_ATTR_BANDWIDTH";break;
+      case STUN_ATTR_DESTINATION_ADDRESS:stream << "STUN_ATTR_DESTINATION_ADDRESS";break;
+      //case STUN_ATTR_SOURCE_ADDRESS2:stream << "STUN_ATTR_SOURCE_ADDRESS2";break;
+      case STUN_ATTR_DATA:stream << "STUN_ATTR_DATA";break;
+      case STUN_ATTR_OPTIONS:stream << "STUN_ATTR_OPTIONS";break;
+      //TurnAttributeType:
+      case STUN_ATTR_CHANNEL_NUMBER:stream << "STUN_ATTR_CHANNEL_NUMBER";break;
+      case STUN_ATTR_XOR_PEER_ADDRESS:stream << "STUN_ATTR_XOR_PEER_ADDRESS";break;
+      case STUN_ATTR_XOR_RELAYED_ADDRESS:stream << "STUN_ATTR_XOR_RELAYED_ADDRESS";break;
+      case STUN_ATTR_REQUESTED_TRANSPORT:stream << "STUN_ATTR_REQUESTED_TRANSPORT";break;
+      //IceAttributeType
+      case STUN_ATTR_PRIORITY:stream << "STUN_ATTR_PRIORITY";break;
+      case STUN_ATTR_USE_CANDIDATE:stream << "STUN_ATTR_USE_CANDIDATE";break;
+      case STUN_ATTR_ICE_CONTROLLED:stream << "STUN_ATTR_ICE_CONTROLLED";break;
+      case STUN_ATTR_ICE_CONTROLLING:stream << "STUN_ATTR_ICE_CONTROLLING";break;
+      default:stream << "STUN_ATTR_UNKNOWN";break;
+    }
+  }
+  stream << "]}";
+  return stream.str();
 }
 
 StunAttributeValueType StunMessage::GetAttributeValueType(int type) const {

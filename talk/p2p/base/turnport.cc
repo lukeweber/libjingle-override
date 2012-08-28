@@ -58,7 +58,9 @@ TurnPort::TurnPort(
       ready_(false),
       channel_nmbr_(0x40000000),
       error_(0),
-      turn_username_("tenhands") {
+      turn_username_("nicktuentitesting@gmail.com"),
+      nonce_("nonsenseNONCE"),
+      realm_("tuenti") {
   requests_.SignalSendPacket.connect(this, &TurnPort::OnSendPacket);
 }
 
@@ -421,6 +423,7 @@ void TurnAllocateRequest::OnResponse(StunMessage* response) {
           response->GetAddress(STUN_ATTR_XOR_RELAYED_ADDRESS);
   if (!addr_attr) {
     LOG(LS_ERROR) << "Allocate response missing mapped address.";
+    LOG(LS_ERROR) << response->ToString();
   } else if (addr_attr->family() != STUN_ADDRESS_IPV4) {
     LOG(LS_ERROR) << "Mapped address has bad family";
   } else {

@@ -198,7 +198,11 @@ class StunMessage {
   // this was successful.
   bool Write(talk_base::ByteBuffer* buf) const;
 
- protected:
+  // WritesWrites this object into a STUN packet. The return value indicates whether
+  // this was successful.
+  std::string ToString() const;
+
+protected:
   // Verifies that the given attribute is allowed for this message.
   virtual StunAttributeValueType GetAttributeValueType(int type) const;
 
