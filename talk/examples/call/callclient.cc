@@ -339,8 +339,13 @@ void CallClient::ParseLine(const std::string& line) {
 }
 
 CallClient::CallClient(buzz::XmppClient* xmpp_client,
-                       const std::string& caps_node, const std::string& version)
+                       const std::string& caps_node,
+                       const std::string& version,
+                       const char *stunserver,
+                       const char *relayserver)
     : xmpp_client_(xmpp_client),
+      stunserver_(stunserver),
+      relayserver_(relayserver),
       worker_thread_(NULL),
       media_engine_(NULL),
       data_engine_(NULL),
@@ -458,11 +463,20 @@ void CallClient::InitMedia() {
   network_manager_ = new talk_base::BasicNetworkManager();
 
   // TODO: Decide if the relay address should be specified here.
-  talk_base::SocketAddress stun_addr("stun.l.google.com", 19302);
+  talk_base::SocketAddress stun_addr;
+  talk_base::SocketAddress relay_addr_udp;
+  if (!stunserver_.empty() && !stun_addr.FromString(stunserver_)) {
+    stun_addr.Clear();
+  }
+  if (!relayserver_.empty() && !relay_addr_udp.FromString(relayserver_)) {
+    relay_addr_udp.Clear();
+  }
+  talk_base::SocketAddress relay_addr_tcp(relay_addr_udp);
+  talk_base::SocketAddress relay_addr_ssl(relay_addr_udp);
+  
   port_allocator_ =  new cricket::BasicPortAllocator(
-      network_manager_, stun_addr, talk_base::SocketAddress(), 
-      talk_base::SocketAddress(), talk_base::SocketAddress(), 
-      talk_base::SocketAddress());
+      network_manager_, stun_addr, relay_addr_udp, relay_addr_tcp,
+      relay_addr_ssl, talk_base::SocketAddress());
 
   if (portallocator_flags_ != 0) {
     port_allocator_->set_flags(portallocator_flags_);
