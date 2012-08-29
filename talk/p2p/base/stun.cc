@@ -382,6 +382,7 @@ bool StunMessage::Write(ByteBuffer* buf) const {
 std::string StunMessage::ToString() const {
   std::stringstream stream;
   int attr_count = attrs_->size();
+  int type = 0;
   stream << "{AttributeCount:" << attr_count << ",";
   //std::string displaystring = "{AttributeCount:"+attr_count+",\n";
   stream << "StunAttributes:[";
@@ -389,7 +390,8 @@ std::string StunMessage::ToString() const {
     if(i != 0) {
       stream << ",";
     }
-    switch((*attrs_)[i]->type()){
+    type = (*attrs_)[i]->type();
+    switch(type){
       //StunAttributeType
       case STUN_ATTR_MAPPED_ADDRESS:stream << "STUN_ATTR_MAPPED_ADDRESS";break;
       case STUN_ATTR_USERNAME:stream << "STUN_ATTR_USERNAME";break;
@@ -422,6 +424,7 @@ std::string StunMessage::ToString() const {
       case STUN_ATTR_ICE_CONTROLLING:stream << "STUN_ATTR_ICE_CONTROLLING";break;
       default:stream << "STUN_ATTR_UNKNOWN";break;
     }
+    stream << "=0x" << std::hex << type << std::dec;
   }
   stream << "]}";
   return stream.str();

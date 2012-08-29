@@ -25,6 +25,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <iostream>
 #include "talk/base/asyncpacketsocket.h"
 #include "talk/base/helpers.h"
 #include "talk/base/logging.h"
@@ -59,8 +60,8 @@ TurnPort::TurnPort(
       channel_nmbr_(0x40000000),
       error_(0),
       turn_username_("nicktuentitesting@gmail.com"),
-      nonce_("nonsenseNONCE"),
-      realm_("tuenti") {
+      nonce_(""),
+      realm_("") {
   requests_.SignalSendPacket.connect(this, &TurnPort::OnSendPacket);
 }
 
@@ -367,6 +368,7 @@ void TurnPort::SendBindingErrorResponse(StunMessage* request,
 //
 TurnAllocateRequest::TurnAllocateRequest(TurnPort* port,
                                  const talk_base::SocketAddress& server_addr) :
+    StunRequest(new TurnMessage()),
     port_(port),
     server_addr_(server_addr) {
   start_time_ = talk_base::Time();
@@ -407,6 +409,7 @@ void TurnAllocateRequest::Prepare(StunMessage* request) {
   if ( AddMI ) {
     request->AddMessageIntegrity(password);
   }
+  LOG(LS_INFO) << "LOGT REQ = " << request->ToString() << std::endl;
 
 }
 
