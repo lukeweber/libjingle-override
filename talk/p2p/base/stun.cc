@@ -86,6 +86,7 @@ bool StunMessage::SetTransactionID(const std::string& str) {
 bool StunMessage::AddAttribute(StunAttribute* attr) {
   // Fail any attributes that aren't valid for this type of message.
   if (attr->value_type() != GetAttributeValueType(attr->type())) {
+    LOG(LS_ERROR) << "TLOG Could not add attribute(" << attr->value_type() << " != " << GetAttributeValueType(attr->type()) << ")";
     return false;
   }
   attrs_->push_back(attr);

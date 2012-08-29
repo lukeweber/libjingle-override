@@ -619,13 +619,14 @@ void ChannelBindRequest::Prepare(StunMessage* request) {
   channum_attr->SetValue(conn_->GetChannelNumber());
   request->AddAttribute(channum_attr);
 
-  StunAddressAttribute* addr_attr = StunAttribute::CreateXorAddress(
+  StunXorAddressAttribute* addr_attr = StunAttribute::CreateXorAddress(
                                             STUN_ATTR_XOR_PEER_ADDRESS);
   addr_attr->SetIP(conn_->remote_candidate().address().ipaddr());
   addr_attr->SetPort(conn_->remote_candidate().address().port());
   request->AddAttribute(addr_attr);
 
   request->AddMessageIntegrity(password);
+  LOG(LS_INFO) << "LOGT REQ = " << request->ToString() << std::endl;
 
 }
 

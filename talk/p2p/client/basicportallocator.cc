@@ -242,6 +242,7 @@ BasicPortAllocator::BasicPortAllocator(
   LOG(INFO) << "relay_address_udp_(" << relay_address_udp.ToString() << ")";
   LOG(INFO) << "relay_address_tcp_(" << relay_address_tcp.ToString() << ")";
   LOG(INFO) << "relay_address_ssl_(" << relay_address_ssl.ToString() << ")";
+  LOG(INFO) << "turn_address_udp_(" << turn_address_udp_.ToString() << ")";
 }
 
 void BasicPortAllocator::Construct() {

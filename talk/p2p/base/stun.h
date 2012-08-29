@@ -564,6 +564,7 @@ class TurnMessage : public StunMessage {
       case STUN_ATTR_CHANNEL_NUMBER:      return STUN_VALUE_UINT32;
       case STUN_ATTR_REQUESTED_TRANSPORT: return STUN_VALUE_UINT32;
       case STUN_ATTR_XOR_RELAYED_ADDRESS: return STUN_VALUE_XOR_ADDRESS;
+      case STUN_ATTR_XOR_PEER_ADDRESS:    return STUN_VALUE_XOR_ADDRESS;
       case STUN_ATTR_ALTERNATE_SERVER:    return STUN_VALUE_ADDRESS;
       default: return StunMessage::GetAttributeValueType(type);
     }
