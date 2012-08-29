@@ -583,7 +583,8 @@ int RelayProxyConnection::Send(const void* data, size_t size)  {
 //
 ChannelBindRequest::ChannelBindRequest(RelayProxyConnection* conn,
                                    const talk_base::SocketAddress& server_addr)
-                                   : conn_(conn),
+                                   : StunRequest(new TurnMessage()),
+                                     conn_(conn),
                                      server_addr_(server_addr) {
 }
 
@@ -665,7 +666,8 @@ void ChannelBindRequest::OnTimeout() {
 //
 RefreshRequest::RefreshRequest(RelayProxyConnection* conn,
                                const talk_base::SocketAddress& server_addr)
-                               : conn_(conn),
+                               : StunRequest(new TurnMessage()),
+                                 conn_(conn),
                                  server_addr_(server_addr) {
 }
 
