@@ -815,6 +815,7 @@ void AllocationSequence::OnMessage(talk_base::Message* msg) {
       break;
 
     case PHASE_TURN:
+      LOG(INFO) << "LOGT AllocationSequence::OnMessage - PHASE_TURN";
       state_ = kCompleted;
       CreateTurnPorts();
       break;
