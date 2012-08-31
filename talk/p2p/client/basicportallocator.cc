@@ -55,10 +55,9 @@ const uint32 MSG_ALLOCATION_PHASE = 4;
 const uint32 MSG_SHAKE = 5;
 const uint32 MSG_SEQUENCEOBJECTS_CREATED = 6;
 
-// Based on my personal testing the timeout values in P2P
+// Based on my personal testing the timeout values in P2P (250)
 // is way too aggressive, not enough time given for in-progress to complete
-// const uint32 ALLOCATE_DELAY = 1000;
-const uint32 ALLOCATE_DELAY = 250;
+const uint32 ALLOCATE_DELAY = 1000;//250 was the original
 const uint32 ALLOCATION_STEP_DELAY = 1 * 1000;
 
 const int PHASE_UDP = 0;
