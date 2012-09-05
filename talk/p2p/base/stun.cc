@@ -213,6 +213,7 @@ bool StunMessage::ValidateMessageIntegrity(const char* data, size_t size,
     return false;
 
   // Comparing the calculated HMAC with the one present in the message.
+  printf("msg=(0x%x)!=(0x%x)generated\n", reinterpret_cast<unsigned int>(data + current_pos + kStunAttributeHeaderSize), reinterpret_cast<unsigned int>(hmac));
   return (std::memcmp(data + current_pos + kStunAttributeHeaderSize,
                       hmac, sizeof(hmac)) == 0);
 }
@@ -220,11 +221,19 @@ bool StunMessage::ValidateMessageIntegrity(const char* data, size_t size,
 bool StunMessage::AddMessageIntegrity(const std::string& password) {
   // Add the attribute with a dummy value. Since this is a known attribute, it
   // can't fail.
+#define NFHACK_MESSAGE_INTEGRITY
+#ifdef NFHACK_MESSAGE_INTEGRITY
+  StunByteStringAttribute* msg_integrity_attr =
+      new StunByteStringAttribute(STUN_ATTR_MESSAGE_INTEGRITY,
+          password);
+  VERIFY(AddAttribute(msg_integrity_attr));
+  return true;
+#else
   StunByteStringAttribute* msg_integrity_attr =
       new StunByteStringAttribute(STUN_ATTR_MESSAGE_INTEGRITY,
           std::string(kStunMessageIntegritySize, '0'));
   VERIFY(AddAttribute(msg_integrity_attr));
-
+#endif //NFHACK_MESSAGE_INTEGRITY
   // Calculate the HMAC for the message.
   talk_base::ByteBuffer buf;
   if (!Write(&buf))
@@ -246,6 +255,8 @@ bool StunMessage::AddMessageIntegrity(const std::string& password) {
 
   // Insert correct HMAC into the attribute.
   msg_integrity_attr->CopyBytes(hmac, sizeof(hmac));
+  //Validation failes something is wierd here
+  //return ValidateMessageIntegrity(buf.Data(), buf.Length(), password);
   return true;
 }
 
