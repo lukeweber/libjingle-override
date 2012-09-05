@@ -60,13 +60,6 @@ extern const uint32 PRIORITY_LOCAL_STUN;
 extern const uint32 PRIORITY_LOCAL_TCP;
 extern const uint32 PRIORITY_RELAY;
 
-enum ProtocolType {
-  PROTO_UDP,
-  PROTO_TCP,
-  PROTO_SSLTCP,
-  PROTO_LAST = PROTO_SSLTCP
-};
-
 enum IcePriorityValue {
   ICE_TYPE_PREFERENCE_RELAY = 0,
   ICE_TYPE_PREFERENCE_SRFLX = 100,
@@ -256,8 +249,9 @@ class Port : public PortInterface, public talk_base::MessageHandler,
   // Called when a packet is received from an unknown address that is not
   // currently a connection.  If this is an authenticated STUN binding request,
   // then we will signal the client.
-  virtual void OnReadPacket(const char* data, size_t size,
-                            const talk_base::SocketAddress& addr);
+  void OnReadPacket(const char* data, size_t size,
+                    const talk_base::SocketAddress& addr,
+                    ProtocolType proto);
 
   // If the given data comprises a complete and correct STUN message then the
   // return value is true, otherwise false. If the message username corresponds

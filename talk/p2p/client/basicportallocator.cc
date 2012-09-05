@@ -375,7 +375,9 @@ void BasicPortAllocatorSession::OnMessage(talk_base::Message *message) {
 }
 
 void BasicPortAllocatorSession::GetPortConfigurations() {
-  PortConfiguration* config = new PortConfiguration(allocator_->stun_address());
+  PortConfiguration* config = new PortConfiguration(allocator_->stun_address(),
+                                                    username(),
+                                                    password());
   PortConfiguration::PortList ports;
   if (!allocator_->relay_address_udp().IsAny())
     ports.push_back(ProtocolAddress(
@@ -1028,11 +1030,6 @@ void AllocationSequence::CreateTurnPorts() {
 }
 
 // PortConfiguration
-PortConfiguration::PortConfiguration(
-    const talk_base::SocketAddress& stun_address)
-    : stun_address(stun_address) {
-}
-
 PortConfiguration::PortConfiguration(
     const talk_base::SocketAddress& stun_address,
     const std::string& username,

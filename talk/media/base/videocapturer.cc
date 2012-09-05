@@ -31,9 +31,9 @@
 
 #include "talk/base/logging.h"
 
-#ifdef HAVE_WEBRTC_VIDEO
+#if defined(HAVE_WEBRTC_VIDEO)
 #include "talk/media/webrtc/webrtcvideoframe.h"
-#endif
+#endif  // HAVE_WEBRTC_VIDEO
 
 namespace cricket {
 
@@ -121,8 +121,11 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
   if (SignalVideoFrame.is_empty()) {
     return;
   }
-#ifdef HAVE_WEBRTC_VIDEO
-  WebRtcVideoFrame i420_frame;
+#if defined(HAVE_WEBRTC_VIDEO)
+#define VIDEO_FRAME_NAME WebRtcVideoFrame
+#endif
+#if defined(VIDEO_FRAME_NAME)
+  VIDEO_FRAME_NAME i420_frame;
   if (!i420_frame.Init(captured_frame, captured_frame->width,
                        captured_frame->height)) {
     LOG(LS_ERROR) << "Couldn't convert to I420! "
@@ -130,7 +133,7 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
     return;
   }
   SignalVideoFrame(this, &i420_frame);
-#endif
+#endif  // VIDEO_FRAME_NAME
 }
 
 // Get the distance between the supported and desired formats.

@@ -147,7 +147,9 @@ void HttpPortAllocatorSessionBase::GetPortConfigurations() {
   // but for now is done here and added to the initial config.  Note any later
   // configs will have unresolved stun ips and will be discarded by the
   // AllocationSequence.
-  PortConfiguration* config = new PortConfiguration(stun_hosts_[0]);
+  PortConfiguration* config = new PortConfiguration(stun_hosts_[0],
+                                                    username(),
+                                                    password());
   if (!turn_hosts_.empty())
     config->AddTurn(turn_hosts_[0]);
   ConfigReady(config);
