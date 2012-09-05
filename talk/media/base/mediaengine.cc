@@ -43,6 +43,8 @@
 namespace cricket {
 #if defined(HAVE_WEBRTC_VOICE)
 #define AUDIO_ENG_NAME WebRtcVoiceEngine
+#else
+#define AUDIO_ENG_NAME NullVoiceEngine
 #endif
 
 const int MediaEngineInterface::kDefaultAudioDelayOffset = 0;
@@ -55,10 +57,10 @@ CompositeMediaEngine<WebRtcVoiceEngine, WebRtcVideoEngine>::
 }
 #endif
 
-#if defined(HAVE_WEBRTC_VOICE) && !defined(HAVE_WEBRTC_VIDEO)
-#define VIDEO_ENG_NAME NullVideoEngine
-#else
+#if defined(HAVE_WEBRTC_VIDEO)
 #define VIDEO_ENG_NAME WebRtcVideoEngine
+#else
+#define VIDEO_ENG_NAME NullVideoEngine
 #endif
 
 MediaEngineInterface* MediaEngineFactory::Create() {

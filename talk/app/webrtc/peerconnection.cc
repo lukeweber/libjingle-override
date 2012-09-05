@@ -368,7 +368,9 @@ PeerConnectionInterface::IceState PeerConnection::ice_state() {
 }
 
 bool PeerConnection::StartIce(IceOptions options) {
-  return session_->StartIce(options);
+  // Ice will be started by default and will be removed in Jsep01.
+  // TODO: Remove this method once fully migrated to JSEP01.
+  return true;
 }
 
 SessionDescriptionInterface* PeerConnection::CreateOffer(
@@ -458,13 +460,6 @@ void PeerConnection::SetLocalDescription(
   if (!SetLocalDescription(JsepSessionDescription::GetAction(desc->type()),
                            desc)) {
     error = "SetLocalDescription failed.";
-    observer_copy->OnFailure(error);
-    return;
-  }
-
-  // TODO: Ice should be able to start even without local desc.
-  if (!StartIce(JsepInterface::kUseAll)) {
-    error = "StartIce failed.";
     observer_copy->OnFailure(error);
     return;
   }

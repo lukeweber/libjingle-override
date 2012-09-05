@@ -2154,7 +2154,11 @@ void WebRtcVoiceMediaChannel::OnRtcpReceived(talk_base::Buffer* packet) {
                                                     packet->length());
 }
 
-bool WebRtcVoiceMediaChannel::Mute(bool muted) {
+bool WebRtcVoiceMediaChannel::MuteStream(uint32 ssrc, bool muted) {
+  if (local_ssrc_ != ssrc && ssrc != 0) {
+    LOG(LS_WARNING) << "The specified ssrc " << ssrc << " is not in use.";
+    return false;
+  }
   if (engine()->voe()->volume()->SetInputMute(voe_channel(),
       muted) == -1) {
     LOG_RTCERR2(SetInputMute, voe_channel(), muted);
