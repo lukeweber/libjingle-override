@@ -59,7 +59,7 @@ TurnPort::TurnPort(
       ready_(false),
       channel_nmbr_(0x40000000),
       error_(0),
-      turn_username_("nicktuentitesting@gmail.com"),
+      turn_username_(""),
       nonce_(""),
       realm_("") {
   requests_.SignalSendPacket.connect(this, &TurnPort::OnSendPacket);
