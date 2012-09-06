@@ -49,7 +49,7 @@ const char TURN_PORT_TYPE[] = "relay";
 //MAKE SURE IT IS EXACTLY 39 CHARS + 1 NULL TERM = 40 UNTIL WE FIX THE HASH
 //                       0        10        20        30        40
 //                       01234567890123456789012345678901234567890
-const char password[] = "supersecretpass56789";//01234567890123456789";
+const char password[] = "supersecretpass";//5678901234567890123456789";
 
 TurnPort::TurnPort(
     talk_base::Thread* thread, talk_base::PacketSocketFactory* factory,
