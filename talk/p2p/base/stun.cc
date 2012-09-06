@@ -239,7 +239,7 @@ bool StunMessage::AddMessageIntegrity(const std::string& password) {
   int buf_len = 0;
   int attr_len = 0;
   size_t msg_len_for_hmac = 0;
-#define NFHACK_FAKE_BUFFER
+//#define NFHACK_FAKE_BUFFER
 #ifdef NFHACK_FAKE_BUFFER
   msg_len_for_hmac = 100 + buf_len + attr_len;
   talk_base::ByteBuffer fake_buf;
