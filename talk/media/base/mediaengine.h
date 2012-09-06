@@ -174,7 +174,6 @@ class MediaEngineInterface : public sigslot::has_slots<>
 
   sigslot::repeater2<VideoCapturer*, CaptureState>
       SignalVideoCaptureStateChange;
-
   sigslot::signal0<> SignalTerminate;
 };
 
