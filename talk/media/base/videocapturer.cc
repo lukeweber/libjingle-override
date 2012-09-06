@@ -35,6 +35,10 @@
 #include "talk/media/webrtc/webrtcvideoframe.h"
 #endif  // HAVE_WEBRTC_VIDEO
 
+#if defined(HAVE_WEBRTC_VIDEO)
+#include "talk/media/webrtc/webrtcvideoframe.h"
+#endif  // HAVE_WEBRTC_VIDEO
+
 namespace cricket {
 
 static const int64 kMaxDistance = ~(static_cast<int64>(1) << 63);
@@ -56,7 +60,7 @@ CapturedFrame::CapturedFrame()
       data(NULL) {
 }
 
-// TODO: Remove this function once lmimediaengine stops using it.
+// TODO(fbarchard): Remove this function once lmimediaengine stops using it.
 bool CapturedFrame::GetDataSize(uint32* size) const {
   if (!size || data_size == CapturedFrame::kUnknownDataSize) {
     return false;
@@ -91,7 +95,7 @@ bool VideoCapturer::GetBestCaptureFormat(const VideoFormat& format,
   std::vector<VideoFormat>::const_iterator i;
   for (i = supported_formats_->begin(); i != supported_formats_->end(); ++i) {
     int64 distance = GetFormatDistance(format, *i);
-    // TODO: Reduce to LS_VERBOSE if/when camera capture is
+    // TODO(fbarchard): Reduce to LS_VERBOSE if/when camera capture is
     // relatively bug free.
     LOG(LS_INFO) << " Supported " << i->ToString()
                  << " distance " << distance;
@@ -191,7 +195,7 @@ int64 VideoCapturer::GetFormatDistance(const VideoFormat& desired,
   // strongly avoiding going down in resolution, similar to
   // the old method, but not completely ruling it out in extreme situations.
   // It also ignores framerate, which is often very low at high resolutions.
-  // TODO: Improve logic to use weighted factors.
+  // TODO(fbarchard): Improve logic to use weighted factors.
   static const int kDownPenalty = -3;
   if (delta_w < 0) {
     delta_w = delta_w * kDownPenalty;

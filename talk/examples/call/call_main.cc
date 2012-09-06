@@ -35,7 +35,7 @@
 #include "talk/base/flags.h"
 #include "talk/base/logging.h"
 #ifdef OSX
-#include "talk/base/macsocketserver.h"
+#include "talk/base/maccocoasocketserver.h"
 #endif
 #include "talk/base/pathutils.h"
 #include "talk/base/ssladapter.h"
@@ -395,7 +395,7 @@ int main(int argc, char **argv) {
 #endif
   talk_base::Thread* main_thread = talk_base::Thread::Current();
 #ifdef OSX
-  talk_base::MacCarbonAppSocketServer ss;
+  talk_base::MacCocoaSocketServer ss;
   talk_base::SocketServerScope ss_scope(&ss);
 #endif
 
