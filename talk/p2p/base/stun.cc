@@ -221,40 +221,20 @@ bool StunMessage::ValidateMessageIntegrity(const char* data, size_t size,
 bool StunMessage::AddMessageIntegrity(const std::string& password) {
   // Add the attribute with a dummy value. Since this is a known attribute, it
   // can't fail.
-//#define NFHACK_MESSAGE_INTEGRITY
-#ifdef NFHACK_MESSAGE_INTEGRITY
-  StunByteStringAttribute* msg_integrity_attr =
-      new StunByteStringAttribute(STUN_ATTR_MESSAGE_INTEGRITY,
-          password);
-  VERIFY(AddAttribute(msg_integrity_attr));
-  return true;
-#else
   StunByteStringAttribute* msg_integrity_attr =
       new StunByteStringAttribute(STUN_ATTR_MESSAGE_INTEGRITY,
           std::string(kStunMessageIntegritySize, '0'));
   VERIFY(AddAttribute(msg_integrity_attr));
-#endif //NFHACK_MESSAGE_INTEGRITY
   // Calculate the HMAC for the message.
   talk_base::ByteBuffer buf;
   int buf_len = 0;
   int attr_len = 0;
   size_t msg_len_for_hmac = 0;
-//#define NFHACK_FAKE_BUFFER
-#ifdef NFHACK_FAKE_BUFFER
-  msg_len_for_hmac = 100 + buf_len + attr_len;
-  talk_base::ByteBuffer fake_buf;
-  if (!Write(&fake_buf))
-    return false;
-  for(unsigned int i=0; i < msg_len_for_hmac; i++){
-    buf.WriteUInt32(0xdeadbeef);
-  }
-#else
   if (!Write(&buf))
     return false;
   buf_len = buf.Length();
   attr_len = msg_integrity_attr->length();
   msg_len_for_hmac = buf_len - kStunAttributeHeaderSize - attr_len;
-#endif //NFHACK_FAKE_BUFFER
 
   int password_len = password.size();
   char hmac[kStunMessageIntegritySize];
@@ -262,9 +242,6 @@ bool StunMessage::AddMessageIntegrity(const std::string& password) {
                                       password.c_str(), password_len,
                                       buf.Data(), msg_len_for_hmac,
                                       hmac, sizeof(hmac));
-#ifdef NFHACK_FAKE_BUFFER
-  printf("faked hmac=(0x%x)\n", reinterpret_cast<unsigned int>(hmac));
-#endif
   ASSERT(ret == sizeof(hmac));
   if (ret != sizeof(hmac)) {
     LOG(LS_ERROR) << "HMAC computation failed. Message-Integrity "
