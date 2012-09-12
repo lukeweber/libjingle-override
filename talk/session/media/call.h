@@ -64,7 +64,7 @@ class Call : public talk_base::MessageHandler, public sigslot::has_slots<> {
 
   Session* InitiateSession(const buzz::Jid &jid, const CallOptions& options);
   void AcceptSession(Session* session, const CallOptions& options);
-  void RejectSession(Session* session);
+  void RejectSession(Session* session, bool busy);
   void TerminateSession(Session* session);
   void Terminate();
   bool SendViewRequest(Session* session,

@@ -215,7 +215,9 @@ class BaseSession : public sigslot::has_slots<>,
     STATE_RECEIVEDACCEPT,     // received accept. begin connecting transport
     STATE_SENTMODIFY,         // sent modify, waiting for Accept or Reject
     STATE_RECEIVEDMODIFY,     // received modify, call Accept or Reject
+    STATE_SENTBUSY,           // sent busy after receiving initiate
     STATE_SENTREJECT,         // sent reject after receiving initiate
+    STATE_RECEIVEDBUSY,        // received busy after sending initiate
     STATE_RECEIVEDREJECT,     // received reject after sending initiate
     STATE_SENTREDIRECT,       // sent direct after receiving initiate
     STATE_SENTTERMINATE,      // sent terminate (any time / either side)

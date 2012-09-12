@@ -258,8 +258,12 @@ std::string BaseSession::StateToString(State state) {
       return "STATE_RECEIVEDMODIFY";
     case Session::STATE_SENTREJECT:
       return "STATE_SENTREJECT";
+    case Session::STATE_SENTBUSY:
+      return "STATE_SENTBUSY";
     case Session::STATE_RECEIVEDREJECT:
       return "STATE_RECEIVEDREJECT";
+    case Session::STATE_RECEIVEDBUSY:
+      return "STATE_RECEIVEDBUSY";
     case Session::STATE_SENTREDIRECT:
       return "STATE_SENTREDIRECT";
     case Session::STATE_SENTTERMINATE:
@@ -733,7 +737,6 @@ bool Session::Accept(const SessionDescription* sdesc) {
 
 bool Session::Reject(const std::string& reason) {
   ASSERT(signaling_thread()->IsCurrent());
-
   // Reject is sent in response to an initiate or modify, to reject the
   // request
   if (state() != STATE_RECEIVEDINITIATE && state() != STATE_RECEIVEDMODIFY)
@@ -745,7 +748,11 @@ bool Session::Reject(const std::string& reason) {
     return false;
   }
 
-  SetState(STATE_SENTREJECT);
+  if (reason == STR_TERMINATE_BUSY) {
+    SetState(STATE_SENTBUSY);
+  } else {
+    SetState(STATE_SENTREJECT);
+  }
   return true;
 }
 
@@ -758,7 +765,9 @@ bool Session::TerminateWithReason(const std::string& reason) {
     case STATE_RECEIVEDTERMINATE:
       return false;
 
+    case STATE_SENTBUSY:
     case STATE_SENTREJECT:
+    case STATE_RECEIVEDBUSY:
     case STATE_RECEIVEDREJECT:
       // We don't need to send terminate if we sent or received a reject...
       // it's implicit.
@@ -1101,7 +1110,7 @@ bool Session::OnInitiateMessage(const SessionMessage& msg,
   SetState(STATE_RECEIVEDINITIATE);
 
   // Users of Session may listen to state change and call Reject().
-  if (state() != STATE_SENTREJECT) {
+  if (state() != STATE_SENTREJECT && state() != STATE_SENTBUSY) {
     if (!OnRemoteCandidates(init.transports, error))
       return false;
   }
@@ -1130,7 +1139,7 @@ bool Session::OnAcceptMessage(const SessionMessage& msg, MessageError* error) {
   SetState(STATE_RECEIVEDACCEPT);
 
   // Users of Session may listen to state change and call Reject().
-  if (state() != STATE_SENTREJECT) {
+  if (state() != STATE_SENTREJECT && state() != STATE_SENTBUSY) {
     if (!OnRemoteCandidates(accept.transports, error))
       return false;
   }
@@ -1139,10 +1148,17 @@ bool Session::OnAcceptMessage(const SessionMessage& msg, MessageError* error) {
 }
 
 bool Session::OnRejectMessage(const SessionMessage& msg, MessageError* error) {
-  if (!CheckState(STATE_SENTINITIATE, error))
+  SessionTerminate term;
+  if (!CheckState(STATE_SENTINITIATE, error) &&
+        !ParseSessionTerminate(msg.protocol, msg.action_elem, &term, error))
     return false;
 
-  SetState(STATE_RECEIVEDREJECT);
+  if (term.reason == STR_TERMINATE_BUSY) {
+      SetState(STATE_RECEIVEDBUSY);
+  } else {
+      SetState(STATE_RECEIVEDREJECT);
+  }
+
   return true;
 }
 
@@ -1287,7 +1303,9 @@ void Session::OnMessage(talk_base::Message* pmsg) {
 
   case MSG_STATE:
     switch (orig_state) {
+    case STATE_SENTBUSY:
     case STATE_SENTREJECT:
+    case STATE_RECEIVEDBUSY:
     case STATE_RECEIVEDREJECT:
       // Assume clean termination.
       Terminate();

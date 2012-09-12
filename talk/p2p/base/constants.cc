@@ -201,6 +201,7 @@ const char JINGLE_ERROR_UNKNOWN_SESSION[] = "unknown-session";
 
 // Call terminate reasons from XEP-166
 const char STR_TERMINATE_DECLINE[] = "decline";
+const char STR_TERMINATE_BUSY[] = "busy";
 const char STR_TERMINATE_SUCCESS[] = "success";
 const char STR_TERMINATE_ERROR[] = "general-error";
 const char STR_TERMINATE_INCOMPATIBLE_PARAMETERS[] = "incompatible-parameters";
