@@ -295,6 +295,7 @@ BaseSession::BaseSession(talk_base::Thread* signaling_thread,
       content_type_(content_type),
       transport_type_(NS_GINGLE_P2P),
       initiator_(initiator),
+      identity_(NULL),
       local_description_(NULL),
       remote_description_(NULL),
       transport_muxed_(false),
@@ -374,9 +375,9 @@ TransportProxy* BaseSession::GetOrCreateTransportProxy(
 
   transproxy = new TransportProxy(sid_, content_name,
                                   new TransportWrapper(transport));
-  TransportInfo info;
-  if (GetLocalTransportInfo(content_name, &info)) {
-    transproxy->SetLocalTransportDescription(info.description);
+  TransportDescription tdesc;
+  if (GetLocalTransportDescription(content_name, &tdesc)) {
+    transproxy->SetLocalTransportDescription(tdesc);
   }
   transproxy->SignalCandidatesReady.connect(
       this, &BaseSession::OnTransportProxyCandidatesReady);
@@ -428,9 +429,9 @@ cricket::Transport* BaseSession::CreateTransport(
     const std::string& content_name) {
   ASSERT(transport_type_ == NS_GINGLE_P2P);
   return new cricket::DtlsTransport<P2PTransport>(
-      signaling_thread(), worker_thread(), content_name, port_allocator());
+      signaling_thread(), worker_thread(), content_name,
+      port_allocator(), identity_);
 }
-
 
 void BaseSession::UpdateContentName(
     const std::string& old_content_name, const std::string& new_content_name) {
@@ -625,17 +626,18 @@ void BaseSession::LogState(State old_state, State new_state) {
                << " Transport:" << transport_type();
 }
 
-bool BaseSession::GetLocalTransportInfo(const std::string& content_name,
-                                        TransportInfo* info) {
-  if (!local_description_ || !info) {
+bool BaseSession::GetTransportDescription(const SessionDescription* description,
+                                          const std::string& content_name,
+                                          TransportDescription* tdesc) {
+  if (!description || !tdesc) {
     return false;
   }
   const TransportInfo* transport_info =
-      local_description_->GetTransportInfoByName(content_name);
+      description->GetTransportInfoByName(content_name);
   if (!transport_info) {
     return false;
   }
-  *info = *transport_info;
+  *tdesc = transport_info->description;
   return true;
 }
 
@@ -648,8 +650,14 @@ void BaseSession::OnMessage(talk_base::Message *pmsg) {
 
   case MSG_STATE:
     switch (state_) {
+    case STATE_RECEIVEDINITIATE:
+      PushdownRemoteTransportDescription();
+      break;
     case STATE_SENTACCEPT:
+      SetState(STATE_INPROGRESS);
+      break;
     case STATE_RECEIVEDACCEPT:
+      PushdownRemoteTransportDescription();
       SetState(STATE_INPROGRESS);
       break;
 
@@ -823,7 +831,7 @@ TransportInfos Session::GetEmptyTransportInfos(
        content != contents.end(); ++content) {
     tinfos.push_back(
         TransportInfo(content->name,
-          TransportDescription(transport_type(), Candidates())));
+            TransportDescription(transport_type(), Candidates())));
   }
   return tinfos;
 }
@@ -1105,6 +1113,7 @@ bool Session::OnInitiateMessage(const SessionMessage& msg,
   }
 
   set_remote_name(msg.from);
+  set_initiator_name(msg.initiator);
   set_remote_description(new SessionDescription(init.ClearContents(),
                                                 init.groups));
   SetState(STATE_RECEIVEDINITIATE);

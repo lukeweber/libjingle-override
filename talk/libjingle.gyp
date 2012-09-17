@@ -210,6 +210,8 @@
             'base/winfirewall.cc',
             'base/winping.cc',
           ],
+          # Suppress warnings about WIN32_LEAN_AND_MEAN.
+          'msvs_disabled_warnings': [4005],
           'msvs_settings': {
             'VCLibrarianTool': {
               'AdditionalDependencies': [
@@ -321,6 +323,13 @@
             'media/devices/macdevicemanager.cc',
             'media/devices/macdevicemanagermm.mm',
           ],
+          'xcode_settings': {
+            'WARNING_CFLAGS': [
+              # TODO(ronghuawu): Update macdevicemanager.cc to stop using
+              # deprecated functions and remove this flag.
+              '-Wno-deprecated-declarations',
+            ],
+          },
           'link_settings': {
             'xcode_settings': {
               'OTHER_LDFLAGS': [
@@ -375,6 +384,8 @@
         'p2p/base/transport.cc',
         'p2p/base/transportchannel.cc',
         'p2p/base/transportchannelproxy.cc',
+        'p2p/base/transportdescriptionfactory.cc',
+        'p2p/base/transportdescriptionfactory.h',
         'p2p/base/udpport.cc',
         'p2p/client/basicportallocator.cc',
         'p2p/client/connectivitychecker.cc',

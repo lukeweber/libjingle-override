@@ -118,6 +118,7 @@
         'base/urlencode_unittest.cc',
         'base/versionparsing_unittest.cc',
         'base/virtualsocket_unittest.cc',
+        'base/windowpicker_unittest.cc',
         'xmllite/qname_unittest.cc',
         'xmllite/xmlbuilder_unittest.cc',
         'xmllite/xmlelement_unittest.cc',
@@ -192,6 +193,16 @@
         'libjingle.gyp:libjingle_media',
         'libjingle_unittest_main',
       ],
+      # TODO(ronghuawu): Avoid the copies.
+      # https://code.google.com/p/libjingle/issues/detail?id=398
+      'copies': [
+        {
+          'destination': '<(PRODUCT_DIR)/talk/media',
+          'files': [
+            'media/testdata/',
+          ],
+        },
+      ],
       'sources': [
         'media/base/codec_unittest.cc',
         'media/base/filemediaengine_unittest.cc',
@@ -249,6 +260,7 @@
         'p2p/base/stunrequest_unittest.cc',
         'p2p/base/stunserver_unittest.cc',
         'p2p/base/transport_unittest.cc',
+        'p2p/base/transportdescriptionfactory_unittest.cc',
         'p2p/client/connectivitychecker_unittest.cc',
         'p2p/client/portallocator_unittest.cc',
         'session/media/channel_unittest.cc',

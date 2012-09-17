@@ -1391,8 +1391,7 @@ bool PhysicalSocketServer::Wait(int cmsWait, bool process_io) {
 
     // Recalc the time remaining to wait. Doing it here means it doesn't get
     // calced twice the first time through the loop
-
-    if (cmsWait != kForever) {
+    if (ptvWait) {
       ptvWait->tv_sec = 0;
       ptvWait->tv_usec = 0;
       struct timeval tvT;
