@@ -26,56 +26,15 @@
 #
 
 {
-  'includes': ['../build/common.gypi'],
   'targets': [
-    {
-      'target_name': 'jingle_media',
-      'type': 'static_library',
-      'sources': [
-        'base/codec.cc',
-        'base/constants.cc',
-        'base/cpuid.cc',
-        'base/filemediaengine.cc',
-        'base/hybridvideoengine.cc',
-        'base/mediaengine.cc',
-        'base/rtpdataengine.cc',
-        'base/rtpdump.cc',
-        'base/rtputils.cc',
-        'base/streamparams.cc',
-        'base/videoadapter.cc',
-        'base/videocapturer.cc',
-        'base/videocommon.cc',
-        'base/videoframe.cc',
-        'devices/devicemanager.cc',
-        'devices/dummydevicemanager.cc',
-        'devices/filevideocapturer.cc',
+    {   
+      'target_name': 'All', 
+      'type': 'none',   
+      'dependencies': [ 
+        'libjingle.gyp:*',  
+        'libjingle_examples.gyp:*',  
+        'libjingle_tests.gyp:*',  
       ],
-      'conditions': [
-        ['OS=="linux"', {
-          'sources': [
-            'devices/gtkvideorenderer.cc',
-            'devices/libudevsymboltable.cc',
-            'devices/linuxdevicemanager.cc',
-            'devices/v4llookup.cc',
-          ],
-          'cflags': [
-            '<!@(pkg-config --cflags gtk+-2.0)',
-          ],
-        }],
-        ['OS=="win"', {
-          'sources': [
-            'devices/gdivideorenderer.cc',
-            'devices/win32devicemanager.cc',
-          ],
-        }],
-        ['OS=="mac"', {
-          'sources': [
-            'devices/carbonvideorenderer.cc',
-            'devices/macdevicemanager.cc',
-            'devices/macdevicemanagermm.mm',
-          ],
-        }],
-      ],
-    },  # target jingle_media
+    },
   ],
 }

@@ -28,6 +28,13 @@
 # This file contains common settings for building libjingle components.
 
 {
+  'variables': {
+    # TODO(ronghuawu): Chromium build will need a different libjingle_root.
+    'libjingle_root%': '<(DEPTH)',
+    # TODO(ronghuawu): For now, disable the Chrome plugins, which causes a
+    # flood of chromium-style warnings.
+    'clang_use_chrome_plugins%': 0,
+  },
   'target_defaults': {
     'include_dirs': [
       '../..',
@@ -58,7 +65,12 @@
       }],
       ['os_posix==1', {
         'defines': [
+          'HASH_NAMESPACE=__gnu_cxx',
           'POSIX',
+          'DISABLE_DYNAMIC_CAST',
+          'HAVE_OPENSSL_SSL_H=1',
+          # The POSIX standard says we have to define this.
+          '_REENTRANT',
         ],
       }],
     ],
