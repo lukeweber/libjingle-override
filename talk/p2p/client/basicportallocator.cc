@@ -1014,7 +1014,7 @@ void AllocationSequence::CreateTurnPorts() {
                                     session_->username(),
                                     session_->password());
   if (port) {
-    session_->AddAllocatedPort(port, this, PRIORITY_RELAY, false);
+    session_->AddAllocatedPort(port, this, false);
     // Add the addresses of this protocol.
     ProtocolAddress addr (config_->turn_address, PROTO_UDP);
     port->AddServerAddress(addr);

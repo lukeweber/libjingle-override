@@ -1085,7 +1085,7 @@ void CallClient::Accept(const cricket::CallOptions& options) {
 
 void CallClient::Reject() {
   ASSERT(call_ && incoming_call_);
-  call_->RejectSession(call_->sessions()[0]);
+  call_->RejectSession(call_->sessions()[0], false);
   incoming_call_ = false;
 }
 

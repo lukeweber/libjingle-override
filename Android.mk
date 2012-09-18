@@ -123,6 +123,7 @@ LOCAL_SRC_FILES += \
 		talk/p2p/base/transport.cc \
 		talk/p2p/base/transportchannel.cc \
 		talk/p2p/base/transportchannelproxy.cc \
+		talk/p2p/base/transportdescriptionfactory.cc \
 		talk/p2p/base/udpport.cc \
 		talk/p2p/client/basicportallocator.cc \
 		talk/p2p/client/httpportallocator.cc \
