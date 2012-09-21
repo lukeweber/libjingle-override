@@ -763,17 +763,15 @@ bool Session::TerminateWithReason(const std::string& reason) {
 
   // Either side can terminate, at any time.
   switch (state()) {
-    case STATE_SENTTERMINATE:
-    case STATE_RECEIVEDTERMINATE:
-      return false;
-
     case STATE_SENTBUSY:
     case STATE_SENTREJECT:
     case STATE_RECEIVEDBUSY:
     case STATE_RECEIVEDREJECT:
+    case STATE_SENTTERMINATE:
+    case STATE_RECEIVEDTERMINATE:
       // We don't need to send terminate if we sent or received a reject...
       // it's implicit.
-      break;
+      return false;
 
     default:
       SessionError error;
@@ -1156,12 +1154,6 @@ bool Session::OnRejectMessage(const SessionMessage& msg, MessageError* error) {
         !ParseSessionTerminate(msg.protocol, msg.action_elem, &term, error))
     return false;
 
-  if (term.reason == STR_TERMINATE_BUSY) {
-      SetState(STATE_RECEIVEDBUSY);
-  } else {
-      SetState(STATE_RECEIVEDREJECT);
-  }
-
   return true;
 }
 
@@ -1181,7 +1173,12 @@ bool Session::OnTerminateMessage(const SessionMessage& msg,
     LOG(LS_VERBOSE) << "Received error on call: " << term.debug_reason;
   }
 
-  SetState(STATE_RECEIVEDTERMINATE);
+  if (term.reason == STR_TERMINATE_BUSY) {
+    SetState(STATE_RECEIVEDBUSY);
+  } else {
+    SetState(STATE_RECEIVEDTERMINATE);
+  }
+
   return true;
 }
 
@@ -1310,10 +1307,6 @@ void Session::OnMessage(talk_base::Message* pmsg) {
     case STATE_SENTREJECT:
     case STATE_RECEIVEDBUSY:
     case STATE_RECEIVEDREJECT:
-      // Assume clean termination.
-      Terminate();
-      break;
-
     case STATE_SENTTERMINATE:
     case STATE_RECEIVEDTERMINATE:
       session_manager_->DestroySession(this);
