@@ -36,9 +36,9 @@
 #include "talk/media/webrtc/webrtcmediaengine.h"
 
 #ifdef WEBRTC_RELATIVE_PATH
-#include "modules/audio_device/main/interface/audio_device.h"
+#include "modules/audio_device/include/audio_device.h"
 #else
-#include "third_party/webrtc/modules/audio_device/main/interface/audio_device.h"
+#include "third_party/webrtc/modules/audio_device/include/audio_device.h"
 #endif
 
 using talk_base::scoped_refptr;

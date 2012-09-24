@@ -34,7 +34,7 @@
 
 #ifdef WEBRTC_RELATIVE_PATH
 #include "common_types.h"
-#include "modules/audio_device/main/interface/audio_device.h"
+#include "modules/audio_device/include/audio_device.h"
 #include "voice_engine/include/voe_audio_processing.h"
 #include "voice_engine/include/voe_base.h"
 #include "voice_engine/include/voe_codec.h"
@@ -50,7 +50,7 @@
 #include "voice_engine/include/voe_volume_control.h"
 #else
 #include "third_party/webrtc/common_types.h"
-#include "third_party/webrtc/modules/audio_device/main/interface/audio_device.h"
+#include "third_party/webrtc/modules/audio_device/include/audio_device.h"
 #include "third_party/webrtc/voice_engine/include/voe_audio_processing.h"
 #include "third_party/webrtc/voice_engine/include/voe_base.h"
 #include "third_party/webrtc/voice_engine/include/voe_codec.h"
