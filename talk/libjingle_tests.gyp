@@ -197,13 +197,18 @@
       # https://code.google.com/p/libjingle/issues/detail?id=398
       'copies': [
         {
-          'destination': '<(PRODUCT_DIR)/talk/media',
+          'destination': '<(DEPTH)/../talk/media/testdata',
           'files': [
-            'media/testdata/',
+            'media/testdata/1.frame_plus_1.byte',
+            'media/testdata/captured-320x240-2s-48.frames',
+            'media/testdata/h264-svc-99-640x360.rtpdump',
+            'media/testdata/video.rtpdump',
+            'media/testdata/voice.rtpdump',
           ],
         },
       ],
       'sources': [
+        'media/base/capturemanager_unittest.cc',
         'media/base/codec_unittest.cc',
         'media/base/filemediaengine_unittest.cc',
         'media/base/rtpdataengine_unittest.cc',

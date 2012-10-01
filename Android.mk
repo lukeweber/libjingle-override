@@ -143,6 +143,8 @@ LOCAL_SRC_FILES += \
 		talk/app/webrtc/audiotrack.cc \
 		talk/app/webrtc/videotrack.cc \
 		talk/app/webrtc/videotrackrenderers.cc \
+		talk/media/base/capturemanager.cc \
+		talk/media/base/capturerenderadapter.cc \
 		talk/media/base/codec.cc \
 		talk/media/base/constants.cc \
 		talk/media/base/rtpdataengine.cc \
@@ -215,6 +217,7 @@ LOCAL_CFLAGS += \
 	-DHAVE_UINT32_T \
 	-DHAVE_UINT16_T \
 	-DHAVE_UINT8_T \
-	-DHAVE_UINT_T
+	-DHAVE_UINT_T \
+	-DUSE_WEBRTC_313_BRANCH
 
 include $(BUILD_STATIC_LIBRARY)

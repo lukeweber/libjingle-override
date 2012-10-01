@@ -537,6 +537,8 @@
         'talk/app/webrtc/webrtcsdp.h',
         'talk/app/webrtc/webrtcsession.cc',
         'talk/app/webrtc/webrtcsession.h',
+        'talk/media/base/capturemanager.cc',
+        'talk/media/base/capturerenderadapter.cc',
         'talk/media/base/codec.cc',
         'talk/media/base/codec.h',
         'talk/media/base/constants.cc',
