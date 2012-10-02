@@ -6,60 +6,59 @@
 #include "talk/base/testclient.h"
 #include "talk/p2p/base/turnserver.h"
 
-#include <boost/thread.hpp>
-#include <boost/scoped_ptr.hpp>
-#include <boost/make_shared.hpp>
-
-
 using namespace cricket;
 
 static const talk_base::SocketAddress turn_int_addr("127.0.0.1", 3478);
 
-class TestConnection {
+class TestConnection : public talk_base::Thread {
   public:
-    TestConnection(const talk_base::SocketAddress& client_addr, 
-        const talk_base::SocketAddress& peer_addr, const uint32 channel,
-        const char* data)
-      : main_(talk_base::Thread::Current()), ss_(main_->socketserver()) {
-        client_.reset(new talk_base::TestClient(
-              talk_base::AsyncUDPSocket::Create(ss_, client_addr)));
-        peer_.reset(new talk_base::TestClient(
-              talk_base::AsyncUDPSocket::Create(ss_, peer_addr)));
+    TestConnection(talk_base::SocketAddress& client_addr, 
+        talk_base::SocketAddress& peer_addr, const uint32 channel,
+        const char* data) {
         data_ = data;
         channel_ = channel;
+        client_addr_ = client_addr;
         peer_addr_ = peer_addr;
       }
 
-    void Run() {
-      std::cout << "Running" << std::endl;
-      Allocate();
-      BindChannel();
-      // Send Data 
-      for (int i = 0; i < 100; i++) {
-        std::string client_data = std::string("client") + data_;
-        ClientSendData(client_data.c_str());
-        std::string received_data = PeerReceiveData();
-        if (received_data != client_data) {
-          std::cout << "!!! Client -> Peer Data | Validation Failed !!!" << std::endl;
+    virtual void Run() {
+      std::cout << "Running on " << channel_ << std::endl;
+      th_ = talk_base::Thread::Current();
+      ss_ = th_->socketserver();
+      client_.reset(new talk_base::TestClient(
+            talk_base::AsyncUDPSocket::Create(ss_, client_addr_)));
+      peer_.reset(new talk_base::TestClient(
+            talk_base::AsyncUDPSocket::Create(ss_, peer_addr_)));
+      if (Allocate() && BindChannel() && relayed_addr_.port() != 0) {
+        for (int i = 0; i < 100; i++) {
+          std::string client_data = std::string("client") + data_;
+          ClientSendData(client_data.c_str());
+          std::string received_data = PeerReceiveData();
+          if (received_data != client_data) {
+            std::cout << "--- " << client_addr_.port() << " -> " 
+              << peer_addr_.port() << " | Validation Failed"  << std::endl;
+          }
         }
-      }
 
-      for (int i = 0; i < 100; i++) {
-        std::string peer_data = std::string("peer") + data_;
-        PeerSendData(peer_data.c_str());
-        std::string received_data = ClientReceiveData();
-        if (received_data != peer_data) {
-          std::cout << "!!! Peer -> Client Data | Validation Failed !!!" << std::endl;
-          std::cout << received_data << std::endl;
+        for (int i = 0; i < 100; i++) {
+          std::string peer_data = std::string("peer") + data_;
+          PeerSendData(peer_data.c_str());
+          std::string received_data = ClientReceiveData();
+          if (received_data != peer_data) {
+            std::cout << "--- " << peer_addr_.port() << " -> "
+              << client_addr_.port() << " | Validation Failed"  << std::endl;
+            std::cout << received_data << std::endl;
+          }
         }
       }
     }
 
   private:
-    void Allocate() {
+    bool Allocate() {
       std::cout << "Allocate" << std::endl;
       StunMessage* allocate_request = new TurnMessage();
       allocate_request->SetType(STUN_ALLOCATE_REQUEST);
+      bool success = true;
 
       // Set transport attribute
       StunUInt32Attribute * transport_attr =
@@ -73,39 +72,48 @@ class TestConnection {
       // Check allocate response
       TurnMessage* allocate_response = ReceiveStunMessage();
 
-      switch (allocate_response->type()) {
-        case STUN_ALLOCATE_RESPONSE:
-          std::cout << "allocate response" << std::endl;
-          break;
-        case STUN_ALLOCATE_ERROR_RESPONSE:
-          std::cout << "allocate error" << std::endl;
-          break;
-        default:
-          std::cout << "bogus" << allocate_response->type() << std::endl;
-      }
+      if (allocate_response != NULL) {
+        switch (allocate_response->type()) {
+          case STUN_ALLOCATE_RESPONSE:
+            std::cout << "allocate response" << std::endl;
+            break;
+          case STUN_ALLOCATE_ERROR_RESPONSE:
+            std::cout << "allocate error" << std::endl;
+            break;
+          default:
+            std::cout << "bogus" << allocate_response->type() << std::endl;
+        }
 
-      // Extract assigned relayed address
-      const StunAddressAttribute* raddr_attr =
-        allocate_response->GetAddress(STUN_ATTR_XOR_RELAYED_ADDRESS);
-      if (!raddr_attr) {
+        // Extract assigned relayed address
+        const StunAddressAttribute* raddr_attr =
+          allocate_response->GetAddress(STUN_ATTR_XOR_RELAYED_ADDRESS);
+        if (!raddr_attr) {
           std::cout << "No relayed address" << std::endl;
-      } else {
-        relayed_addr_ = talk_base::SocketAddress(raddr_attr->ipaddr(), raddr_attr->port());
-      }
+        } else {
+          relayed_addr_ = talk_base::SocketAddress(raddr_attr->ipaddr(), raddr_attr->port());
+        }
 
-      const StunAddressAttribute* maddr_attr =
-        allocate_response->GetAddress(STUN_ATTR_XOR_MAPPED_ADDRESS);
-      if (!maddr_attr) {
+        const StunAddressAttribute* maddr_attr =
+          allocate_response->GetAddress(STUN_ATTR_XOR_MAPPED_ADDRESS);
+        if (!maddr_attr) {
           std::cout << "No relayed address" << std::endl;
+        } else {
+          mapped_addr_ = talk_base::SocketAddress(maddr_attr->ipaddr(), maddr_attr->port());
+        }
       } else {
-        mapped_addr_ = talk_base::SocketAddress(maddr_attr->ipaddr(), maddr_attr->port());
+        std::cout << "Got NULL on allocate request" << std::endl;
+        success = false;
       }
 
       delete allocate_response;
       delete allocate_request;
+
+      return success;
     }
 
-    void BindChannel() {
+    bool BindChannel() {
+      bool success = true;
+
       std::cout << "Bind Channel " << channel_ << std::endl;
       StunMessage* bind_request = new TurnMessage();
       bind_request->SetType(STUN_CHANNEL_BIND_REQUEST);
@@ -128,23 +136,30 @@ class TestConnection {
 
       // Receive Channel Bind response
       TurnMessage* bind_response = ReceiveStunMessage();
-      switch (bind_response->type()) {
-        case STUN_CHANNEL_BIND_RESPONSE:
-          std::cout << "bind response" << std::endl;
-          break;
-        case STUN_CHANNEL_BIND_ERROR_RESPONSE:
-          std::cout << "bind error" << std::endl;
-          break;
-        default:
-          std::cout << "bogus: " << bind_response->type() << std::endl;
+      if (bind_response != NULL) {
+        switch (bind_response->type()) {
+          case STUN_CHANNEL_BIND_RESPONSE:
+            std::cout << "bind response" << std::endl;
+            break;
+          case STUN_CHANNEL_BIND_ERROR_RESPONSE:
+            std::cout << "bind error" << std::endl;
+            break;
+          default:
+            std::cout << "bogus: " << bind_response->type() << std::endl;
+        }
+      } else {
+        std::cout << "Got NULL on bind channel" << std::endl;
+        success = false;
       }
 
       delete bind_response;
       delete bind_request;
+
+      return success;
     }
 
     void ClientSendData(const char* data) {
-      std::cout << "Client Send Data" << std::endl;
+      // std::cout << "Client Send Data from port " << client_addr_.port() << std::endl;
       talk_base::ByteBuffer buff;
       uint32 val = channel_ | std::strlen(data);
       buff.WriteUInt32(val);
@@ -153,7 +168,7 @@ class TestConnection {
     }
 
     std::string PeerReceiveData() {
-      std::cout << "Peer Receive Data" << std::endl;
+      // std::cout << "Peer Receive Data on port " << peer_addr_.port() << std::endl;
       std::string raw;
       talk_base::TestClient::Packet* packet = peer_->NextPacket();
       if (packet) {
@@ -164,14 +179,14 @@ class TestConnection {
     }
 
     void PeerSendData(const char* data) {
-      std::cout << "Peer Send Data" << std::endl;
+      // std::cout << "Peer Send Data from port " << peer_addr_.port() << std::endl;
       talk_base::ByteBuffer buff;
       buff.WriteBytes(data, std::strlen(data));
       peer_->SendTo(buff.Data(), buff.Length(), relayed_addr_);
     }
 
     std::string ClientReceiveData() {
-      std::cout << "Client Receive Data" << std::endl;
+      // std::cout << "Client Receive Data on port " << client_addr_.port() << std::endl;
       std::string raw;
       talk_base::TestClient::Packet* packet = client_->NextPacket();
       if (packet) {
@@ -208,11 +223,12 @@ class TestConnection {
       return response;
     }
 
-    talk_base::Thread* main_;
+    talk_base::Thread* th_;
     talk_base::SocketServer* ss_;
     talk_base::scoped_ptr<talk_base::TestClient> client_;
     talk_base::scoped_ptr<talk_base::TestClient> peer_;
     talk_base::SocketAddress peer_addr_;
+    talk_base::SocketAddress client_addr_;
     talk_base::SocketAddress mapped_addr_;
     talk_base::SocketAddress relayed_addr_;
     const char* data_;
@@ -220,19 +236,29 @@ class TestConnection {
 };
 
 int main(int argc, char **argv) {
-  talk_base::SocketAddress client_addr("127.0.0.1", 6000);
-  talk_base::SocketAddress peer_addr("127.0.0.1", 6001);
+  uint32 client_port = 6000;
+  uint32 peer_port = 6001;
   const char* test_data = "datadatadatadatadatadatadatadatadatadatadatadata";
   const uint32 channel_min = 0x40000000;
-  const uint32 channel_max = 0x80000000;
-  // uint32 channel = 0x40010000;
+  // const uint32 channel_max = 0x80000000;
+  const int thread_count = 1;
+  std::vector<talk_base::Thread*> threads;
+
   uint32 channel = channel_min + 0x10000;
-  if (channel == channel_max) {
-    channel = channel_min;
+  for (int i = 0; i < thread_count; i++) {
+    std::cout << "--- Starting thread " << i << std::endl;
+    talk_base::SocketAddress sa1 = talk_base::SocketAddress("127.0.0.1", client_port);
+    talk_base::SocketAddress sa2 = talk_base::SocketAddress("127.0.0.1", peer_port);
+    threads.push_back(new TestConnection(sa1, sa2, channel, test_data));
+    threads[i]->Start();
+
+    client_port += 2;
+    peer_port += 2;
+    channel += 0x10000;
   }
 
-  std::cout << "Creating clients" << std::endl;
-  TestConnection *conn = new TestConnection(client_addr, peer_addr, channel, test_data);
-  conn->Run();
-  delete conn;
+  for (int i = 0; i < thread_count; i++) {
+    threads[i]->Stop();
+    delete threads[i];
+  }
 }
