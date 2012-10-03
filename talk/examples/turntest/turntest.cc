@@ -25,12 +25,15 @@ class TestConnection : public talk_base::Thread {
       std::cout << "Running on " << channel_ << std::endl;
       th_ = talk_base::Thread::Current();
       ss_ = th_->socketserver();
+      // Create client and peer
       client_.reset(new talk_base::TestClient(
             talk_base::AsyncUDPSocket::Create(ss_, client_addr_)));
       peer_.reset(new talk_base::TestClient(
             talk_base::AsyncUDPSocket::Create(ss_, peer_addr_)));
+      // Assure that we have allocated, binded and have relay address
       if (Allocate() && BindChannel() && relayed_addr_.port() != 0) {
-        for (int i = 0; i < 100; i++) {
+        // Send data from client to peer
+        for (int i = 0; i < 1000; i++) {
           std::string client_data = std::string("client") + data_;
           ClientSendData(client_data.c_str());
           std::string received_data = PeerReceiveData();
@@ -40,7 +43,8 @@ class TestConnection : public talk_base::Thread {
           }
         }
 
-        for (int i = 0; i < 100; i++) {
+        // Send data from peer to client
+        for (int i = 0; i < 1000; i++) {
           std::string peer_data = std::string("peer") + data_;
           PeerSendData(peer_data.c_str());
           std::string received_data = ClientReceiveData();
@@ -66,10 +70,8 @@ class TestConnection : public talk_base::Thread {
       transport_attr->SetValue(0x11000000);
       allocate_request->AddAttribute(transport_attr);
 
-      // Send allocate request
+      // Send allocate request and get the response
       SendStunMessage(allocate_request);
-
-      // Check allocate response
       TurnMessage* allocate_response = ReceiveStunMessage();
 
       if (allocate_response != NULL) {
@@ -93,6 +95,7 @@ class TestConnection : public talk_base::Thread {
           relayed_addr_ = talk_base::SocketAddress(raddr_attr->ipaddr(), raddr_attr->port());
         }
 
+        // Extract mapped address
         const StunAddressAttribute* maddr_attr =
           allocate_response->GetAddress(STUN_ATTR_XOR_MAPPED_ADDRESS);
         if (!maddr_attr) {
@@ -131,11 +134,10 @@ class TestConnection : public talk_base::Thread {
       addr_attr->SetPort(peer_addr_.port());
       bind_request->AddAttribute(addr_attr);
 
-      // Send Channel Bind request
+      // Send Channel Bind request and get the response
       SendStunMessage(bind_request);
-
-      // Receive Channel Bind response
       TurnMessage* bind_response = ReceiveStunMessage();
+
       if (bind_response != NULL) {
         switch (bind_response->type()) {
           case STUN_CHANNEL_BIND_RESPONSE:
@@ -190,12 +192,15 @@ class TestConnection : public talk_base::Thread {
       std::string raw;
       talk_base::TestClient::Packet* packet = client_->NextPacket();
       if (packet) {
+        // First 4 bytes are reserved for channel address
+        // But only 2 of them are significant, the rest 2 are zeros
         uint16 val1, val2;
         memcpy(&val1, packet->buf, 2);
         val2 = talk_base::NetworkToHost16(val1);
         if ( val2 & 0x4000 )  {
           uint32 received_channel = val2 << 16;
           if (received_channel == channel_) {
+            // Move the pointer and reduce the size to read
             raw = std::string(packet->buf + 4, packet->size - 4);
           } else {
             std::cout << "!!! Client -> Peer | Wrong Channel Number !!!" << std::endl;
@@ -240,8 +245,8 @@ int main(int argc, char **argv) {
   uint32 peer_port = 6001;
   const char* test_data = "datadatadatadatadatadatadatadatadatadatadatadata";
   const uint32 channel_min = 0x40000000;
-  // const uint32 channel_max = 0x80000000;
-  const int thread_count = 1;
+  const uint32 channel_max = 0x80000000;
+  const int thread_count = 30;
   std::vector<talk_base::Thread*> threads;
 
   uint32 channel = channel_min + 0x10000;
@@ -255,6 +260,11 @@ int main(int argc, char **argv) {
     client_port += 2;
     peer_port += 2;
     channel += 0x10000;
+
+    // Check if we reached the max value for channel number
+    if (channel == channel_max) {
+      channel = 0x40000000;
+    }
   }
 
   for (int i = 0; i < thread_count; i++) {

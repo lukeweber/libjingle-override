@@ -364,7 +364,7 @@ bool Thread::IsOwned() {
 }
 
 void Thread::Stop() {
-  MessageQueue::Quit();
+  // MessageQueue::Quit();
   Join();
 }
 
