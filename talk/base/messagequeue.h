@@ -131,6 +131,7 @@ class DisposeData : public MessageData {
 
 const uint32 MQID_ANY = static_cast<uint32>(-1);
 const uint32 MQID_DISPOSE = static_cast<uint32>(-2);
+const uint32 MQID_QUIT = static_cast<uint32>(-3);
 
 // No destructor
 
