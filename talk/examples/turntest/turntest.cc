@@ -33,7 +33,7 @@ class TestConnection : public talk_base::Thread {
       // Assure that we have allocated, binded and have relay address
       if (Allocate() && BindChannel() && relayed_addr_.port() != 0) {
         // Send data from client to peer
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 10; i++) {
           std::string client_data = std::string("client") + data_;
           ClientSendData(client_data.c_str());
           std::string received_data = PeerReceiveData();
@@ -44,7 +44,7 @@ class TestConnection : public talk_base::Thread {
         }
 
         // Send data from peer to client
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 10; i++) {
           std::string peer_data = std::string("peer") + data_;
           PeerSendData(peer_data.c_str());
           std::string received_data = ClientReceiveData();
@@ -246,7 +246,7 @@ int main(int argc, char **argv) {
   const char* test_data = "datadatadatadatadatadatadatadatadatadatadatadata";
   const uint32 channel_min = 0x40000000;
   const uint32 channel_max = 0x80000000;
-  const int thread_count = 30;
+  const int thread_count = 10;
   std::vector<talk_base::Thread*> threads;
 
   uint32 channel = channel_min + 0x10000;
@@ -263,7 +263,7 @@ int main(int argc, char **argv) {
 
     // Check if we reached the max value for channel number
     if (channel == channel_max) {
-      channel = 0x40000000;
+      channel = channel_min;
     }
   }
 
