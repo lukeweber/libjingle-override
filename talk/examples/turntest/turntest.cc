@@ -33,7 +33,7 @@ class TestConnection : public talk_base::Thread {
       // Assure that we have allocated, binded and have relay address
       if (Allocate() && BindChannel() && relayed_addr_.port() != 0) {
         // Send data from client to peer
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 50000; i++) {
           std::string client_data = std::string("client") + data_;
           ClientSendData(client_data.c_str());
           std::string received_data = PeerReceiveData();
@@ -41,10 +41,12 @@ class TestConnection : public talk_base::Thread {
             std::cout << "--- " << client_addr_.port() << " -> " 
               << peer_addr_.port() << " | Validation Failed"  << std::endl;
           }
+          // Sleep 100ms between messages
+          usleep(100000);
         }
 
         // Send data from peer to client
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 50000; i++) {
           std::string peer_data = std::string("peer") + data_;
           PeerSendData(peer_data.c_str());
           std::string received_data = ClientReceiveData();
@@ -53,6 +55,8 @@ class TestConnection : public talk_base::Thread {
               << client_addr_.port() << " | Validation Failed"  << std::endl;
             std::cout << received_data << std::endl;
           }
+          // Sleep 100ms between messages
+          usleep(100000);
         }
       }
     }
@@ -243,10 +247,13 @@ class TestConnection : public talk_base::Thread {
 int main(int argc, char **argv) {
   uint32 client_port = 6000;
   uint32 peer_port = 6001;
-  const char* test_data = "datadatadatadatadatadatadatadatadatadatadatadata";
+  // 100 bytes, avg size of rtp data packet used in call example
+  const char* test_data = 
+    "datadatadatadatadatadatadatadatadatadatadatadatada"
+    "tadatadatadatadatadatadatadatadatadatadatadatadata";
   const uint32 channel_min = 0x40000000;
   const uint32 channel_max = 0x80000000;
-  const int thread_count = 10;
+  const int thread_count = 200;
   std::vector<talk_base::Thread*> threads;
 
   uint32 channel = channel_min + 0x10000;
