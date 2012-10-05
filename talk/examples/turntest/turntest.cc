@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "talk/base/logging.h"
+#include "talk/base/flags.h"
 #include "talk/base/physicalsocketserver.h"
 #include "talk/base/socketaddress.h"
 #include "talk/base/testclient.h"
@@ -14,15 +14,15 @@ class TestConnection : public talk_base::Thread {
   public:
     TestConnection(talk_base::SocketAddress& client_addr, 
         talk_base::SocketAddress& peer_addr, const uint32 channel,
-        const char* data) {
+        const int msg_count, const char* data) {
         data_ = data;
         channel_ = channel;
         client_addr_ = client_addr;
         peer_addr_ = peer_addr;
+        msg_count_ = msg_count;
       }
 
     virtual void Run() {
-      std::cout << "Running on " << channel_ << std::endl;
       th_ = talk_base::Thread::Current();
       ss_ = th_->socketserver();
       // Create client and peer
@@ -33,7 +33,7 @@ class TestConnection : public talk_base::Thread {
       // Assure that we have allocated, binded and have relay address
       if (Allocate() && BindChannel() && relayed_addr_.port() != 0) {
         // Send data from client to peer
-        for (int i = 0; i < 50000; i++) {
+        for (int i = 0; i < msg_count_; i++) {
           std::string client_data = std::string("client") + data_;
           ClientSendData(client_data.c_str());
           std::string received_data = PeerReceiveData();
@@ -46,7 +46,7 @@ class TestConnection : public talk_base::Thread {
         }
 
         // Send data from peer to client
-        for (int i = 0; i < 50000; i++) {
+        for (int i = 0; i < msg_count_; i++) {
           std::string peer_data = std::string("peer") + data_;
           PeerSendData(peer_data.c_str());
           std::string received_data = ClientReceiveData();
@@ -63,7 +63,7 @@ class TestConnection : public talk_base::Thread {
 
   private:
     bool Allocate() {
-      std::cout << "Allocate" << std::endl;
+      // std::cout << "Allocate" << std::endl;
       StunMessage* allocate_request = new TurnMessage();
       allocate_request->SetType(STUN_ALLOCATE_REQUEST);
       bool success = true;
@@ -81,7 +81,7 @@ class TestConnection : public talk_base::Thread {
       if (allocate_response != NULL) {
         switch (allocate_response->type()) {
           case STUN_ALLOCATE_RESPONSE:
-            std::cout << "allocate response" << std::endl;
+            // std::cout << "allocate response" << std::endl;
             break;
           case STUN_ALLOCATE_ERROR_RESPONSE:
             std::cout << "allocate error" << std::endl;
@@ -121,7 +121,7 @@ class TestConnection : public talk_base::Thread {
     bool BindChannel() {
       bool success = true;
 
-      std::cout << "Bind Channel " << channel_ << std::endl;
+      // std::cout << "Bind Channel " << channel_ << std::endl;
       StunMessage* bind_request = new TurnMessage();
       bind_request->SetType(STUN_CHANNEL_BIND_REQUEST);
 
@@ -145,7 +145,7 @@ class TestConnection : public talk_base::Thread {
       if (bind_response != NULL) {
         switch (bind_response->type()) {
           case STUN_CHANNEL_BIND_RESPONSE:
-            std::cout << "bind response" << std::endl;
+            // std::cout << "bind response" << std::endl;
             break;
           case STUN_CHANNEL_BIND_ERROR_RESPONSE:
             std::cout << "bind error" << std::endl;
@@ -241,27 +241,51 @@ class TestConnection : public talk_base::Thread {
     talk_base::SocketAddress mapped_addr_;
     talk_base::SocketAddress relayed_addr_;
     const char* data_;
+    int msg_count_;
     uint32 channel_;
 };
 
 int main(int argc, char **argv) {
-  uint32 client_port = 6000;
-  uint32 peer_port = 6001;
+  // Define parameters
+  DEFINE_int(port, 6000, "Port to start from");
+  DEFINE_int(threads, 250, "Threads to run");
+  DEFINE_int(msg_count, 1000, "Number of messages to send");
+  DEFINE_bool(help, false, "Prints this message");
+
+  // parse options
+  FlagList::SetFlagsFromCommandLine(&argc, argv, true);
+  if (FLAG_help) {
+    FlagList::Print(NULL, false);
+    return 0;
+  }
+
+  uint32 client_port = FLAG_port;
+  uint32 peer_port = client_port + 1;
+  const int msg_count = FLAG_msg_count;
+  const int thread_count = FLAG_threads;
+
+  // uint32 client_port = 6000;
+  // uint32 peer_port = 6001;
   // 100 bytes, avg size of rtp data packet used in call example
   const char* test_data = 
     "datadatadatadatadatadatadatadatadatadatadatadatada"
     "tadatadatadatadatadatadatadatadatadatadatadatadata";
   const uint32 channel_min = 0x40000000;
   const uint32 channel_max = 0x80000000;
-  const int thread_count = 200;
   std::vector<talk_base::Thread*> threads;
+
+  std::cout << "Starting with " << std::endl;
+  std::cout << "  Threads: " << thread_count << std::endl;
+  std::cout << "  Client starting port: " << client_port << std::endl;
+  std::cout << "  Peer starting port: " << peer_port << std::endl;
+  std::cout << "  Messages to send: " << msg_count << std::endl;
 
   uint32 channel = channel_min + 0x10000;
   for (int i = 0; i < thread_count; i++) {
     std::cout << "--- Starting thread " << i << std::endl;
     talk_base::SocketAddress sa1 = talk_base::SocketAddress("127.0.0.1", client_port);
     talk_base::SocketAddress sa2 = talk_base::SocketAddress("127.0.0.1", peer_port);
-    threads.push_back(new TestConnection(sa1, sa2, channel, test_data));
+    threads.push_back(new TestConnection(sa1, sa2, channel, msg_count, test_data));
     threads[i]->Start();
 
     client_port += 2;
