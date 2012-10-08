@@ -213,6 +213,7 @@ bool StunMessage::ValidateMessageIntegrity(const char* data, size_t size,
     return false;
 
   // Comparing the calculated HMAC with the one present in the message.
+  printf("msg=(0x%x)!=(0x%x)generated\n", reinterpret_cast<unsigned int>(data + current_pos + kStunAttributeHeaderSize), reinterpret_cast<unsigned int>(hmac));
   return (std::memcmp(data + current_pos + kStunAttributeHeaderSize,
                       hmac, sizeof(hmac)) == 0);
 }
@@ -224,17 +225,21 @@ bool StunMessage::AddMessageIntegrity(const std::string& password) {
       new StunByteStringAttribute(STUN_ATTR_MESSAGE_INTEGRITY,
           std::string(kStunMessageIntegritySize, '0'));
   VERIFY(AddAttribute(msg_integrity_attr));
-
   // Calculate the HMAC for the message.
   talk_base::ByteBuffer buf;
+  int buf_len = 0;
+  int attr_len = 0;
+  size_t msg_len_for_hmac = 0;
   if (!Write(&buf))
     return false;
+  buf_len = buf.Length();
+  attr_len = msg_integrity_attr->length();
+  msg_len_for_hmac = buf_len - kStunAttributeHeaderSize - attr_len;
 
-  int msg_len_for_hmac = buf.Length() -
-      kStunAttributeHeaderSize - msg_integrity_attr->length();
+  int password_len = password.size();
   char hmac[kStunMessageIntegritySize];
   size_t ret = talk_base::ComputeHmac(talk_base::DIGEST_SHA_1,
-                                      password.c_str(), password.size(),
+                                      password.c_str(), password_len,
                                       buf.Data(), msg_len_for_hmac,
                                       hmac, sizeof(hmac));
   ASSERT(ret == sizeof(hmac));
@@ -246,6 +251,8 @@ bool StunMessage::AddMessageIntegrity(const std::string& password) {
 
   // Insert correct HMAC into the attribute.
   msg_integrity_attr->CopyBytes(hmac, sizeof(hmac));
+  //Validation failes something is wierd here
+  //return ValidateMessageIntegrity(buf.Data(), buf.Length(), password);
   return true;
 }
 
