@@ -45,11 +45,7 @@ static const int kSoftConnectTimeoutMs     = 3 * 1000;
 
 const char TURN_PORT_TYPE[] = "relay";
 
-//NFHACK SHOULD NOT HARDCODE
-//MAKE SURE IT IS EXACTLY 39 CHARS + 1 NULL TERM = 40 UNTIL WE FIX THE HASH
-//                       0        10        20        30        40
-//                       01234567890123456789012345678901234567890
-const char password[] = "supersecretpass";//5678901234567890123456789";
+const char password[] = "";
 
 TurnPort::TurnPort(
     talk_base::Thread* thread, talk_base::PacketSocketFactory* factory,
@@ -63,11 +59,9 @@ TurnPort::TurnPort(
       ready_(false),
       channel_nmbr_(0x40000000),
       error_(0),
-      //NFHACK SHOULD NOT HARDCODE: maybe this is wy it is working unidirectional
-      turn_username_(""),//nicktuen"),//nicktuentitesting@gmail.com"),
+      turn_username_(""),
       nonce_(""),
-      //NFHACK SHOULD NOT HARDCODE
-      realm_("myrealm") {
+      realm_("") {
   requests_.SignalSendPacket.connect(this, &TurnPort::OnSendPacket);
 }
 
