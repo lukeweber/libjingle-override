@@ -66,7 +66,7 @@ TurnPort::TurnPort(
 }
 
 TurnPort::~TurnPort() {
-  LOG_J(LS_INFO, this) << "RelayPort destructed";
+  LOG_J(LS_INFO, this) << "TurnPort destructed";
   delete socket_;
   thread()->Clear(this);
 }

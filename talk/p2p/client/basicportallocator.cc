@@ -209,6 +209,8 @@ BasicPortAllocator::BasicPortAllocator(
     talk_base::NetworkManager* network_manager,
     talk_base::PacketSocketFactory* socket_factory)
     : network_manager_(network_manager),
+      turn_username_(""),
+      turn_password_(""),
       socket_factory_(socket_factory) {
   ASSERT(socket_factory_ != NULL);
   Construct();
@@ -234,7 +236,9 @@ BasicPortAllocator::BasicPortAllocator(
       relay_address_udp_(relay_address_udp),
       relay_address_tcp_(relay_address_tcp),
       relay_address_ssl_(relay_address_ssl),
-      turn_address_udp_(turn_address_udp){
+      turn_address_udp_(turn_address_udp),
+      turn_username_(""),
+      turn_password_("") {
   Construct();
   LOG(INFO) << "LOGT Constructed with addresses";
   LOG(INFO) << "stun_address_(" << stun_address.ToString() << ")";
@@ -1005,14 +1009,30 @@ void AllocationSequence::CreateTurnPorts() {
         << "AllocationSequence: No TURN server configured, skipping.";
     return;
   }
-
+  std::string password(session_->password());
+  std::string username(session_->username());
+  BasicPortAllocator *allocator = session_->allocator();
+  if(allocator) {
+    std::string turnPassword(allocator->get_turn_password());
+    std::string turnUsername(allocator->get_turn_username());
+    if(!turnPassword.empty()) {
+      LOG(LS_WARNING) << "AllocationSequence: Overriding ice_pwd(" <<
+      password << ") with turn_password(" << turnPassword << ")";
+      password.assign(turnPassword);
+    }
+    if(!turnUsername.empty()) {
+      LOG(LS_WARNING) << "AllocationSequence: Overriding ice_user(" <<
+      username << ") with turn_username(" << turnUsername << ")";
+      username.assign(turnUsername);
+    }
+  }
   TurnPort* port = TurnPort::Create(session_->network_thread(),
                                     session_->socket_factory(),
                                     network_, ip_,
                                     session_->allocator()->min_port(),
                                     session_->allocator()->max_port(),
-                                    session_->username(),
-                                    session_->password());
+                                    username,
+                                    password);
   if (port) {
     session_->AddAllocatedPort(port, this, false);
     // Add the addresses of this protocol.
