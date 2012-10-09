@@ -136,8 +136,7 @@ void MessageQueue::set_socketserver(SocketServer* ss) {
 }
 
 void MessageQueue::Quit() {
-  Post(NULL, MQID_REDPILL);
-  //ss_->WakeUp();
+  Post(NULL, MQID_QUIT);
 }
 
 bool MessageQueue::IsQuitting() {
@@ -215,15 +214,12 @@ bool MessageQueue::Get(Message *pmsg, int cmsWait, bool process_io) {
           ASSERT(NULL == pmsg->phandler);
           delete pmsg->pdata;
           continue;
-        } else if (MQID_REDPILL == pmsg->message_id){
+        } else if (MQID_QUIT == pmsg->message_id){
           break;
         }
         return true;
       }
     }
-
-    //if (fStop_)
-    //  break;
 
     // Which is shorter, the delay wait or the asked wait?
 
@@ -257,14 +253,15 @@ void MessageQueue::ReceiveSends() {
 
 void MessageQueue::Post(MessageHandler *phandler, uint32 id,
     MessageData *pdata, bool time_sensitive) {
+  // Keep thread safe
   CritScope cs(&crit_);
   if (fStop_)
     return;
+  if (id == MQID_QUIT)
+    fStop_ = true;
 
-  // Keep thread safe
   // Add the message to the end of the queue
   // Signal for the multiplexer to return
-
   EnsureActive();
   Message msg;
   msg.phandler = phandler;
@@ -272,9 +269,6 @@ void MessageQueue::Post(MessageHandler *phandler, uint32 id,
   msg.pdata = pdata;
   if (time_sensitive) {
     msg.ts_sensitive = Time() + kMaxMsgLatency;
-  }
-  if (id == MQID_REDPILL){
-    fStop_ = true;
   }
   msgq_.push_back(msg);
   ss_->WakeUp();

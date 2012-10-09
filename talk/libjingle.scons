@@ -454,6 +454,7 @@ talk.App(env, name = "call",
          ],
          lin_libs = [
            "videorenderer",
+           "gthread-2.0",
          ],
          srcs = [
            "examples/call/call_main.cc",
