@@ -8,7 +8,7 @@
 
 using namespace cricket;
 
-static const talk_base::SocketAddress turn_int_addr("127.0.0.1", 3478);
+static const talk_base::SocketAddress *g_turn_int_addr = NULL;
 
 class TestConnection : public talk_base::Thread {
   public:
@@ -170,7 +170,7 @@ class TestConnection : public talk_base::Thread {
       uint32 val = channel_ | std::strlen(data);
       buff.WriteUInt32(val);
       buff.WriteBytes(data, std::strlen(data));
-      client_->SendTo(buff.Data(), buff.Length(), turn_int_addr);
+      client_->SendTo(buff.Data(), buff.Length(), *g_turn_int_addr);
     }
 
     std::string PeerReceiveData() {
@@ -217,7 +217,7 @@ class TestConnection : public talk_base::Thread {
     void SendStunMessage(const StunMessage* msg) {
       talk_base::ByteBuffer buff;
       msg->Write(&buff);
-      client_->SendTo(buff.Data(), buff.Length(), turn_int_addr);
+      client_->SendTo(buff.Data(), buff.Length(), *g_turn_int_addr);
     }
 
     TurnMessage* ReceiveStunMessage() {
@@ -250,6 +250,8 @@ int main(int argc, char **argv) {
   DEFINE_int(port, 6000, "Port to start from");
   DEFINE_int(threads, 250, "Threads to run");
   DEFINE_int(msg_count, 1000, "Number of messages to send");
+  DEFINE_string(turn_host, "127.0.0.1", "TURN server IP");
+  DEFINE_int(turn_port, 3478, "TURN server port");
   DEFINE_bool(help, false, "Prints this message");
 
   // parse options
@@ -263,6 +265,8 @@ int main(int argc, char **argv) {
   uint32 peer_port = client_port + 1;
   const int msg_count = FLAG_msg_count;
   const int thread_count = FLAG_threads;
+
+  g_turn_int_addr = new talk_base::SocketAddress(FLAG_turn_host, FLAG_turn_port);
 
   // uint32 client_port = 6000;
   // uint32 peer_port = 6001;
