@@ -209,9 +209,9 @@ BasicPortAllocator::BasicPortAllocator(
     talk_base::NetworkManager* network_manager,
     talk_base::PacketSocketFactory* socket_factory)
     : network_manager_(network_manager),
+      socket_factory_(socket_factory),
       turn_username_(""),
-      turn_password_(""),
-      socket_factory_(socket_factory) {
+      turn_password_("") {
   ASSERT(socket_factory_ != NULL);
   Construct();
 }
@@ -219,7 +219,9 @@ BasicPortAllocator::BasicPortAllocator(
 BasicPortAllocator::BasicPortAllocator(
     talk_base::NetworkManager* network_manager)
     : network_manager_(network_manager),
-      socket_factory_(NULL) {
+      socket_factory_(NULL),
+      turn_username_(""),
+      turn_password_("") {
   Construct();
 }
 

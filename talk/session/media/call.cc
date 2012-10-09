@@ -128,11 +128,13 @@ void Call::RejectSession(Session* session, bool busy) {
   // Assume polite decline.
   MediaSessionMap::iterator it = media_session_map_.find(session->id());
   if (it != media_session_map_.end())
+  {
     if (busy) {
       it->second.session->Reject(STR_TERMINATE_BUSY);
     } else {
       it->second.session->Reject(STR_TERMINATE_DECLINE);
     }
+  }
 }
 
 void Call::TerminateSession(Session* session) {
