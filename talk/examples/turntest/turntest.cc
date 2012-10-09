@@ -250,6 +250,7 @@ int main(int argc, char **argv) {
   DEFINE_int(port, 6000, "Port to start from");
   DEFINE_int(threads, 250, "Threads to run");
   DEFINE_int(msg_count, 1000, "Number of messages to send");
+  DEFINE_string(client_host, "127.0.0.1", "Client's IP");
   DEFINE_string(turn_host, "127.0.0.1", "TURN server IP");
   DEFINE_int(turn_port, 3478, "TURN server port");
   DEFINE_bool(help, false, "Prints this message");
@@ -287,8 +288,8 @@ int main(int argc, char **argv) {
   uint32 channel = channel_min + 0x10000;
   for (int i = 0; i < thread_count; i++) {
     std::cout << "--- Starting thread " << i << std::endl;
-    talk_base::SocketAddress sa1 = talk_base::SocketAddress("127.0.0.1", client_port);
-    talk_base::SocketAddress sa2 = talk_base::SocketAddress("127.0.0.1", peer_port);
+    talk_base::SocketAddress sa1 = talk_base::SocketAddress(FLAG_client_host, client_port);
+    talk_base::SocketAddress sa2 = talk_base::SocketAddress(FLAG_client_host, peer_port);
     threads.push_back(new TestConnection(sa1, sa2, channel, msg_count, test_data));
     threads[i]->Start();
 
