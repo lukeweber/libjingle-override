@@ -85,18 +85,36 @@ class StatsProcessor(object):
     print "    Peer -> Client:    %s" % (stats["bind_error"])
 
   def print_total_stats(self):
+    allocation_error_per = 0
+    allocation_null_per = 0
+    bind_error_per = 0
+    bind_null_per = 0
+    client_to_peer_per = 0
+    peer_to_client_per = 0
+    if (self._total_allocate_error != 0):
+      allocation_error_per = (self._total_thread_cnt / self._total_allocate_error) * 100;
+    if (self._total_allocate_null != 0):
+      allocation_null_per = (self._total_thread_cnt / self._total_allocate_null) * 100;
+    if (self._total_bind_error != 0):
+      bind_error_per = (self._total_thread_cnt / self._total_bind_error) * 100;
+    if (self._total_allocate_null != 0):
+      bind_null_per = (self._total_thread_cnt / self._total_bind_null) * 100;
+    if (self._total_client_to_peer != 0):
+      client_to_peer_per = (self._total_message_cnt / self._total_client_to_peer) * 100;
+    if (self._total_peer_to_client != 0):
+      peer_to_client_per = (self._total_message_cnt / self._total_peer_to_client) * 100;
     print ""
     print "========================================="
     print "============   Total Stats   ============"
     print "========================================="
     print "  Allocations & Binds failures (%s total)" % (self._total_thread_cnt)
-    print "    Allocation errors: %s" % (self._total_allocate_error)
-    print "    Allocation NULLs:  %s" % (self._total_allocate_null)
-    print "    Bind errors:       %s" % (self._total_bind_error)
-    print "    Bind NULLs:        %s" % (self._total_bind_error)
+    print "    Allocation errors: %s (%0.2f %%)" % (self._total_allocate_error, allocation_error_per)
+    print "    Allocation NULLs:  %s (%0.2f %%)" % (self._total_allocate_null, allocation_null_per)
+    print "    Bind errors:       %s (%0.2f %%)" % (self._total_bind_error, bind_null_per)
+    print "    Bind NULLs:        %s (%0.2f %%)" % (self._total_bind_error, bind_error_per)
     print "  Data transfer failures (%s each way)" % (self._total_message_cnt)
-    print "    Client -> Peer:    %s" % (self._total_bind_error)
-    print "    Peer -> Client:    %s" % (self._total_bind_error)
+    print "    Client -> Peer:    %s (%0.2f %%)" % (self._total_client_to_peer, client_to_peer_per)
+    print "    Peer -> Client:    %s (%0.2f %%)" % (self._total_peer_to_client, peer_to_client_per)
 
   def process(self):
     log_files = self.get_file_list()
