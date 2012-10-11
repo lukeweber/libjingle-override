@@ -16,6 +16,7 @@ CLIENT_HOST="127.0.0.1"
 TURN_PORT="3478"
 JOBS="2"
 THREADS="250"
+MESSAGES="1000"
 print_usage(){
 	echo "$1" >&2
 	echo -e "Usage: $0 \n" >&2 
@@ -51,6 +52,10 @@ do
 			;;
 		t ) #threads
 			THREADS="$OPTARG"
+			validate_optarg
+			;;
+		m ) #messages
+			MESSAGES="$OPTARG"
 			validate_optarg
 			;;
 		: )
@@ -95,11 +100,11 @@ port=6000
 # Jobs to run
 jobs=27
 # PIDs array
-declare -A pids
+declare -a pids
 
-for n in `seq ${jobs}`;
+for n in `seq ${JOBS}`;
 do
-  ./turntest --turn_host=${RESTUND_HOST} --turn_port=${TURN_PORT} --client_host=${CLIENT_HOST} --port ${port} --threads=${THREADS} 2>&1 1>./turn.log.${port} &
+  ./turntest --message_cnt=${MESSAGES} --turn_host=${RESTUND_HOST} --turn_port=${TURN_PORT} --client_host=${CLIENT_HOST} --port ${port} --thread_cnt=${THREADS} 2>&1 1>./turn.${port}.log &
   pid=$!
   echo "Backgrounded: $n (pid=$pid)"
   pids[$pid]=$n

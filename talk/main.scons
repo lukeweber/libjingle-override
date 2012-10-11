@@ -179,7 +179,7 @@ win_env.Append(
     '_USE_32BIT_TIME_T',
     '_UNICODE',
     'UNICODE',
-    '_HAS_EXCEPTIONS=0',
+    '_HAS_EXCEPTIONS=1',
     'WIN32',
     # TODO(dape): remove this from logging.cc and enable here instead.
     #'WIN32_LEAN_AND_MEAN',
@@ -354,7 +354,7 @@ posix_env.Append(
     '-Wall',
     '-Werror',
     '-Wno-switch',
-    '-fno-exceptions',
+    # '-fno-exceptions',
     # Needed for a clean ABI and for link-time dead-code removal to work
     # properly.
     '-fvisibility=hidden',

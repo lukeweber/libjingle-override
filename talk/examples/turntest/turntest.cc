@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include "talk/base/flags.h"
+#include "talk/base/json.h"
 #include "talk/base/physicalsocketserver.h"
 #include "talk/base/socketaddress.h"
 #include "talk/base/testclient.h"
@@ -15,12 +16,18 @@ class TestConnection : public talk_base::Thread {
     TestConnection(talk_base::SocketAddress& client_addr, 
         talk_base::SocketAddress& peer_addr, const uint32 channel,
         const int msg_count, const char* data) {
-        data_ = data;
-        channel_ = channel;
-        client_addr_ = client_addr;
-        peer_addr_ = peer_addr;
-        msg_count_ = msg_count;
-      }
+      data_ = data;
+      channel_ = channel;
+      client_addr_ = client_addr;
+      peer_addr_ = peer_addr;
+      msg_count_ = msg_count;
+
+      InitStats();
+    }
+
+    ~TestConnection() {
+      DoneStats();
+    }
 
     virtual void Run() {
       th_ = talk_base::Thread::Current();
@@ -38,8 +45,7 @@ class TestConnection : public talk_base::Thread {
           ClientSendData(client_data.c_str());
           std::string received_data = PeerReceiveData();
           if (received_data != client_data) {
-            std::cout << "--- " << client_addr_.port() << " -> " 
-              << peer_addr_.port() << " | Validation Failed"  << std::endl;
+            data_client_peer_error_cnt++;
           }
           // Sleep 100ms between messages
           usleep(100000);
@@ -51,9 +57,7 @@ class TestConnection : public talk_base::Thread {
           PeerSendData(peer_data.c_str());
           std::string received_data = ClientReceiveData();
           if (received_data != peer_data) {
-            std::cout << "--- " << peer_addr_.port() << " -> "
-              << client_addr_.port() << " | Validation Failed"  << std::endl;
-            std::cout << received_data << std::endl;
+            data_peer_client_error_cnt++;
           }
           // Sleep 100ms between messages
           usleep(100000);
@@ -81,20 +85,20 @@ class TestConnection : public talk_base::Thread {
       if (allocate_response != NULL) {
         switch (allocate_response->type()) {
           case STUN_ALLOCATE_RESPONSE:
-            // std::cout << "allocate response" << std::endl;
+            allocation_state = ALLOCATION_SUCCESS;
             break;
           case STUN_ALLOCATE_ERROR_RESPONSE:
-            std::cout << "allocate error" << std::endl;
+            allocation_state = ALLOCATION_ERROR;
             break;
           default:
-            std::cout << "bogus" << allocate_response->type() << std::endl;
+            allocation_state = ALLOCATION_BOGUS;
         }
 
         // Extract assigned relayed address
         const StunAddressAttribute* raddr_attr =
           allocate_response->GetAddress(STUN_ATTR_XOR_RELAYED_ADDRESS);
         if (!raddr_attr) {
-          std::cout << "No relayed address" << std::endl;
+            allocation_state = ALLOCATION_ERROR;
         } else {
           relayed_addr_ = talk_base::SocketAddress(raddr_attr->ipaddr(), raddr_attr->port());
         }
@@ -103,12 +107,12 @@ class TestConnection : public talk_base::Thread {
         const StunAddressAttribute* maddr_attr =
           allocate_response->GetAddress(STUN_ATTR_XOR_MAPPED_ADDRESS);
         if (!maddr_attr) {
-          std::cout << "No relayed address" << std::endl;
+            allocation_state = ALLOCATION_ERROR;
         } else {
           mapped_addr_ = talk_base::SocketAddress(maddr_attr->ipaddr(), maddr_attr->port());
         }
       } else {
-        std::cout << "Got NULL on allocate request" << std::endl;
+        allocation_state = ALLOCATION_NULL;
         success = false;
       }
 
@@ -145,16 +149,16 @@ class TestConnection : public talk_base::Thread {
       if (bind_response != NULL) {
         switch (bind_response->type()) {
           case STUN_CHANNEL_BIND_RESPONSE:
-            // std::cout << "bind response" << std::endl;
+            binding_state = BINDING_SUCCESS;
             break;
           case STUN_CHANNEL_BIND_ERROR_RESPONSE:
-            std::cout << "bind error" << std::endl;
+            binding_state = BINDING_ERROR;
             break;
           default:
-            std::cout << "bogus: " << bind_response->type() << std::endl;
+            binding_state = BINDING_BOGUS;
         }
       } else {
-        std::cout << "Got NULL on bind channel" << std::endl;
+        binding_state = BINDING_NULL;
         success = false;
       }
 
@@ -232,6 +236,30 @@ class TestConnection : public talk_base::Thread {
       return response;
     }
 
+    void InitStats() {
+      allocation_state = ALLOCATION_DEFAULT;
+      binding_state = BINDING_DEFAULT;
+
+      // Reseting stats numbers
+      data_peer_client_error_cnt = 0;
+      data_client_peer_error_cnt = 0;
+    }
+
+    void DoneStats() {
+      Json::FastWriter writer;
+      Json::Value root(Json::objectValue);
+      Json::Value thread_stats(Json::objectValue);
+
+      thread_stats["allocation_state"] = allocation_state;
+      thread_stats["binding_state"] = binding_state;
+      thread_stats["data_peer_client_error_cnt"] = data_peer_client_error_cnt;
+      thread_stats["data_client_peer_error_cnt"] = data_client_peer_error_cnt;
+
+      root["thread_stats"] = thread_stats;
+
+      std::cout << writer.write(root);
+    }
+
     talk_base::Thread* th_;
     talk_base::SocketServer* ss_;
     talk_base::scoped_ptr<talk_base::TestClient> client_;
@@ -243,13 +271,53 @@ class TestConnection : public talk_base::Thread {
     const char* data_;
     int msg_count_;
     uint32 channel_;
+
+    // Stats
+    enum AllocationState {
+      ALLOCATION_SUCCESS = 0,
+      ALLOCATION_ERROR = 1,
+      ALLOCATION_BOGUS = 2,
+      ALLOCATION_NULL = 5,
+      ALLOCATION_DEFAULT = 10
+    };
+    AllocationState allocation_state;
+
+    enum BindingResult {
+      BINDING_SUCCESS = 0,
+      BINDING_ERROR = 1,
+      BINDING_BOGUS = 2,
+      BINDING_NULL = 5,
+      BINDING_DEFAULT = 10
+    };
+    BindingResult binding_state;
+
+    int data_peer_client_error_cnt;
+    int data_client_peer_error_cnt;
 };
+
+void process_stats(int threads_cnt, std::string turn_host, int turn_port,
+    std::string client_host, int start_port, int message_cnt) {
+  Json::FastWriter writer;
+  Json::Value root(Json::objectValue);
+  Json::Value process_stats(Json::objectValue);
+
+  process_stats["thread_cnt"] = threads_cnt;
+  process_stats["turn_host"] = turn_host;
+  process_stats["turn_port"] = turn_port;
+  process_stats["client_host"] = client_host;
+  process_stats["start_port"] = start_port;
+  process_stats["end_port"] = start_port + threads_cnt * 2 - 1;
+  process_stats["message_cnt"] = message_cnt;
+  root["process_stats"] = process_stats;
+
+  std::cout << writer.write(root);
+}
 
 int main(int argc, char **argv) {
   // Define parameters
   DEFINE_int(port, 6000, "Port to start from");
-  DEFINE_int(threads, 250, "Threads to run");
-  DEFINE_int(msg_count, 1000, "Number of messages to send");
+  DEFINE_int(thread_cnt, 250, "Threads to run");
+  DEFINE_int(message_cnt, 1000, "Number of messages to send");
   DEFINE_string(client_host, "127.0.0.1", "Client's IP");
   DEFINE_string(turn_host, "127.0.0.1", "TURN server IP");
   DEFINE_int(turn_port, 3478, "TURN server port");
@@ -264,13 +332,9 @@ int main(int argc, char **argv) {
 
   uint32 client_port = FLAG_port;
   uint32 peer_port = client_port + 1;
-  const int msg_count = FLAG_msg_count;
-  const int thread_count = FLAG_threads;
 
   g_turn_int_addr = new talk_base::SocketAddress(FLAG_turn_host, FLAG_turn_port);
 
-  // uint32 client_port = 6000;
-  // uint32 peer_port = 6001;
   // 100 bytes, avg size of rtp data packet used in call example
   const char* test_data = 
     "datadatadatadatadatadatadatadatadatadatadatadatada"
@@ -279,18 +343,14 @@ int main(int argc, char **argv) {
   const uint32 channel_max = 0x80000000;
   std::vector<talk_base::Thread*> threads;
 
-  std::cout << "Starting with " << std::endl;
-  std::cout << "  Threads: " << thread_count << std::endl;
-  std::cout << "  Client starting port: " << client_port << std::endl;
-  std::cout << "  Peer starting port: " << peer_port << std::endl;
-  std::cout << "  Messages to send: " << msg_count << std::endl;
+  process_stats(FLAG_thread_cnt, FLAG_turn_host, FLAG_turn_port, 
+      FLAG_client_host, FLAG_port, FLAG_message_cnt);
 
   uint32 channel = channel_min + 0x10000;
-  for (int i = 0; i < thread_count; i++) {
-    std::cout << "--- Starting thread " << i << std::endl;
+  for (int i = 0; i < FLAG_thread_cnt; i++) {
     talk_base::SocketAddress sa1 = talk_base::SocketAddress(FLAG_client_host, client_port);
     talk_base::SocketAddress sa2 = talk_base::SocketAddress(FLAG_client_host, peer_port);
-    threads.push_back(new TestConnection(sa1, sa2, channel, msg_count, test_data));
+    threads.push_back(new TestConnection(sa1, sa2, channel, FLAG_message_cnt, test_data));
     threads[i]->Start();
 
     client_port += 2;
@@ -303,7 +363,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  for (int i = 0; i < thread_count; i++) {
+  for (int i = 0; i < FLAG_thread_cnt; i++) {
     threads[i]->Stop();
     delete threads[i];
   }
