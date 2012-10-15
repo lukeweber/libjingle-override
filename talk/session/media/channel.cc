@@ -43,38 +43,39 @@ namespace cricket {
 
 enum {
   MSG_ENABLE = 1,
-  MSG_DISABLE = 2,
-  MSG_MUTESTREAM = 3,
-  MSG_ISSTREAMMUTED = 4,
-  MSG_SETREMOTECONTENT = 6,
-  MSG_SETLOCALCONTENT = 7,
-  MSG_EARLYMEDIATIMEOUT = 8,
-  MSG_INSERTDTMF = 9,
-  MSG_SETRENDERER = 10,
-  MSG_ADDRECVSTREAM = 11,
-  MSG_REMOVERECVSTREAM = 12,
-  MSG_SETRINGBACKTONE = 13,
-  MSG_PLAYRINGBACKTONE = 14,
-  MSG_SETMAXSENDBANDWIDTH = 15,
-  MSG_ADDSCREENCAST = 16,
-  MSG_REMOVESCREENCAST = 17,
-  MSG_SENDINTRAFRAME = 19,
-  MSG_REQUESTINTRAFRAME = 20,
-  MSG_SCREENCASTWINDOWEVENT = 21,
-  MSG_RTPPACKET = 22,
-  MSG_RTCPPACKET = 23,
-  MSG_CHANNEL_ERROR = 24,
-  MSG_SETCHANNELOPTIONS = 25,
-  MSG_SCALEVOLUME = 26,
-  MSG_HANDLEVIEWREQUEST = 27,
-  MSG_SENDDATA = 28,
-  MSG_DATARECEIVED = 29,
-  MSG_SETCAPTURER = 30,
-  MSG_ISSCREENCASTING = 32,
-  MSG_SCREENCASTFPS = 33,
-  MSG_SETSCREENCASTFACTORY = 34,
-  MSG_FIRSTPACKETRECEIVED = 35,
-  MSG_SESSION_ERROR = 36,
+  MSG_DISABLE,
+  MSG_MUTESTREAM,
+  MSG_ISSTREAMMUTED,
+  MSG_SETREMOTECONTENT,
+  MSG_SETLOCALCONTENT,
+  MSG_EARLYMEDIATIMEOUT,
+  MSG_CANINSERTDTMF,
+  MSG_INSERTDTMF,
+  MSG_SETRENDERER,
+  MSG_ADDRECVSTREAM,
+  MSG_REMOVERECVSTREAM,
+  MSG_SETRINGBACKTONE,
+  MSG_PLAYRINGBACKTONE,
+  MSG_SETMAXSENDBANDWIDTH,
+  MSG_ADDSCREENCAST,
+  MSG_REMOVESCREENCAST,
+  MSG_SENDINTRAFRAME,
+  MSG_REQUESTINTRAFRAME,
+  MSG_SCREENCASTWINDOWEVENT,
+  MSG_RTPPACKET,
+  MSG_RTCPPACKET,
+  MSG_CHANNEL_ERROR,
+  MSG_SETCHANNELOPTIONS,
+  MSG_SCALEVOLUME,
+  MSG_HANDLEVIEWREQUEST,
+  MSG_SENDDATA,
+  MSG_DATARECEIVED,
+  MSG_SETCAPTURER,
+  MSG_ISSCREENCASTING,
+  MSG_SCREENCASTFPS,
+  MSG_SETSCREENCASTFACTORY,
+  MSG_FIRSTPACKETRECEIVED,
+  MSG_SESSION_ERROR,
 };
 
 // Value specified in RFC 5764.
@@ -136,6 +137,7 @@ struct PlayRingbackToneMessageData : public talk_base::MessageData {
   bool loop;
   bool result;
 };
+typedef talk_base::TypedMessageData<bool> BoolMessageData;
 struct DtmfMessageData : public talk_base::MessageData {
   DtmfMessageData(uint32 ssrc, int event, int duration, int flags)
       : ssrc(ssrc),
@@ -173,16 +175,20 @@ struct RenderMessageData : public talk_base::MessageData {
   VideoRenderer* renderer;
 };
 
-struct ScreencastMessageData : public talk_base::MessageData {
-  ScreencastMessageData(uint32 s, const ScreencastId& id, int f)
+struct AddScreencastMessageData : public talk_base::MessageData {
+  AddScreencastMessageData(uint32 s, const ScreencastId& id)
       : ssrc(s),
         window_id(id),
-        fps(f),
-        result(false) {
+        result(NULL) {
   }
   uint32 ssrc;
   ScreencastId window_id;
-  int fps;
+  VideoCapturer* result;
+};
+
+struct RemoveScreencastMessageData : public talk_base::MessageData {
+  explicit RemoveScreencastMessageData(uint32 s) : ssrc(s), result(false) {}
+  uint32 ssrc;
   bool result;
 };
 
@@ -828,10 +834,23 @@ void BaseChannel::ChannelWritable_w() {
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   if (writable_)
     return;
+
   LOG(LS_INFO) << "Channel socket writable ("
                << transport_channel_->content_name() << ", "
                << transport_channel_->component() << ")"
                << (was_ever_writable_ ? "" : " for the first time");
+
+  std::vector<ConnectionInfo> infos;
+  transport_channel_->GetStats(&infos);
+  for (std::vector<ConnectionInfo>::const_iterator it = infos.begin();
+       it != infos.end(); ++it) {
+    if (it->best_connection) {
+      LOG(LS_INFO) << "Using " << it->local_candidate.ToString() << "->"
+                   << it->remote_candidate.ToString();
+      break;
+    }
+  }
+
   // If we're doing DTLS-SRTP, now is the time.
   if (!was_ever_writable_) {
     if (!SetupDtlsSrtp(false)) {
@@ -1388,6 +1407,12 @@ bool VoiceChannel::PressDTMF(int digit, bool playout) {
   return InsertDtmf(0, digit, duration_ms, flags);
 }
 
+bool VoiceChannel::CanInsertDtmf() {
+  BoolMessageData data(false);
+  Send(MSG_CANINSERTDTMF, &data);
+  return data.data();
+}
+
 bool VoiceChannel::InsertDtmf(uint32 ssrc, int event_code, int duration,
                               int flags) {
   DtmfMessageData data(ssrc, event_code, duration, flags);
@@ -1594,9 +1619,13 @@ void VoiceChannel::HandleEarlyMediaTimeout() {
   }
 }
 
+bool VoiceChannel::CanInsertDtmf_w() {
+  return media_channel()->CanInsertDtmf();
+}
+
 bool VoiceChannel::InsertDtmf_w(uint32 ssrc, int event, int duration,
                                 int flags) {
-  if (!enabled() || !writable()) {
+  if (!enabled()) {
     return false;
   }
 
@@ -1634,6 +1663,12 @@ void VoiceChannel::OnMessage(talk_base::Message *pmsg) {
     case MSG_EARLYMEDIATIMEOUT:
       HandleEarlyMediaTimeout();
       break;
+    case MSG_CANINSERTDTMF: {
+      BoolMessageData* data =
+          static_cast<BoolMessageData*>(pmsg->pdata);
+      data->data() = CanInsertDtmf_w();
+      break;
+    }
     case MSG_INSERTDTMF: {
       DtmfMessageData* data =
           static_cast<DtmfMessageData*>(pmsg->pdata);
@@ -1782,8 +1817,9 @@ bool VideoChannel::ApplyViewRequest(const ViewRequest& request) {
   return data.result;
 }
 
-bool VideoChannel::AddScreencast(uint32 ssrc, const ScreencastId& id, int fps) {
-  ScreencastMessageData data(ssrc, id, fps);
+VideoCapturer* VideoChannel::AddScreencast(
+    uint32 ssrc, const ScreencastId& id) {
+  AddScreencastMessageData data(ssrc, id);
   Send(MSG_ADDSCREENCAST, &data);
   return data.result;
 }
@@ -1795,7 +1831,7 @@ bool VideoChannel::SetCapturer(uint32 ssrc, VideoCapturer* capturer) {
 }
 
 bool VideoChannel::RemoveScreencast(uint32 ssrc) {
-  ScreencastMessageData data(ssrc, ScreencastId(), 0);
+  RemoveScreencastMessageData data(ssrc);
   Send(MSG_REMOVESCREENCAST, &data);
   return data.result;
 }
@@ -1979,27 +2015,20 @@ void VideoChannel::SetRenderer_w(uint32 ssrc, VideoRenderer* renderer) {
   media_channel()->SetRenderer(ssrc, renderer);
 }
 
-bool VideoChannel::AddScreencast_w(uint32 ssrc, const ScreencastId& id,
-                                   int fps) {
+VideoCapturer* VideoChannel::AddScreencast_w(
+    uint32 ssrc, const ScreencastId& id) {
   if (screencast_capturers_.find(ssrc) != screencast_capturers_.end()) {
-    return false;
+    return NULL;
   }
   VideoCapturer* screen_capturer =
       screencapture_factory_->CreateScreenCapturer(id);
   if (!screen_capturer) {
-    return false;
+    return NULL;
   }
   screen_capturer->SignalStateChange.connect(this,
                                              &VideoChannel::OnStateChange);
-  VideoFormat format;  // default format
-  format.interval = VideoFormat::FpsToInterval(fps);
-  if (screen_capturer->Start(format) != CS_RUNNING ||
-      !SetCapturer_w(ssrc, screen_capturer)) {
-    delete screen_capturer;
-    return false;
-  }
   screencast_capturers_[ssrc] = screen_capturer;
-  return true;
+  return screen_capturer;
 }
 
 bool VideoChannel::SetCapturer_w(uint32 ssrc, VideoCapturer* capturer) {
@@ -2009,9 +2038,6 @@ bool VideoChannel::SetCapturer_w(uint32 ssrc, VideoCapturer* capturer) {
 bool VideoChannel::RemoveScreencast_w(uint32 ssrc) {
   ScreencastMap::iterator iter = screencast_capturers_.find(ssrc);
   if (iter  == screencast_capturers_.end()) {
-    return false;
-  }
-  if (!SetCapturer_w(ssrc, NULL)) {
     return false;
   }
   // Clean up VideoCapturer.
@@ -2067,9 +2093,9 @@ void VideoChannel::OnMessage(talk_base::Message *pmsg) {
       break;
     }
     case MSG_ADDSCREENCAST: {
-      ScreencastMessageData* data =
-          static_cast<ScreencastMessageData*>(pmsg->pdata);
-      data->result = AddScreencast_w(data->ssrc, data->window_id, data->fps);
+      AddScreencastMessageData* data =
+          static_cast<AddScreencastMessageData*>(pmsg->pdata);
+      data->result = AddScreencast_w(data->ssrc, data->window_id);
       break;
     }
     case MSG_SETCAPTURER: {
@@ -2079,8 +2105,8 @@ void VideoChannel::OnMessage(talk_base::Message *pmsg) {
       break;
     }
     case MSG_REMOVESCREENCAST: {
-      ScreencastMessageData* data =
-          static_cast<ScreencastMessageData*>(pmsg->pdata);
+      RemoveScreencastMessageData* data =
+          static_cast<RemoveScreencastMessageData*>(pmsg->pdata);
       data->result = RemoveScreencast_w(data->ssrc);
       break;
     }

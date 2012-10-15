@@ -19,7 +19,6 @@
       'NO_SOUND_SYSTEM',
       'SRTP_RELATIVE_PATH',
       'WEBRTC_RELATIVE_PATH',
-      'USE_WEBRTC_313_BRANCH',
       '_USE_32BIT_TIME_T',
     ],
     'configurations': {
@@ -685,6 +684,8 @@
         'talk/session/media/typingmonitor.h',
         'talk/session/media/typingmonitor.cc',
         'talk/session/media/voicechannel.h',
+        'talk/media/base/capturemanager.cc',
+        'talk/media/base/capturerenderadapter.cc',
         'talk/media/base/rtpdataengine.cc',
         'talk/media/base/rtpdataengine.h',
         'talk/media/base/rtpdump.cc',

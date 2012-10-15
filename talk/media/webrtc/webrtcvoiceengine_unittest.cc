@@ -135,9 +135,11 @@ class WebRtcVoiceEngineTestFake : public testing::Test {
     codecs.push_back(kPcmuCodec);
     EXPECT_TRUE(channel_->SetSendCodecs(codecs));
     EXPECT_TRUE(channel_->SetSend(cricket::SEND_MICROPHONE));
+    EXPECT_FALSE(channel_->CanInsertDtmf());
     EXPECT_FALSE(channel_->InsertDtmf(ssrc, 1, 111, cricket::DF_SEND));
     codecs.push_back(kTelephoneEventCodec);
     EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+    EXPECT_TRUE(channel_->CanInsertDtmf());
     // Check we fail if the ssrc is invalid.
     EXPECT_FALSE(channel_->InsertDtmf(-1, 1, 111, cricket::DF_SEND));
 
@@ -159,6 +161,7 @@ class WebRtcVoiceEngineTestFake : public testing::Test {
     EXPECT_TRUE(voe_.WasSendTelephoneEventCalled(channel_id, 4, 145));
     EXPECT_TRUE(voe_.WasPlayDtmfToneCalled(4, 145));
   }
+
 
  protected:
   cricket::FakeWebRtcVoiceEngine voe_;
@@ -1718,6 +1721,7 @@ TEST_F(WebRtcVoiceEngineTestFake, InitDoesNotOverwriteDefaultAgcConfig) {
             config.digitalCompressionGaindB);
   EXPECT_EQ(set_config.limiterEnable, config.limiterEnable);
 }
+
 
 TEST_F(WebRtcVoiceEngineTestFake, SetOptionOverridesViaChannels) {
   EXPECT_TRUE(SetupEngine());

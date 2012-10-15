@@ -145,6 +145,11 @@ class WebRtcPassthroughRender : public webrtc::VideoRender {
     return -1;
   }
 
+  virtual WebRtc_Word32 SetExpectedRenderDelay(WebRtc_UWord32 stream_id,
+                                               WebRtc_Word32 delay_ms) {
+    return -1;
+  }
+
   virtual WebRtc_Word32 ConfigureRenderer(
       const WebRtc_UWord32 stream_id,
       const unsigned int zOrder,

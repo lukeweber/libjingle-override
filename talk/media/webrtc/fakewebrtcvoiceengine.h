@@ -32,6 +32,7 @@
 #include <map>
 #include <vector>
 
+
 #include "talk/base/basictypes.h"
 #include "talk/base/stringutils.h"
 #include "talk/media/base/codec.h"
@@ -54,6 +55,7 @@ static const int kFakeDeviceId = 0;
 #else
 static const int kFakeDeviceId = 1;
 #endif
+
 
 class FakeWebRtcVoiceEngine
     : public webrtc::VoEAudioProcessing,
@@ -824,10 +826,8 @@ class FakeWebRtcVoiceEngine
     mode = ec_mode_;
     return 0;
   }
-#ifdef USE_WEBRTC_313_BRANCH
   WEBRTC_STUB(EnableDriftCompensation, (bool enable))
   WEBRTC_BOOL_STUB(DriftCompensationEnabled, ())
-#endif
   WEBRTC_VOID_STUB(SetDelayOffsetMs, (int offset))
   WEBRTC_STUB(DelayOffsetMs, ());
   WEBRTC_FUNC(SetAecmMode, (webrtc::AecmModes mode, bool enableCNG)) {

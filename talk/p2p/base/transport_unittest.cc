@@ -154,13 +154,18 @@ TEST_F(TransportTest, TestSetDescriptionsIceDtls) {
                                   talk_base::DIGEST_SHA_1, &remote_identity),
                               Candidates());
   EXPECT_TRUE(SetupChannel());
-  EXPECT_TRUE(transport_->SetLocalTransportDescription(local));
-  EXPECT_TRUE(transport_->SetRemoteTransportDescription(remote));
+  EXPECT_TRUE(transport_->SetLocalTransportDescription(local,
+                                                       cricket::CA_OFFER));
+  EXPECT_NE(cricket::ICEPROTO_RFC5245, transport_->protocol());
+  EXPECT_NE(cricket::ICEPROTO_RFC5245, channel_->protocol());
+  EXPECT_TRUE(transport_->SetRemoteTransportDescription(remote,
+                                                        cricket::CA_ANSWER));
   transport_->ConnectChannels();
   FakeTransportChannel* channel2 = CreateChannel(2);
   ASSERT_TRUE(channel2 != NULL);
   // channel_ was created before SetLocal/SetRemote; channel2 was created after.
   EXPECT_EQ(cricket::ICEPROTO_RFC5245, channel_->protocol());
+  EXPECT_EQ(cricket::ICEPROTO_RFC5245, transport_->protocol());
   EXPECT_EQ(local.ice_ufrag, channel_->ice_ufrag());
   EXPECT_EQ(local.ice_pwd, channel_->ice_pwd());
   EXPECT_EQ(*remote.identity_fingerprint, channel_->dtls_fingerprint());
@@ -177,13 +182,18 @@ TEST_F(TransportTest, TestSetDescriptionsGiceDtls) {
   TransportDescription remote(cricket::NS_GINGLE_P2P, TransportOptions(),
                               "DEFGDEFG", "defgdefg", NULL, Candidates());
   EXPECT_TRUE(SetupChannel());
-  EXPECT_TRUE(transport_->SetLocalTransportDescription(local));
-  EXPECT_TRUE(transport_->SetRemoteTransportDescription(remote));
+  EXPECT_TRUE(transport_->SetLocalTransportDescription(local,
+                                                       cricket::CA_OFFER));
+  EXPECT_NE(cricket::ICEPROTO_GOOGLE, transport_->protocol());
+  EXPECT_NE(cricket::ICEPROTO_GOOGLE, channel_->protocol());
+  EXPECT_TRUE(transport_->SetRemoteTransportDescription(remote,
+                                                        cricket::CA_ANSWER));
   transport_->ConnectChannels();
   FakeTransportChannel* channel2 = CreateChannel(2);
   ASSERT_TRUE(channel2 != NULL);
   // channel_ was created before SetLocal/SetRemote; channel2 was created after.
   EXPECT_EQ(cricket::ICEPROTO_GOOGLE, channel_->protocol());
+  EXPECT_EQ(cricket::ICEPROTO_GOOGLE, transport_->protocol());
   EXPECT_EQ(local.ice_ufrag, channel_->ice_ufrag());
   EXPECT_EQ(local.ice_pwd, channel_->ice_pwd());
   EXPECT_EQ("", channel_->dtls_fingerprint().algorithm);
@@ -193,30 +203,21 @@ TEST_F(TransportTest, TestSetDescriptionsGiceDtls) {
   EXPECT_EQ("", channel2->dtls_fingerprint().algorithm);
 }
 
-// Tests that an implicit local description is used if none is supplied.
-TEST_F(TransportTest, TestImplicitDescriptions) {
-  EXPECT_TRUE(SetupChannel());
-  transport_->ConnectChannels();
-  EXPECT_EQ(cricket::ICEPROTO_GOOGLE, channel_->protocol());
-  EXPECT_NE("", channel_->ice_ufrag());
-  EXPECT_NE("", channel_->ice_pwd());
-}
-
 // Tests that we can properly serialize/deserialize candidates.
 TEST_F(TransportTest, TestP2PTransportWriteAndParseCandidate) {
   Candidate test_candidate(
       "", 1, "udp",
       talk_base::SocketAddress("2001:db8:fefe::1", 9999),
-      738197504, "abcdef", "ghijkl", "foo", "testnet", 50, 0);
+      738197504, "abcdef", "ghijkl", "foo", "testnet", 50, "");
   Candidate test_candidate2(
       "", 2, "tcp",
       talk_base::SocketAddress("192.168.7.1", 9999),
-      1107296256, "mnopqr", "stuvwx", "bar", "testnet2", 100, 0);
+      1107296256, "mnopqr", "stuvwx", "bar", "testnet2", 100, "");
   talk_base::SocketAddress host_address("www.google.com", 24601);
   host_address.SetResolvedIP(talk_base::IPAddress(0x0A000001));
   Candidate test_candidate3(
       "", 3, "spdy", host_address, 1476395008, "yzabcd",
-      "efghij", "baz", "testnet3", 150, 0);
+      "efghij", "baz", "testnet3", 150, "");
   cricket::Candidates candidates;
   candidates.push_back(test_candidate);
   candidates.push_back(test_candidate2);
@@ -303,16 +304,16 @@ TEST_F(TransportTest, TestRawTransportWriteAndParseCandidate) {
   Candidate test_candidate(
       "", 1, "udp",
       talk_base::SocketAddress("2001:db8:fefe::1", 9999),
-      738197504, "abcdef", "ghijkl", "foo", "testnet", 50, 0);
+      738197504, "abcdef", "ghijkl", "foo", "testnet", 50, "1");
   Candidate test_candidate2(
       "", 1, "udp",
       talk_base::SocketAddress("192.168.7.1", 9999),
-      1107296256, "mnopqr", "stuvwx", "bar", "testnet2", 100, 0);
+      1107296256, "mnopqr", "stuvwx", "bar", "testnet2", 100, "1");
   talk_base::SocketAddress host_address("www.google.com", 24601);
   host_address.SetResolvedIP(talk_base::IPAddress(0x0A000001));
   Candidate test_candidate3(
       "", 1, "udp", host_address, 1476395008, "yzabcd",
-      "efghij", "baz", "testnet3", 150, 0);
+      "efghij", "baz", "testnet3", 150, "1");
   cricket::Candidates candidates;
   candidates.push_back(test_candidate);
   candidates.push_back(test_candidate2);

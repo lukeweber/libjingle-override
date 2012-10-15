@@ -134,13 +134,19 @@ class WebRtcSession : public cricket::BaseSession,
                                cricket::VideoRenderer* renderer);
   virtual void SetVideoSend(const std::string& name, bool enable);
 
+  virtual bool CanSendDtmf(const std::string& name);
+  virtual bool SendDtmf(const std::string& send_name,
+                        const std::string& tones, int duration,
+                        const std::string& play_name);
+
  private:
   // Invokes ConnectChannels() on transport proxies, which initiates ice
   // candidates allocation.
   bool StartCandidatesAllocation();
+  bool UpdateSessionState(Action action, cricket::ContentSource source,
+                          const cricket::SessionDescription* desc);
 
   virtual void OnMessage(talk_base::Message* msg);
-
 
   // Transport related callbacks, override from cricket::BaseSession.
   virtual void OnTransportRequestSignaling(cricket::Transport* transport);

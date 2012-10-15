@@ -490,34 +490,32 @@ const WebRtcVideoEngine::VideoCodecPref
     {kFecPayloadName, 102, 2},
 };
 
-static const int64 kNsPerFrame = 33333333;  // 30fps
-
 // The formats are sorted by the descending order of width. We use the order to
 // find the next format for CPU and bandwidth adaptation.
 const VideoFormatPod WebRtcVideoEngine::kVideoFormats[] = {
-  {1280, 800, kNsPerFrame, FOURCC_ANY},
-  {1280, 720, kNsPerFrame, FOURCC_ANY},
-  {960, 600, kNsPerFrame, FOURCC_ANY},
-  {960, 540, kNsPerFrame, FOURCC_ANY},
-  {640, 400, kNsPerFrame, FOURCC_ANY},
-  {640, 360, kNsPerFrame, FOURCC_ANY},
-  {640, 480, kNsPerFrame, FOURCC_ANY},
-  {480, 300, kNsPerFrame, FOURCC_ANY},
-  {480, 270, kNsPerFrame, FOURCC_ANY},
-  {480, 360, kNsPerFrame, FOURCC_ANY},
-  {320, 200, kNsPerFrame, FOURCC_ANY},
-  {320, 180, kNsPerFrame, FOURCC_ANY},
-  {320, 240, kNsPerFrame, FOURCC_ANY},
-  {240, 150, kNsPerFrame, FOURCC_ANY},
-  {240, 135, kNsPerFrame, FOURCC_ANY},
-  {240, 180, kNsPerFrame, FOURCC_ANY},
-  {160, 100, kNsPerFrame, FOURCC_ANY},
-  {160, 90, kNsPerFrame, FOURCC_ANY},
-  {160, 120, kNsPerFrame, FOURCC_ANY},
+  {1280, 800, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {1280, 720, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {960, 600, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {960, 540, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {640, 400, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {640, 360, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {640, 480, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {480, 300, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {480, 270, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {480, 360, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {320, 200, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {320, 180, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {320, 240, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {240, 150, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {240, 135, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {240, 180, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {160, 100, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {160, 90, FPS_TO_INTERVAL(30), FOURCC_ANY},
+  {160, 120, FPS_TO_INTERVAL(30), FOURCC_ANY},
 };
 
 const VideoFormatPod WebRtcVideoEngine::kDefaultVideoFormat =
-    {640, 400, kNsPerFrame, FOURCC_ANY};
+  {640, 400, FPS_TO_INTERVAL(30), FOURCC_ANY};
 
 static void UpdateVideoCodec(const cricket::VideoFormat& video_format,
                              webrtc::VideoCodec* target_codec) {
@@ -580,6 +578,7 @@ void WebRtcVideoEngine::Construct(ViEWrapper* vie_wrapper,
   if (!SetDefaultCodec(max_codec)) {
     LOG(LS_ERROR) << "Failed to initialize list of supported codec types";
   }
+
 }
 
 WebRtcVideoEngine::~WebRtcVideoEngine() {
@@ -648,6 +647,7 @@ bool WebRtcVideoEngine::InitVideoEngine() {
     LOG_RTCERR0(RegisterVideoRenderModule);
     return false;
   }
+
 
   initialized_ = true;
   return true;
@@ -836,7 +836,8 @@ void WebRtcVideoEngine::OnFrameCaptured(VideoCapturer* capturer,
   talk_base::CritScope cs(&channels_crit_);
   for (VideoChannels::iterator it = channels_.begin();
       it != channels_.end(); ++it) {
-    if ((*it)->sending()) (*it)->SendFrame(0u, &i420_frame);
+    if ((*it)->sending()) (*it)->SendFrame(0u, &i420_frame,
+                                           capturer->IsScreencast());
   }
 }
 
@@ -1877,7 +1878,7 @@ void WebRtcVideoMediaChannel::OnFrameCaptured(VideoCapturer* capturer,
     return;
   }
 
-  SendFrame(send_channel, &i420_frame, true);
+  SendFrame(send_channel, &i420_frame, capturer->IsScreencast());
 }
 
 bool WebRtcVideoMediaChannel::RemoveCapturer(uint32 ssrc) {
@@ -2140,7 +2141,9 @@ bool WebRtcVideoMediaChannel::SetCapturer(uint32 ssrc,
       this,
       &WebRtcVideoMediaChannel::OnFrameCaptured);
   const int64 timestamp = send_channel->last_frame_time_stamp();
-  QueueBlackFrame(ssrc, timestamp, send_codec_->maxFramerate);
+  if (send_codec_.get()) {
+    QueueBlackFrame(ssrc, timestamp, send_codec_->maxFramerate);
+  }
   return true;
 }
 
@@ -2328,10 +2331,8 @@ bool WebRtcVideoMediaChannel::SetOptions(int options) {
   bool denoiser_changed = (options_ & OPT_VIDEO_NOISE_REDUCTION) !=
       (options & OPT_VIDEO_NOISE_REDUCTION);
 
-#ifdef USE_WEBRTC_313_BRANCH
   bool leaky_bucket_changed = (options_ & OPT_VIDEO_LEAKY_BUCKET) !=
       (options & OPT_VIDEO_LEAKY_BUCKET);
-#endif
 
   // Save the options, to be interpreted where appropriate.
   options_ = options;
@@ -2353,7 +2354,6 @@ bool WebRtcVideoMediaChannel::SetOptions(int options) {
     }
     LogSendCodecChange("SetOptions()");
   }
-#ifdef USE_WEBRTC_313_BRANCH
   if (leaky_bucket_changed) {
     bool enable_leaky_bucket = IsOptionSet(OPT_VIDEO_LEAKY_BUCKET);
     for (SendChannelMap::iterator it = send_channels_.begin();
@@ -2365,7 +2365,6 @@ bool WebRtcVideoMediaChannel::SetOptions(int options) {
       }
     }
   }
-#endif
   return true;
 }
 
@@ -2402,7 +2401,8 @@ bool WebRtcVideoMediaChannel::GetRenderer(uint32 ssrc,
 }
 
 // TODO(zhurunz): Add unittests to test this function.
-bool WebRtcVideoMediaChannel::SendFrame(uint32 ssrc, const VideoFrame* frame) {
+bool WebRtcVideoMediaChannel::SendFrame(uint32 ssrc, const VideoFrame* frame,
+                                        bool is_screencast) {
   // If the ssrc is 0 it signifies that the frame is generated by the
   // WebRtcVideoEngine. Send this frame on all streams who do not have their
   // own capturer.
@@ -2417,7 +2417,7 @@ bool WebRtcVideoMediaChannel::SendFrame(uint32 ssrc, const VideoFrame* frame) {
        iter != send_channels_.end(); ++iter) {
     WebRtcVideoChannelSendInfo* send_channel = iter->second;
     if (!send_channel->video_capturer()) {
-      success = SendFrame(send_channel, frame, false) && success;
+      success = SendFrame(send_channel, frame, is_screencast) && success;
     }
   }
   return success;
@@ -2426,7 +2426,7 @@ bool WebRtcVideoMediaChannel::SendFrame(uint32 ssrc, const VideoFrame* frame) {
 bool WebRtcVideoMediaChannel::SendFrame(
     WebRtcVideoChannelSendInfo* send_channel,
     const VideoFrame* frame,
-    bool owns_capturer) {
+    bool is_screencast) {
   if (!send_channel) {
     return false;
   }
@@ -2446,7 +2446,7 @@ bool WebRtcVideoMediaChannel::SendFrame(
 
   // Checks if we need to reset vie send codec.
   if (!MaybeResetVieSendCodec(send_channel, frame->GetWidth(),
-                              frame->GetHeight(), owns_capturer, NULL)) {
+                              frame->GetHeight(), is_screencast, NULL)) {
     LOG(LS_ERROR) << "MaybeResetVieSendCodec failed with "
                   << frame->GetWidth() << "x" << frame->GetHeight();
     return false;
@@ -2454,10 +2454,8 @@ bool WebRtcVideoMediaChannel::SendFrame(
   const VideoFrame* frame_out = frame;
   talk_base::scoped_ptr<VideoFrame> processed_frame;
   WebRtc_Word64 clocks = 0;
-  // Old implementation was to disable muting for screencast. This translate to
-  // mute if receiving frames from engines capturer (i.e. the channel doesn't
-  // own the capturer generating the frames) and muted is set to true.
-  const bool mute = (send_channel->muted() && !owns_capturer);
+  // Disable muting for screencast.
+  const bool mute = (send_channel->muted() && !is_screencast);
   send_channel->ProcessFrame(*frame_out, mute, processed_frame.use(),
                              &clocks);
   if (processed_frame.get()) {
@@ -2607,6 +2605,7 @@ bool WebRtcVideoMediaChannel::ConfigureReceiving(int channel_id,
     return false;
   }
 
+
   if (engine_->vie()->rtp()->SetRembStatus(channel_id,
                                            kRembNotSending,
                                            kRembReceiving) != 0) {
@@ -2718,7 +2717,6 @@ bool WebRtcVideoMediaChannel::ConfigureSending(int channel_id,
     }
   }
 
-#ifdef USE_WEBRTC_313_BRANCH
   if (IsOptionSet(OPT_VIDEO_LEAKY_BUCKET)) {
     if (engine()->vie()->rtp()->SetTransmissionSmoothingStatus(channel_id,
                                                                true) != 0) {
@@ -2726,7 +2724,6 @@ bool WebRtcVideoMediaChannel::ConfigureSending(int channel_id,
       return false;
     }
   }
-#endif
 
   if (!SetNackFec(channel_id, send_red_type_, send_fec_type_)) {
     // Logged in SetNackFec. Don't spam the logs.
@@ -2918,7 +2915,7 @@ bool WebRtcVideoMediaChannel::MaybeResetVieSendCodec(
     WebRtcVideoChannelSendInfo* send_channel,
     int new_width,
     int new_height,
-    bool owns_capturer,
+    bool is_screencast,
     bool* reset) {
   if (reset) {
     *reset = false;
@@ -2934,7 +2931,7 @@ bool WebRtcVideoMediaChannel::MaybeResetVieSendCodec(
   // Vie send codec size should not exceed target_codec.
   int target_width = new_width;
   int target_height = new_height;
-  if (!owns_capturer &&
+  if (!is_screencast &&
       (new_width > target_codec.width || new_height > target_codec.height)) {
     target_width = target_codec.width;
     target_height = target_codec.height;
@@ -2953,14 +2950,13 @@ bool WebRtcVideoMediaChannel::MaybeResetVieSendCodec(
   // Only reset send codec when there is a size change. Additionally,
   // automatic resize needs to be turned of when screencasting and on when
   // not screencasting.
-  const bool screen_share = owns_capturer;
   // Don't allow automatic resizing for screencasting.
-  bool automatic_resize = !screen_share;
+  bool automatic_resize = !is_screencast;
   // Turn off VP8 frame dropping when screensharing as the current model does
   // not work well at low fps.
-  bool vp8_frame_dropping = !screen_share;
+  bool vp8_frame_dropping = !is_screencast;
   // Disable denoising for screencasting.
-  bool denoising = !screen_share &&
+  bool denoising = !is_screencast &&
       (0 != (options_ & OPT_VIDEO_NOISE_REDUCTION));
   bool reset_send_codec =
       target_width != cur_width || target_height != cur_height ||
