@@ -48,11 +48,18 @@ class TestConnection : public talk_base::Thread {
 
   private:
     void RunClientMode() {
+      std::cout << "-- Running in Client Mode --" << std::endl;
+      std::cout << "  Client address " << client_addr_.ipaddr() << ":" << client_addr_.port() << std::endl;
+      std::cout << "  Peer address   " << peer_addr_.ipaddr() << ":" << peer_addr_.port() << std::endl;
+      std::cout << "  TURN address   " << g_turn_int_addr->ipaddr() << ":" << g_turn_int_addr->port() << std::endl;
+      std::cout << std::endl;
       client_.reset(new talk_base::TestClient(
             talk_base::AsyncUDPSocket::Create(ss_, client_addr_)));
+      std::cout << "1. Allocate and bind channel...";
       if (Allocate() && BindChannel() && relayed_addr_.port() != 0) {
+        std::cout << "Done" << std::endl;
         // Send data from client to peer
-        std::cout << "Allocated and binded a channel, start sending messages" << std::endl;
+        std::cout << "2. Sending " << msg_count_ << " messages to peer" << std::endl;
         for (int i = 0; i < msg_count_; i++) {
           std::string client_data = std::string("client") + data_;
           ClientSendData(client_data.c_str());
@@ -60,46 +67,59 @@ class TestConnection : public talk_base::Thread {
           usleep(100000);
           std::cout << ".";
         }
-        std::cout << "Done sending messages, waiting to receive some" << std::endl;
+        std::cout << "Done" << std::endl;
+        std::cout << std::endl;
+        std::cout << "2. Waiting for " << msg_count_ << " messages to arrive from peer" << std::endl;
         while (true) {
           std::string received_data = ClientReceiveData();
           if (received_data != "") {
-            std::cout << "Got data " << received_data << std::endl;
+            std::cout << ".";
             client_received_cnt_++;
             if (client_received_cnt_ == msg_count_) {
               break;
             }
           } else {
-            std::cout << "Still nothing..." << std::endl;
+            std::cout << "...still waiting..." << std::endl;
           }
         }
+        std::cout << "Done" << std::endl;
+        std::cout << "My Mission is over, goodbye." << std::endl;
       }
     }
 
     void RunPeerMode() {
+      std::cout << "-- Running in Peer Mode --" << std::endl;
+      std::cout << "  Relayed client address is unknown by now" << std::endl;
+      std::cout << "  Peer address   " << peer_addr_.ipaddr() << ":" << peer_addr_.port() << std::endl;
+      std::cout << "  TURN address   " << g_turn_int_addr->ipaddr() << ":" << g_turn_int_addr->port() << std::endl;
+      std::cout << std::endl;
       peer_.reset(new talk_base::TestClient(
             talk_base::AsyncUDPSocket::Create(ss_, peer_addr_)));
+      std::cout << "1. Waiting for " << msg_count_ << " messages to arrive from client" << std::endl;
       while (true) {
         std::string received_data = PeerReceiveData();
         if (received_data != "") {
-          std::cout << "Got data " << received_data << std::endl;
+          std::cout << ".";
           peer_received_cnt_++;
           if (peer_received_cnt_ == msg_count_) {
             break;
           }
         } else {
-          std::cout << "Still nothing..." << std::endl;
+          std::cout << "...still waiting..." << std::endl;
         }
       }
-      sleep(1);
-      std::cout << "Done receiving messages, start sending back" << std::endl;
+      std::cout << "Done" << std::endl;
+      std::cout << std::endl;
+      std::cout << "2. Sending " << msg_count_ << " messages to client via relay" << std::endl;
+      std::cout << "  Relayed client address " << relayed_addr_.ipaddr() << ":" << relayed_addr_.port() << std::endl;
       for (int i = 0; i < msg_count_; i++) {
         std::string peer_data = std::string("peer") + data_;
         PeerSendData(peer_data.c_str());
         usleep(100000);
         std::cout << ".";
       }
-      std::cout << std::endl << "Done sending messages back, bye!" << std::endl;
+      std::cout << "Done" << std::endl;
+      std::cout << "My Mission is over, goodbye." << std::endl;
     }
 
     bool Allocate() {
@@ -205,7 +225,7 @@ class TestConnection : public talk_base::Thread {
     }
 
     void ClientSendData(const char* data) {
-      std::cout << "Client Send Data from port " << client_addr_.port() << std::endl;
+      // std::cout << "Client Send Data from port " << client_addr_.port() << std::endl;
       talk_base::ByteBuffer buff;
       uint32 val = channel_ | std::strlen(data);
       buff.WriteUInt32(val);
@@ -214,7 +234,7 @@ class TestConnection : public talk_base::Thread {
     }
 
     std::string PeerReceiveData() {
-      std::cout << "Peer Receive Data on port " << peer_addr_.port() << std::endl;
+      // std::cout << "Peer Receive Data on port " << peer_addr_.port() << std::endl;
       std::string raw;
       talk_base::TestClient::Packet* packet = peer_->NextPacket();
       if (packet) {
@@ -228,15 +248,15 @@ class TestConnection : public talk_base::Thread {
     }
 
     void PeerSendData(const char* data) {
-      std::cout << "Peer Send Data from port " << peer_addr_.port() << " to " 
-        << relayed_addr_.ipaddr() << ":"<< relayed_addr_.port() << std::endl;
+      // std::cout << "Peer Send Data from port " << peer_addr_.port() << " to " 
+        // << relayed_addr_.ipaddr() << ":"<< relayed_addr_.port() << std::endl;
       talk_base::ByteBuffer buff;
       buff.WriteBytes(data, std::strlen(data));
       peer_->SendTo(buff.Data(), buff.Length(), relayed_addr_);
     }
 
     std::string ClientReceiveData() {
-      std::cout << "Client Receive Data on port " << client_addr_.port() << std::endl;
+      // std::cout << "Client Receive Data on port " << client_addr_.port() << std::endl;
       std::string raw;
       talk_base::TestClient::Packet* packet = client_->NextPacket();
       if (packet) {
