@@ -493,6 +493,14 @@ talk.App(env, name = "turntest",
            "examples/turntest/turntest.cc",
          ],
 )
+talk.App(env, name = "turnclient",
+         libs = [
+           "jingle",
+         ],
+         srcs = [
+           "examples/turntest/turnclient.cc",
+         ],
+)
 talk.App(env, name = "relayserver",
          libs = [
            "jingle",
