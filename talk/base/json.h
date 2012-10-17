@@ -34,7 +34,7 @@
 #ifdef JSONCPP_RELATIVE_PATH
 #include "json/json.h"
 #else
-#include "third_party/jsoncpp/json.h"
+#include "third_party/jsoncpp/include/json/json.h"
 #endif
 
 // TODO: Move to talk_base namespace

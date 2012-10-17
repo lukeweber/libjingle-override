@@ -84,7 +84,7 @@ class TestClient : public sigslot::has_slots<> {
   bool CheckNoPacket();
 
  private:
-  static const int kTimeout = 1000;
+  static const int kTimeout = 5000;
   // Workaround for the fact that AsyncPacketSocket::GetConnState doesn't exist.
   Socket::ConnState GetState();
   // Slot for packets read on the socket.

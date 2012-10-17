@@ -6,6 +6,16 @@ env.Replace(
   RPATH = [],
 )
 
+talk.Library(env, name = "jsoncpp",
+             srcs = [
+               "third_party/jsoncpp/src/lib_json/json_reader.cpp",
+               "third_party/jsoncpp/src/lib_json/json_value.cpp",
+               "third_party/jsoncpp/src/lib_json/json_writer.cpp",
+             ],
+             includedirs = [
+               "third_party/jsoncpp/include",
+             ],
+)
 talk.Library(env, name = "expat",
              cppdefines = [
                "XML_STATIC",
@@ -454,6 +464,7 @@ talk.App(env, name = "call",
          ],
          lin_libs = [
            "videorenderer",
+           "gthread-2.0",
          ],
          srcs = [
            "examples/call/call_main.cc",
@@ -476,6 +487,7 @@ talk.App(env, name = "call",
 talk.App(env, name = "turntest",
          libs = [
            "jingle",
+           "jsoncpp"
          ],
          srcs = [
            "examples/turntest/turntest.cc",
