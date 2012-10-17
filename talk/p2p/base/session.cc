@@ -248,6 +248,8 @@ std::string BaseSession::StateToString(State state) {
       return "STATE_SENTINITIATE";
     case Session::STATE_RECEIVEDINITIATE:
       return "STATE_RECEIVEDINITIATE";
+    case Session::STATE_RECEIVEDINITIATE_ACK:
+      return "STATE_RECEIVEDINITIATE_ACK";
     case Session::STATE_SENTACCEPT:
       return "STATE_SENTACCEPT";
     case Session::STATE_RECEIVEDACCEPT:
@@ -571,6 +573,7 @@ bool BaseSession::ContentsGrouped() {
 bool BaseSession::MaybeEnableMuxingSupport() {
   bool ret = true;
   if ((state_ == STATE_SENTINITIATE ||
+      state_ == STATE_RECEIVEDINITIATE_ACK ||
       state_ == STATE_RECEIVEDINITIATE) &&
       ((local_description_ == NULL) ||
       (remote_description_ == NULL))) {
@@ -691,6 +694,9 @@ void BaseSession::OnMessage(talk_base::Message *pmsg) {
   case MSG_TIMEOUT:
     // Session timeout has occured.
     SetError(ERROR_TIME);
+    break;
+  case MSG_INIT_ACK_TIMEOUT:
+    SetError(ERROR_ACK_TIME);
     break;
 
   case MSG_STATE:
@@ -1060,10 +1066,12 @@ void Session::OnIncomingResponse(const buzz::XmlElement* orig_stanza,
 }
 
 void Session::OnInitiateAcked() {
-    // TODO: This is to work around server re-ordering
-    // messages.  We send the candidates once the session-initiate
-    // is acked.  Once we have fixed the server to guarantee message
-    // order, we can remove this case.
+  signaling_thread()->Clear(this, MSG_INIT_ACK_TIMEOUT);
+  SetState(STATE_RECEIVEDINITIATE_ACK);
+  // TODO: This is to work around server re-ordering
+  // messages.  We send the candidates once the session-initiate
+  // is acked.  Once we have fixed the server to guarantee message
+  // order, we can remove this case.
   if (!initiate_acked_) {
     initiate_acked_ = true;
     SessionError error;
@@ -1171,8 +1179,9 @@ bool Session::OnInitiateMessage(const SessionMessage& msg,
 }
 
 bool Session::OnAcceptMessage(const SessionMessage& msg, MessageError* error) {
-  if (!CheckState(STATE_SENTINITIATE, error))
+  if (!CheckSentInitiate(error)) {
     return false;
+  }
 
   SessionAccept accept;
   if (!ParseSessionAccept(msg.protocol, msg.action_elem,
@@ -1205,8 +1214,8 @@ bool Session::OnAcceptMessage(const SessionMessage& msg, MessageError* error) {
 
 bool Session::OnRejectMessage(const SessionMessage& msg, MessageError* error) {
   SessionTerminate term;
-  if (!CheckState(STATE_SENTINITIATE, error) &&
-        !ParseSessionTerminate(msg.protocol, msg.action_elem, &term, error))
+  if (!CheckSentInitiate(error) &&
+      !ParseSessionTerminate(msg.protocol, msg.action_elem, &term, error))
     return false;
 
   return true;
@@ -1314,7 +1323,7 @@ bool BareJidsEqual(const std::string& name1,
 bool Session::OnRedirectError(const SessionRedirect& redirect,
                               SessionError* error) {
   MessageError message_error;
-  if (!CheckState(STATE_SENTINITIATE, &message_error)) {
+  if (!CheckSentInitiate(&message_error)){
     return BadWrite(message_error.text, error);
   }
 
@@ -1332,6 +1341,17 @@ bool Session::OnRedirectError(const SessionRedirect& redirect,
 bool Session::CheckState(State expected, MessageError* error) {
   ASSERT(state() == expected);
   if (state() != expected) {
+    return BadMessage(buzz::QN_STANZA_NOT_ALLOWED,
+                      "message not allowed in current state",
+                      error);
+  }
+  return true;
+}
+
+bool Session::CheckSentInitiate(MessageError* error) {
+  ASSERT(state() == STATE_SENTINITIATE ||
+         state() == STATE_RECEIVEDINITIATE_ACK);
+  if (state() != STATE_SENTINITIATE && state() != STATE_RECEIVEDINITIATE_ACK) {
     return BadMessage(buzz::QN_STANZA_NOT_ALLOWED,
                       "message not allowed in current state",
                       error);
@@ -1381,6 +1401,10 @@ bool Session::SendInitiateMessage(const SessionDescription* sdesc,
   init.contents = sdesc->contents();
   init.transports = GetEmptyTransportInfos(init.contents);
   init.groups = sdesc->groups();
+  signaling_thread()->Clear(this, MSG_INIT_ACK_TIMEOUT);
+  signaling_thread()->PostDelayed(
+          session_manager_->session_init_ack_timeout() * 1000,
+          this, MSG_INIT_ACK_TIMEOUT);
   return SendMessage(ACTION_SESSION_INITIATE, init, error);
 }
 
