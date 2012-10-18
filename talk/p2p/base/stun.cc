@@ -384,7 +384,8 @@ std::string StunMessage::ToString() const {
   std::stringstream stream;
   int attr_count = attrs_->size();
   int type = 0;
-  stream << "{AttributeCount:" << attr_count << ",";
+  stream << "{this=0x" << std::hex << reinterpret_cast<size_t>(this) << std::dec << ",";
+  stream << "AttributeCount:" << attr_count << ",";
   //std::string displaystring = "{AttributeCount:"+attr_count+",\n";
   stream << "StunAttributes:[";
   for (int i = 0; i < attr_count; ++i) {
