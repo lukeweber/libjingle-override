@@ -144,6 +144,7 @@ class TestConnection : public talk_base::Thread {
             allocation_state = ALLOCATION_SUCCESS;
             break;
           case STUN_ALLOCATE_ERROR_RESPONSE:
+            std::cout << std::endl << "!!! Allocation error" << std::endl;
             allocation_state = ALLOCATION_ERROR;
             break;
           default:
@@ -169,6 +170,7 @@ class TestConnection : public talk_base::Thread {
         }
       } else {
         allocation_state = ALLOCATION_NULL;
+        std::cout << std::endl << "!!! Allocation timeout" << std::endl;
         success = false;
       }
 
@@ -208,6 +210,7 @@ class TestConnection : public talk_base::Thread {
             binding_state = BINDING_SUCCESS;
             break;
           case STUN_CHANNEL_BIND_ERROR_RESPONSE:
+            std::cout << std::endl << "!!! Bind error" << std::endl;
             binding_state = BINDING_ERROR;
             break;
           default:
@@ -215,6 +218,7 @@ class TestConnection : public talk_base::Thread {
         }
       } else {
         binding_state = BINDING_NULL;
+        std::cout << std::endl << "!!! Bind timeout" << std::endl;
         success = false;
       }
 
