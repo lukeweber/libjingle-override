@@ -207,29 +207,31 @@ class BaseSession : public sigslot::has_slots<>,
  public:
   enum {
     MSG_TIMEOUT = 0,
+    MSG_INIT_ACK_TIMEOUT,
     MSG_ERROR,
     MSG_STATE,
   };
 
   enum State {
     STATE_INIT = 0,
-    STATE_SENTINITIATE,       // sent initiate, waiting for Accept or Reject
-    STATE_RECEIVEDINITIATE,   // received an initiate. Call Accept or Reject
-    STATE_SENTPRACCEPT,       // sent provisional Accept
-    STATE_SENTACCEPT,         // sent accept. begin connecting transport
-    STATE_RECEIVEDPRACCEPT,   // received provisional Accept, waiting for Accept
-    STATE_RECEIVEDACCEPT,     // received accept. begin connecting transport
-    STATE_SENTMODIFY,         // sent modify, waiting for Accept or Reject
-    STATE_RECEIVEDMODIFY,     // received modify, call Accept or Reject
-    STATE_SENTBUSY,           // sent busy after receiving initiate
-    STATE_SENTREJECT,         // sent reject after receiving initiate
+    STATE_SENTINITIATE,        // sent initiate, waiting for Accept or Reject
+    STATE_RECEIVEDINITIATE,    // received an initiate. Call Accept or Reject
+    STATE_RECEIVEDINITIATE_ACK,// received an initiate ack. Client is alive.
+    STATE_SENTPRACCEPT,        // sent provisional Accept
+    STATE_SENTACCEPT,          // sent accept. begin connecting transport
+    STATE_RECEIVEDPRACCEPT,    // received provisional Accept, waiting for Accept
+    STATE_RECEIVEDACCEPT,      // received accept. begin connecting transport
+    STATE_SENTMODIFY,          // sent modify, waiting for Accept or Reject
+    STATE_RECEIVEDMODIFY,      // received modify, call Accept or Reject
+    STATE_SENTBUSY,            // sent busy after receiving initiate
+    STATE_SENTREJECT,          // sent reject after receiving initiate
     STATE_RECEIVEDBUSY,        // received busy after sending initiate
-    STATE_RECEIVEDREJECT,     // received reject after sending initiate
-    STATE_SENTREDIRECT,       // sent direct after receiving initiate
-    STATE_SENTTERMINATE,      // sent terminate (any time / either side)
-    STATE_RECEIVEDTERMINATE,  // received terminate (any time / either side)
-    STATE_INPROGRESS,         // session accepted and in progress
-    STATE_DEINIT,             // session is being destroyed
+    STATE_RECEIVEDREJECT,      // received reject after sending initiate
+    STATE_SENTREDIRECT,        // sent direct after receiving initiate
+    STATE_SENTTERMINATE,       // sent terminate (any time / either side)
+    STATE_RECEIVEDTERMINATE,   // received terminate (any time / either side)
+    STATE_INPROGRESS,          // session accepted and in progress
+    STATE_DEINIT,              // session is being destroyed
   };
 
   enum Error {
@@ -239,6 +241,7 @@ class BaseSession : public sigslot::has_slots<>,
     ERROR_NETWORK = 3,    // network error, could not allocate network resources
     ERROR_CONTENT = 4,    // channel errors in SetLocalContent/SetRemoteContent
     ERROR_TRANSPORT = 5,  // transport error of some kind
+    ERROR_ACK_TIME = 6,   // no ack response to signaling, client not available
   };
 
   // Convert State to a readable string.
@@ -704,6 +707,9 @@ class Session : public BaseSession {
 
   // Verifies that we are in the appropriate state to receive this message.
   bool CheckState(State state, MessageError* error);
+
+  //Verifies that we sent initiate or received an ack from our initiate.
+  bool CheckSentInitiate(MessageError* error);
 
   SessionManager* session_manager_;
   bool initiate_acked_;

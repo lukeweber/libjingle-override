@@ -212,6 +212,8 @@ BasicPortAllocator::BasicPortAllocator(
       socket_factory_(socket_factory),
       turn_username_(""),
       turn_password_("") {
+  LOG(LS_INFO) << "BasicPortAllocator::" << __FUNCTION__;
+  LOG_J(LS_INFO, this) << __FUNCTION__;
   ASSERT(socket_factory_ != NULL);
   Construct();
 }
