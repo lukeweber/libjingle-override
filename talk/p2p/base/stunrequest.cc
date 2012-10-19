@@ -159,6 +159,17 @@ void StunRequest::Construct() {
   }
 }
 
+std::string StunRequest::ToString() const {
+  std::stringstream stream;
+  std::string stunMessage = "NULL";
+  if(msg_ != NULL) {
+    stunMessage = msg_->ToString();
+  }
+  stream << "{timeout:" << timeout_ << "," << "StunMessage:" <<
+    stunMessage << "}";
+  return stream.str();
+}
+
 int StunRequest::type() {
   ASSERT(msg_ != NULL);
   return msg_->type();

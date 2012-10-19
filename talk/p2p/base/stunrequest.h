@@ -86,6 +86,9 @@ public:
   // Causes our wrapped StunMessage to be Prepared
   void Construct();
 
+  // Used only for debugging
+  std::string ToString() const;
+
   // The manager handling this request (if it has been scheduled for sending).
   StunRequestManager* manager() { return manager_; }
 

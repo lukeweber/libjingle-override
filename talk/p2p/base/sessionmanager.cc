@@ -41,15 +41,16 @@
 namespace cricket {
 
 SessionManager::SessionManager(PortAllocator *allocator,
-                               talk_base::Thread *worker) {
-  allocator_ = allocator;
+                               talk_base::Thread *worker)
+    : allocator_(allocator),
+      timeout_(kDefaultTimeout),
+      timeout_init_ack_(kDefaultTimeoutInitAck) {
   signaling_thread_ = talk_base::Thread::Current();
   if (worker == NULL) {
     worker_thread_ = talk_base::Thread::Current();
   } else {
     worker_thread_ = worker;
   }
-  timeout_ = 50;
 }
 
 SessionManager::~SessionManager() {

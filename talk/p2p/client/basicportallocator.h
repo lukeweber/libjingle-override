@@ -54,6 +54,11 @@ class BasicPortAllocator : public PortAllocator {
   virtual ~BasicPortAllocator();
 
   talk_base::NetworkManager* network_manager() { return network_manager_; }
+  std::string ToString() const {
+    std::stringstream stream;
+    stream << "BasicPortAllocator";
+    return stream.str();
+  }
 
   // If socket_factory() is set to NULL each PortAllocatorSession
   // creates its own socket factory.
