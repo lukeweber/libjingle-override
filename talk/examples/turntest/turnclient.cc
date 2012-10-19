@@ -58,17 +58,9 @@ class TestConnection : public talk_base::Thread {
       std::cout << "1. Allocate and bind channel...";
       if (Allocate() && BindChannel() && relayed_addr_.port() != 0) {
         std::cout << "Done" << std::endl;
-        // Send data from client to peer
-        std::cout << "2. Sending " << msg_count_ << " messages to peer" << std::endl;
-        for (int i = 0; i < msg_count_; i++) {
-          std::string client_data = std::string("client") + data_;
-          ClientSendData(client_data.c_str());
-          // Sleep 100ms between messages
-          usleep(100000);
-          std::cout << ".";
-        }
-        std::cout << "Done" << std::endl;
-        std::cout << std::endl;
+        std::cout << relayed_addr_.port() << " <-- Input this TURN port to the peer" << std::endl;
+        std::cout << "Press ENTER to start waiting for messages from peer" << std::endl;
+        std::cin.ignore(100000, '\n');
         std::cout << "2. Waiting for " << msg_count_ << " messages to arrive from peer" << std::endl;
         while (true) {
           std::string received_data = ClientReceiveData();
@@ -81,6 +73,17 @@ class TestConnection : public talk_base::Thread {
           } else {
             std::cout << "...still waiting..." << std::endl;
           }
+        }
+        std::cout << std::endl;
+        std::cout << "Done" << std::endl;
+        // Send data from client to peer
+        std::cout << "2. Sending " << msg_count_ << " messages to peer" << std::endl;
+        for (int i = 0; i < msg_count_; i++) {
+          std::string client_data = std::string("client") + data_;
+          ClientSendData(client_data.c_str());
+          // Sleep 100ms between messages
+          usleep(100000);
+          std::cout << ".";
         }
         std::cout << "Done" << std::endl;
         std::cout << "My Mission is over, goodbye." << std::endl;
@@ -95,31 +98,46 @@ class TestConnection : public talk_base::Thread {
       std::cout << std::endl;
       peer_.reset(new talk_base::TestClient(
             talk_base::AsyncUDPSocket::Create(ss_, peer_addr_)));
-      std::cout << "1. Waiting for " << msg_count_ << " messages to arrive from client" << std::endl;
-      while (true) {
-        std::string received_data = PeerReceiveData();
-        if (received_data != "") {
-          std::cout << ".";
-          peer_received_cnt_++;
-          if (peer_received_cnt_ == msg_count_) {
+      // Get Peer's reflexive address
+      if (GetPeerReflexiveAddress()) {
+        std::cout << peer_reflexive_address_.ipaddr() << " <-- Run client with this address for peer" << std::endl;;
+        std::cout << "Give me the TURN port to connect to: ";
+        while (1) {
+          if (std::cin >> turn_port_) {
             break;
+          } else {
+            std::cout << "Invalid Input! Please input a numerical value." << std::endl;
+            std::cin.clear();
+            while (std::cin.get() != '\n') ; // empty loop
           }
-        } else {
-          std::cout << "...still waiting..." << std::endl;
         }
+        std::cout << "Sending " << msg_count_ << " messages to client via relay" << std::endl;
+        relayed_addr_ = talk_base::SocketAddress(g_turn_int_addr->ipaddr(), turn_port_);
+        std::cout << "  Relayed client address " << relayed_addr_.ipaddr() << ":" << turn_port_ << std::endl;
+        for (int i = 0; i < msg_count_; i++) {
+          std::string peer_data = std::string("peer") + data_;
+          PeerSendData(peer_data.c_str());
+          usleep(100000);
+          std::cout << ".";
+        }
+        std::cout << "Waiting for " << msg_count_ << " messages to arrive from client" << std::endl;
+        while (true) {
+          std::string received_data = PeerReceiveData();
+          if (received_data != "") {
+            std::cout << ".";
+            peer_received_cnt_++;
+            if (peer_received_cnt_ == msg_count_) {
+              break;
+            }
+          } else {
+            std::cout << "...still waiting..." << std::endl;
+          }
+        }
+        std::cout << "Done" << std::endl;
+        std::cout << std::endl;
+        std::cout << "Done" << std::endl;
+        std::cout << "My Mission is over, goodbye." << std::endl;
       }
-      std::cout << "Done" << std::endl;
-      std::cout << std::endl;
-      std::cout << "2. Sending " << msg_count_ << " messages to client via relay" << std::endl;
-      std::cout << "  Relayed client address " << relayed_addr_.ipaddr() << ":" << relayed_addr_.port() << std::endl;
-      for (int i = 0; i < msg_count_; i++) {
-        std::string peer_data = std::string("peer") + data_;
-        PeerSendData(peer_data.c_str());
-        usleep(100000);
-        std::cout << ".";
-      }
-      std::cout << "Done" << std::endl;
-      std::cout << "My Mission is over, goodbye." << std::endl;
     }
 
     bool Allocate() {
@@ -135,8 +153,8 @@ class TestConnection : public talk_base::Thread {
       allocate_request->AddAttribute(transport_attr);
 
       // Send allocate request and get the response
-      SendStunMessage(allocate_request);
-      TurnMessage* allocate_response = ReceiveStunMessage();
+      SendStunMessage(allocate_request, client_);
+      TurnMessage* allocate_response = ReceiveStunMessage(client_);
 
       if (allocate_response != NULL) {
         switch (allocate_response->type()) {
@@ -201,8 +219,8 @@ class TestConnection : public talk_base::Thread {
       bind_request->AddAttribute(addr_attr);
 
       // Send Channel Bind request and get the response
-      SendStunMessage(bind_request);
-      TurnMessage* bind_response = ReceiveStunMessage();
+      SendStunMessage(bind_request, client_);
+      TurnMessage* bind_response = ReceiveStunMessage(client_);
 
       if (bind_response != NULL) {
         switch (bind_response->type()) {
@@ -228,6 +246,49 @@ class TestConnection : public talk_base::Thread {
       return success;
     }
 
+    bool GetPeerReflexiveAddress() {
+      bool success = true;
+
+      // std::cout << "Bind Channel " << channel_ << std::endl;
+      std::string transaction_id = "0123456789ab";
+      StunMessage* stun_bind_request = new TurnMessage();
+      stun_bind_request->SetType(STUN_BINDING_REQUEST);
+      stun_bind_request->SetTransactionID(transaction_id);
+      SendStunMessage(stun_bind_request, peer_);
+
+      StunMessage* stun_bind_response = ReceiveStunMessage(peer_);
+      if (stun_bind_response != NULL) {
+        switch (stun_bind_response->type()) {
+          case STUN_BINDING_RESPONSE:
+            stun_binding_state = STUN_BINDING_SUCCESS;
+            break;
+          case STUN_BINDING_ERROR_RESPONSE:
+            std::cout << std::endl << "!!! STUN Bind error" << std::endl;
+            stun_binding_state = STUN_BINDING_ERROR;
+            break;
+          default:
+            stun_binding_state = STUN_BINDING_BOGUS;
+        }
+      } else {
+        stun_binding_state = STUN_BINDING_NULL;
+        std::cout << std::endl << "!!! STUN Bind timeout" << std::endl;
+        success = false;
+      }
+
+      if (stun_binding_state == STUN_BINDING_SUCCESS) {
+        // Extract assigned server-reflexive peer address
+        const StunAddressAttribute* peer_raddr_attr =
+          stun_bind_response->GetAddress(STUN_ATTR_XOR_MAPPED_ADDRESS);
+        if (!peer_raddr_attr) {
+            stun_binding_state = STUN_BINDING_ERROR;
+        } else {
+          peer_reflexive_address_ = talk_base::SocketAddress(peer_raddr_attr->ipaddr(), peer_raddr_attr->port());
+        }
+      }
+
+      return success;
+    }
+
     void ClientSendData(const char* data) {
       // std::cout << "Client Send Data from port " << client_addr_.port() << std::endl;
       talk_base::ByteBuffer buff;
@@ -243,9 +304,6 @@ class TestConnection : public talk_base::Thread {
       talk_base::TestClient::Packet* packet = peer_->NextPacket();
       if (packet) {
         raw = std::string(packet->buf, packet->size);
-        if (relayed_addr_.port() == 0) {
-          relayed_addr_ = packet->addr;
-        }
         delete packet;
       }
       return raw;
@@ -282,15 +340,15 @@ class TestConnection : public talk_base::Thread {
       return raw;
     }
 
-    void SendStunMessage(const StunMessage* msg) {
+    void SendStunMessage(const StunMessage* msg, talk_base::scoped_ptr<talk_base::TestClient> &sender) {
       talk_base::ByteBuffer buff;
       msg->Write(&buff);
-      client_->SendTo(buff.Data(), buff.Length(), *g_turn_int_addr);
+      sender->SendTo(buff.Data(), buff.Length(), *g_turn_int_addr);
     }
 
-    TurnMessage* ReceiveStunMessage() {
+    TurnMessage* ReceiveStunMessage(talk_base::scoped_ptr<talk_base::TestClient> &receiver) {
       TurnMessage* response = NULL;
-      talk_base::TestClient::Packet* packet = client_->NextPacket();
+      talk_base::TestClient::Packet* packet = receiver->NextPacket();
       if (packet) {
         talk_base::ByteBuffer buf(packet->buf, packet->size);
         response = new TurnMessage();
@@ -308,8 +366,10 @@ class TestConnection : public talk_base::Thread {
     talk_base::SocketAddress client_addr_;
     talk_base::SocketAddress mapped_addr_;
     talk_base::SocketAddress relayed_addr_;
+    talk_base::SocketAddress peer_reflexive_address_;
     const char* data_;
     int msg_count_;
+    int turn_port_;
     uint32 channel_;
     Mode mode_;
 
@@ -323,14 +383,23 @@ class TestConnection : public talk_base::Thread {
     };
     AllocationState allocation_state;
 
-    enum BindingResult {
+    enum BindingState {
       BINDING_SUCCESS = 0,
       BINDING_ERROR = 1,
       BINDING_BOGUS = 2,
       BINDING_NULL = 5,
       BINDING_DEFAULT = 10
     };
-    BindingResult binding_state;
+    BindingState binding_state;
+
+    enum StunBindingState {
+      STUN_BINDING_SUCCESS = 0,
+      STUN_BINDING_ERROR = 1,
+      STUN_BINDING_BOGUS = 2,
+      STUN_BINDING_NULL = 5,
+      STUN_BINDING_DEFAULT = 10
+    };
+    StunBindingState stun_binding_state;
 
     int peer_received_cnt_;
     int client_received_cnt_;
