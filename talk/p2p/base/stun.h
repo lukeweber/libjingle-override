@@ -502,7 +502,7 @@ enum RelayMessageType {
   STUN_SEND_REQUEST                 = 0x0004,
   STUN_SEND_RESPONSE                = 0x0104,
   STUN_SEND_ERROR_RESPONSE          = 0x0114,
-  STUN_DATA_INDICATION              = 0x0115
+  // STUN_DATA_INDICATION              = 0x0115
 };
 
 // "GTURN"-specific STUN attributes.
@@ -513,7 +513,7 @@ enum RelayAttributeType {
   STUN_ATTR_BANDWIDTH             = 0x0010,  // UInt32
   STUN_ATTR_DESTINATION_ADDRESS   = 0x0011,  // Address
   STUN_ATTR_SOURCE_ADDRESS2       = 0x0012,  // Address
-  STUN_ATTR_DATA                  = 0x0013,  // ByteString
+  // STUN_ATTR_DATA                  = 0x0013,  // ByteString
   STUN_ATTR_OPTIONS               = 0x8001   // UInt32
 };
 
@@ -527,7 +527,7 @@ class RelayMessage : public StunMessage {
       case STUN_ATTR_BANDWIDTH:           return STUN_VALUE_UINT32;
       case STUN_ATTR_DESTINATION_ADDRESS: return STUN_VALUE_ADDRESS;
       case STUN_ATTR_SOURCE_ADDRESS2:     return STUN_VALUE_ADDRESS;
-      case STUN_ATTR_DATA:                return STUN_VALUE_BYTE_STRING;
+      // case STUN_ATTR_DATA:                return STUN_VALUE_BYTE_STRING;
       case STUN_ATTR_OPTIONS:             return STUN_VALUE_UINT32;
       default: return StunMessage::GetAttributeValueType(type);
     }
@@ -545,6 +545,7 @@ enum TurnMessageType {
   STUN_CHANNEL_BIND_REQUEST             = 0x0009,
   STUN_CHANNEL_BIND_RESPONSE            = 0x0109,
   STUN_CHANNEL_BIND_ERROR_RESPONSE      = 0x0119,
+  STUN_DATA_INDICATION                  = 0x0007
 };
 
 // "TURN"-specific STUN attributes.
@@ -553,6 +554,7 @@ enum TurnAttributeType {
   STUN_ATTR_XOR_PEER_ADDRESS      = 0x0012,  // XorAddress
   STUN_ATTR_XOR_RELAYED_ADDRESS   = 0x0016,  // XorAddress
   STUN_ATTR_REQUESTED_TRANSPORT   = 0x0019,  // UInt32
+  STUN_ATTR_DATA                  = 0x0013,  // ByteString
 };
 
 // A "TURN" STUN message.
@@ -567,6 +569,7 @@ class TurnMessage : public StunMessage {
       case STUN_ATTR_XOR_RELAYED_ADDRESS: return STUN_VALUE_XOR_ADDRESS;
       case STUN_ATTR_XOR_PEER_ADDRESS:    return STUN_VALUE_XOR_ADDRESS;
       case STUN_ATTR_ALTERNATE_SERVER:    return STUN_VALUE_ADDRESS;
+      case STUN_ATTR_DATA:                return STUN_VALUE_BYTE_STRING;
       default: return StunMessage::GetAttributeValueType(type);
     }
   }

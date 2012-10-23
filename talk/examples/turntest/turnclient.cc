@@ -28,6 +28,7 @@ class TestConnection : public talk_base::Thread {
       mode_ = mode;
       peer_received_cnt_ = 0;
       client_received_cnt_ = 0;
+      channel_mode_ = true;
     }
 
     virtual void Run() {
@@ -55,13 +56,14 @@ class TestConnection : public talk_base::Thread {
       std::cout << std::endl;
       client_.reset(new talk_base::TestClient(
             talk_base::AsyncUDPSocket::Create(ss_, client_addr_)));
-      std::cout << "1. Allocate and bind channel...";
+      std::cout << "Allocate and bind channel...";
       if (Allocate() && BindChannel() && relayed_addr_.port() != 0) {
         std::cout << "Done" << std::endl;
         std::cout << relayed_addr_.port() << " <-- Input this TURN port to the peer" << std::endl;
         std::cout << "Press ENTER to start waiting for messages from peer" << std::endl;
         std::cin.ignore(100000, '\n');
-        std::cout << "2. Waiting for " << msg_count_ << " messages to arrive from peer" << std::endl;
+        std::cout << std::endl;
+        std::cout << "Waiting for " << msg_count_ << " messages to arrive from peer" << std::endl;
         while (true) {
           std::string received_data = ClientReceiveData();
           if (received_data != "") {
@@ -74,10 +76,20 @@ class TestConnection : public talk_base::Thread {
             std::cout << "...still waiting..." << std::endl;
           }
         }
-        std::cout << std::endl;
         std::cout << "Done" << std::endl;
+        if (!channel_mode_) {
+          std::cout << std::endl;
+          std::cout << "!!! We're receiving Data Indications instead of ChannelMessages" << std::endl;
+          std::cout << "!!! This means, that our peer is behind the Symmetric NAT" << std::endl;
+          std::cout << "!!! But we know the new peer's address " << peer_addr_.ipaddr() << ":" << peer_addr_.port() << std::endl;
+          std::cout << "!!! So let's try to rebind the channel, and use it" << std::endl;
+          channel_ += 0x10000;
+          BindChannel();
+          std::cout << std::endl;
+        }
         // Send data from client to peer
-        std::cout << "2. Sending " << msg_count_ << " messages to peer" << std::endl;
+        std::cout << std::endl;
+        std::cout << "Sending " << msg_count_ << " messages to peer" << std::endl;
         for (int i = 0; i < msg_count_; i++) {
           std::string client_data = std::string("client") + data_;
           ClientSendData(client_data.c_str());
@@ -100,7 +112,7 @@ class TestConnection : public talk_base::Thread {
             talk_base::AsyncUDPSocket::Create(ss_, peer_addr_)));
       // Get Peer's reflexive address
       if (GetPeerReflexiveAddress()) {
-        std::cout << peer_reflexive_address_.ipaddr() << " <-- Run client with this address for peer" << std::endl;;
+        std::cout << peer_reflexive_address_.ipaddr() << " " << peer_reflexive_address_.port() << " <-- Run client with this address for peer" << std::endl;
         std::cout << "Give me the TURN port to connect to: ";
         while (1) {
           if (std::cin >> turn_port_) {
@@ -111,6 +123,8 @@ class TestConnection : public talk_base::Thread {
             while (std::cin.get() != '\n') ; // empty loop
           }
         }
+        GetPeerReflexiveAddress();
+        std::cout << std::endl;
         std::cout << "Sending " << msg_count_ << " messages to client via relay" << std::endl;
         relayed_addr_ = talk_base::SocketAddress(g_turn_int_addr->ipaddr(), turn_port_);
         std::cout << "  Relayed client address " << relayed_addr_.ipaddr() << ":" << turn_port_ << std::endl;
@@ -120,6 +134,8 @@ class TestConnection : public talk_base::Thread {
           usleep(100000);
           std::cout << ".";
         }
+        std::cout << "Done" << std::endl;
+        std::cout << std::endl;
         std::cout << "Waiting for " << msg_count_ << " messages to arrive from client" << std::endl;
         while (true) {
           std::string received_data = PeerReceiveData();
@@ -134,14 +150,11 @@ class TestConnection : public talk_base::Thread {
           }
         }
         std::cout << "Done" << std::endl;
-        std::cout << std::endl;
-        std::cout << "Done" << std::endl;
         std::cout << "My Mission is over, goodbye." << std::endl;
       }
     }
 
     bool Allocate() {
-      // std::cout << "Allocate" << std::endl;
       StunMessage* allocate_request = new TurnMessage();
       allocate_request->SetType(STUN_ALLOCATE_REQUEST);
       bool success = true;
@@ -250,10 +263,8 @@ class TestConnection : public talk_base::Thread {
       bool success = true;
 
       // std::cout << "Bind Channel " << channel_ << std::endl;
-      std::string transaction_id = "0123456789ab";
       StunMessage* stun_bind_request = new TurnMessage();
       stun_bind_request->SetType(STUN_BINDING_REQUEST);
-      stun_bind_request->SetTransactionID(transaction_id);
       SendStunMessage(stun_bind_request, peer_);
 
       StunMessage* stun_bind_response = ReceiveStunMessage(peer_);
@@ -322,18 +333,41 @@ class TestConnection : public talk_base::Thread {
       std::string raw;
       talk_base::TestClient::Packet* packet = client_->NextPacket();
       if (packet) {
-        // First 4 bytes are reserved for channel address
-        // But only 2 of them are significant, the rest 2 are zeros
-        uint16 val1, val2;
-        memcpy(&val1, packet->buf, 2);
-        val2 = talk_base::NetworkToHost16(val1);
-        if ( val2 & 0x4000 )  {
-          uint32 received_channel = val2 << 16;
-          if (received_channel == channel_) {
-            // Move the pointer and reduce the size to read
-            raw = std::string(packet->buf + 4, packet->size - 4);
-          } else {
-            std::cout << "!!! Client -> Peer | Wrong Channel Number !!!" << std::endl;
+        talk_base::ByteBuffer buf(packet->buf, packet->size);
+        TurnMessage msg;
+        if (msg.Read(&buf)) {
+          // Data Indication, bad
+          if ((msg.type() ^ 0x0010) == STUN_DATA_INDICATION) {
+            channel_mode_ = false;
+            const StunAddressAttribute* addr_attr =
+              msg.GetAddress(STUN_ATTR_XOR_PEER_ADDRESS);
+            if (!addr_attr) {
+              std::cout << "No peer address in data indication" << std::endl;
+            } else {
+              peer_addr_ = talk_base::SocketAddress(addr_attr->ipaddr(), addr_attr->port());
+            }
+            const StunByteStringAttribute* data_attr = msg.GetByteString(STUN_ATTR_DATA);
+            if (!data_attr) {
+              std::cout << "Data indication has no data" << std::endl;
+            } else {
+              raw = std::string(data_attr->bytes(), data_attr->length());
+            }
+          }
+        } else {
+          // ChannelData, good
+          // First 4 bytes are reserved for channel address
+          // But only 2 of them are significant, the rest 2 are zeros
+          uint16 val1, val2;
+          memcpy(&val1, packet->buf, 2);
+          val2 = talk_base::NetworkToHost16(val1);
+          if ( val2 & 0x4000 )  {
+            uint32 received_channel = val2 << 16;
+            if (received_channel == channel_) {
+              // Move the pointer and reduce the size to read
+              raw = std::string(packet->buf + 4, packet->size - 4);
+            } else {
+              std::cout << "!!! Client -> Peer | Wrong Channel Number !!!" << std::endl;
+            }
           }
         }
       }
@@ -371,6 +405,7 @@ class TestConnection : public talk_base::Thread {
     int msg_count_;
     int turn_port_;
     uint32 channel_;
+    bool channel_mode_;
     Mode mode_;
 
     // Stats
@@ -409,9 +444,9 @@ int main(int argc, char **argv) {
   // Define parameters
   DEFINE_string(mode, "client", "Mode to run in: client or peer");
   DEFINE_string(client_host, "127.0.0.1", "Client's IP");
-  DEFINE_int(client_port, 6000, "Client's port");
+  DEFINE_int(client_port, 6001, "Client's port");
   DEFINE_string(peer_host, "127.0.0.1", "Peer's IP");
-  DEFINE_int(peer_port, 7000, "Peer's port");
+  DEFINE_int(peer_port, 7001, "Peer's port");
   DEFINE_string(turn_host, "127.0.0.1", "TURN host");
   DEFINE_int(turn_port, 3478, "Turn port");
   DEFINE_int(message_cnt, 10, "Number of messages to send");
