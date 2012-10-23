@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2009, Google Inc.
+ * Copyright 2012, Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,55 +25,31 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "talk/base/filelock.h"
+#ifndef TALK_APP_WEBRTC_VIDEOSOURCEINTERFACE_H_
+#define TALK_APP_WEBRTC_VIDEOSOURCEINTERFACE_H_
 
-#include "talk/base/fileutils.h"
-#include "talk/base/logging.h"
-#include "talk/base/pathutils.h"
-#include "talk/base/stream.h"
+#include "talk/app/webrtc/mediastreaminterface.h"
 
-namespace talk_base {
+namespace webrtc {
 
-FileLock::FileLock(const std::string& path, FileStream* file)
-    : path_(path), file_(file) {
-}
+// VideoSourceInterface is a reference counted source used for VideoTracks.
+// The same source can be used in multiple VideoTracks.
+// The methods are only supposed to be called by the PeerConnection
+// implementation.
+class VideoSourceInterface : public MediaSourceInterface {
+ public:
+  // Get access to the source implementation of cricket::VideoCapturer.
+  // This can be used for receiving frames and state notifications.
+  // But it should not be used for starting or stopping capturing.
+  virtual cricket::VideoCapturer* GetVideoCapturer() = 0;
+  // Adds |output| to the source to receive frames.
+  virtual void AddSink(cricket::VideoRenderer* output) = 0;
+  virtual void RemoveSink(cricket::VideoRenderer* output) = 0;
 
-FileLock::~FileLock() {
-  MaybeUnlock();
-}
+ protected:
+  virtual ~VideoSourceInterface() {}
+};
 
-void FileLock::Unlock() {
-  LOG_F(LS_INFO);
-  MaybeUnlock();
-}
+}  // namespace webrtc
 
-void FileLock::MaybeUnlock() {
-  if (file_) {
-    LOG(LS_INFO) << "Unlocking:" << path_;
-    file_->Close();
-    Filesystem::DeleteFile(path_);
-    file_.reset();
-  }
-}
-
-FileLock* FileLock::TryLock(const std::string& path) {
-  FileStream* stream = new FileStream();
-  bool ok = false;
-#ifdef WIN32
-  // Open and lock in a single operation.
-  ok = stream->OpenShare(path, "a", _SH_DENYRW, NULL);
-#else // Linux and OSX
-  ok = stream->Open(path, "a", NULL) && stream->TryLock();
-#endif
-  if (ok) {
-    return new FileLock(path, stream);
-  } else {
-    // Something failed, either we didn't succeed to open the
-    // file or we failed to lock it. Anyway remove the heap
-    // allocated object and then return NULL to indicate failure.
-    delete stream;
-    return NULL;
-  }
-}
-
-}  // namespace talk_base
+#endif  // TALK_APP_WEBRTC_VIDEOSOURCEINTERFACE_H_

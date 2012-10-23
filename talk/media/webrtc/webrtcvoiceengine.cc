@@ -840,7 +840,7 @@ bool WebRtcVoiceEngine::ChangeLocalMonitor(bool enable) {
   if (!voe_wrapper_->file()) {
     return false;
   }
-  if (enable && !monitor_.get()) {
+  if (enable && !monitor_) {
     monitor_.reset(new WebRtcMonitorStream);
     if (voe_wrapper_->file()->StartRecordingMicrophone(monitor_.get()) == -1) {
       LOG_RTCERR1(StartRecordingMicrophone, monitor_.get());
@@ -851,7 +851,7 @@ bool WebRtcVoiceEngine::ChangeLocalMonitor(bool enable) {
       monitor_.reset();
       return false;
     }
-  } else if (!enable && monitor_.get()) {
+  } else if (!enable && monitor_) {
     voe_wrapper_->file()->StopRecordingMicrophone();
     monitor_.reset();
   }
@@ -1749,8 +1749,8 @@ bool WebRtcVoiceMediaChannel::ChangeSend(SendFlags send) {
       return false;
     }
   } else if (send == SEND_RINGBACKTONE) {
-    ASSERT(ringback_tone_.get() != NULL);
-    if (!ringback_tone_.get()) {
+    ASSERT(ringback_tone_);
+    if (!ringback_tone_) {
       return false;
     }
     if (engine()->voe()->file() &&
@@ -2091,7 +2091,7 @@ bool WebRtcVoiceMediaChannel::SetRingbackTone(const char *buf, int len) {
 
 bool WebRtcVoiceMediaChannel::PlayRingbackTone(uint32 ssrc,
                                              bool play, bool loop) {
-  if (!ringback_tone_.get()) {
+  if (!ringback_tone_) {
     return false;
   }
 
