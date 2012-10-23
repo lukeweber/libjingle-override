@@ -25,7 +25,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <iostream>
 #include "talk/base/asyncpacketsocket.h"
 #include "talk/base/helpers.h"
 #include "talk/base/logging.h"
@@ -91,7 +90,7 @@ void TurnPort::AddServerAddress(const ProtocolAddress& addr) {
   alt_server_addr_ = addr.address;
   if (!this->Init()) {
     LOG_J(LS_WARNING, this) <<
-                   "RelayPort::AddServerAddress; unable to initialize port";
+                   "TurnPort::AddServerAddress; unable to initialize port";
   }
 }
 
@@ -99,16 +98,14 @@ void TurnPort::AddExternalAddress(const ProtocolAddress& addr) {
 }
 
 void TurnPort::PrepareAddress() {
-  LOG(INFO) << __FUNCTION__;
   //
-  // Send a AllocateRequest to Relay Server
+  // Send a AllocateRequest to Turn Server
   //
   requests_.SendDelayed(new TurnAllocateRequest(this, server_addr_), 0);
   ready_ = false;
 }
 
 void TurnPort::PrepareSecondaryAddress() {
-  LOG(INFO) << __FUNCTION__;
   requests_.SendDelayed(new TurnAllocateRequest(this, alt_server_addr_), 0);
 }
 
@@ -120,7 +117,7 @@ void TurnPort::SetReady() {
 }
 
 void TurnPort::OnConnectionDestroyed(Connection* conn) {
-  LOG_J(LS_INFO, this) << "RelayPort::OnConnectionDestroyed";
+  LOG_J(LS_INFO, this) << __FUNCTION__;
   RelayProxyConnection* rpc = reinterpret_cast<RelayProxyConnection*>(conn);
   connectionMap_.erase(rpc->GetChannelNumber());
   Port::OnConnectionDestroyed(conn);
@@ -196,7 +193,10 @@ void TurnPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
     std::map<uint32, RelayProxyConnection *>::iterator it =
                 connectionMap_.begin();
     for ( ; (it != connectionMap_.end() && !bHandled); it++ ) {
-      bHandled = it->second->CheckResponse(&msg);
+      RelayProxyConnection * pSec = it->second;
+      if ( pSec != NULL ) {
+        bHandled = pSec->CheckResponse(&msg);
+      }
     }
   }
 }
@@ -236,12 +236,12 @@ void TurnPort::OnSendPacket(const void* data, size_t size, StunRequest* req) {
 
   if (socket_->SendTo(data, size, addr) < 0)
     LOG(LS_ERROR) << socket_->GetError() <<
-      "RelayPort::OnSendPacket sendto error";
+      "TurnPort::OnSendPacket sendto error to addr " << addr.ToString() <<
+      " " << req->ToString();
 }
 
 void TurnPort::SendBindingResponse(StunMessage* request,
                                     const talk_base::SocketAddress& addr) {
-  // LOG_J(LS_VERBOSE, this)<< "RelayPort::SendBindingResponse";
 
   ASSERT(request->type() == STUN_BINDING_REQUEST);
 
@@ -376,7 +376,6 @@ TurnAllocateRequest::TurnAllocateRequest(TurnPort* port,
 
 void TurnAllocateRequest::Prepare(StunMessage* request) {
   LOG(LS_INFO) << "TurnAllocateRequest::Prepare";
-
   bool AddMI = false;
   request->SetType(STUN_ALLOCATE_REQUEST);
   if (port_->GetNonce().length() != 0) {
@@ -410,7 +409,6 @@ void TurnAllocateRequest::Prepare(StunMessage* request) {
     request->AddMessageIntegrity(password);
   }
   LOG(LS_INFO) << "LOGT REQ = " << request->ToString() << std::endl;
-
 }
 
 int TurnAllocateRequest::GetNextDelay() {
@@ -541,7 +539,6 @@ void RelayProxyConnection::SendRefreshRequest() {
 // Called when a packet is received on this connection.
 //
 void RelayProxyConnection::OnReadPacket(const char* data, size_t size) {
-  // LOG(LS_VERBOSE) << "RelayProxyConnection::OnReadPacket; invoking base" ;
   Connection::OnReadPacket(data, size);
 }
 
@@ -566,7 +563,6 @@ void RelayProxyConnection::OnSendStunPacket(const void* data, size_t size,
 }
 
 int RelayProxyConnection::Send(const void* data, size_t size)  {
-  // LOG(LS_VERBOSE) << "RelayProxyConnection::Send ....";
 
   talk_base::ByteBuffer buff;
   uint32 val = chan_ | size;
@@ -593,7 +589,6 @@ ChannelBindRequest::~ChannelBindRequest() {
 
 void ChannelBindRequest::Prepare(StunMessage* request) {
   LOG(LS_VERBOSE) << "ChannelBindRequest::Prepare";
-
   request->SetType(STUN_CHANNEL_BIND_REQUEST);
 
   StunByteStringAttribute* username_attr =
@@ -627,7 +622,6 @@ void ChannelBindRequest::Prepare(StunMessage* request) {
 
   request->AddMessageIntegrity(password);
   LOG(LS_INFO) << "LOGT REQ = " << request->ToString() << std::endl;
-
 }
 
 void ChannelBindRequest::OnResponse(StunMessage* response) {
@@ -700,7 +694,6 @@ void RefreshRequest::Prepare(StunMessage* request) {
 }
 
 void RefreshRequest::OnResponse(StunMessage* response) {
-  // LOG(LS_INFO) << "RefreshRequest::OnResponse; refresh request succeeded";
 }
 
 void RefreshRequest::OnErrorResponse(StunMessage* response) {
