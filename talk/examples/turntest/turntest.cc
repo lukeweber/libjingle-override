@@ -70,7 +70,6 @@ class TestConnection : public talk_base::Thread {
       // std::cout << "Allocate" << std::endl;
       StunMessage* allocate_request = new TurnMessage();
       allocate_request->SetType(STUN_ALLOCATE_REQUEST);
-      bool success = true;
 
       // Set transport attribute
       StunUInt32Attribute * transport_attr =
@@ -113,18 +112,19 @@ class TestConnection : public talk_base::Thread {
         }
       } else {
         allocation_state = ALLOCATION_NULL;
-        success = false;
       }
 
       delete allocate_response;
       delete allocate_request;
 
-      return success;
+      if (allocation_state == ALLOCATION_SUCCESS) {
+        return true;
+      } else {
+        return false;
+      }
     }
 
     bool BindChannel() {
-      bool success = true;
-
       // std::cout << "Bind Channel " << channel_ << std::endl;
       StunMessage* bind_request = new TurnMessage();
       bind_request->SetType(STUN_CHANNEL_BIND_REQUEST);
@@ -159,13 +159,16 @@ class TestConnection : public talk_base::Thread {
         }
       } else {
         binding_state = BINDING_NULL;
-        success = false;
       }
 
       delete bind_response;
       delete bind_request;
 
-      return success;
+      if (binding_state == BINDING_SUCCESS) {
+        return true;
+      } else {
+        return false;
+      }
     }
 
     void ClientSendData(const char* data) {
