@@ -28,7 +28,7 @@ validate_optarg(){
 	[[ "${OPTARG:0:1}" = "-" ]] && print_usage "-$opt: requires an argument"
 }
 
-while getopts "hr:c:p:j:t:" opt
+while getopts "hr:c:p:j:t:m:" opt
 do
 	case $opt in
 		h ) #help
@@ -76,6 +76,7 @@ echo "CLIENT_HOST=$CLIENT_HOST"
 echo "TURN_PORT=$TURN_PORT"
 echo "JOBS=$JOBS"
 echo "THREADS=$THREADS"
+echo "MESSAGES=$MESSAGES"
 
 read -p "Press [Enter] key to continue CTRL-C to quit..."
 # First possible solution using GNU parallel
