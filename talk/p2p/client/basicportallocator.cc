@@ -42,6 +42,7 @@
 #include "talk/p2p/base/tcpport.h"
 #include "talk/p2p/base/udpport.h"
 #include "talk/p2p/base/turnport.h"
+#include "talk/p2p/base/timeouts.h"
 
 using talk_base::CreateRandomId;
 using talk_base::CreateRandomString;
@@ -57,8 +58,8 @@ const uint32 MSG_SEQUENCEOBJECTS_CREATED = 6;
 
 // Based on my personal testing the timeout values in P2P (250)
 // is way too aggressive, not enough time given for in-progress to complete
-const uint32 ALLOCATE_DELAY = 1000;//250 was the original
-const uint32 ALLOCATION_STEP_DELAY = 1 * 1000;
+const uint32 ALLOCATE_DELAY = kAllocatorTimeoutAllocateDelay;
+const uint32 ALLOCATION_STEP_DELAY = kAllocatorTimeoutAllocateStepDelay;
 
 const int PHASE_UDP = 0;
 const int PHASE_RELAY = 1;
@@ -140,6 +141,7 @@ class AllocationSequence : public talk_base::MessageHandler {
                      uint32 flags);
   ~AllocationSequence();
 
+  virtual std::string GetClassname() const { return "AllocationSequence"; }
   // Disables the phases for a new sequence that this one already covers for an
   // equivalent network setup.
   void DisableEquivalentPhases(talk_base::Network* network,
@@ -212,8 +214,6 @@ BasicPortAllocator::BasicPortAllocator(
       socket_factory_(socket_factory),
       turn_username_(""),
       turn_password_("") {
-  LOG(LS_INFO) << "BasicPortAllocator::" << __FUNCTION__;
-  LOG_J(LS_INFO, this) << __FUNCTION__;
   ASSERT(socket_factory_ != NULL);
   Construct();
 }
@@ -253,6 +253,7 @@ BasicPortAllocator::BasicPortAllocator(
 }
 
 void BasicPortAllocator::Construct() {
+  LOG_CI;
   best_writable_phase_ = -1;
   // For testing, also helps in sending OFFER Quicker 
   // best_writable_phase_ = PHASE_TURN;
@@ -260,6 +261,7 @@ void BasicPortAllocator::Construct() {
 }
 
 BasicPortAllocator::~BasicPortAllocator() {
+  LOG_CI;
 }
 
 int BasicPortAllocator::best_writable_phase() const {

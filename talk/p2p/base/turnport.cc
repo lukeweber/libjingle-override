@@ -84,6 +84,12 @@ bool TurnPort::Init() {
   return true;
 }
 
+std::string TurnPort::ToString() const {
+  std::stringstream ss;
+  ss << "[server_addr_:" << server_addr_.ToString();
+  ss << ",Port:" << Port::ToString() << "]";
+  return ss.str();
+}
 void TurnPort::AddServerAddress(const ProtocolAddress& addr) {
   LOG_J(LS_INFO, this) << "RelayPort::AddServerAddress called " << addr.address;
   server_addr_ = addr.address;
@@ -117,7 +123,6 @@ void TurnPort::SetReady() {
 }
 
 void TurnPort::OnConnectionDestroyed(Connection* conn) {
-  LOG_J(LS_INFO, this) << __FUNCTION__;
   RelayProxyConnection* rpc = reinterpret_cast<RelayProxyConnection*>(conn);
   connectionMap_.erase(rpc->GetChannelNumber());
   Port::OnConnectionDestroyed(conn);
@@ -487,7 +492,7 @@ void TurnAllocateRequest::OnErrorResponse(StunMessage* response) {
 }
 
 void TurnAllocateRequest::OnTimeout() {
-  LOG(LS_ERROR) << "Allocate request timed out";
+  LOG(LS_ERROR) << "Allocate request timed out on port " << port_->ToString();
   port_->SignalAddressError(port_);
 }
 
@@ -563,7 +568,6 @@ void RelayProxyConnection::OnSendStunPacket(const void* data, size_t size,
 }
 
 int RelayProxyConnection::Send(const void* data, size_t size)  {
-
   talk_base::ByteBuffer buff;
   uint32 val = chan_ | size;
   buff.WriteUInt32(val);

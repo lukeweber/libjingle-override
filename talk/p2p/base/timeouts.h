@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2004--2005, Google Inc.
+ * Copyright 2012, Tuenti Technologies.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,18 +25,40 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_P2P_BASE_COMMON_H_
-#define TALK_P2P_BASE_COMMON_H_
+#ifndef TALK_P2P_BASE_TIMEOUTS_H_
+#define TALK_P2P_BASE_TIMEOUTS_H_
 
-#include "talk/base/logging.h"
+// This file contains timeouts related to signaling that are used in various
+// classes in libjingle
 
-// Common log description format for jingle messages
-#define LOG_J(sev, obj) LOG(sev) << "Jingle:" << obj->ToString() << ": "
-#define LOG_JV(sev, obj) LOG_V(sev) << "Jingle:" << obj->ToString() << ": "
+namespace cricket {
+enum SessionTimeout {
+    kSessionTimeoutWritable = 50000,
+    kSessionTimeoutInitAck = 8000,
+};
 
-#define SEP1 "::"
-#define SEP2 "##"
-#define SEP3 ": "
-#define LOG_C(sev, obj, file, line, function) LOG(sev) << line << SEP1 << file << SEP2 << obj->GetClassname().c_str() << SEP1 << function << SEP3
-#define LOG_CI LOG_C(INFO, this, __FILE__, __LINE__, __FUNCTION__)
-#endif  // TALK_P2P_BASE_COMMON_H_
+enum PortTimeout {
+    kPortTimeoutConnectionReadable = 90000,//30000
+    kPortTimeoutConnectionWriteable = 45000,//15000
+    kPortTimeoutConnectionWriteConnect = 15000,//5000
+    kPortTimeoutConnectionResponse = 15000,//5000
+};
+
+// When the socket is unwritable, we will use 10 Kbps (ignoring IP+UDP headers)
+// for pinging.  When the socket is writable, we will use only 1 Kbps because
+// we don't want to degrade the quality on a modem.  These numbers should work
+// well on a 28.8K modem, which is the slowest connection on which the voice
+// quality is reasonable at all.
+enum P2PTransportChannelPingTimeout {
+    kPingPacketSize = 60*8,
+    kPingTimeoutWritableDelay = 30000 * kPingPacketSize / 1000,//1000 * PING_PACKET_SIZE / 1000
+    kPingTimeoutUnWritableDelay = 30000 * kPingPacketSize / 10000,//1000 * PING_PACKET_SIZE / 10000
+    kPingMaxCurrentWritableDelay = 900,//2*WRITABLE_DELAY - bit
+};
+
+enum BasicPortAllocatorTimeout {
+    kAllocatorTimeoutAllocateDelay = 4000,//250
+    kAllocatorTimeoutAllocateStepDelay = 4000,
+};
+} //namespace cricket
+#endif  // TALK_P2P_BASE_TIMEOUTS_H_

@@ -20,7 +20,6 @@
 #include "talk/p2p/base/port.h"
 #include "talk/p2p/base/relayport.h"
 #include "talk/p2p/base/stunport.h"
-
 namespace cricket {
 
 static const char kSessionTypeVideo[] =

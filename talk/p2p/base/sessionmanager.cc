@@ -33,6 +33,7 @@
 #include "talk/base/scoped_ptr.h"
 #include "talk/base/stringencode.h"
 #include "talk/p2p/base/constants.h"
+#include "talk/p2p/base/timeouts.h"
 #include "talk/p2p/base/session.h"
 #include "talk/p2p/base/sessionmessages.h"
 #include "talk/xmpp/constants.h"
@@ -43,8 +44,8 @@ namespace cricket {
 SessionManager::SessionManager(PortAllocator *allocator,
                                talk_base::Thread *worker)
     : allocator_(allocator),
-      timeout_(kDefaultTimeout),
-      timeout_init_ack_(kDefaultTimeoutInitAck) {
+      timeout_(kSessionTimeoutWritable),
+      timeout_init_ack_(kSessionTimeoutInitAck) {
   signaling_thread_ = talk_base::Thread::Current();
   if (worker == NULL) {
     worker_thread_ = talk_base::Thread::Current();

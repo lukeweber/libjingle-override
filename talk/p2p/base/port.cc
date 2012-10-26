@@ -685,6 +685,8 @@ class ConnectionRequest : public StunRequest {
   virtual ~ConnectionRequest() {
   }
 
+  virtual std::string GetClassname() const { return "ConnectionRequest"; }
+
   virtual void Prepare(StunMessage* request) {
     request->SetType(STUN_BINDING_REQUEST);
     std::string username;
@@ -817,6 +819,7 @@ void Connection::set_read_state(ReadState value) {
     LOG_J(LS_VERBOSE, this) << "set_read_state";
     SignalStateChange(this);
     CheckTimeout();
+    LOG(INFO) << ToString();
   }
 }
 
@@ -827,6 +830,7 @@ void Connection::set_write_state(WriteState value) {
     LOG_J(LS_VERBOSE, this) << "set_write_state";
     SignalStateChange(this);
     CheckTimeout();
+    LOG(INFO) << ToString();
   }
 }
 

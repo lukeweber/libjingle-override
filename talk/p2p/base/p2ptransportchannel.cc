@@ -32,6 +32,7 @@
 #include "talk/base/crc32.h"
 #include "talk/base/logging.h"
 #include "talk/base/stringencode.h"
+#include "talk/p2p/base/timeouts.h"
 #include "talk/p2p/base/common.h"
 #include "talk/p2p/base/relayport.h"  // For RELAY_PORT_TYPE.
 #include "talk/p2p/base/stunport.h"  // For STUN_PORT_TYPE.
@@ -44,18 +45,13 @@ enum {
   MSG_PING,
 };
 
-// When the socket is unwritable, we will use 10 Kbps (ignoring IP+UDP headers)
-// for pinging.  When the socket is writable, we will use only 1 Kbps because
-// we don't want to degrade the quality on a modem.  These numbers should work
-// well on a 28.8K modem, which is the slowest connection on which the voice
-// quality is reasonable at all.
-static const uint32 PING_PACKET_SIZE = 60 * 8;
-static const uint32 WRITABLE_DELAY = 1000 * PING_PACKET_SIZE / 1000;  // 480ms
-static const uint32 UNWRITABLE_DELAY = 1000 * PING_PACKET_SIZE / 10000;  // 50ms
+// See the enum definition to better understand these values
+static const uint32 WRITABLE_DELAY = cricket::kPingTimeoutWritableDelay;
+static const uint32 UNWRITABLE_DELAY = cricket::kPingTimeoutUnWritableDelay;
 
 // If there is a current writable connection, then we will also try hard to
 // make sure it is pinged at this rate.
-static const uint32 MAX_CURRENT_WRITABLE_DELAY = 900;  // 2*WRITABLE_DELAY - bit
+static const uint32 MAX_CURRENT_WRITABLE_DELAY = cricket::kPingMaxCurrentWritableDelay;
 
 // The minimum improvement in RTT that justifies a switch.
 static const double kMinImprovement = 10;
