@@ -163,7 +163,6 @@ class AllocationSequence : public talk_base::MessageHandler {
 
   // Returns true if AllocationSequence has got all expect candidates.
   bool HasAllCandidates() {
-    LOG(INFO) << __FUNCTION__ << " state " << state_ << " " << allocated_candidates_ << "/" << expected_candidates_;
 #if 0 // Fix this, needs more investigation
     return (state_ == kCompleted &&
             allocated_candidates_ == expected_candidates_);
@@ -214,7 +213,6 @@ BasicPortAllocator::BasicPortAllocator(
       socket_factory_(socket_factory),
       turn_username_(""),
       turn_password_("") {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(socket_factory_ != NULL);
   Construct();
 }
@@ -225,7 +223,6 @@ BasicPortAllocator::BasicPortAllocator(
       socket_factory_(NULL),
       turn_username_(""),
       turn_password_("") {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   Construct();
 }
 
@@ -245,7 +242,6 @@ BasicPortAllocator::BasicPortAllocator(
       turn_address_udp_(turn_address_udp),
       turn_username_(""),
       turn_password_("") {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   Construct();
   LOG(INFO) << "LOGT Constructed with addresses";
   LOG(INFO) << "stun_address_(" << stun_address.ToString() << ")";
@@ -256,7 +252,7 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void BasicPortAllocator::Construct() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
+  LOG_CI;
   best_writable_phase_ = -1;
   // For testing, also helps in sending OFFER Quicker 
   // best_writable_phase_ = PHASE_TURN;
@@ -264,11 +260,10 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 BasicPortAllocator::~BasicPortAllocator() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
+  LOG_CI;
 }
 
 int BasicPortAllocator::best_writable_phase() const {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // If we are configured with an HTTP proxy, the best bet is to use the relay
   if ((best_writable_phase_ == -1)
       && ((proxy().type == talk_base::PROXY_HTTPS)
@@ -281,13 +276,11 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 PortAllocatorSession *BasicPortAllocator::CreateSessionInternal(
     const std::string& content_name, int component,
     const std::string& ice_ufrag, const std::string& ice_pwd) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   return new BasicPortAllocatorSession(this, content_name, component,
                                        ice_ufrag, ice_pwd);
 }
 
 void BasicPortAllocator::AddWritablePhase(int phase) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if ((best_writable_phase_ == -1) || (phase < best_writable_phase_))
     best_writable_phase_ = phase;
 }
@@ -306,14 +299,12 @@ BasicPortAllocatorSession::BasicPortAllocatorSession(
       network_manager_started_(false),
       running_(false),
       allocation_sequences_created_(false) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   allocator_->network_manager()->SignalNetworksChanged.connect(
       this, &BasicPortAllocatorSession::OnNetworksChanged);
   allocator_->network_manager()->StartUpdating();
 }
 
 BasicPortAllocatorSession::~BasicPortAllocatorSession() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   allocator_->network_manager()->StopUpdating();
   if (network_thread_ != NULL)
     network_thread_->Clear(this);
@@ -330,7 +321,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void BasicPortAllocatorSession::GetInitialPorts() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   network_thread_ = talk_base::Thread::Current();
   if (!socket_factory_) {
     owned_socket_factory_.reset(
@@ -345,7 +335,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void BasicPortAllocatorSession::StartGetAllPorts() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(talk_base::Thread::Current() == network_thread_);
   running_ = true;
   if (allocation_started_)
@@ -357,7 +346,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void BasicPortAllocatorSession::StopGetAllPorts() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(talk_base::Thread::Current() == network_thread_);
   running_ = false;
   network_thread_->Clear(this, MSG_ALLOCATE);
@@ -366,7 +354,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void BasicPortAllocatorSession::OnMessage(talk_base::Message *message) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   switch (message->message_id) {
   case MSG_CONFIG_START:
     ASSERT(talk_base::Thread::Current() == network_thread_);
@@ -397,7 +384,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void BasicPortAllocatorSession::GetPortConfigurations() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   PortConfiguration* config = new PortConfiguration(allocator_->stun_address(),
                                                     username(),
                                                     password());
@@ -419,13 +405,11 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void BasicPortAllocatorSession::ConfigReady(PortConfiguration* config) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   network_thread_->Post(this, MSG_CONFIG_READY, config);
 }
 
 // Adds a configuration to the list.
 void BasicPortAllocatorSession::OnConfigReady(PortConfiguration* config) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (config)
     configs_.push_back(config);
 
@@ -433,13 +417,11 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void BasicPortAllocatorSession::AllocatePorts() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(talk_base::Thread::Current() == network_thread_);
   network_thread_->Post(this, MSG_ALLOCATE);
 }
 
 void BasicPortAllocatorSession::OnAllocate() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (network_manager_started_)
     DoAllocate();
 
@@ -451,7 +433,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 // For each network, see if we have a sequence that covers it already.  If not,
 // create a new sequence to create the appropriate ports.
 void BasicPortAllocatorSession::DoAllocate() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   bool done_signal_needed = false;
   std::vector<talk_base::Network*> networks;
   allocator_->network_manager()->GetNetworks(&networks);
@@ -517,7 +498,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void BasicPortAllocatorSession::OnNetworksChanged() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   network_manager_started_ = true;
   if (allocation_started_)
     DoAllocate();
@@ -525,7 +505,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 
 void BasicPortAllocatorSession::DisableEquivalentPhases(
     talk_base::Network* network, PortConfiguration* config, uint32* flags) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   for (uint32 i = 0; i < sequences_.size() &&
       (*flags & DISABLE_ALL_PHASES) != DISABLE_ALL_PHASES; ++i) {
     sequences_[i]->DisableEquivalentPhases(network, config, flags);
@@ -535,7 +514,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 void BasicPortAllocatorSession::AddAllocatedPort(Port* port,
                                                  AllocationSequence * seq,
                                                  bool prepare_address) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (!port)
     return;
 
@@ -568,7 +546,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void BasicPortAllocatorSession::OnAddressReady(Port *port) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(talk_base::Thread::Current() == network_thread_);
   std::vector<PortData>::iterator it
     = std::find(ports_.begin(), ports_.end(), port);
@@ -604,7 +581,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 
 void BasicPortAllocatorSession::OnProtocolEnabled(AllocationSequence * seq,
                                                   ProtocolType proto) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   std::vector<Candidate> candidates;
   for (std::vector<PortData>::iterator it = ports_.begin();
        it != ports_.end(); ++it) {
@@ -633,18 +609,15 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 
 void BasicPortAllocatorSession::OnPortAllocationComplete(
     AllocationSequence* seq) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   MaybeSignalCandidatesAllocationDone();
 }
 
 void BasicPortAllocatorSession::OnAllocationSequenceObjectsCreated() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   allocation_sequences_created_ = true;
   MaybeSignalCandidatesAllocationDone();
 }
 
 void BasicPortAllocatorSession::MaybeSignalCandidatesAllocationDone() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // Send signal only if all required AllocationSequence objects
   // are created.
   if (!allocation_sequences_created_)
@@ -662,7 +635,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 
 void BasicPortAllocatorSession::OnPortDestroyed(
     PortInterface* port) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(INFO) << "LOGT BasicPortAllocatorSession::OnPortDestroyed";
   ASSERT(talk_base::Thread::Current() == network_thread_);
   for (std::vector<PortData>::iterator iter = ports_.begin();
@@ -678,7 +650,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void BasicPortAllocatorSession::OnAddressError(Port* port) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(talk_base::Thread::Current() == network_thread_);
   std::vector<PortData>::iterator iter =
       std::find(ports_.begin(), ports_.end(), port);
@@ -695,21 +666,18 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 
 void BasicPortAllocatorSession::OnConnectionCreated(Port* port,
                                                     Connection* conn) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(INFO) << "LOGT BasicPortAllocatorSession::OnConnectionCreated";
   conn->SignalStateChange.connect(this,
     &BasicPortAllocatorSession::OnConnectionStateChange);
 }
 
 void BasicPortAllocatorSession::OnConnectionStateChange(Connection* conn) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (conn->write_state() == Connection::STATE_WRITABLE)
     allocator_->AddWritablePhase(
       LocalCandidateToPhase(conn->local_candidate()));
 }
 
 void BasicPortAllocatorSession::OnShake() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(INFO) << ">>>>> SHAKE <<<<< >>>>> SHAKE <<<<< >>>>> SHAKE <<<<<";
 
   std::vector<Port*> ports;
@@ -754,7 +722,6 @@ AllocationSequence::AllocationSequence(BasicPortAllocatorSession* session,
       flags_(flags),
       allocated_candidates_(0),
       expected_candidates_(0) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // All of the phases up until the best-writable phase so far run in step 0.
   // The other phases follow sequentially in the steps after that.  If there is
   // no best-writable so far, then only phase 0 occurs in step 0.
@@ -768,13 +735,11 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 AllocationSequence::~AllocationSequence() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   session_->network_thread()->Clear(this);
 }
 
 void AllocationSequence::DisableEquivalentPhases(talk_base::Network* network,
     PortConfiguration* config, uint32* flags) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (!((network == network_) && (ip_ == network->ip()))) {
     // Different network setup; nothing is equivalent.
     return;
@@ -803,7 +768,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void AllocationSequence::Start() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(INFO) << "LOGT AllocationSequence::Start";
   state_ = kRunning;
   session_->network_thread()->PostDelayed(ALLOCATION_STEP_DELAY,
@@ -812,14 +776,12 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void AllocationSequence::Stop() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(INFO) << "LOGT AllocationSequence::Stop";
   state_ = kStopped;
   session_->network_thread()->Clear(this, MSG_ALLOCATION_PHASE);
 }
 
 void AllocationSequence::OnMessage(talk_base::Message* msg) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(INFO) << "LOGT AllocationSequence::OnMessage";
   ASSERT(talk_base::Thread::Current() == session_->network_thread());
   if (msg)
@@ -890,7 +852,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void AllocationSequence::EnableProtocol(ProtocolType proto) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(INFO) << "LOGT AllocationSequence::EnableProtocol";
   switch(proto) { 
     case PROTO_UDP:
@@ -913,7 +874,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 bool AllocationSequence::ProtocolEnabled(ProtocolType proto) const {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   for (ProtocolList::const_iterator it = protocols_.begin();
        it != protocols_.end(); ++it) {
     if (*it == proto)
@@ -923,7 +883,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void AllocationSequence::CreateUDPPorts() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (flags_ & PORTALLOCATOR_DISABLE_UDP) {
     LOG(LS_VERBOSE) << "AllocationSequence: UDP ports disabled, skipping.";
     return;
@@ -943,7 +902,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void AllocationSequence::CreateTCPPorts() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (flags_ & PORTALLOCATOR_DISABLE_TCP) {
     LOG(LS_VERBOSE) << "AllocationSequence: TCP ports disabled, skipping.";
     return;
@@ -964,7 +922,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void AllocationSequence::CreateStunPorts() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (flags_ & PORTALLOCATOR_DISABLE_STUN) {
     LOG(LS_VERBOSE) << "AllocationSequence: STUN ports disabled, skipping.";
     return;
@@ -994,7 +951,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void AllocationSequence::CreateRelayPorts() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (flags_ & PORTALLOCATOR_DISABLE_RELAY) {
      LOG(LS_VERBOSE) << "AllocationSequence: Relay ports disabled, skipping.";
      return;
@@ -1045,7 +1001,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void AllocationSequence::CreateTurnPorts() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (flags_ & PORTALLOCATOR_DISABLE_TURN) {
      LOG(LS_VERBOSE) << "AllocationSequence: Turn ports disabled, skipping.";
      return;
@@ -1104,11 +1059,9 @@ PortConfiguration::PortConfiguration(
     : stun_address(stun_address),
       username(username),
       password(password) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
 }
 
 void PortConfiguration::AddRelay(const PortList& ports, int priority_modifier) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   RelayServer relay;
   relay.ports = ports;
   relay.priority_modifier = priority_modifier;
@@ -1116,14 +1069,12 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void PortConfiguration::AddTurn(const talk_base::SocketAddress& turn_addr) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   turn_address = turn_addr;
 }
 
 
 bool PortConfiguration::SupportsProtocol(
     const PortConfiguration::RelayServer& relay, ProtocolType type) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << "PortConfiguration::" << __FUNCTION__;
   PortConfiguration::PortList::const_iterator relay_port;
   for (relay_port = relay.ports.begin();
         relay_port != relay.ports.end();

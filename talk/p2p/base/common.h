@@ -34,4 +34,9 @@
 #define LOG_J(sev, obj) LOG(sev) << "Jingle:" << obj->ToString() << ": "
 #define LOG_JV(sev, obj) LOG_V(sev) << "Jingle:" << obj->ToString() << ": "
 
+#define SEP1 "::"
+#define SEP2 "##"
+#define SEP3 ": "
+#define LOG_C(sev, obj, file, line, function) LOG(sev) << line << SEP1 << file << SEP2 << obj->GetClassname().c_str() << SEP1 << function << SEP3
+#define LOG_CI LOG_C(INFO, this, __FILE__, __LINE__, __FUNCTION__)
 #endif  // TALK_P2P_BASE_COMMON_H_

@@ -176,7 +176,6 @@ Port::Port(talk_base::Thread* thread, const std::string& type,
       ice_protocol_(ICEPROTO_GOOGLE),
       role_(ROLE_UNKNOWN),
       tiebreaker_(0) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(factory_ != NULL);
   // If the username_fragment and password are empty, we should just create one.
   if (ice_username_fragment_.empty()) {
@@ -188,7 +187,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 Port::~Port() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // Delete all of the remaining connections.  We copy the list up front
   // because each deletion will cause it to be modified.
 
@@ -205,7 +203,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 Connection* Port::GetConnection(const talk_base::SocketAddress& remote_addr) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   AddressMap::const_iterator iter = connections_.find(remote_addr);
   if (iter != connections_.end())
     return iter->second;
@@ -222,7 +219,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 std::string Port::ComputeFoundation(
     const std::string& protocol,
     const talk_base::SocketAddress& base_address) const {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   std::ostringstream ost;
   ost << type_ << base_address.ipaddr().ToString() << protocol;
   return talk_base::ToString<uint32>(talk_base::ComputeCrc32(ost.str()));
@@ -232,7 +228,6 @@ void Port::AddAddress(const talk_base::SocketAddress& address,
                       const talk_base::SocketAddress& base_address,
                       const std::string& protocol,
                       bool final) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   Candidate c;
   c.set_id(talk_base::CreateRandomString(8));
   c.set_component(component_);
@@ -259,7 +254,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Port::AddConnection(Connection* conn) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   connections_[conn->remote_candidate().address()] = conn;
   conn->SignalDestroyed.connect(this, &Port::OnConnectionDestroyed);
   SignalConnectionCreated(this, conn);
@@ -268,7 +262,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 void Port::OnReadPacket(
     const char* data, size_t size, const talk_base::SocketAddress& addr,
     ProtocolType proto) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // If the user has enabled port packets, just hand this over.
   if (enable_port_packets_) {
     SignalReadPacket(this, data, size, addr);
@@ -309,7 +302,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 bool Port::GetStunMessage(const char* data, size_t size,
                           const talk_base::SocketAddress& addr,
                           IceMessage** out_msg, std::string* out_username) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // NOTE: This could clearly be optimized to avoid allocating any memory.
   //       However, at the data rates we'll be looking at on the client side,
   //       this probably isn't worth worrying about.
@@ -404,7 +396,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 bool Port::IsCompatibleAddress(const talk_base::SocketAddress& addr) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   int family = ip().family();
   // We use single-stack sockets, so families must match.
   if (addr.family() != family) {
@@ -420,7 +411,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 bool Port::ParseStunUsername(const StunMessage* stun_msg,
                              std::string* local_ufrag,
                              std::string* remote_ufrag) const {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // The packet must include a username that either begins or ends with our
   // fragment.  It should begin with our fragment if it is a request and it
   // should end with our fragment if it is a response.
@@ -457,7 +447,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 bool Port::MaybeIceRoleConflict(
     const talk_base::SocketAddress& addr, IceMessage* stun_msg,
     const std::string& remote_ufrag) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // Validate ICE_CONTROLLING or ICE_CONTROLLED attributes.
   bool ret = true;
   TransportRole remote_ice_role = ROLE_UNKNOWN;
@@ -518,7 +507,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 
 void Port::CreateStunUsername(const std::string& remote_username,
                               std::string* stun_username_attr_str) const {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   stun_username_attr_str->clear();
   *stun_username_attr_str = remote_username;
   if (ice_protocol_ == ICEPROTO_RFC5245) {
@@ -530,7 +518,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 
 void Port::SendBindingResponse(StunMessage* request,
                                const talk_base::SocketAddress& addr) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(request->type() == STUN_BINDING_REQUEST);
 
   // Retrieve the username from the request.
@@ -580,7 +567,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 void Port::SendBindingErrorResponse(StunMessage* request,
                                     const talk_base::SocketAddress& addr,
                                     int error_code, const std::string& reason) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(request->type() == STUN_BINDING_REQUEST);
 
   // Fill in the response message.
@@ -625,7 +611,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Port::OnMessage(talk_base::Message *pmsg) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(pmsg->message_id == MSG_CHECKTIMEOUT);
   ASSERT(lifetime_ == LT_PRETIMEOUT);
   lifetime_ = LT_POSTTIMEOUT;
@@ -633,7 +618,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 std::string Port::ToString() const {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   std::stringstream ss;
   ss << "Port[" << content_name_ << ":" << component_
      << ":" << generation_ << ":" << type_
@@ -642,12 +626,10 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Port::EnablePortPackets() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   enable_port_packets_ = true;
 }
 
 void Port::Start() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // The port sticks around for a minimum lifetime, after which
   // we destroy it when it drops to zero connections.
   if (lifetime_ == LT_PRESTART) {
@@ -659,7 +641,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Port::OnConnectionDestroyed(Connection* conn) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   AddressMap::iterator iter =
       connections_.find(conn->remote_candidate().address());
   ASSERT(iter != connections_.end());
@@ -669,7 +650,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Port::Destroy() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(connections_.empty());
   LOG_J(LS_INFO, this) << "Port deleted";
   SignalDestroyed(this);
@@ -677,7 +657,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Port::CheckTimeout() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // If this port has no connections, then there's no reason to keep it around.
   // When the connections time out (both read and write), they will delete
   // themselves, so if we have any connections, they are either readable or
@@ -688,7 +667,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 const std::string Port::username_fragment() const {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (ice_protocol_ == ICEPROTO_GOOGLE &&
       component_ == ICE_CANDIDATE_COMPONENT_RTCP) {
     // In GICE mode, we should adjust username fragment for rtcp component.
@@ -704,17 +682,14 @@ class ConnectionRequest : public StunRequest {
   explicit ConnectionRequest(Connection* connection)
       : StunRequest(new IceMessage()),
         connection_(connection) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   }
 
   virtual ~ConnectionRequest() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   }
 
   virtual std::string GetClassname() const { return "ConnectionRequest"; }
 
   virtual void Prepare(StunMessage* request) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
     request->SetType(STUN_BINDING_REQUEST);
     std::string username;
     connection_->port()->CreateStunUsername(
@@ -759,22 +734,18 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
   }
 
   virtual void OnResponse(StunMessage* response) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
     connection_->OnConnectionRequestResponse(this, response);
   }
 
   virtual void OnErrorResponse(StunMessage* response) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
     connection_->OnConnectionRequestErrorResponse(this, response);
   }
 
   virtual void OnTimeout() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
     connection_->OnConnectionRequestTimeout(this);
   }
 
   virtual int GetNextDelay() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
     // Each request is sent only once.  After a single delay , the request will
     // time out.
     timeout_ = true;
@@ -799,7 +770,6 @@ Connection::Connection(Port* port, size_t index,
     last_ping_sent_(0), last_ping_received_(0), last_data_received_(0),
     last_ping_response_received_(0), reported_(false), nominated_(false),
     state_(STATE_WAITING) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // All of our connections start in WAITING state.
   // TODO(mallinath) - Start connections from STATE_FROZEN.
   // Wire up to send stun packets
@@ -808,17 +778,14 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 Connection::~Connection() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
 }
 
 const Candidate& Connection::local_candidate() const {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(local_candidate_index_ < port_->Candidates().size());
   return port_->Candidates()[local_candidate_index_];
 }
 
 uint64 Connection::priority() const {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   uint64 priority = 0;
   // RFC 5245 - 5.7.2.  Computing Pair Priority and Ordering Pairs
   // Let G be the priority for the candidate provided by the controlling
@@ -844,7 +811,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Connection::set_read_state(ReadState value) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ReadState old_value = read_state_;
   read_state_ = value;
   if (value != old_value) {
@@ -856,7 +822,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Connection::set_write_state(WriteState value) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   WriteState old_value = write_state_;
   write_state_ = value;
   if (value != old_value) {
@@ -868,7 +833,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Connection::set_state(State state) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   State old_state = state_;
   state_ = state;
   if (state != old_state) {
@@ -877,7 +841,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Connection::set_connected(bool value) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   bool old_value = connected_;
   connected_ = value;
   if (value != old_value) {
@@ -887,14 +850,12 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 
 void Connection::OnSendStunPacket(const void* data, size_t size,
                                   StunRequest* req) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (port_->SendTo(data, size, remote_candidate_.address(), false) < 0) {
     LOG_J(LS_WARNING, this) << "Failed to send STUN ping " << req->id();
   }
 }
 
 void Connection::OnReadPacket(const char* data, size_t size) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   talk_base::scoped_ptr<IceMessage> msg;
   std::string remote_ufrag;
   const talk_base::SocketAddress& addr(remote_candidate_.address());
@@ -1001,7 +962,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Connection::Prune() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (!pruned_) {
     LOG_J(LS_VERBOSE, this) << "Connection pruned";
     pruned_ = true;
@@ -1011,14 +971,12 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Connection::Destroy() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG_J(LS_VERBOSE, this) << "Connection destroyed";
   set_read_state(STATE_READ_TIMEOUT);
   set_write_state(STATE_WRITE_TIMEOUT);
 }
 
 void Connection::UpdateState(uint32 now) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   uint32 rtt = ConservativeRTTEstimate(rtt_);
 
   std::string pings;
@@ -1093,7 +1051,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Connection::Ping(uint32 now) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(connected_);
   last_ping_sent_ = now;
   pings_since_last_response_.push_back(now);
@@ -1104,13 +1061,11 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Connection::ReceivedPing() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   last_ping_received_ = talk_base::Time();
   set_read_state(STATE_READABLE);
 }
 
 std::string Connection::ToString() const {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   const char CONNECT_STATE_ABBREV[2] = {
     '-',  // not connected (false)
     'C',  // connected (true)
@@ -1158,7 +1113,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 
 void Connection::OnConnectionRequestResponse(ConnectionRequest* request,
                                              StunMessage* response) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // We've already validated that this is a STUN binding response with
   // the correct local and remote username for this connection.
   // So if we're not already, become writable. We may be bringing a pruned
@@ -1187,7 +1141,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 
 void Connection::OnConnectionRequestErrorResponse(ConnectionRequest* request,
                                                   StunMessage* response) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   const StunErrorCodeAttribute* error_attr = response->GetErrorCode();
   int error_code = STUN_ERROR_GLOBAL_FAILURE;
   if (error_attr) {
@@ -1218,7 +1171,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Connection::OnConnectionRequestTimeout(ConnectionRequest* request) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // Log at LS_INFO if we miss a ping on a writable connection.
   talk_base::LoggingSeverity sev = (write_state_ == STATE_WRITABLE) ?
       talk_base::LS_INFO : talk_base::LS_VERBOSE;
@@ -1227,7 +1179,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Connection::CheckTimeout() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // If both read and write have timed out, then this connection can contribute
   // no more to p2p socket unless at some later date readability were to come
   // back.  However, we gave readability a long time to timeout, so at this
@@ -1239,7 +1190,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Connection::HandleRoleConflictFromPeer() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // Maybe we should reverse the nominated flag if we are in controlling mode.
   if (port_->Role() == ROLE_CONTROLLING)
     nominated_ = false;  // Role change will be done from Transport.
@@ -1247,7 +1197,6 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 void Connection::OnMessage(talk_base::Message *pmsg) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(pmsg->message_id == MSG_DELETE);
 
   LOG_J(LS_INFO, this) << "Connection deleted";
@@ -1256,33 +1205,27 @@ LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "
 }
 
 size_t Connection::recv_bytes_second() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   return recv_rate_tracker_.units_second();
 }
 
 size_t Connection::recv_total_bytes() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   return recv_rate_tracker_.total_units();
 }
 
 size_t Connection::sent_bytes_second() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   return send_rate_tracker_.units_second();
 }
 
 size_t Connection::sent_total_bytes() {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   return send_rate_tracker_.total_units();
 }
 
 ProxyConnection::ProxyConnection(Port* port, size_t index,
                                  const Candidate& candidate)
   : Connection(port, index, candidate), error_(0) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
 }
 
 int ProxyConnection::Send(const void* data, size_t size) {
-LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (write_state() != STATE_WRITABLE) {
     error_ = EWOULDBLOCK;
     return SOCKET_ERROR;
