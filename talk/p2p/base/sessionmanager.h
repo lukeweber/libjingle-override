@@ -56,11 +56,6 @@ class SessionManager : public sigslot::has_slots<> {
                  talk_base::Thread *worker_thread = NULL);
   virtual ~SessionManager();
 
-  enum SessionTimeout {
-    kDefaultTimeout = 50,
-    kDefaultTimeoutInitAck = 3,
-  };
-
   PortAllocator *port_allocator() const { return allocator_; }
   talk_base::Thread *worker_thread() const { return worker_thread_; }
   talk_base::Thread *signaling_thread() const { return signaling_thread_; }

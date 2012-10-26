@@ -964,7 +964,7 @@ void Session::OnTransportWritable(Transport* transport) {
   signaling_thread()->Clear(this, MSG_TIMEOUT);
   if (transport->HasChannels() && !transport->writable()) {
     signaling_thread()->PostDelayed(
-        session_manager_->session_timeout() * 1000, this, MSG_TIMEOUT);
+        session_manager_->session_timeout(), this, MSG_TIMEOUT);
   }
 }
 
@@ -1403,7 +1403,7 @@ bool Session::SendInitiateMessage(const SessionDescription* sdesc,
   init.groups = sdesc->groups();
   signaling_thread()->Clear(this, MSG_INIT_ACK_TIMEOUT);
   signaling_thread()->PostDelayed(
-          session_manager_->session_init_ack_timeout() * 1000,
+          session_manager_->session_init_ack_timeout(),
           this, MSG_INIT_ACK_TIMEOUT);
   return SendMessage(ACTION_SESSION_INITIATE, init, error);
 }

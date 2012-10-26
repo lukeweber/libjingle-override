@@ -32,9 +32,11 @@
 #include "talk/base/crc32.h"
 #include "talk/base/logging.h"
 #include "talk/base/stringencode.h"
+#include "talk/p2p/base/timeouts.h"
 #include "talk/p2p/base/common.h"
 #include "talk/p2p/base/relayport.h"  // For RELAY_PORT_TYPE.
 #include "talk/p2p/base/stunport.h"  // For STUN_PORT_TYPE.
+#include "talk/p2p/base/timeouts.h"
 
 namespace {
 
@@ -49,13 +51,13 @@ enum {
 // we don't want to degrade the quality on a modem.  These numbers should work
 // well on a 28.8K modem, which is the slowest connection on which the voice
 // quality is reasonable at all.
-static const uint32 PING_PACKET_SIZE = 60 * 8;
-static const uint32 WRITABLE_DELAY = 1000 * PING_PACKET_SIZE / 1000;  // 480ms
-static const uint32 UNWRITABLE_DELAY = 1000 * PING_PACKET_SIZE / 10000;  // 50ms
+//static const uint32 PING_PACKET_SIZE = 60 * 8;
+static const uint32 WRITABLE_DELAY = cricket::kPingTimeoutWritableDelay;
+static const uint32 UNWRITABLE_DELAY = cricket::kPingTimeoutUnWritableDelay;
 
 // If there is a current writable connection, then we will also try hard to
 // make sure it is pinged at this rate.
-static const uint32 MAX_CURRENT_WRITABLE_DELAY = 900;  // 2*WRITABLE_DELAY - bit
+static const uint32 MAX_CURRENT_WRITABLE_DELAY = cricket::kPingMaxCurrentWritableDelay;
 
 // The minimum improvement in RTT that justifies a switch.
 static const double kMinImprovement = 10;
@@ -170,9 +172,11 @@ P2PTransportChannel::P2PTransportChannel(const std::string& content_name,
     protocol_type_(ICEPROTO_GOOGLE),
     role_(ROLE_UNKNOWN),
     tiebreaker_(0) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
 }
 
 P2PTransportChannel::~P2PTransportChannel() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
   for (uint32 i = 0; i < allocator_sessions_.size(); ++i)
@@ -182,6 +186,7 @@ P2PTransportChannel::~P2PTransportChannel() {
 // Add the allocator session to our list so that we know which sessions
 // are still active.
 void P2PTransportChannel::AddAllocatorSession(PortAllocatorSession* session) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   session->set_generation(static_cast<uint32>(allocator_sessions_.size()));
   allocator_sessions_.push_back(session);
 
@@ -200,6 +205,7 @@ void P2PTransportChannel::AddAllocatorSession(PortAllocatorSession* session) {
 }
 
 void P2PTransportChannel::SetRole(TransportRole role) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
   role_ = role;
@@ -211,6 +217,7 @@ void P2PTransportChannel::SetRole(TransportRole role) {
 }
 
 void P2PTransportChannel::SetTiebreaker(uint64 tiebreaker) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   if (!ports_.empty()) {
     LOG(LS_ERROR)
@@ -222,6 +229,7 @@ void P2PTransportChannel::SetTiebreaker(uint64 tiebreaker) {
 }
 
 void P2PTransportChannel::SetIceProtocolType(IceProtocolType type) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
   protocol_type_ = type;
@@ -232,15 +240,18 @@ void P2PTransportChannel::SetIceProtocolType(IceProtocolType type) {
 }
 
 void P2PTransportChannel::SetIceUfrag(const std::string& ice_ufrag) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ice_ufrag_ = ice_ufrag;
 }
 
 void P2PTransportChannel::SetIcePwd(const std::string& ice_pwd) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ice_pwd_ = ice_pwd;
 }
 
 // Go into the state of processing candidates, and running in general
 void P2PTransportChannel::Connect() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   if (ice_ufrag_.empty() || ice_pwd_.empty()) {
     ASSERT(false);
@@ -258,6 +269,7 @@ void P2PTransportChannel::Connect() {
 
 // Reset the socket, clear up any previous allocations and start over
 void P2PTransportChannel::Reset() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
   // Get rid of all the old allocators.  This should clean up everything.
@@ -294,6 +306,7 @@ void P2PTransportChannel::Reset() {
 // A new port is available, attempt to make connections for it
 void P2PTransportChannel::OnPortReady(PortAllocatorSession *session,
                                       PortInterface* port) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
   // Set in-effect options on the new port
@@ -337,6 +350,7 @@ void P2PTransportChannel::OnPortReady(PortAllocatorSession *session,
 // A new candidate is available, let listeners know
 void P2PTransportChannel::OnCandidatesReady(
     PortAllocatorSession *session, const std::vector<Candidate>& candidates) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   for (size_t i = 0; i < candidates.size(); ++i) {
     SignalCandidateReady(this, candidates[i]);
@@ -345,6 +359,7 @@ void P2PTransportChannel::OnCandidatesReady(
 
 void P2PTransportChannel::OnCandidatesAllocationDone(
     PortAllocatorSession* session) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   SignalCandidatesAllocationDone(this);
 }
@@ -462,12 +477,14 @@ void P2PTransportChannel::OnUnknownAddress(
 }
 
 void P2PTransportChannel::OnRoleConflict() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   SignalRoleConflict(this);  // STUN ping will be sent when SetRole is called
                              // from Transport.
 }
 
 // When the signalling channel is ready, we can really kick off the allocator
 void P2PTransportChannel::OnSignalingReady() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   if (waiting_for_signaling_) {
     waiting_for_signaling_ = false;
@@ -477,6 +494,7 @@ void P2PTransportChannel::OnSignalingReady() {
 }
 
 void P2PTransportChannel::OnUseCandidate(Connection* conn) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(role_ == ROLE_CONTROLLED);
   if (conn->state() == Connection::STATE_SUCCEEDED) {
     // Set the nominated flag.
@@ -486,6 +504,7 @@ void P2PTransportChannel::OnUseCandidate(Connection* conn) {
 }
 
 void P2PTransportChannel::OnCandidate(const Candidate& candidate) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
   // Create connections to this remote candidate.
@@ -501,6 +520,7 @@ void P2PTransportChannel::OnCandidate(const Candidate& candidate) {
 bool P2PTransportChannel::CreateConnections(const Candidate &remote_candidate,
                                             PortInterface* origin_port,
                                             bool readable) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
   // Add a new connection for this candidate to every port that allows such a
@@ -537,6 +557,7 @@ bool P2PTransportChannel::CreateConnection(PortInterface* port,
                                            const Candidate& remote_candidate,
                                            PortInterface* origin_port,
                                            bool readable) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // Look for an existing connection with this remote address.  If one is not
   // found, then we can create a new connection for this address.
   Connection* connection = port->GetConnection(remote_candidate.address());
@@ -583,6 +604,7 @@ bool P2PTransportChannel::CreateConnection(PortInterface* port,
 
 bool P2PTransportChannel::FindConnection(
     cricket::Connection* connection) const {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   std::vector<Connection*>::const_iterator citer =
       std::find(connections_.begin(), connections_.end(), connection);
   return citer != connections_.end();
@@ -591,6 +613,7 @@ bool P2PTransportChannel::FindConnection(
 // Maintain our remote candidate list, adding this new remote one.
 void P2PTransportChannel::RememberRemoteCandidate(
     const Candidate& remote_candidate, PortInterface* origin_port) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // Remove any candidates whose generation is older than this one.  The
   // presence of a new generation indicates that the old ones are not useful.
   uint32 i = 0;
@@ -621,6 +644,7 @@ void P2PTransportChannel::RememberRemoteCandidate(
 // Set options on ourselves is simply setting options on all of our available
 // port objects.
 int P2PTransportChannel::SetOption(talk_base::Socket::Option opt, int value) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   OptionMap::iterator it = options_.find(opt);
   if (it == options_.end()) {
     options_.insert(std::make_pair(opt, value));
@@ -644,6 +668,7 @@ int P2PTransportChannel::SetOption(talk_base::Socket::Option opt, int value) {
 
 // Send data to the other side, using our best connection.
 int P2PTransportChannel::SendPacket(const char *data, size_t len, int flags) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   if (flags != 0) {
     error_ = EINVAL;
@@ -662,6 +687,7 @@ int P2PTransportChannel::SendPacket(const char *data, size_t len, int flags) {
 }
 
 bool P2PTransportChannel::GetStats(ConnectionInfos *infos) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   // Gather connection infos.
   infos->clear();
@@ -695,6 +721,7 @@ bool P2PTransportChannel::GetStats(ConnectionInfos *infos) {
 
 // Begin allocate (or immediately re-allocate, if MSG_ALLOCATE pending)
 void P2PTransportChannel::Allocate() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // Time for a new allocator, lets make sure we have a signalling channel
   // to communicate candidates through first.
   waiting_for_signaling_ = true;
@@ -703,6 +730,7 @@ void P2PTransportChannel::Allocate() {
 
 // Monitor connection states.
 void P2PTransportChannel::UpdateConnectionStates() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   uint32 now = talk_base::Time();
 
   // We need to copy the list of connections since some may delete themselves
@@ -713,6 +741,7 @@ void P2PTransportChannel::UpdateConnectionStates() {
 
 // Prepare for best candidate sorting.
 void P2PTransportChannel::RequestSort() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (!sort_dirty_) {
     worker_thread_->Post(this, MSG_SORT);
     sort_dirty_ = true;
@@ -723,6 +752,7 @@ void P2PTransportChannel::RequestSort() {
 // the number of available connections and the current state so that we
 // can possibly kick off more allocators (for more connections).
 void P2PTransportChannel::SortConnections() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
   // Make sure the connection states are up-to-date since this affects how they
@@ -815,6 +845,7 @@ void P2PTransportChannel::SortConnections() {
 
 // Track the best connection, and let listeners know
 void P2PTransportChannel::SwitchBestConnectionTo(Connection* conn) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // Note: if conn is NULL, the previous best_connection_ has been destroyed,
   // so don't use it.
   // use it.
@@ -835,6 +866,7 @@ void P2PTransportChannel::SwitchBestConnectionTo(Connection* conn) {
 }
 
 void P2PTransportChannel::UpdateChannelState() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // The Handle* functions already set the writable state.  We'll just double-
   // check it here.
   bool writable = ((best_connection_ != NULL)  &&
@@ -855,6 +887,7 @@ void P2PTransportChannel::UpdateChannelState() {
 // We checked the status of our connections and we had at least one that
 // was writable, go into the writable state.
 void P2PTransportChannel::HandleWritable() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   //
   // One or more connections writable!
@@ -877,6 +910,7 @@ void P2PTransportChannel::HandleWritable() {
 // were writable, go into the connecting state (kick off a new allocator
 // session).
 void P2PTransportChannel::HandleNotWritable() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   //
   // No connections are writable but not timed out!
@@ -895,6 +929,7 @@ void P2PTransportChannel::HandleNotWritable() {
 // We checked the status of our connections and not only weren't they writable
 // but they were also timed out, we really need a new allocator.
 void P2PTransportChannel::HandleAllTimedOut() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   //
   // No connections... all are timed out!
   //
@@ -917,6 +952,7 @@ void P2PTransportChannel::HandleAllTimedOut() {
 // list (later we will mark it best).
 Connection* P2PTransportChannel::GetBestConnectionOnNetwork(
     talk_base::Network* network) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // If the best connection is on this network, then it wins.
   if (best_connection_ && (best_connection_->port()->Network() == network))
     return best_connection_;
@@ -931,6 +967,7 @@ Connection* P2PTransportChannel::GetBestConnectionOnNetwork(
 }
 
 void P2PTransportChannel::NominateBestConnection() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // If we have best possible connection, which may not be in writable state
   // yet, that means we can cease connection checks and time to send stun ping
   // with USE-CANDIDATE.
@@ -948,6 +985,7 @@ void P2PTransportChannel::NominateBestConnection() {
 
 // Handle any queued up requests
 void P2PTransportChannel::OnMessage(talk_base::Message *pmsg) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   switch (pmsg->message_id) {
     case MSG_SORT:
       OnSort();
@@ -963,12 +1001,14 @@ void P2PTransportChannel::OnMessage(talk_base::Message *pmsg) {
 
 // Handle queued up sort request
 void P2PTransportChannel::OnSort() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // Resort the connections based on the new statistics.
   SortConnections();
 }
 
 // Handle queued up ping request
 void P2PTransportChannel::OnPing() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // Make sure the states of the connections are up-to-date (since this affects
   // which ones are pingable).
   UpdateConnectionStates();
@@ -985,6 +1025,7 @@ void P2PTransportChannel::OnPing() {
 
 // Is the connection in a state for us to even consider pinging the other side?
 bool P2PTransportChannel::IsPingable(Connection* conn) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // An unconnected connection cannot be written to at all, so pinging is out
   // of the question.
   if (!conn->connected())
@@ -1009,6 +1050,7 @@ bool P2PTransportChannel::IsPingable(Connection* conn) {
 // pingable connection unless we have a writable connection that is past the
 // maximum acceptable ping delay.
 Connection* P2PTransportChannel::FindNextPingableConnection() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   uint32 now = talk_base::Time();
   if (best_connection_ &&
       (best_connection_->write_state() == Connection::STATE_WRITABLE) &&
@@ -1032,6 +1074,7 @@ Connection* P2PTransportChannel::FindNextPingableConnection() {
 
 // return the number of "pingable" connections
 int P2PTransportChannel::NumPingableConnections() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   int count = 0;
   for (size_t i = 0; i < connections_.size(); ++i) {
     if (IsPingable(connections_[i]))
@@ -1043,6 +1086,7 @@ int P2PTransportChannel::NumPingableConnections() {
 // When a connection's state changes, we need to figure out who to use as
 // the best connection again.  It could have become usable, or become unusable.
 void P2PTransportChannel::OnConnectionStateChange(Connection *connection) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
   // We have to unroll the stack before doing this because we may be changing
@@ -1053,6 +1097,7 @@ void P2PTransportChannel::OnConnectionStateChange(Connection *connection) {
 // When a connection is removed, edit it out, and then update our best
 // connection.
 void P2PTransportChannel::OnConnectionDestroyed(Connection *connection) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
   // Note: the previous best_connection_ may be destroyed by now, so don't
@@ -1081,6 +1126,7 @@ void P2PTransportChannel::OnConnectionDestroyed(Connection *connection) {
 // When a port is destroyed remove it from our list of ports to use for
 // connection attempts.
 void P2PTransportChannel::OnPortDestroyed(PortInterface* port) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
   // Remove this port from the list (if we didn't drop it already).
@@ -1096,6 +1142,7 @@ void P2PTransportChannel::OnPortDestroyed(PortInterface* port) {
 // We data is available, let listeners know
 void P2PTransportChannel::OnReadPacket(Connection *connection, const char *data,
                                        size_t len) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
   // Do not deliver, if packet doesn't belong to the correct transport channel.

@@ -90,6 +90,7 @@ class Port : public PortInterface, public talk_base::MessageHandler,
        int min_port, int max_port, const std::string& username_fragment,
        const std::string& password);
   virtual ~Port();
+  virtual std::string GetClassname() const { return "Port"; }
 
   virtual const std::string& Type() const { return type_; }
   virtual talk_base::Network* Network() const { return network_; }
@@ -323,6 +324,7 @@ class Connection : public talk_base::MessageHandler,
   };
 
   virtual ~Connection();
+  virtual std::string GetClassname() const { return "Connection"; }
 
   // The local port where this connection sends and receives packets.
   Port* port() { return port_; }
@@ -406,7 +408,7 @@ class Connection : public talk_base::MessageHandler,
   void ReceivedPing();
 
   // Debugging description of this connection
-  std::string ToString() const;
+  virtual std::string ToString() const;
 
   bool reported() const { return reported_; }
   void set_reported(bool reported) { reported_ = reported;}
@@ -479,6 +481,7 @@ class Connection : public talk_base::MessageHandler,
 class ProxyConnection : public Connection {
  public:
   ProxyConnection(Port* port, size_t index, const Candidate& candidate);
+  virtual std::string GetClassname() const { return "ProxyConnection"; }
 
   virtual int Send(const void* data, size_t size);
   virtual int GetError() { return error_; }

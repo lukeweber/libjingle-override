@@ -55,6 +55,7 @@ class RemoteCandidate : public Candidate {
  public:
   RemoteCandidate(const Candidate& c, PortInterface* origin_port)
       : Candidate(c), origin_port_(origin_port) {}
+  virtual std::string GetClassname() const { return "RemoteCandidate"; }
 
   PortInterface* origin_port() { return origin_port_; }
 
@@ -72,6 +73,7 @@ class P2PTransportChannel : public TransportChannelImpl,
                       P2PTransport* transport,
                       PortAllocator *allocator);
   virtual ~P2PTransportChannel();
+  virtual std::string GetClassname() const { return "P2PTransportChannel"; }
 
   // From TransportChannelImpl:
   virtual Transport* GetTransport() { return transport_; }

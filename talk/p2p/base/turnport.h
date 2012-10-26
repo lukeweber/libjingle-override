@@ -62,6 +62,8 @@ class TurnPort : public Port {
                          username, password);
   }
   virtual ~TurnPort();
+  virtual std::string GetClassname() const { return "TurnPort"; }
+  std::string ToString() const;
 
   void AddServerAddress(const ProtocolAddress& addr);
   void AddExternalAddress(const ProtocolAddress& addr);
@@ -153,6 +155,7 @@ class TurnAllocateRequest : public StunRequest {
  public:
   TurnAllocateRequest(TurnPort* port, const talk_base::SocketAddress& server_addr);
   virtual ~TurnAllocateRequest() {}
+  virtual std::string GetClassname() const { return "TurnAllocateRequest"; }
   virtual void Prepare(StunMessage* request);
   const talk_base::SocketAddress& server_addr() const { return server_addr_; }
   virtual int GetNextDelay();
@@ -172,6 +175,7 @@ class ChannelBindRequest : public StunRequest {
   ChannelBindRequest(RelayProxyConnection* conn,
                      const talk_base::SocketAddress& server_addr);
   virtual ~ChannelBindRequest();
+  virtual std::string GetClassname() const { return "ChannelBindRequest"; }
   //virtual void Prepare(TurnMessage* request);
   virtual void Prepare(StunMessage* request);
   const talk_base::SocketAddress& server_addr() const {
@@ -192,6 +196,7 @@ class RefreshRequest : public StunRequest {
   RefreshRequest(RelayProxyConnection* conn,
                  const talk_base::SocketAddress& server_addr);
   virtual ~RefreshRequest();
+  virtual std::string GetClassname() const { return "RefreshRequest"; }
   //virtual void Prepare(TurnMessage* request);
   virtual void Prepare(StunMessage* request);
   const talk_base::SocketAddress& server_addr() const {
@@ -210,6 +215,7 @@ class RelayProxyConnection : public ProxyConnection  {
   public:
     RelayProxyConnection(TurnPort* port, uint32 channelNum,
                          const Candidate& candidate);
+    virtual std::string GetClassname() const { return "RelayProxyConnection"; }
     virtual int Send(const void* data, size_t size);
     virtual int GetError()  { return error_ ; }
     virtual void Ping(uint32 now);

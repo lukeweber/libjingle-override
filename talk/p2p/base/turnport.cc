@@ -61,16 +61,19 @@ TurnPort::TurnPort(
       turn_username_(""),
       nonce_(""),
       realm_("") {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   requests_.SignalSendPacket.connect(this, &TurnPort::OnSendPacket);
 }
 
 TurnPort::~TurnPort() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG_J(LS_INFO, this) << "TurnPort destructed";
   delete socket_;
   thread()->Clear(this);
 }
 
 bool TurnPort::Init() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   socket_ = socket_factory()->CreateUdpSocket(
      talk_base::SocketAddress(ip(), 0),
      min_port(), max_port());
@@ -84,7 +87,14 @@ bool TurnPort::Init() {
   return true;
 }
 
+std::string TurnPort::ToString() const {
+  std::stringstream ss;
+  ss << "[server_addr_:" << server_addr_.ToString();
+  ss << ",Port:" << Port::ToString() << "]";
+  return ss.str();
+}
 void TurnPort::AddServerAddress(const ProtocolAddress& addr) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG_J(LS_INFO, this) << "RelayPort::AddServerAddress called " << addr.address;
   server_addr_ = addr.address;
   alt_server_addr_ = addr.address;
@@ -95,9 +105,11 @@ void TurnPort::AddServerAddress(const ProtocolAddress& addr) {
 }
 
 void TurnPort::AddExternalAddress(const ProtocolAddress& addr) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
 }
 
 void TurnPort::PrepareAddress() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   //
   // Send a AllocateRequest to Turn Server
   //
@@ -106,10 +118,12 @@ void TurnPort::PrepareAddress() {
 }
 
 void TurnPort::PrepareSecondaryAddress() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   requests_.SendDelayed(new TurnAllocateRequest(this, alt_server_addr_), 0);
 }
 
 void TurnPort::SetReady() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (!ready_) {
     ready_ = true;
     SignalAddressReady(this);
@@ -117,6 +131,7 @@ void TurnPort::SetReady() {
 }
 
 void TurnPort::OnConnectionDestroyed(Connection* conn) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG_J(LS_INFO, this) << __FUNCTION__;
   RelayProxyConnection* rpc = reinterpret_cast<RelayProxyConnection*>(conn);
   connectionMap_.erase(rpc->GetChannelNumber());
@@ -125,6 +140,7 @@ void TurnPort::OnConnectionDestroyed(Connection* conn) {
 
 Connection* TurnPort::CreateConnection(const Candidate& address,
                                         CandidateOrigin origin) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if (address.protocol() != "udp")
     return NULL;
 
@@ -141,6 +157,7 @@ Connection* TurnPort::CreateConnection(const Candidate& address,
 }
 
 int TurnPort::SetOption(talk_base::Socket::Option opt, int value) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   int result = 0;
   socket_->SetOption(opt, value);
   options_.push_back(OptionValue(opt, value));
@@ -148,12 +165,14 @@ int TurnPort::SetOption(talk_base::Socket::Option opt, int value) {
 }
 
 int TurnPort::GetError() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   return error_;
 }
 
 void TurnPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
                              const char* data, size_t size,
                              const talk_base::SocketAddress& remote_addr) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(socket == socket_);
 
   // if we received a channel data request, send it to appropriate
@@ -203,6 +222,7 @@ void TurnPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
 
 int TurnPort::SendTo(const void* data, size_t size,
                       const talk_base::SocketAddress& addr, bool payload) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   // LOG_J(LS_INFO, this) << " RelayPort::SendTo; Sending Packet to: " << addr;
 
   int sent = socket_->SendTo(data, size, alt_server_addr_);
@@ -215,6 +235,7 @@ int TurnPort::SendTo(const void* data, size_t size,
 }
 
 void TurnPort::OnSendPacket(const void* data, size_t size, StunRequest* req) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   talk_base::SocketAddress addr;
 
   if (req->type() == STUN_ALLOCATE_REQUEST) {
@@ -242,6 +263,7 @@ void TurnPort::OnSendPacket(const void* data, size_t size, StunRequest* req) {
 
 void TurnPort::SendBindingResponse(StunMessage* request,
                                     const talk_base::SocketAddress& addr) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
 
   ASSERT(request->type() == STUN_BINDING_REQUEST);
 
@@ -308,6 +330,7 @@ void TurnPort::SendBindingErrorResponse(StunMessage* request,
                                          const talk_base::SocketAddress& addr,
                                          int error_code,
                                          const std::string& reason) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   ASSERT(request->type() == STUN_BINDING_REQUEST);
 
   std::map<uint32, RelayProxyConnection*>::iterator it;
@@ -371,10 +394,12 @@ TurnAllocateRequest::TurnAllocateRequest(TurnPort* port,
     StunRequest(new TurnMessage()),
     port_(port),
     server_addr_(server_addr) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   start_time_ = talk_base::Time();
 }
 
 void TurnAllocateRequest::Prepare(StunMessage* request) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(LS_INFO) << "TurnAllocateRequest::Prepare";
   bool AddMI = false;
   request->SetType(STUN_ALLOCATE_REQUEST);
@@ -412,6 +437,7 @@ void TurnAllocateRequest::Prepare(StunMessage* request) {
 }
 
 int TurnAllocateRequest::GetNextDelay() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   int delay = 100 * talk_base::_max(1 << count_, 2);
   count_ += 1;
   if (count_ == 5)
@@ -420,6 +446,7 @@ int TurnAllocateRequest::GetNextDelay() {
 }
 
 void TurnAllocateRequest::OnResponse(StunMessage* response) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   const StunAddressAttribute* addr_attr =
           response->GetAddress(STUN_ATTR_XOR_RELAYED_ADDRESS);
   if (!addr_attr) {
@@ -437,6 +464,7 @@ void TurnAllocateRequest::OnResponse(StunMessage* response) {
 }
 
 void TurnAllocateRequest::OnErrorResponse(StunMessage* response) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   const StunErrorCodeAttribute* attr = response->GetErrorCode();
   if (!attr) {
     LOG(LS_ERROR) << "Bad allocate response error code";
@@ -487,7 +515,8 @@ void TurnAllocateRequest::OnErrorResponse(StunMessage* response) {
 }
 
 void TurnAllocateRequest::OnTimeout() {
-  LOG(LS_ERROR) << "Allocate request timed out";
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
+  LOG(LS_ERROR) << "Allocate request timed out on port " << port_->ToString();
   port_->SignalAddressError(port_);
 }
 
@@ -504,6 +533,7 @@ RelayProxyConnection::RelayProxyConnection(TurnPort* port, uint32 channelNum,
 }
 
 void RelayProxyConnection::Ping(uint32 now) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if ( talk_base::Time() >= nextping_ ) {
     LOG(LS_VERBOSE) << "Sending ChannelBindRequest";
     SendChannelBindRequest();
@@ -522,6 +552,7 @@ void RelayProxyConnection::Ping(uint32 now) {
 }
 
 void RelayProxyConnection::SendChannelBindRequest() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   TurnPort* port = reinterpret_cast<TurnPort*> (this->port());
   ChannelBindRequest *request = new ChannelBindRequest(this,
                                                        port->Alt_server_addr());
@@ -529,6 +560,7 @@ void RelayProxyConnection::SendChannelBindRequest() {
 }
 
 void RelayProxyConnection::SendRefreshRequest() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   TurnPort* port = reinterpret_cast<TurnPort*> (this->port());
   RefreshRequest *request = new RefreshRequest(this,
                                                port->Alt_server_addr());
@@ -539,11 +571,13 @@ void RelayProxyConnection::SendRefreshRequest() {
 // Called when a packet is received on this connection.
 //
 void RelayProxyConnection::OnReadPacket(const char* data, size_t size) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   Connection::OnReadPacket(data, size);
 }
 
 void RelayProxyConnection::OnSendStunPacket(const void* data, size_t size,
                                             StunRequest* req) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   if ( (req->type() == STUN_REFRESH_REQUEST) ||
        (req->type() == STUN_CHANNEL_BIND_REQUEST) ) {
     // LOG(LS_INFO) << "RelayProxyConnection::OnSendStunPacket";
@@ -563,7 +597,7 @@ void RelayProxyConnection::OnSendStunPacket(const void* data, size_t size,
 }
 
 int RelayProxyConnection::Send(const void* data, size_t size)  {
-
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   talk_base::ByteBuffer buff;
   uint32 val = chan_ | size;
   buff.WriteUInt32(val);
@@ -582,12 +616,15 @@ ChannelBindRequest::ChannelBindRequest(RelayProxyConnection* conn,
                                    : StunRequest(new TurnMessage()),
                                      conn_(conn),
                                      server_addr_(server_addr) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
 }
 
 ChannelBindRequest::~ChannelBindRequest() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
 }
 
 void ChannelBindRequest::Prepare(StunMessage* request) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(LS_VERBOSE) << "ChannelBindRequest::Prepare";
   request->SetType(STUN_CHANNEL_BIND_REQUEST);
 
@@ -625,11 +662,13 @@ void ChannelBindRequest::Prepare(StunMessage* request) {
 }
 
 void ChannelBindRequest::OnResponse(StunMessage* response) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(LS_INFO) << "ChannelBindRequest::OnResponse";
   conn_->ChannelBindSucess();
 }
 
 void ChannelBindRequest::OnErrorResponse(StunMessage* response) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(LS_ERROR) << "ChannelBindRequest::OnErrorResponse!";
   const StunErrorCodeAttribute* attr = response->GetErrorCode();
   if (!attr) {
@@ -653,6 +692,7 @@ void ChannelBindRequest::OnErrorResponse(StunMessage* response) {
 }
 
 void ChannelBindRequest::OnTimeout() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(LS_ERROR) << "ChannelBindRequest::OnTimeOut!";
 }
 
@@ -664,12 +704,15 @@ RefreshRequest::RefreshRequest(RelayProxyConnection* conn,
                                : StunRequest(new TurnMessage()),
                                  conn_(conn),
                                  server_addr_(server_addr) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
 }
 
 RefreshRequest::~RefreshRequest() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
 }
 
 void RefreshRequest::Prepare(StunMessage* request) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   request->SetType(STUN_REFRESH_RESPONSE);
 
   StunByteStringAttribute* username_attr = StunAttribute::CreateByteString(
@@ -694,9 +737,11 @@ void RefreshRequest::Prepare(StunMessage* request) {
 }
 
 void RefreshRequest::OnResponse(StunMessage* response) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
 }
 
 void RefreshRequest::OnErrorResponse(StunMessage* response) {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(LS_ERROR) << "RefreshRequest::OnErrorResponse!";
   const StunErrorCodeAttribute* attr = response->GetErrorCode();
   if (!attr) {
@@ -722,6 +767,7 @@ void RefreshRequest::OnErrorResponse(StunMessage* response) {
 }
 
 void RefreshRequest::OnTimeout() {
+LOG(INFO) << __LINE__ << "::" << __FILE__ << "##" << GetClassname().c_str() << "::" << __FUNCTION__;
   LOG(LS_ERROR) << "RefreshRequest::OnTimeOut!";
 }
 
