@@ -36,7 +36,6 @@
 #include "talk/p2p/base/common.h"
 #include "talk/p2p/base/relayport.h"  // For RELAY_PORT_TYPE.
 #include "talk/p2p/base/stunport.h"  // For STUN_PORT_TYPE.
-#include "talk/p2p/base/timeouts.h"
 
 namespace {
 
@@ -46,12 +45,7 @@ enum {
   MSG_PING,
 };
 
-// When the socket is unwritable, we will use 10 Kbps (ignoring IP+UDP headers)
-// for pinging.  When the socket is writable, we will use only 1 Kbps because
-// we don't want to degrade the quality on a modem.  These numbers should work
-// well on a 28.8K modem, which is the slowest connection on which the voice
-// quality is reasonable at all.
-//static const uint32 PING_PACKET_SIZE = 60 * 8;
+// See the enum definition to better understand these values
 static const uint32 WRITABLE_DELAY = cricket::kPingTimeoutWritableDelay;
 static const uint32 UNWRITABLE_DELAY = cricket::kPingTimeoutUnWritableDelay;
 

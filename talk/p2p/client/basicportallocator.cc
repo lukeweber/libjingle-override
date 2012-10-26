@@ -163,6 +163,7 @@ class AllocationSequence : public talk_base::MessageHandler {
 
   // Returns true if AllocationSequence has got all expect candidates.
   bool HasAllCandidates() {
+    LOG(INFO) << __FUNCTION__ << " state " << state_ << " " << allocated_candidates_ << "/" << expected_candidates_;
 #if 0 // Fix this, needs more investigation
     return (state_ == kCompleted &&
             allocated_candidates_ == expected_candidates_);
