@@ -252,7 +252,7 @@ class Port : public PortInterface, public talk_base::MessageHandler,
                             const std::string& remote_ufrag);
 
   // Called when one of our connections deletes itself.
-  void OnConnectionDestroyed(Connection* conn);
+  virtual void OnConnectionDestroyed(Connection* conn);
 
  protected:
   // Fills in the local address of the port.
