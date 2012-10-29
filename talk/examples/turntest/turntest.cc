@@ -21,6 +21,8 @@ class TestConnection : public talk_base::Thread {
       client_addr_ = client_addr;
       peer_addr_ = peer_addr;
       msg_count_ = msg_count;
+      std::string client_data = std::string("client") + data_;
+      std::string peer_data = std::string("peer") + data_;
 
       InitStats();
     }
@@ -41,7 +43,6 @@ class TestConnection : public talk_base::Thread {
       if (Allocate() && BindChannel() && relayed_addr_.port() != 0) {
         // Send data from client to peer
         for (int i = 0; i < msg_count_; i++) {
-          std::string client_data = std::string("client") + data_;
           ClientSendData(client_data.c_str());
           std::string received_data = PeerReceiveData();
           if (received_data != client_data) {
@@ -53,7 +54,6 @@ class TestConnection : public talk_base::Thread {
 
         // Send data from peer to client
         for (int i = 0; i < msg_count_; i++) {
-          std::string peer_data = std::string("peer") + data_;
           PeerSendData(peer_data.c_str());
           std::string received_data = ClientReceiveData();
           if (received_data != peer_data) {
@@ -101,21 +101,12 @@ class TestConnection : public talk_base::Thread {
         } else {
           relayed_addr_ = talk_base::SocketAddress(raddr_attr->ipaddr(), raddr_attr->port());
         }
-
-        // Extract mapped address
-        const StunAddressAttribute* maddr_attr =
-          allocate_response->GetAddress(STUN_ATTR_XOR_MAPPED_ADDRESS);
-        if (!maddr_attr) {
-            allocation_state = ALLOCATION_ERROR;
-        } else {
-          mapped_addr_ = talk_base::SocketAddress(maddr_attr->ipaddr(), maddr_attr->port());
-        }
       } else {
         allocation_state = ALLOCATION_NULL;
       }
 
-      delete allocate_response;
       delete allocate_request;
+      delete allocate_response;
 
       if (allocation_state == ALLOCATION_SUCCESS) {
         return true;
@@ -161,8 +152,8 @@ class TestConnection : public talk_base::Thread {
         binding_state = BINDING_NULL;
       }
 
-      delete bind_response;
       delete bind_request;
+      delete bind_response;
 
       if (binding_state == BINDING_SUCCESS) {
         return true;
@@ -172,7 +163,6 @@ class TestConnection : public talk_base::Thread {
     }
 
     void ClientSendData(const char* data) {
-      // std::cout << "Client Send Data from port " << client_addr_.port() << std::endl;
       talk_base::ByteBuffer buff;
       uint32 val = channel_ | std::strlen(data);
       buff.WriteUInt32(val);
@@ -181,25 +171,21 @@ class TestConnection : public talk_base::Thread {
     }
 
     std::string PeerReceiveData() {
-      // std::cout << "Peer Receive Data on port " << peer_addr_.port() << std::endl;
       std::string raw;
       talk_base::TestClient::Packet* packet = peer_->NextPacket();
       if (packet) {
         raw = std::string(packet->buf, packet->size);
-        delete packet;
       }
       return raw;
     }
 
     void PeerSendData(const char* data) {
-      // std::cout << "Peer Send Data from port " << peer_addr_.port() << std::endl;
       talk_base::ByteBuffer buff;
       buff.WriteBytes(data, std::strlen(data));
       peer_->SendTo(buff.Data(), buff.Length(), relayed_addr_);
     }
 
     std::string ClientReceiveData() {
-      // std::cout << "Client Receive Data on port " << client_addr_.port() << std::endl;
       std::string raw;
       talk_base::TestClient::Packet* packet = client_->NextPacket();
       if (packet) {
@@ -234,7 +220,6 @@ class TestConnection : public talk_base::Thread {
         talk_base::ByteBuffer buf(packet->buf, packet->size);
         response = new TurnMessage();
         response->Read(&buf);
-        delete packet;
       }
       return response;
     }
@@ -269,7 +254,6 @@ class TestConnection : public talk_base::Thread {
     talk_base::scoped_ptr<talk_base::TestClient> peer_;
     talk_base::SocketAddress peer_addr_;
     talk_base::SocketAddress client_addr_;
-    talk_base::SocketAddress mapped_addr_;
     talk_base::SocketAddress relayed_addr_;
     const char* data_;
     int msg_count_;
@@ -296,6 +280,9 @@ class TestConnection : public talk_base::Thread {
 
     int data_peer_client_error_cnt;
     int data_client_peer_error_cnt;
+
+    std::string client_data;
+    std::string peer_data;
 };
 
 void process_stats(int threads_cnt, std::string turn_host, int turn_port,
@@ -370,4 +357,6 @@ int main(int argc, char **argv) {
     threads[i]->Stop();
     delete threads[i];
   }
+
+  delete g_turn_int_addr;
 }

@@ -77,7 +77,7 @@ class StatsProcessor(object):
     self._total_client_to_peer += thread_stats["client_to_peer"]
     self._total_peer_to_client += thread_stats["peer_to_client"]
 
-    self.print_threads_stats(thread_stats, thread_cnt, message_cnt)
+    # self.print_threads_stats(thread_stats, thread_cnt, message_cnt)
 
   def print_process_stats(self, process_stats):
     ps = process_stats["process_stats"];
