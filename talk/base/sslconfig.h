@@ -30,11 +30,12 @@
 
 // If no preference has been indicated, default to SChannel on Windows and
 // OpenSSL everywhere else, if it is available.
-#if !defined(SSL_USE_SCHANNEL) && !defined(SSL_USE_OPENSSL)
+#if !defined(SSL_USE_SCHANNEL) && !defined(SSL_USE_OPENSSL) && !defined(SSL_USE_NSS)
 #ifdef WIN32
 #define SSL_USE_SCHANNEL 1
 #else  // !WIN32
 #define SSL_USE_OPENSSL HAVE_OPENSSL_SSL_H
+#define SSL_USE_NSS HAVE_NSS_SSL_H
 #endif  // !WIN32
 #endif
 

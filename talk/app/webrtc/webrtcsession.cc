@@ -61,6 +61,15 @@ static const uint64 kInitSessionVersion = 2;
 // We allow 30 seconds to establish a connection, otherwise it's an error.
 static const int kCallSetupTimeout = 30 * 1000;
 
+// DTLS-SRTP pseudo-constraints.
+const char MediaConstraintsInterface::kEnableDtlsSrtp[] =
+    "DtlsSrtpKeyAgreement";
+const char MediaConstraintsInterface::kValueTrue[] = "true";
+
+// Arbitrary constant used as prefix for the identity.
+// Chosen to make the certificates more readable.
+const char kWebRTCIdentityPrefix[] = "WebRTC";
+
 // Constants for setting the default encoder size.
 // TODO: Implement proper negotiation of video resolution.
 static const int kDefaultVideoCodecId = 100;
@@ -68,6 +77,22 @@ static const int kDefaultVideoCodecFramerate = 30;
 static const char kDefaultVideoCodecName[] = "VP8";
 static const int kDefaultVideoCodecWidth = 640;
 static const int kDefaultVideoCodecHeight = 480;
+
+// Compares |answer| against |offer|. Comparision is done
+// for number of m-lines in answer against offer. If matches true will be
+// returned otherwise false.
+static bool VerifyMediaDescriptions(
+    const SessionDescription* answer, const SessionDescription* offer) {
+  if (offer->contents().size() != answer->contents().size())
+    return false;
+
+  for (size_t i = 0; i < offer->contents().size(); ++i) {
+    if ((offer->contents()[i].name) != answer->contents()[i].name) {
+      return false;
+    }
+  }
+  return true;
+}
 
 static void CopyCandidatesFromSessionDescription(
     const SessionDescriptionInterface* source_desc,
@@ -224,6 +249,42 @@ WebRtcSession::~WebRtcSession() {
   }
 }
 
+
+static bool FindConstraint(const MediaConstraintsInterface::Constraints&
+  constraints, const std::string& key, std::string* value) {
+  for (MediaConstraintsInterface::Constraints::const_iterator iter =
+           constraints.begin(); iter != constraints.end(); ++iter) {
+    if (iter->key == key) {
+      if (value)
+        *value = iter->value;
+      
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static bool FindConstraint(const MediaConstraintsInterface* constraints,
+  const std::string& key, std::string* value, bool* mandatory) {
+  if (!constraints)
+    return false;
+ 
+  if (FindConstraint(constraints->GetMandatory(), key, value)) {
+    if (mandatory)
+      *mandatory = true;
+    return true;
+  }
+
+  if (FindConstraint(constraints->GetOptional(), key, value)) {
+    if (mandatory)
+      *mandatory = false;
+    return true;
+  }
+
+  return false;
+}
+
 bool WebRtcSession::Initialize(const MediaConstraintsInterface* constraints) {
   // TODO(perkj): Take |constraints| into consideration. Return false if not all
   // mandatory constraints can be fulfilled. Note that |constraints|
@@ -231,6 +292,27 @@ bool WebRtcSession::Initialize(const MediaConstraintsInterface* constraints) {
 
   // By default SRTP-SDES is enabled in WebRtc.
   set_secure_policy(cricket::SEC_REQUIRED);
+
+#if 0
+  // Enable DTLS-SRTP if the constraint is set.
+  // DTLS-SRTP currently disabled in this code base pending landing
+  // of CLs this depends on.
+  std::string value;
+  if (FindConstraint(constraints, MediaConstraintsInterface::kEnableDtlsSrtp,
+      &value, NULL) && value == MediaConstraintsInterface::kValueTrue) {
+    LOG(LS_INFO) << "DTLS-SRTP enabled; generating identity";
+    std::string identity_name = kWebRTCIdentityPrefix +
+        talk_base::ToString(talk_base::CreateRandomId());
+    transport_desc_factory_.set_identity(talk_base::SSLIdentity::Generate(
+        identity_name));
+    LOG(LS_INFO) << "Finished generating identity";
+    set_identity(transport_desc_factory_.identity());
+    transport_desc_factory_.set_digest_algorithm(talk_base::DIGEST_SHA_256);
+    
+    transport_desc_factory_.set_secure(cricket::SEC_ENABLED);
+  }
+#endif
+
   // Make sure SessionDescriptions only contains the StreamParams we negotiate.
   session_desc_factory_.set_add_legacy_streams(false);
 
@@ -292,6 +374,10 @@ SessionDescriptionInterface* WebRtcSession::CreateAnswer(
     const SessionDescriptionInterface* offer) {
   cricket::MediaSessionOptions options =
       mediastream_signaling_->GetMediaSessionOptions(hints);
+  if (!offer) {
+    LOG(LS_ERROR) << "Offer can't be NULL in CreateAnswer.";
+    return NULL;
+  }
   if (!ValidStreams(options.streams)) {
     LOG(LS_ERROR) << "CreateAnswer called with invalid media streams.";
     return NULL;
@@ -341,6 +427,13 @@ bool WebRtcSession::SetLocalDescription(Action action,
     return false;
   }
 
+  if (action == kAnswer && !VerifyMediaDescriptions(
+      desc->description(), remote_description()->description())) {
+    LOG(LS_ERROR) << "Offer and answer descriptions m-lines are not matching."
+                  << " Rejecting answer.";
+    return false;
+  }
+
   // Update the initiator flag if this session is the initiator.
   if (state() == STATE_INIT && action == kOffer) {
     set_initiator(true);
@@ -362,6 +455,7 @@ bool WebRtcSession::SetLocalDescription(Action action,
   }
   // Kick starting the ice candidates allocation.
   StartCandidatesAllocation();
+
   return error() == cricket::BaseSession::ERROR_NONE;
 }
 
@@ -377,6 +471,13 @@ bool WebRtcSession::SetRemoteDescription(Action action,
     LOG(LS_ERROR) << "SetRemoteDescription called with an invalid session"
                   <<" description";
     delete desc;
+    return false;
+  }
+
+  if (action == kAnswer && !VerifyMediaDescriptions(
+      desc->description(), local_description()->description())) {
+    LOG(LS_ERROR) << "Offer and answer descriptions m-lines are not matching. "
+                  << "Rejecting answer.";
     return false;
   }
 

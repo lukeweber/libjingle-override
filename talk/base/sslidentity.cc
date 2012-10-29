@@ -38,15 +38,30 @@
 
 #if SSL_USE_SCHANNEL
 
-#elif SSL_USE_OPENSSL  // && !SSL_USE_SCHANNEL
+#elif SSL_USE_OPENSSL  // !SSL_USE_SCHANNEL
 
 #include "talk/base/opensslidentity.h"
 
-#endif  // SSL_USE_OPENSSL && !SSL_USE_SCHANNEL
+#elif SSL_USE_NSS  // !SSL_USE_SCHANNEL && !SSL_USE_OPENSSL
+
+#include "talk/base/nssidentity.h"
+
+#endif  // SSL_USE_SCHANNEL
 
 namespace talk_base {
 
-#if SSL_USE_OPENSSL
+#if SSL_USE_SCHANNEL
+
+SSLCertificate* SSLCertificate::FromPEMString(const std::string& pem_string,
+                                              int* pem_length) {
+  return NULL;
+}
+
+SSLIdentity* SSLIdentity::Generate(const std::string& common_name) {
+  return NULL;
+}
+
+#elif SSL_USE_OPENSSL  // !SSL_USE_SCHANNEL
 
 SSLCertificate* SSLCertificate::FromPEMString(const std::string& pem_string,
                                               int* pem_length) {
@@ -57,17 +72,21 @@ SSLIdentity* SSLIdentity::Generate(const std::string& common_name) {
   return OpenSSLIdentity::Generate(common_name);
 }
 
-#else  // !SSL_USE_OPENSSL
+#elif SSL_USE_NSS  // !SSL_USE_OPENSSL && !SSL_USE_SCHANNEL
 
 SSLCertificate* SSLCertificate::FromPEMString(const std::string& pem_string,
                                               int* pem_length) {
-  return NULL;
+  return NSSCertificate::FromPEMString(pem_string, pem_length);
 }
 
 SSLIdentity* SSLIdentity::Generate(const std::string& common_name) {
-  return NULL;
+  return NSSIdentity::Generate(common_name);
 }
 
-#endif  // SSL_USE_OPENSSL
+#else  // !SSL_USE_OPENSSL && !SSL_USE_SCHANNEL && !SSL_USE_NSS
+
+#error "No SSL implementation"
+
+#endif  // SSL_USE_SCHANNEL
 
 }  // namespace talk_base
