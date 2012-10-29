@@ -33,15 +33,21 @@
 
 namespace cricket {
 enum SessionTimeout {
+    //The ammount of time allowed for a session to become writeable
     kSessionTimeoutWritable = 50000,
+    //This is the connection timeout to initiate a connected call
     kSessionTimeoutInitAck = 8000,
 };
 
 enum PortTimeout {
-    kPortTimeoutConnectionReadable = 90000,//30000
-    kPortTimeoutConnectionWriteable = 45000,//15000
-    kPortTimeoutConnectionWriteConnect = 15000,//5000
-    kPortTimeoutConnectionResponse = 15000,//5000
+    //Times out port if does not receive a readable ping before
+    kPortTimeoutConnectionReadable = 30000,
+    //Times out port if cannot connect as writeable before
+    kPortTimeoutConnectionWriteable = 15000,
+    //Times out port if does not receive a writeable ping before
+    kPortTimeoutConnectionWriteConnect = 5000,
+    //Global timeout request for each port request
+    kPortTimeoutConnectionResponse = 5000,
 };
 
 // When the socket is unwritable, we will use 10 Kbps (ignoring IP+UDP headers)
@@ -50,15 +56,20 @@ enum PortTimeout {
 // well on a 28.8K modem, which is the slowest connection on which the voice
 // quality is reasonable at all.
 enum P2PTransportChannelPingTimeout {
-    kPingPacketSize = 60*8,
-    kPingTimeoutWritableDelay = 30000 * kPingPacketSize / 1000,//1000 * PING_PACKET_SIZE / 1000
-    kPingTimeoutUnWritableDelay = 30000 * kPingPacketSize / 10000,//1000 * PING_PACKET_SIZE / 10000
-    kPingMaxCurrentWritableDelay = 900,//2*WRITABLE_DELAY - bit
+    kPingPacketSize = 60*8,//original
+    //Times out channel if cannot connect as writable before
+    kPingTimeoutWritableDelay = 1000 * kPingPacketSize / 1000,
+    //Times out channel if does not receive a readable ping before
+    kPingTimeoutUnWritableDelay = 1000 * kPingPacketSize / 10000,
+    //Times out channel if does not receive a writable ping before
+    kPingMaxCurrentWritableDelay = 2*kPingTimeoutWritableDelay,
 };
 
 enum BasicPortAllocatorTimeout {
-    kAllocatorTimeoutAllocateDelay = 4000,//250
-    kAllocatorTimeoutAllocateStepDelay = 4000,
+    //The ammount of time to wait before starting allocation
+    kAllocatorTimeoutAllocateDelay = 1000,//250
+    //The ammount of time to spend on each step of the allocation sequence
+    kAllocatorTimeoutAllocateStepDelay = 1000,
 };
 } //namespace cricket
 #endif  // TALK_P2P_BASE_TIMEOUTS_H_
