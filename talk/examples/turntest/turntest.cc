@@ -10,6 +10,7 @@
 using namespace cricket;
 
 static const talk_base::SocketAddress *g_turn_int_addr = NULL;
+static const int retry_max = 50;
 
 class TestConnection : public talk_base::Thread {
   public:
@@ -21,8 +22,8 @@ class TestConnection : public talk_base::Thread {
       client_addr_ = client_addr;
       peer_addr_ = peer_addr;
       msg_count_ = msg_count;
-      std::string client_data = std::string("client") + data_;
-      std::string peer_data = std::string("peer") + data_;
+      allocate_try_cnt_ = 0;
+      bind_try_cnt_ = 0;
 
       InitStats();
     }
@@ -40,9 +41,26 @@ class TestConnection : public talk_base::Thread {
       peer_.reset(new talk_base::TestClient(
             talk_base::AsyncUDPSocket::Create(ss_, peer_addr_)));
       // Assure that we have allocated, binded and have relay address
-      if (Allocate() && BindChannel() && relayed_addr_.port() != 0) {
+      for (int i = 0; i < retry_max; i++) {
+        Allocate();
+        if (allocation_state == ALLOCATION_SUCCESS) {
+          break;
+        }
+      }
+
+      if (allocation_state == ALLOCATION_SUCCESS) {
+        for (int i = 0; i < retry_max; i++) {
+          BindChannel();
+          if (binding_state == BINDING_SUCCESS) {
+            break;
+          }
+        }
+      }
+      if (allocation_state == ALLOCATION_SUCCESS 
+          && binding_state == BINDING_SUCCESS) {
         // Send data from client to peer
         for (int i = 0; i < msg_count_; i++) {
+          std::string client_data = std::string("client") + data_;
           ClientSendData(client_data.c_str());
           std::string received_data = PeerReceiveData();
           if (received_data != client_data) {
@@ -54,6 +72,7 @@ class TestConnection : public talk_base::Thread {
 
         // Send data from peer to client
         for (int i = 0; i < msg_count_; i++) {
+          std::string peer_data = std::string("peer") + data_;
           PeerSendData(peer_data.c_str());
           std::string received_data = ClientReceiveData();
           if (received_data != peer_data) {
@@ -258,6 +277,8 @@ class TestConnection : public talk_base::Thread {
     const char* data_;
     int msg_count_;
     uint32 channel_;
+    short unsigned int allocate_try_cnt_;
+    short unsigned int bind_try_cnt_;
 
     // Stats
     enum AllocationState {
@@ -280,9 +301,6 @@ class TestConnection : public talk_base::Thread {
 
     int data_peer_client_error_cnt;
     int data_client_peer_error_cnt;
-
-    std::string client_data;
-    std::string peer_data;
 };
 
 void process_stats(int threads_cnt, std::string turn_host, int turn_port,
@@ -342,6 +360,7 @@ int main(int argc, char **argv) {
     talk_base::SocketAddress sa2 = talk_base::SocketAddress(FLAG_client_host, peer_port);
     threads.push_back(new TestConnection(sa1, sa2, channel, FLAG_message_cnt, test_data));
     threads[i]->Start();
+    usleep(10000);
 
     client_port += 2;
     peer_port += 2;
