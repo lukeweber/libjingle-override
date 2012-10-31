@@ -265,6 +265,8 @@ class TestConnection : public talk_base::Thread {
       // std::cout << "Bind Channel " << channel_ << std::endl;
       StunMessage* stun_bind_request = new TurnMessage();
       stun_bind_request->SetType(STUN_BINDING_REQUEST);
+      // We compatible with rfc5389, cause transaction ID has length of 12
+      stun_bind_request->SetTransactionID("123456789012");
       SendStunMessage(stun_bind_request, peer_);
 
       StunMessage* stun_bind_response = ReceiveStunMessage(peer_);
