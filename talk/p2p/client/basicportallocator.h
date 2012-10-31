@@ -40,17 +40,39 @@
 
 namespace cricket {
 
+struct RelayCredentials {
+  RelayCredentials() {}
+  RelayCredentials(const std::string& username,
+                   const std::string& password)
+      : username(username),
+        password(password) {
+  }
+
+  std::string username;
+  std::string password;
+};
+
+typedef std::vector<ProtocolAddress> PortList;
+struct RelayServerConfig {
+  PortList ports;
+  RelayCredentials credentials;
+  int priority_modifier;  // added to the protocol modifier to get the
+                          // priority for this particular server
+};
+
 class BasicPortAllocator : public PortAllocator {
  public:
   BasicPortAllocator(talk_base::NetworkManager* network_manager,
                      talk_base::PacketSocketFactory* socket_factory);
   explicit BasicPortAllocator(talk_base::NetworkManager* network_manager);
   BasicPortAllocator(talk_base::NetworkManager* network_manager,
+                     talk_base::PacketSocketFactory* socket_factory,
+                     const talk_base::SocketAddress& stun_server);
+  BasicPortAllocator(talk_base::NetworkManager* network_manager,
                      const talk_base::SocketAddress& stun_server,
                      const talk_base::SocketAddress& relay_server_udp,
                      const talk_base::SocketAddress& relay_server_tcp,
-                     const talk_base::SocketAddress& relay_server_ssl,
-                     const talk_base::SocketAddress& turn_server_udp);
+                     const talk_base::SocketAddress& relay_server_ssl);
   virtual ~BasicPortAllocator();
 
   talk_base::NetworkManager* network_manager() { return network_manager_; }
@@ -69,6 +91,8 @@ class BasicPortAllocator : public PortAllocator {
   const talk_base::SocketAddress& stun_address() const {
     return stun_address_;
   }
+  // TODO(mallinath) - Deprecate relay_addres_xxx() methods and use
+  // relays() and AddRelay() methods defined below.
   const talk_base::SocketAddress& relay_address_udp() const {
     return relay_address_udp_;
   }
@@ -78,8 +102,11 @@ class BasicPortAllocator : public PortAllocator {
   const talk_base::SocketAddress& relay_address_ssl() const {
     return relay_address_ssl_;
   }
-  const talk_base::SocketAddress& turn_address_udp() const {
-    return turn_address_udp_;
+  const std::vector<RelayServerConfig>& relays() const {
+    return relays_;
+  }
+  virtual void AddRelay(const RelayServerConfig& relay) {
+    relays_.push_back(relay);
   }
 
   // Returns the best (highest priority) phase that has produced a port that
@@ -125,9 +152,9 @@ class BasicPortAllocator : public PortAllocator {
   const talk_base::SocketAddress relay_address_udp_;
   const talk_base::SocketAddress relay_address_tcp_;
   const talk_base::SocketAddress relay_address_ssl_;
-  const talk_base::SocketAddress turn_address_udp_;
   std::string turn_username_;
   std::string turn_password_;
+  std::vector<RelayServerConfig> relays_;
   int best_writable_phase_;
   bool allow_tcp_listen_;
 };
@@ -175,7 +202,7 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
   void OnNetworksChanged();
   void OnAllocationSequenceObjectsCreated();
   void DisableEquivalentPhases(talk_base::Network* network,
-      PortConfiguration* config, uint32* flags);
+                               PortConfiguration* config, uint32* flags);
   void AddAllocatedPort(Port* port, AllocationSequence* seq,
                         bool prepare_address = true);
   void OnAddressReady(Port* port);
@@ -215,18 +242,10 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
 // Records configuration information useful in creating ports.
 struct PortConfiguration : public talk_base::MessageData {
   talk_base::SocketAddress stun_address;
-  talk_base::SocketAddress turn_address;
   std::string username;
   std::string password;
 
-  typedef std::vector<ProtocolAddress> PortList;
-  struct RelayServer {
-    PortList ports;
-    int priority_modifier;  // added to the protocol modifier to get the
-                            // priority for this particular server
-  };
-
-  typedef std::vector<RelayServer> RelayList;
+  typedef std::vector<RelayServerConfig> RelayList;
   RelayList relays;
 
   PortConfiguration(const talk_base::SocketAddress& stun_address,
@@ -236,12 +255,11 @@ struct PortConfiguration : public talk_base::MessageData {
   virtual std::string GetClassname() const { return "PortConfiguration"; }
 
   // Adds another relay server, with the given ports and modifier, to the list.
-  void AddRelay(const PortList& ports, int priority_modifier);
-
-  void AddTurn(const talk_base::SocketAddress& turn_address);
+  void AddRelay(const PortList& ports, const RelayCredentials& credentials,
+                int priority_modifier);
 
   // Determines whether the given relay server supports the given protocol.
-  static bool SupportsProtocol(const PortConfiguration::RelayServer& relay,
+  static bool SupportsProtocol(const RelayServerConfig& relay,
                                ProtocolType type);
 };
 

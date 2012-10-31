@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2004--2005, Google Inc.
+ * Copyright 2012, Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,708 +25,734 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "talk/base/asyncpacketsocket.h"
-#include "talk/base/helpers.h"
-#include "talk/base/logging.h"
-#include "talk/base/byteorder.h"
-#include "talk/p2p/base/common.h"
 #include "talk/p2p/base/turnport.h"
 
+#include <stdio.h>
+
+#include "talk/base/asyncpacketsocket.h"
+#include "talk/base/byteorder.h"
+#include "talk/base/common.h"
+#include "talk/base/logging.h"
+#include "talk/base/nethelpers.h"
+#include "talk/base/socketaddress.h"
+#include "talk/base/stringencode.h"
+#include "talk/p2p/base/common.h"
+#include "talk/p2p/base/stun.h"
 
 namespace cricket {
 
-static const uint32 kMessageConnectTimeout = 1;
-static const int kKeepAliveDelay           = 10 * 60 * 1000;
-static const int kRetryTimeout             = 50 * 1000;  // ICE says 50 secs
-// How long to wait for a socket to connect to remote host in milliseconds
-// before trying another connection.
-static const int kSoftConnectTimeoutMs     = 3 * 1000;
+static const int PROTOCOL_UDP = 0x11;
+// TODO(juberti): Move to stun.h when relay messages have been renamed.
+static const int TURN_ALLOCATE_REQUEST = STUN_ALLOCATE_REQUEST;
+static const int TURN_ALLOCATE_ERROR_RESPONSE = STUN_ALLOCATE_ERROR_RESPONSE;
 
-const char TURN_PORT_TYPE[] = "relay";
+static const int TURN_DEFAULT_PORT = 3478;
+static const int TURN_CHANNEL_NUMBER_START = 0x4000;
+static const int TURN_CHANNEL_BINDING_TIMEOUT = 10 * 60 * 1000;  // 10 minutes
 
-const char password[] = "";
+static const size_t TURN_CHANNEL_HEADER_SIZE = 4U;
 
-TurnPort::TurnPort(
-    talk_base::Thread* thread, talk_base::PacketSocketFactory* factory,
-    talk_base::Network* network, const talk_base::IPAddress& ip,
-    int min_port, int max_port, const std::string& username,
-    const std::string& password)
-    : Port(thread, TURN_PORT_TYPE, ICE_TYPE_PREFERENCE_RELAY, factory, network,
-           ip, min_port, max_port, username, password),
-      requests_(thread),
-      socket_(NULL),
-      ready_(false),
-      channel_nmbr_(0x40000000),
+inline bool IsTurnChannelData(uint16 msg_type) {
+  return ((msg_type & 0xC000) == 0x4000);  // MSB are 0b01
+}
+
+class TurnAllocateRequest : public StunRequest {
+ public:
+  explicit TurnAllocateRequest(TurnPort* port);
+  virtual void Prepare(StunMessage* request);
+  virtual void OnResponse(StunMessage* response);
+  virtual void OnErrorResponse(StunMessage* response);
+  virtual void OnTimeout();
+
+ private:
+  // Handles authentication challenge from the server.
+  void OnAuthChallenge(StunMessage* response, int code);
+  void OnUnknownAttribute(StunMessage* response);
+
+  TurnPort* port_;
+};
+
+class TurnRefreshRequest : public StunRequest {
+ public:
+  explicit TurnRefreshRequest(TurnPort* port);
+  virtual void Prepare(StunMessage* request);
+  virtual void OnResponse(StunMessage* response);
+  virtual void OnErrorResponse(StunMessage* response);
+  virtual void OnTimeout();
+
+ private:
+  TurnPort* port_;
+};
+
+class TurnCreatePermissionRequest : public StunRequest {
+ public:
+  TurnCreatePermissionRequest(TurnPort* port, TurnEntry* entry,
+                              const talk_base::SocketAddress& ext_addr);
+  virtual void Prepare(StunMessage* request);
+  virtual void OnResponse(StunMessage* response);
+  virtual void OnErrorResponse(StunMessage* response);
+  virtual void OnTimeout();
+
+ private:
+  TurnPort* port_;
+  TurnEntry* entry_;
+  talk_base::SocketAddress ext_addr_;
+};
+
+class TurnChannelBindRequest : public StunRequest {
+ public:
+  TurnChannelBindRequest(TurnPort* port, TurnEntry* entry, int channel_id,
+                         const talk_base::SocketAddress& ext_addr);
+  virtual void Prepare(StunMessage* request);
+  virtual void OnResponse(StunMessage* response);
+  virtual void OnErrorResponse(StunMessage* response);
+  virtual void OnTimeout();
+
+ private:
+  TurnPort* port_;
+  TurnEntry* entry_;
+  int channel_id_;
+  talk_base::SocketAddress ext_addr_;
+};
+
+// Manages a "connection" to a remote destination. We will attempt to bring up
+// a channel for this remote destination to reduce the overhead of sending data.
+class TurnEntry : public sigslot::has_slots<> {
+ public:
+  TurnEntry(TurnPort* port, int channel_id,
+            const talk_base::SocketAddress& ext_addr);
+
+  TurnPort* port() { return port_; }
+
+  int channel_id() const { return channel_id_; }
+  const talk_base::SocketAddress& address() const { return ext_addr_; }
+  bool locked() const { return locked_; }
+
+  // Sends a packet to the given destination address.
+  // This will wrap the packet in STUN if necessary.
+  int Send(const void* data, size_t size, bool payload);
+
+  void OnCreatePermissionSuccess();
+  void OnCreatePermissionError();
+  void OnChannelBindSuccess();
+  void OnChannelBindError();
+
+ private:
+  TurnPort* port_;
+  int channel_id_;
+  talk_base::SocketAddress ext_addr_;
+  bool locked_;
+};
+
+TurnPort::TurnPort(talk_base::Thread* thread,
+                   talk_base::PacketSocketFactory* factory,
+                   talk_base::Network* network,
+                   const talk_base::IPAddress& ip,
+                   int min_port, int max_port,
+                   const std::string& username,
+                   const std::string& password,
+                   const talk_base::SocketAddress& server_address,
+                   const RelayCredentials& credentials)
+    : Port(thread, RELAY_PORT_TYPE, ICE_TYPE_PREFERENCE_RELAY,
+           factory, network, ip, min_port, max_port,
+           username, password),
+      server_address_(server_address),
+      credentials_(credentials),
+      resolver_(NULL),
       error_(0),
-      turn_username_(""),
-      nonce_(""),
-      realm_("") {
-  requests_.SignalSendPacket.connect(this, &TurnPort::OnSendPacket);
+      request_manager_(thread),
+      next_channel_number_(TURN_CHANNEL_NUMBER_START) {
+  request_manager_.SignalSendPacket.connect(this, &TurnPort::OnSendStunPacket);
 }
 
 TurnPort::~TurnPort() {
-  LOG_J(LS_INFO, this) << "TurnPort destructed";
-  delete socket_;
-  thread()->Clear(this);
+  // TODO(juberti): Should this even be necessary?
+  while (!entries_.empty()) {
+    DestroyEntry(entries_.front()->address());
+  }
 }
 
 bool TurnPort::Init() {
-  socket_ = socket_factory()->CreateUdpSocket(
-     talk_base::SocketAddress(ip(), 0),
-     min_port(), max_port());
+  socket_.reset(socket_factory()->CreateUdpSocket(
+      talk_base::SocketAddress(ip(), 0), min_port(), max_port()));
   if (!socket_) {
     LOG_J(LS_WARNING, this) << "UDP socket creation failed";
     return false;
   }
-
   socket_->SignalReadPacket.connect(this, &TurnPort::OnReadPacket);
-
   return true;
 }
 
-std::string TurnPort::ToString() const {
-  std::stringstream ss;
-  ss << "[server_addr_:" << server_addr_.ToString();
-  ss << ",Port:" << Port::ToString() << "]";
-  return ss.str();
-}
-void TurnPort::AddServerAddress(const ProtocolAddress& addr) {
-  LOG_J(LS_INFO, this) << "RelayPort::AddServerAddress called " << addr.address;
-  server_addr_ = addr.address;
-  alt_server_addr_ = addr.address;
-  if (!this->Init()) {
-    LOG_J(LS_WARNING, this) <<
-                   "TurnPort::AddServerAddress; unable to initialize port";
-  }
-}
-
-void TurnPort::AddExternalAddress(const ProtocolAddress& addr) {
-}
-
 void TurnPort::PrepareAddress() {
-  //
-  // Send a AllocateRequest to Turn Server
-  //
-  requests_.SendDelayed(new TurnAllocateRequest(this, server_addr_), 0);
-  ready_ = false;
-}
-
-void TurnPort::PrepareSecondaryAddress() {
-  requests_.SendDelayed(new TurnAllocateRequest(this, alt_server_addr_), 0);
-}
-
-void TurnPort::SetReady() {
-  if (!ready_) {
-    ready_ = true;
-    SignalAddressReady(this);
+  if (credentials_.username.empty() ||
+      credentials_.password.empty()) {
+    LOG(LS_ERROR) << "Allocation can't be started without setting the"
+                  << " TURN server credentials for the user.";
+    SignalAddressError(this);
+    return;
   }
-}
 
-void TurnPort::OnConnectionDestroyed(Connection* conn) {
-  RelayProxyConnection* rpc = reinterpret_cast<RelayProxyConnection*>(conn);
-  connectionMap_.erase(rpc->GetChannelNumber());
-  Port::OnConnectionDestroyed(conn);
+  if (!server_address_.port()) {
+    server_address_.SetPort(TURN_DEFAULT_PORT);
+  }
+
+  if (server_address_.IsUnresolved()) {
+    ResolveTurnAddress();
+  } else {
+    SendRequest(new TurnAllocateRequest(this), 0);
+  }
 }
 
 Connection* TurnPort::CreateConnection(const Candidate& address,
-                                        CandidateOrigin origin) {
-  if (address.protocol() != "udp")
+                                       CandidateOrigin origin) {
+  // TURN-UDP can only connect to UDP candidates.
+  if (address.protocol() != "udp") {
     return NULL;
+  }
 
-  RelayProxyConnection* conn = new RelayProxyConnection(this, channel_nmbr_,
-                                                        address);
-  connectionMap_[channel_nmbr_] = conn;
+  if (!IsCompatibleAddress(address.address())) {
+    return NULL;
+  }
+
+  // Create an entry, if needed, so we can get our permissions set up correctly.
+  CreateEntry(address.address());
+
+  // TODO(juberti): This will need to change if we start gathering STUN
+  // candidates on this port.
+  ProxyConnection* conn = new ProxyConnection(this, 0, address);
   AddConnection(conn);
-  channel_nmbr_ += 0x10000;
-  // 0x4000 through 0x7FFF: These values are the allowed channel numbers
-  // (16,383 possible values).
-  if ( channel_nmbr_ == 0x80000000 )
-    channel_nmbr_ = 0x40000000;
   return conn;
 }
 
 int TurnPort::SetOption(talk_base::Socket::Option opt, int value) {
-  int result = 0;
-  socket_->SetOption(opt, value);
-  options_.push_back(OptionValue(opt, value));
-  return result;
+  return socket_->SetOption(opt, value);
 }
 
 int TurnPort::GetError() {
   return error_;
 }
 
-void TurnPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
-                             const char* data, size_t size,
-                             const talk_base::SocketAddress& remote_addr) {
-  ASSERT(socket == socket_);
-
-  // if we received a channel data request, send it to appropriate
-  // connection and let it handle
-  uint16 val1, val2;
-  memcpy(&val1, data, 2);
-  val2 = talk_base::NetworkToHost16(val1);
-
-  if ( val2 & 0x4000 )  {
-    std::map<uint32, RelayProxyConnection*>::iterator it;
-    uint32 val = val2 << 16;
-    // LOG(LS_INFO) << "channum " << val;
-    if ((it = connectionMap_.find(val)) != connectionMap_.end()) {
-      RelayProxyConnection * pRPC = it->second;
-      return pRPC->OnReadPacket (data+4, size-4);
-    }
+int TurnPort::SendTo(const void* data, size_t size,
+                     const talk_base::SocketAddress& addr,
+                     bool payload) {
+  // Try to find an entry for this specific address; we should have one.
+  TurnEntry* entry = FindEntry(addr);
+  ASSERT(entry != NULL);
+  if (!entry) {
+    return 0;
   }
 
-  // this is not channel data. Check if this is a response for a STUN request
-  // we sent out (Allocate Request) if yes,
-  // let our request map handle the request
+  // TODO(juberti): Wire this up once we support sending over connected
+  // transports (e.g. TCP or TLS)
+  // If the entry is connected, then we can send on it (though wrapping may
+  // still be necessary).  Otherwise, we can't yet use this connection, so we
+  // default to the first one.
+  /*
+  if (!connected()) {
+    error_ = EWOULDBLOCK;
+    return SOCKET_ERROR;
+  }
+  */
+
+  // Send the actual contents to the server using the usual mechanism.
+  int sent = entry->Send(data, size, payload);
+  if (sent <= 0) {
+    return SOCKET_ERROR;
+  }
+
+  // The caller of the function is expecting the number of user data bytes,
+  // rather than the size of the packet.
+  return size;
+}
+
+void TurnPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
+                           const char* data, size_t size,
+                           const talk_base::SocketAddress& remote_addr) {
+  ASSERT(socket == socket_.get());
+  ASSERT(remote_addr == server_address_);
+
+  // The message must be at least the size of a message type +
+  if (size < TURN_CHANNEL_HEADER_SIZE) {
+    LOG(LS_WARNING) << "Received TURN message that was too short";
+    return;
+  }
+
+  // Check the message type, to see if is a Channel Data message.
+  uint16 msg_type;
+  memcpy(&msg_type, data, sizeof(msg_type));
+  msg_type = talk_base::NetworkToHost16(msg_type);
+
+  if (IsTurnChannelData(msg_type)) {
+    HandleChannelData(msg_type, data, size);
+  } else if (msg_type == TURN_DATA_INDICATION) {
+    HandleDataIndication(data, size);
+  } else {
+    // This must be a response for one of our requests.
+    // Check success responses, but not errors, for MESSAGE-INTEGRITY.
+    if (IsStunResponseType(msg_type) &&
+        !StunMessage::ValidateMessageIntegrity(data, size, hash())) {
+      LOG(LS_WARNING) << "Received TURN message with invalid "
+                      << "message integrity, msg_type=" << msg_type;
+      return;
+    }
+    request_manager_.CheckResponse(data, size);
+  }
+}
+
+void TurnPort::ResolveTurnAddress() {
+  if (resolver_)
+    return;
+
+  resolver_ = new talk_base::AsyncResolver();
+  resolver_->SignalWorkDone.connect(this, &TurnPort::OnResolveResult);
+  resolver_->set_address(server_address_);
+  resolver_->Start();
+}
+
+void TurnPort::OnResolveResult(talk_base::SignalThread* signal_thread) {
+  ASSERT(signal_thread == resolver_);
+  if (resolver_->error() != 0) {
+    LOG_J(LS_WARNING, this) << "TurnPort: turn host lookup received error "
+                            << resolver_->error();
+    SignalAddressError(this);
+    return;
+  }
+
+  server_address_ = resolver_->address();
+  PrepareAddress();
+}
+
+void TurnPort::OnSendStunPacket(const void* data, size_t size,
+                                StunRequest* request) {
+  if (Send(data, size) < 0) {
+    LOG(LS_ERROR) << "Failed to send TURN message, err=" << socket_->GetError();
+  }
+}
+
+void TurnPort::OnStunAddress(const talk_base::SocketAddress& address) {
+}
+
+void TurnPort::OnAllocateSuccess(const talk_base::SocketAddress& address) {
+  AddAddress(address, socket_->GetLocalAddress(), "udp",
+             RELAY_PORT_TYPE, ICE_TYPE_PREFERENCE_RELAY, true);
+}
+
+void TurnPort::OnAllocateError() {
+  SignalAddressError(this);
+}
+
+void TurnPort::HandleDataIndication(const char* data, size_t size) {
   talk_base::ByteBuffer buf(data, size);
   TurnMessage msg;
   if (!msg.Read(&buf)) {
-    // LOG(LS_INFO) << "RelayPort::OnReadPacket Incoming packet was not STUN";
+    LOG(LS_WARNING) << "Received invalid TURN data indication";
     return;
   }
 
-  // LOG(LS_INFO) << "requests_.CheckResponse";
+  const StunAddressAttribute* addr_attr =
+      msg.GetAddress(STUN_ATTR_XOR_PEER_ADDRESS);
+  if (!addr_attr) {
+    LOG(LS_WARNING) << "Missing STUN_ATTR_XOR_PEER_ADDRESS attribute in "
+                    << "data indication.";
+    return;
+  }
 
-  if (!requests_.CheckResponse(&msg)) {
-    // LOG(LS_INFO) << "RelayProxyConnection.CheckResponse";
-    //
-    // this is not a request we sent out; ask each connection to handle request
-    //
-    bool bHandled = false;
-    std::map<uint32, RelayProxyConnection *>::iterator it =
-                connectionMap_.begin();
-    for ( ; (it != connectionMap_.end() && !bHandled); it++ ) {
-      RelayProxyConnection * pSec = it->second;
-      if ( pSec != NULL ) {
-        bHandled = pSec->CheckResponse(&msg);
-      }
+  const StunByteStringAttribute* data_attr =
+      msg.GetByteString(STUN_ATTR_DATA);
+  if (!data_attr) {
+    LOG(LS_WARNING) << "Missing STUN_ATTR_DATA attribute in "
+                    << "data indication.";
+    return;
+  }
+
+  talk_base::SocketAddress ext_addr(addr_attr->GetAddress());
+  TurnEntry* entry = FindEntry(ext_addr);
+  if (!entry) {
+    LOG(LS_WARNING) << "Received TURN data indication with invalid "
+                    << "peer address, addr=" << ext_addr.ToString();\
+    return;
+  }
+
+  DispatchPacket(data_attr->bytes(), data_attr->length(), entry->address(),
+                 PROTO_UDP);
+}
+
+void TurnPort::HandleChannelData(int channel_id, const char* data,
+                                 size_t size) {
+  //    0                   1                   2                   3
+  //    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+  //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  //   |         Channel Number        |            Length             |
+  //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  //   |                                                               |
+  //   /                       Application Data                        /
+  //   /                                                               /
+  //   |                                                               |
+  //   |                               +-------------------------------+
+  //   |                               |
+  //   +-------------------------------+
+
+  // Extract header fields from the message.
+  uint16 len;
+  memcpy(&len, data + 2, sizeof(len));
+  len = talk_base::NetworkToHost16(len);
+  if (len != size - TURN_CHANNEL_HEADER_SIZE) {
+    LOG(LS_WARNING) << "Received TURN channel data message with "
+                    << "incorrect length, len=" << len;
+    return;
+  }
+
+  TurnEntry* entry = FindEntry(channel_id);
+  if (!entry) {
+    LOG(LS_WARNING) << "Received TURN channel data message for invalid "
+                    << "channel, channel_id=" << channel_id;
+    return;
+  }
+
+  DispatchPacket(data + TURN_CHANNEL_HEADER_SIZE, len, entry->address(),
+                 PROTO_UDP);
+}
+
+void TurnPort::DispatchPacket(const char* data, size_t size,
+    const talk_base::SocketAddress& remote_addr, ProtocolType proto) {
+  if (Connection* conn = GetConnection(remote_addr)) {
+    conn->OnReadPacket(data, size);
+  } else {
+    Port::OnReadPacket(data, size, remote_addr, proto);
+  }
+}
+
+bool TurnPort::ScheduleRefresh(int lifetime) {
+  // Lifetime is in seconds; we schedule a refresh for one minute less.
+  if (lifetime < 2 * 60) {
+    LOG(LS_WARNING) << "Received response with lifetime that was too short, "
+                    << "lifetime=" << lifetime;
+    return false;
+  }
+
+  SendRequest(new TurnRefreshRequest(this), (lifetime - 60) * 1000);
+  return true;
+}
+
+void TurnPort::SendRequest(StunRequest* req, int delay) {
+  request_manager_.SendDelayed(req, delay);
+}
+
+void TurnPort::AddRequestAuthInfo(StunMessage* msg) {
+  // If we've gotten the necessary data from the server, add it to our request.
+  VERIFY(!hash_.empty());
+  VERIFY(msg->AddAttribute(new StunByteStringAttribute(
+      STUN_ATTR_USERNAME, credentials_.username)));
+  VERIFY(msg->AddAttribute(new StunByteStringAttribute(
+      STUN_ATTR_REALM, realm_)));
+  VERIFY(msg->AddAttribute(new StunByteStringAttribute(
+      STUN_ATTR_NONCE, nonce_)));
+  VERIFY(msg->AddMessageIntegrity(hash()));
+}
+
+int TurnPort::Send(const void* data, size_t len) {
+  return socket_->SendTo(data, len, server_address_);
+}
+
+void TurnPort::UpdateHash() {
+  // http://tools.ietf.org/html/rfc5389#section-15.4
+  // long-term credentials will be calculated using the key and key is
+  // key = MD5(username ":" realm ":" SASLprep(password))
+
+  std::string input = credentials_.username;
+  input.append(":");
+  input.append(realm_);
+  input.append(":");
+  input.append(credentials_.password);
+
+  // TODO(juberti): replace with [talk_base::MessageDigest::kMaxSize];
+  char buf[16];
+  size_t retval = talk_base::ComputeDigest(talk_base::DIGEST_MD5,
+      input.c_str(), input.size(), buf, sizeof(buf));
+  ASSERT(retval == sizeof(buf));
+  hash_ = std::string(buf, retval);
+}
+
+TurnEntry* TurnPort::FindEntry(const talk_base::SocketAddress& addr) {
+  TurnEntry* entry = NULL;
+  for (std::list<TurnEntry*>::iterator it = entries_.begin();
+       it != entries_.end(); ++it) {
+    if ((*it)->address() == addr) {
+      entry = *it;
+      break;
     }
   }
+  return entry;
 }
 
-int TurnPort::SendTo(const void* data, size_t size,
-                      const talk_base::SocketAddress& addr, bool payload) {
-  // LOG_J(LS_INFO, this) << " RelayPort::SendTo; Sending Packet to: " << addr;
-
-  int sent = socket_->SendTo(data, size, alt_server_addr_);
-  if (sent < 0) {
-    error_ = socket_->GetError();
-    LOG_J(LS_ERROR, this) << "UDP send of " << size
-                          << " bytes failed with error " << error_;
+TurnEntry* TurnPort::FindEntry(int channel_id) {
+  TurnEntry* entry = NULL;
+  for (std::list<TurnEntry*>::iterator it = entries_.begin();
+       it != entries_.end(); ++it) {
+    if ((*it)->channel_id() == channel_id) {
+      entry = *it;
+      break;
+    }
   }
-  return sent;
+  return entry;
 }
 
-void TurnPort::OnSendPacket(const void* data, size_t size, StunRequest* req) {
-  talk_base::SocketAddress addr;
-
-  if (req->type() == STUN_ALLOCATE_REQUEST) {
-    TurnAllocateRequest* aReq = static_cast<TurnAllocateRequest*>(req);
-    addr = aReq->server_addr();
-  } else if (req->type() == STUN_CHANNEL_BIND_REQUEST) {
-    ChannelBindRequest* aReq = static_cast<ChannelBindRequest*>(req);
-    addr = aReq->server_addr();
-  } else if (req->type() == STUN_REFRESH_REQUEST) {
-    RefreshRequest* aReq = static_cast<RefreshRequest*>(req);
-    addr = aReq->server_addr();
-  }
-
-  if (addr.IsNil()) {
-    addr = this->Alt_server_addr();
-  }
-
-  // LOG(LS_INFO) << "RelayPort::OnSendPacket; Sending request to: " << addr;
-
-  if (socket_->SendTo(data, size, addr) < 0)
-    LOG(LS_ERROR) << socket_->GetError() <<
-      "TurnPort::OnSendPacket sendto error to addr " << addr.ToString() <<
-      " " << req->ToString();
+TurnEntry* TurnPort::CreateEntry(const talk_base::SocketAddress& addr) {
+  ASSERT(FindEntry(addr) == NULL);
+  TurnEntry* entry = new TurnEntry(this, next_channel_number_++, addr);
+  entries_.push_back(entry);
+  return entry;
 }
 
-void TurnPort::SendBindingResponse(StunMessage* request,
-                                    const talk_base::SocketAddress& addr) {
-
-  ASSERT(request->type() == STUN_BINDING_REQUEST);
-
-  std::map<uint32, RelayProxyConnection*>::iterator it;
-  uint32 chanNum;
-
-  Connection* conn2 = this->GetConnection(addr);
-
-  if (NULL != conn2) {
-      RelayProxyConnection* pRPC =
-          reinterpret_cast<RelayProxyConnection*>(conn2);
-      chanNum = pRPC->GetChannelNumber();
-  }
-
-  // Retrieve the username from the request.
-  const StunByteStringAttribute* username_attr =
-               request->GetByteString(STUN_ATTR_USERNAME);
-  ASSERT(username_attr != NULL);
-  if (username_attr == NULL) {
-    // No valid username, skip the response.
-    return;
-  }
-
-  // Fill in the response message.
-  TurnMessage response;
-  response.SetType(STUN_BINDING_RESPONSE);
-  response.SetTransactionID(request->transaction_id());
-
-  StunByteStringAttribute* username2_attr =
-             StunAttribute::CreateByteString(STUN_ATTR_USERNAME);
-  username2_attr->CopyBytes(username_attr->bytes(), username_attr->length());
-  response.AddAttribute(username2_attr);
-
-  StunAddressAttribute* addr_attr =
-      StunAttribute::CreateAddress(STUN_ATTR_MAPPED_ADDRESS);
-  addr_attr->SetPort(addr.port());
-  addr_attr->SetIP(addr.ipaddr());
-  response.AddAttribute(addr_attr);
-
-  // Send the response message.
-  // NOTE: If we wanted to, this is where we would add the HMAC.
-  talk_base::ByteBuffer buf;
-  response.Write(&buf);
-
-  talk_base::ByteBuffer buff2;
-  uint32 val2 = chanNum | buf.Length();
-  buff2.WriteUInt32(val2);
-  buff2.WriteBytes((const char*) buf.Data(), buf.Length());
-
-  if (SendTo(buff2.Data(), buff2.Length(), alt_server_addr_, false) < 0) {
-    LOG_J(LS_ERROR, this) << "Failed to send STUN ping response to "
-                          << addr.ToString();
-  }
-
-  // The fact that we received a successful request means that this connection
-  // (if one exists) should now be readable.
-  Connection* conn = GetConnection(addr);
-  ASSERT(conn != NULL);
-  if (conn)
-    conn->ReceivedPing();
+void TurnPort::DestroyEntry(const talk_base::SocketAddress& addr) {
+  TurnEntry* entry = FindEntry(addr);
+  ASSERT(entry != NULL);
+  entries_.remove(entry);
+  delete entry;
 }
 
-void TurnPort::SendBindingErrorResponse(StunMessage* request,
-                                         const talk_base::SocketAddress& addr,
-                                         int error_code,
-                                         const std::string& reason) {
-  ASSERT(request->type() == STUN_BINDING_REQUEST);
-
-  std::map<uint32, RelayProxyConnection*>::iterator it;
-  uint32 chanNum;
-  Connection* conn2 = this->GetConnection(addr);
-  if (NULL != conn2)  {
-      RelayProxyConnection* pRPC =
-            reinterpret_cast<RelayProxyConnection*>(conn2);
-      chanNum = pRPC->GetChannelNumber();
-  }
-
-  // Retrieve the username from the request. If it didn't have one, we
-  // shouldn't be responding at all.
-  const StunByteStringAttribute* username_attr =
-      request->GetByteString(STUN_ATTR_USERNAME);
-  ASSERT(username_attr != NULL);
-  if (username_attr == NULL) {
-    // No valid username, skip the response.
-    return;
-  }
-
-  // Fill in the response message.
-  TurnMessage response;
-  response.SetType(STUN_BINDING_ERROR_RESPONSE);
-  response.SetTransactionID(request->transaction_id());
-
-  StunByteStringAttribute* username2_attr =
-      StunAttribute::CreateByteString(STUN_ATTR_USERNAME);
-  username2_attr->CopyBytes(username_attr->bytes(), username_attr->length());
-  response.AddAttribute(username2_attr);
-
-  StunErrorCodeAttribute* error_attr = StunAttribute::CreateErrorCode();
-  error_attr->SetCode(error_code);
-  error_attr->SetReason(reason);
-  response.AddAttribute(error_attr);
-
-  // Send the response message.
-  // NOTE: If we wanted to, this is where we would add the HMAC.
-  talk_base::ByteBuffer buf;
-  response.Write(&buf);
-
-  talk_base::ByteBuffer buff2;
-  uint32 val2 = chanNum | buf.Length();
-  buff2.WriteUInt32(val2);
-  buff2.WriteBytes((const char*) buf.Data(), buf.Length());
-
-  LOG_J(LS_INFO, this) << "Sending STUN binding error: reason=" << reason
-                       << " to " << addr.ToString();
-
-  if (SendTo(buff2.Data(), buff2.Length(), alt_server_addr_, false) < 0) {
-    LOG_J(LS_ERROR, this) << "Failed to send STUN binding error response to "
-                          << addr.ToString();
-  }
-}
-
-//
-// TurnAllocateRequest implementation
-//
-TurnAllocateRequest::TurnAllocateRequest(TurnPort* port,
-                                 const talk_base::SocketAddress& server_addr) :
-    StunRequest(new TurnMessage()),
-    port_(port),
-    server_addr_(server_addr) {
-  start_time_ = talk_base::Time();
+TurnAllocateRequest::TurnAllocateRequest(TurnPort* port)
+    : StunRequest(new TurnMessage()),
+      port_(port) {
 }
 
 void TurnAllocateRequest::Prepare(StunMessage* request) {
-  LOG(LS_INFO) << "TurnAllocateRequest::Prepare";
-  bool AddMI = false;
-  request->SetType(STUN_ALLOCATE_REQUEST);
-  if (port_->GetNonce().length() != 0) {
-    AddMI = true;
-    StunByteStringAttribute* username_attr =
-              StunAttribute::CreateByteString(STUN_ATTR_USERNAME);
-    username_attr->CopyBytes(port_->turn_username_.c_str(), 8);
-    request->AddAttribute(username_attr);
+  request->SetType(TURN_ALLOCATE_REQUEST);
 
-    StunByteStringAttribute* nonce_attr =
-              StunAttribute::CreateByteString(STUN_ATTR_NONCE);
-    nonce_attr->CopyBytes(port_->GetNonce().c_str(),
-                          port_->GetNonce().length());
-    request->AddAttribute(nonce_attr);
+  StunUInt32Attribute* transport_attr = StunAttribute::CreateUInt32(
+      STUN_ATTR_REQUESTED_TRANSPORT);
+  transport_attr->SetValue(PROTOCOL_UDP << 24);
+  VERIFY(request->AddAttribute(transport_attr));
+  if (!port_->hash().empty()) {
+    port_->AddRequestAuthInfo(request);
   }
-
-  if (port_->GetRealm().length() != 0) {
-    StunByteStringAttribute* realm_attr =
-            StunAttribute::CreateByteString(STUN_ATTR_REALM);
-    realm_attr->CopyBytes(port_->GetRealm().c_str(),
-                          port_->GetRealm().length());
-    request->AddAttribute(realm_attr);
-  }
-
-  StunUInt32Attribute * transport_attr =
-             StunAttribute::CreateUInt32(STUN_ATTR_REQUESTED_TRANSPORT);
-  transport_attr->SetValue(0x11000000);
-  request->AddAttribute(transport_attr);
-  
-  if ( AddMI ) {
-    request->AddMessageIntegrity(password);
-  }
-  LOG(LS_INFO) << "LOGT REQ = " << request->ToString() << std::endl;
-}
-
-int TurnAllocateRequest::GetNextDelay() {
-  int delay = 100 * talk_base::_max(1 << count_, 2);
-  count_ += 1;
-  if (count_ == 5)
-    timeout_ = true;
-  return delay;
 }
 
 void TurnAllocateRequest::OnResponse(StunMessage* response) {
-  const StunAddressAttribute* addr_attr =
-          response->GetAddress(STUN_ATTR_XOR_RELAYED_ADDRESS);
-  if (!addr_attr) {
-    LOG(LS_ERROR) << "Allocate response missing mapped address.";
-    LOG(LS_ERROR) << response->ToString();
-  } else if (addr_attr->family() != STUN_ADDRESS_IPV4) {
-    LOG(LS_ERROR) << "Mapped address has bad family";
-  } else {
-    talk_base::SocketAddress addr(addr_attr->ipaddr(), addr_attr->port());
-    ProtocolType proto = PROTO_UDP;
-    LOG(INFO) << "Relay allocate succeeded: " << ProtoToString(proto)
-              << " @ " << addr.ToString();
-    port_->AddAddress(addr, port_->socket_->GetLocalAddress(), "udp", true);
+  // TODO(mallinath) - Use mapped address for STUN candidate.
+  const StunAddressAttribute* mapped_attr =
+      response->GetAddress(STUN_ATTR_XOR_MAPPED_ADDRESS);
+  if (!mapped_attr) {
+    LOG(LS_WARNING) << "Missing STUN_ATTR_XOR_MAPPED_ADDRESS attribute in "
+                    << "allocate success response.";
+    return;
   }
+
+  port_->OnStunAddress(mapped_attr->GetAddress());
+
+  const StunAddressAttribute* relayed_attr =
+      response->GetAddress(STUN_ATTR_XOR_RELAYED_ADDRESS);
+  if (!relayed_attr) {
+    LOG(LS_WARNING) << "Missing STUN_ATTR_XOR_RELAYED_ADDRESS attribute in "
+                    << "allocate success response.";
+    return;
+  }
+
+  const StunUInt32Attribute* lifetime_attr =
+      response->GetUInt32(STUN_ATTR_TURN_LIFETIME);
+  if (!lifetime_attr) {
+    LOG(LS_WARNING) << "Missing STUN_ATTR_TURN_LIFETIME attribute in "
+                    << "allocate success response.";
+    return;
+  }
+
+  port_->OnAllocateSuccess(relayed_attr->GetAddress());
+  port_->ScheduleRefresh(lifetime_attr->value());
 }
 
 void TurnAllocateRequest::OnErrorResponse(StunMessage* response) {
-  const StunErrorCodeAttribute* attr = response->GetErrorCode();
-  if (!attr) {
-    LOG(LS_ERROR) << "Bad allocate response error code";
-  } else {
-    LOG(LS_ERROR) << "Allocate error response:"
-              << " code=" << static_cast<int>(attr->code())
-              << " reason='" << attr->reason() << "'";
-  }
-
-  if (attr->code() == cricket::STUN_ERROR_UNAUTHORIZED) {
-    const StunByteStringAttribute* nonce_attr =
-          response->GetByteString(STUN_ATTR_NONCE);
-     ASSERT(nonce_attr != NULL);
-     port_->SetNonce(std::string(nonce_attr->bytes(), nonce_attr->length()));
-
-     const StunByteStringAttribute* realm_attr =
-                        response->GetByteString(STUN_ATTR_REALM);
-     ASSERT(realm_attr != NULL);
-     port_->SetRealm(std::string(realm_attr->bytes(), realm_attr->length()));
-
-     std::string nonce(nonce_attr->bytes(), nonce_attr->length());
-     std::string realm(realm_attr->bytes(), realm_attr->length());
-
-     LOG(INFO) << "nonce = " << nonce << " realm = " << realm;
-
-     port_->PrepareSecondaryAddress();
-  } else if (attr->code() == cricket::STUN_ERROR_TRY_ALTERNATE) {
-    const StunAddressAttribute* addr_attr =
-                response->GetAddress(STUN_ATTR_ALTERNATE_SERVER);
-    if (!addr_attr) {
-      LOG(LS_ERROR) << "Response has no source address";
-      return;
-    } else if (addr_attr->family() != 1) {
-      LOG(LS_ERROR) << "Source address has bad family";
-      return;
-    }
-
-    talk_base::SocketAddress remote_addr(addr_attr->ipaddr(),
-                                         addr_attr->port());
-
-    LOG(INFO) << "Alternate Server: " << remote_addr.ToString();
-
-    port_->Set_alt_server_addr(remote_addr);
-    port_->PrepareSecondaryAddress();
-  } else {
-    LOG(LS_ERROR) << "Unhandled error code";
+  const StunErrorCodeAttribute* errorcode = response->GetErrorCode();
+  switch (errorcode->code()) {
+    case STUN_ERROR_UNAUTHORIZED:       // Unauthrorized.
+    case STUN_ERROR_STALE_CREDENTIALS:  // Stale Nonce.
+      OnAuthChallenge(response, errorcode->code());
+      break;
+    default:
+      LOG(LS_WARNING) << "Allocate response error, code=" << errorcode->code();
+      port_->OnAllocateError();
   }
 }
 
 void TurnAllocateRequest::OnTimeout() {
-  LOG(LS_ERROR) << "Allocate request timed out on port " << port_->ToString();
-  port_->SignalAddressError(port_);
+  LOG(LS_WARNING) << "Allocate response timeout";
 }
 
-//
-// RelayProxyConnection implementation
-//
-RelayProxyConnection::RelayProxyConnection(TurnPort* port, uint32 channelNum,
-                                            const Candidate& candidate)
-                                          : ProxyConnection(port, 0, candidate),
-                                            error_(0) {
-  chan_ = channelNum;
-  nextping_ = talk_base::Time();
-  bChannelBindSuccess = false;
+void TurnAllocateRequest::OnAuthChallenge(StunMessage* response, int code) {
+  if (code == STUN_ERROR_UNAUTHORIZED && !port_->hash().empty()) {
+    LOG(LS_ERROR) << "Failed to authenticate with the server after challenge.";
+    port_->OnAllocateError();
+    return;
+  }
+
+  const StunByteStringAttribute* realm_attr =
+      response->GetByteString(STUN_ATTR_REALM);
+  if (!realm_attr) {
+    LOG(LS_WARNING) << "Missing STUN_ATTR_REALM attribute in "
+                    << "allocate unauthorized response.";
+    return;
+  }
+  port_->set_realm(realm_attr->GetString());
+
+  const StunByteStringAttribute* nonce_attr =
+      response->GetByteString(STUN_ATTR_NONCE);
+  if (!nonce_attr) {
+    LOG(LS_WARNING) << "Missing STUN_ATTR_NONCE attribute in "
+                    << "allocate unauthorized response.";
+    return;
+  }
+  port_->set_nonce(nonce_attr->GetString());
+
+  // Sending AllocationRequest with received realm and nonce values.
+  port_->SendRequest(new TurnAllocateRequest(port_), 0);
 }
 
-void RelayProxyConnection::Ping(uint32 now) {
-  if ( talk_base::Time() >= nextping_ ) {
-    LOG(LS_VERBOSE) << "Sending ChannelBindRequest";
-    SendChannelBindRequest();
-    if (bChannelBindSuccess) {
-      LOG(LS_VERBOSE) << "Sending RefreshRequest";
-      SendRefreshRequest();
+TurnRefreshRequest::TurnRefreshRequest(TurnPort* port)
+    : StunRequest(new TurnMessage()),
+      port_(port) {
+}
+
+void TurnRefreshRequest::Prepare(StunMessage* request) {
+  request->SetType(TURN_REFRESH_REQUEST);
+  port_->AddRequestAuthInfo(request);
+}
+
+void TurnRefreshRequest::OnResponse(StunMessage* response) {
+  const StunUInt32Attribute* lifetime_attr =
+      response->GetUInt32(STUN_ATTR_TURN_LIFETIME);
+  if (!lifetime_attr) {
+    LOG(LS_WARNING) << "Missing STUN_ATTR_TURN_LIFETIME attribute in "
+                    << "refresh success response.";
+    return;
+  }
+
+  port_->ScheduleRefresh(lifetime_attr->value());
+}
+
+void TurnRefreshRequest::OnErrorResponse(StunMessage* response) {
+  // Handle 437 error response.
+}
+
+void TurnRefreshRequest::OnTimeout() {
+}
+
+TurnCreatePermissionRequest::TurnCreatePermissionRequest(
+    TurnPort* port, TurnEntry* entry,
+    const talk_base::SocketAddress& ext_addr)
+    : StunRequest(new TurnMessage()),
+      port_(port),
+      entry_(entry),
+      ext_addr_(ext_addr) {
+}
+
+void TurnCreatePermissionRequest::Prepare(StunMessage* request) {
+  request->SetType(TURN_CREATE_PERMISSION_REQUEST);
+  VERIFY(request->AddAttribute(new StunXorAddressAttribute(
+      STUN_ATTR_XOR_PEER_ADDRESS, ext_addr_)));
+  port_->AddRequestAuthInfo(request);
+}
+
+void TurnCreatePermissionRequest::OnResponse(StunMessage* response) {
+  entry_->OnCreatePermissionSuccess();
+}
+
+void TurnCreatePermissionRequest::OnErrorResponse(StunMessage* response) {
+  entry_->OnCreatePermissionError();
+}
+
+void TurnCreatePermissionRequest::OnTimeout() {
+  LOG(LS_WARNING) << "Create permission timeout";
+}
+
+TurnChannelBindRequest::TurnChannelBindRequest(
+    TurnPort* port, TurnEntry* entry,
+    int channel_id, const talk_base::SocketAddress& ext_addr)
+    : StunRequest(new TurnMessage()),
+      port_(port),
+      entry_(entry),
+      channel_id_(channel_id),
+      ext_addr_(ext_addr) {
+}
+
+void TurnChannelBindRequest::Prepare(StunMessage* request) {
+  request->SetType(TURN_CHANNEL_BIND_REQUEST);
+  VERIFY(request->AddAttribute(new StunUInt32Attribute(
+      STUN_ATTR_CHANNEL_NUMBER, channel_id_ << 16)));
+  VERIFY(request->AddAttribute(new StunXorAddressAttribute(
+      STUN_ATTR_XOR_PEER_ADDRESS, ext_addr_)));
+  port_->AddRequestAuthInfo(request);
+}
+
+void TurnChannelBindRequest::OnResponse(StunMessage* response) {
+  entry_->OnChannelBindSuccess();
+  // Refresh the binding a minute before it expires.
+  port_->SendRequest(new TurnChannelBindRequest(
+      port_, entry_, channel_id_, ext_addr_),
+      TURN_CHANNEL_BINDING_TIMEOUT - 60 * 1000);
+}
+
+void TurnChannelBindRequest::OnErrorResponse(StunMessage* response) {
+  entry_->OnChannelBindError();
+}
+
+void TurnChannelBindRequest::OnTimeout() {
+  LOG(LS_WARNING) << "Channel bind timeout";
+}
+
+TurnEntry::TurnEntry(TurnPort* port, int channel_id,
+                     const talk_base::SocketAddress& ext_addr)
+    : port_(port),
+      channel_id_(channel_id),
+      ext_addr_(ext_addr),
+      locked_(false) {
+  port_->SendRequest(new TurnCreatePermissionRequest(
+      port_, this, ext_addr_), 0);
+}
+
+int TurnEntry::Send(const void* data, size_t size, bool payload) {
+  talk_base::ByteBuffer buf;
+  if (!locked_) {
+    // If we haven't bound the channel yet, we have to use a Send Indication.
+    TurnMessage msg;
+    msg.SetType(TURN_SEND_INDICATION);
+    msg.SetTransactionID(
+        talk_base::CreateRandomString(kStunTransactionIdLength));
+    VERIFY(msg.AddAttribute(new StunXorAddressAttribute(
+        STUN_ATTR_XOR_PEER_ADDRESS, ext_addr_)));
+    VERIFY(msg.AddAttribute(new StunByteStringAttribute(
+        STUN_ATTR_DATA, data, size)));
+    VERIFY(msg.Write(&buf));
+
+    // If we're sending real data, request a channel bind that we can use later.
+    if (payload) {
+      port_->SendRequest(new TurnChannelBindRequest(
+          port_, this, channel_id_, ext_addr_), 0);
     }
-    nextping_ += 60000;
-  }
-  //
-  // let base class send out keep alives
-  //
-  if (bChannelBindSuccess)  {
-    Connection::Ping(now);
-  }
-}
-
-void RelayProxyConnection::SendChannelBindRequest() {
-  TurnPort* port = reinterpret_cast<TurnPort*> (this->port());
-  ChannelBindRequest *request = new ChannelBindRequest(this,
-                                                       port->Alt_server_addr());
-  requests_.Send(request);
-}
-
-void RelayProxyConnection::SendRefreshRequest() {
-  TurnPort* port = reinterpret_cast<TurnPort*> (this->port());
-  RefreshRequest *request = new RefreshRequest(this,
-                                               port->Alt_server_addr());
-  requests_.Send(request);
-}
-
-//
-// Called when a packet is received on this connection.
-//
-void RelayProxyConnection::OnReadPacket(const char* data, size_t size) {
-  Connection::OnReadPacket(data, size);
-}
-
-void RelayProxyConnection::OnSendStunPacket(const void* data, size_t size,
-                                            StunRequest* req) {
-  if ( (req->type() == STUN_REFRESH_REQUEST) ||
-       (req->type() == STUN_CHANNEL_BIND_REQUEST) ) {
-    // LOG(LS_INFO) << "RelayProxyConnection::OnSendStunPacket";
-    TurnPort* port = reinterpret_cast<TurnPort*>(this->port());
-    port->OnSendPacket(data, size, req);
   } else {
-    //
-    // All requests other than STUN_REFRESH/CHANNEL_BIND need to be
-    // wrapped inside of a Channel Data request
-    talk_base::ByteBuffer buff;
-    uint32 val = chan_ | size;
-    buff.WriteUInt32(val);
-    buff.WriteBytes((const char*) data, size);
-    TurnPort* port = reinterpret_cast<TurnPort*>(this->port());
-    port->SendTo(buff.Data(), buff.Length(), port->Alt_server_addr(), false);
+    // If the channel is bound, we can send the data as a Channel Message.
+    buf.WriteUInt16(channel_id_);
+    buf.WriteUInt16(size);
+    buf.WriteBytes(reinterpret_cast<const char*>(data), size);
   }
+  return port_->Send(buf.Data(), buf.Length());
 }
 
-int RelayProxyConnection::Send(const void* data, size_t size)  {
-  talk_base::ByteBuffer buff;
-  uint32 val = chan_ | size;
-  buff.WriteUInt32(val);
-  buff.WriteBytes((const char*) data, size);
-  TurnPort* port = reinterpret_cast<TurnPort*>(this->port());
-  return (port->SendTo(buff.Data(), buff.Length(), port->Alt_server_addr(),
-          false));
-
-}  // namespace cricket
-
-//
-// ChannelBindRequest implementation
-//
-ChannelBindRequest::ChannelBindRequest(RelayProxyConnection* conn,
-                                   const talk_base::SocketAddress& server_addr)
-                                   : StunRequest(new TurnMessage()),
-                                     conn_(conn),
-                                     server_addr_(server_addr) {
+void TurnEntry::OnCreatePermissionSuccess() {
+  LOG(LS_INFO) << "Create perm for " << ext_addr_.ToString() << " succeeded";
 }
 
-ChannelBindRequest::~ChannelBindRequest() {
+void TurnEntry::OnCreatePermissionError() {
+  LOG(LS_INFO) << "Create perm for " << ext_addr_.ToString() << " failed";
 }
 
-void ChannelBindRequest::Prepare(StunMessage* request) {
-  LOG(LS_VERBOSE) << "ChannelBindRequest::Prepare";
-  request->SetType(STUN_CHANNEL_BIND_REQUEST);
-
-  StunByteStringAttribute* username_attr =
-       StunAttribute::CreateByteString(STUN_ATTR_USERNAME);
-  username_attr->CopyBytes(conn_->GetTurnUserName().c_str(),
-                           conn_->GetTurnUserName().length());
-  request->AddAttribute(username_attr);
-
-  StunByteStringAttribute* nonce_attr =
-      StunAttribute::CreateByteString(STUN_ATTR_NONCE);
-  nonce_attr->CopyBytes(conn_->GetNonce().c_str(),
-                        conn_->GetNonce().length());
-  request->AddAttribute(nonce_attr);
-
-  StunByteStringAttribute* realm_attr =
-      StunAttribute::CreateByteString(STUN_ATTR_REALM);
-  realm_attr->CopyBytes(conn_->GetRealm().c_str(),
-                        conn_->GetRealm().length());
-  request->AddAttribute(realm_attr);
-
-  StunUInt32Attribute* channum_attr =
-                 StunAttribute::CreateUInt32(STUN_ATTR_CHANNEL_NUMBER);
-  channum_attr->SetValue(conn_->GetChannelNumber());
-  request->AddAttribute(channum_attr);
-
-  StunXorAddressAttribute* addr_attr = StunAttribute::CreateXorAddress(
-                                            STUN_ATTR_XOR_PEER_ADDRESS);
-  addr_attr->SetIP(conn_->remote_candidate().address().ipaddr());
-  addr_attr->SetPort(conn_->remote_candidate().address().port());
-  request->AddAttribute(addr_attr);
-
-  request->AddMessageIntegrity(password);
-  LOG(LS_INFO) << "LOGT REQ = " << request->ToString() << std::endl;
+void TurnEntry::OnChannelBindSuccess() {
+  LOG(LS_INFO) << "Channel bind for " << ext_addr_.ToString() << " succeeded";
+  locked_ = true;
 }
 
-void ChannelBindRequest::OnResponse(StunMessage* response) {
-  LOG(LS_INFO) << "ChannelBindRequest::OnResponse";
-  conn_->ChannelBindSucess();
-}
-
-void ChannelBindRequest::OnErrorResponse(StunMessage* response) {
-  LOG(LS_ERROR) << "ChannelBindRequest::OnErrorResponse!";
-  const StunErrorCodeAttribute* attr = response->GetErrorCode();
-  if (!attr) {
-    LOG(LS_ERROR) << "Bad ChannelBind response error code";
-  } else {
-    LOG(LS_ERROR) << "ChannelBind error response:"
-                  << " code=" << static_cast<int>(attr->code())
-                  << " reason='" << attr->reason() << "'";
-    if (attr->code() == cricket::STUN_ERROR_STALE_NONCE) {
-      const StunByteStringAttribute* nonce_attr = response->GetByteString(
-                                                    STUN_ATTR_NONCE);
-      ASSERT(nonce_attr != NULL);
-      if ( nonce_attr != NULL ) {
-        TurnPort* port = reinterpret_cast<TurnPort*>(conn_->port());
-        port->SetNonce(std::string(nonce_attr->bytes(), nonce_attr->length()));
-        LOG(LS_INFO) << "Re-Sending ChannelBindRequest with new Nonce";
-        conn_->SendChannelBindRequest();
-      }
-    }
-  }
-}
-
-void ChannelBindRequest::OnTimeout() {
-  LOG(LS_ERROR) << "ChannelBindRequest::OnTimeOut!";
-}
-
-//
-// RefreshRequest implementation
-//
-RefreshRequest::RefreshRequest(RelayProxyConnection* conn,
-                               const talk_base::SocketAddress& server_addr)
-                               : StunRequest(new TurnMessage()),
-                                 conn_(conn),
-                                 server_addr_(server_addr) {
-}
-
-RefreshRequest::~RefreshRequest() {
-}
-
-void RefreshRequest::Prepare(StunMessage* request) {
-  request->SetType(STUN_REFRESH_RESPONSE);
-
-  StunByteStringAttribute* username_attr = StunAttribute::CreateByteString(
-                                            STUN_ATTR_USERNAME);
-  username_attr->CopyBytes(conn_->GetTurnUserName().c_str(),
-                           conn_->GetTurnUserName().length());
-  request->AddAttribute(username_attr);
-
-  StunByteStringAttribute* nonce_attr = StunAttribute::CreateByteString(
-                                         STUN_ATTR_NONCE);
-  nonce_attr->CopyBytes(conn_->GetNonce().c_str(),
-                        conn_->GetNonce().length());
-  request->AddAttribute(nonce_attr);
-
-  StunByteStringAttribute* realm_attr = StunAttribute::CreateByteString(
-                                          STUN_ATTR_REALM);
-  realm_attr->CopyBytes(conn_->GetRealm().c_str(),
-                        conn_->GetRealm().length());
-  request->AddAttribute(realm_attr);
-
-  request->AddMessageIntegrity(password);
-}
-
-void RefreshRequest::OnResponse(StunMessage* response) {
-}
-
-void RefreshRequest::OnErrorResponse(StunMessage* response) {
-  LOG(LS_ERROR) << "RefreshRequest::OnErrorResponse!";
-  const StunErrorCodeAttribute* attr = response->GetErrorCode();
-  if (!attr) {
-    LOG(LS_ERROR) << "Bad RefreshRequest response error code";
-  } else {
-    LOG(LS_ERROR) << "RefreshRequest error response:"
-                  << " code=" << static_cast<int>(attr->code())
-                  << " reason='" << attr->reason() << "'";
-    if (attr->code() == cricket::STUN_ERROR_STALE_NONCE) {
-      const StunByteStringAttribute* nonce_attr = response->GetByteString(
-                                                            STUN_ATTR_NONCE);
-      ASSERT(nonce_attr != NULL);
-      if ( nonce_attr != NULL ) {
-        TurnPort* port = reinterpret_cast<TurnPort*>(conn_->port());
-        port->SetNonce(std::string(nonce_attr->bytes(),
-                       nonce_attr->length()));
-        // Resend the request with the new Nonce
-        LOG(LS_INFO) <<"Re-Sending RefreshRequest with new Nonce";
-        conn_->SendRefreshRequest();
-      }
-    }
-  }
-}
-
-void RefreshRequest::OnTimeout() {
-  LOG(LS_ERROR) << "RefreshRequest::OnTimeOut!";
+void TurnEntry::OnChannelBindError() {
+  // TODO(mallinath) - Implement handling of error response for channel
+  // bind request as per http://tools.ietf.org/html/rfc5766#section-11.3
+  LOG(LS_WARNING) << "Channel bind for " << ext_addr_.ToString() << " failed";
 }
 
 }  // namespace cricket

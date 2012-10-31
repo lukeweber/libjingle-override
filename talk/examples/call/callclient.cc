@@ -367,12 +367,10 @@ CallClient::CallClient(buzz::XmppClient* xmpp_client,
                        const std::string& caps_node,
                        const std::string& version,
                        const char *stunserver,
-                       const char *relayserver,
-                       const char *turnserver)
+                       const char *relayserver)
     : xmpp_client_(xmpp_client),
       stunserver_(stunserver),
       relayserver_(relayserver),
-      turnserver_(turnserver),
       worker_thread_(NULL),
       media_engine_(NULL),
       data_engine_(NULL),
@@ -389,7 +387,7 @@ CallClient::CallClient(buzz::XmppClient* xmpp_client,
       static_views_accumulated_count_(0),
       screencast_ssrc_(0),
       roster_(new RosterMap),
-      portallocator_flags_(0),
+      portallocator_flags_(527),
       allow_local_ips_(false),
       signaling_protocol_(cricket::PROTOCOL_HYBRID),
       transport_protocol_(cricket::ICEPROTO_HYBRID),
@@ -496,15 +494,12 @@ void CallClient::InitMedia() {
   if (!relayserver_.empty() && !relay_addr_udp.FromString(relayserver_)) {
     relay_addr_udp.Clear();
   }
-  if (!turnserver_.empty() && !turn_addr_udp.FromString(turnserver_)) {
-    turn_addr_udp.Clear();
-  }
   talk_base::SocketAddress relay_addr_tcp(relay_addr_udp);
   talk_base::SocketAddress relay_addr_ssl(relay_addr_udp);
   
   port_allocator_ =  new cricket::BasicPortAllocator(
       network_manager_, stun_addr, relay_addr_udp, relay_addr_tcp,
-      relay_addr_ssl, turn_addr_udp);
+      relay_addr_ssl);
 
   if (portallocator_flags_ != 0) {
     port_allocator_->set_flags(portallocator_flags_);

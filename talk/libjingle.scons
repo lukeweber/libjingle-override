@@ -270,7 +270,6 @@ talk.Library(env, name = "jingle",
                "p2p/base/transportchannel.cc",
                "p2p/base/transportchannelproxy.cc",
                "p2p/base/transportdescriptionfactory.cc",
-               "p2p/base/udpport.cc",
                "p2p/client/basicportallocator.cc",
                "p2p/client/connectivitychecker.cc",
                "p2p/client/httpportallocator.cc",
@@ -482,14 +481,6 @@ talk.App(env, name = "call",
            "expat",
            "srtp",
            "xmpphelp",
-         ],
-)
-talk.App(env, name = "turntest",
-         libs = [
-           "jingle",
-         ],
-         srcs = [
-           "examples/turntest/turntest.cc",
          ],
 )
 talk.App(env, name = "relayserver",

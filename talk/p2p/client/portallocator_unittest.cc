@@ -55,7 +55,6 @@ static const SocketAddress kRelayTcpIntAddr("99.99.99.2", 5002);
 static const SocketAddress kRelayTcpExtAddr("99.99.99.3", 5003);
 static const SocketAddress kRelaySslTcpIntAddr("99.99.99.2", 5004);
 static const SocketAddress kRelaySslTcpExtAddr("99.99.99.3", 5005);
-static const SocketAddress kTurnAddr("", 0);
 
 // Minimum and maximum port for port range tests.
 static const int kMinPort = 10000;
@@ -93,7 +92,7 @@ class PortAllocatorTest : public testing::Test, public sigslot::has_slots<> {
                       kRelaySslTcpIntAddr, kRelaySslTcpExtAddr),
         allocator_(new cricket::BasicPortAllocator(
             &network_manager_, kStunAddr, kRelayUdpIntAddr, kRelayTcpIntAddr,
-            kRelaySslTcpIntAddr, kTurnAddr)),
+            kRelaySslTcpIntAddr)),
         candidate_allocation_done_(false) {
   }
 
@@ -278,8 +277,7 @@ TEST_F(PortAllocatorTest, TestDisableAllPorts) {
   session_->set_flags(cricket::PORTALLOCATOR_DISABLE_UDP |
                       cricket::PORTALLOCATOR_DISABLE_STUN |
                       cricket::PORTALLOCATOR_DISABLE_RELAY |
-                      cricket::PORTALLOCATOR_DISABLE_TCP |
-                      cricket::PORTALLOCATOR_DISABLE_TURN);
+                      cricket::PORTALLOCATOR_DISABLE_TCP);
   session_->GetInitialPorts();
   session_->StartGetAllPorts();
   talk_base::Thread::Current()->ProcessMessages(100);

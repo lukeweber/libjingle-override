@@ -44,6 +44,7 @@
 
 using cricket::kDefaultPortAllocatorFlags;
 using cricket::PORTALLOCATOR_ENABLE_SHARED_UFRAG;
+using cricket::PORTALLOCATOR_ENABLE_SHARED_SOCKET;
 using talk_base::SocketAddress;
 
 static const int kDefaultTimeout = 1000;
@@ -83,7 +84,6 @@ static const SocketAddress kRelayTcpIntAddr("99.99.99.2", 5002);
 static const SocketAddress kRelayTcpExtAddr("99.99.99.3", 5003);
 static const SocketAddress kRelaySslTcpIntAddr("99.99.99.2", 5004);
 static const SocketAddress kRelaySslTcpExtAddr("99.99.99.3", 5005);
-static const SocketAddress kTurnAddr("99.99.99.3", 5005);
 
 // Based on ICE_UFRAG_LENGTH
 static const char* kIceUfrag[4] = {"TESTICEUFRAG0000", "TESTICEUFRAG0001",
@@ -135,10 +135,10 @@ class P2PTransportChannelTestBase : public testing::Test,
     ep2_.role_ = cricket::ROLE_CONTROLLED;
     ep1_.allocator_.reset(new cricket::BasicPortAllocator(
         &ep1_.network_manager_, kStunAddr, kRelayUdpIntAddr,
-        kRelayTcpIntAddr, kRelaySslTcpIntAddr, kTurnAddr));
+        kRelayTcpIntAddr, kRelaySslTcpIntAddr));
     ep2_.allocator_.reset(new cricket::BasicPortAllocator(
         &ep2_.network_manager_, kStunAddr, kRelayUdpIntAddr,
-        kRelayTcpIntAddr, kRelaySslTcpIntAddr, kTurnAddr));
+        kRelayTcpIntAddr, kRelaySslTcpIntAddr));
   }
 
  protected:
@@ -566,6 +566,7 @@ class P2PTransportChannelTest : public P2PTransportChannelTestBase {
  protected:
   static const Result* kMatrix[NUM_CONFIGS][NUM_CONFIGS];
   static const Result* kMatrixSharedUfrag[NUM_CONFIGS][NUM_CONFIGS];
+  static const Result* kMatrixSharedSocket[NUM_CONFIGS][NUM_CONFIGS];
   void ConfigureEndpoints(Config config1, Config config2,
       int allocator_flags1, int allocator_flags2,
       cricket::IceProtocolType type) {
@@ -723,6 +724,22 @@ const P2PTransportChannelTest::Result*
 /*PR*/ {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 /*PR*/ {LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LSRS, NULL, LTRT},
 };
+const P2PTransportChannelTest::Result*
+    P2PTransportChannelTest::kMatrixSharedSocket[NUM_CONFIGS][NUM_CONFIGS] = {
+//      OPEN  CONE  ADDR  PORT  SYMM  2CON  SCON  !UDP  !TCP  HTTP  PRXH  PRXS
+/*OP*/ {LULU, LUSU, LUSU, LUSU, LUSU, LUSU, LUSU, LTLT, LTLT, LSRS, NULL, LTLT},
+/*CO*/ {LULU, LUSU, LUSU, LUSU, LUSU, LUSU, LUSU, NULL, NULL, LSRS, NULL, LTRT},
+/*AD*/ {LULU, LUSU, LUSU, LUSU, LUSU, LUSU, LUSU, NULL, NULL, LSRS, NULL, LTRT},
+/*PO*/ {LULU, LUSU, LUSU, LUSU, LURU, LUSU, LURU, NULL, NULL, LSRS, NULL, LTRT},
+/*SY*/ {LULU, LUSU, LUSU, LURU, LURU, LUSU, LURU, NULL, NULL, LSRS, NULL, LTRT},
+/*2C*/ {LULU, LUSU, LUSU, LUSU, LUSU, LUSU, LUSU, NULL, NULL, LSRS, NULL, LTRT},
+/*SC*/ {LULU, LUSU, LUSU, LURU, LURU, LUSU, LURU, NULL, NULL, LSRS, NULL, LTRT},
+/*!U*/ {LTLT, NULL, NULL, NULL, NULL, NULL, NULL, LTLT, LTLT, LSRS, NULL, LTRT},
+/*!T*/ {LTRT, NULL, NULL, NULL, NULL, NULL, NULL, LTLT, LTRT, LSRS, NULL, LTRT},
+/*HT*/ {LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, NULL, LSRS},
+/*PR*/ {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+/*PR*/ {LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LSRS, NULL, LTRT},
+};
 
 // The actual tests that exercise all the various configurations.
 // Test names are of the form P2PTransportChannelTest_TestOPENToNAT_FULL_CONE
@@ -764,12 +781,26 @@ const P2PTransportChannelTest::Result*
     else \
       LOG(LS_WARNING) << "Not yet implemented"; \
   } \
+  TEST_F(P2PTransportChannelTest, \
+         z##Test##x##To##y##AsGiceBothSharedUfragSocket) { \
+    ConfigureEndpoints(x, y, PORTALLOCATOR_ENABLE_SHARED_UFRAG | \
+                       PORTALLOCATOR_ENABLE_SHARED_SOCKET, \
+                       PORTALLOCATOR_ENABLE_SHARED_UFRAG | \
+                       PORTALLOCATOR_ENABLE_SHARED_SOCKET, \
+                       cricket::ICEPROTO_GOOGLE); \
+    if (kMatrixSharedSocket[x][y] != NULL) \
+      Test(*kMatrixSharedSocket[x][y]); \
+    else \
+    LOG(LS_WARNING) << "Not yet implemented"; \
+  } \
   TEST_F(P2PTransportChannelTest, z##Test##x##To##y##AsIce) { \
-    ConfigureEndpoints(x, y, PORTALLOCATOR_ENABLE_SHARED_UFRAG, \
-                       PORTALLOCATOR_ENABLE_SHARED_UFRAG, \
+    ConfigureEndpoints(x, y, PORTALLOCATOR_ENABLE_SHARED_UFRAG | \
+                       PORTALLOCATOR_ENABLE_SHARED_SOCKET, \
+                       PORTALLOCATOR_ENABLE_SHARED_UFRAG | \
+                       PORTALLOCATOR_ENABLE_SHARED_SOCKET, \
                        cricket::ICEPROTO_RFC5245); \
-    if (kMatrixSharedUfrag[x][y] != NULL) \
-      Test(*kMatrixSharedUfrag[x][y]); \
+    if (kMatrixSharedSocket[x][y] != NULL) \
+      Test(*kMatrixSharedSocket[x][y]); \
     else \
     LOG(LS_WARNING) << "Not yet implemented"; \
   }

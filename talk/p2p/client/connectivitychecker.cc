@@ -20,6 +20,7 @@
 #include "talk/p2p/base/port.h"
 #include "talk/p2p/base/relayport.h"
 #include "talk/p2p/base/stunport.h"
+
 namespace cricket {
 
 static const char kSessionTypeVideo[] =
@@ -54,8 +55,7 @@ class TestHttpPortAllocator : public HttpPortAllocator {
       const std::string& ice_pwd) {
     return new TestHttpPortAllocatorSession(this, content_name, component,
                                             ice_ufrag, ice_pwd,
-                                            stun_hosts(), turn_hosts(),
-                                            relay_hosts(),
+                                            stun_hosts(), relay_hosts(),
                                             relay_token(), user_agent());
   }
 };
@@ -378,7 +378,7 @@ void ConnectivityChecker::CreateRelayPorts(
         nic_info->ssltcp.start_time_ms = now;
 
         // Add the addresses of this protocol.
-        PortConfiguration::PortList::const_iterator relay_port;
+        PortList::const_iterator relay_port;
         for (relay_port = relay->ports.begin();
              relay_port != relay->ports.end();
              ++relay_port) {

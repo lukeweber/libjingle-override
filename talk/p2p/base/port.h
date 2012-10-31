@@ -100,6 +100,9 @@ struct ProtocolAddress {
 class Port : public PortInterface, public talk_base::MessageHandler,
              public sigslot::has_slots<> {
  public:
+  Port(talk_base::Thread* thread, talk_base::Network* network,
+       const talk_base::IPAddress& ip,
+       const std::string& username_fragment, const std::string& password);
   Port(talk_base::Thread* thread, const std::string& type,
        const uint32 preference, talk_base::PacketSocketFactory* factory,
        talk_base::Network* network, const talk_base::IPAddress& ip,
@@ -128,6 +131,8 @@ class Port : public PortInterface, public talk_base::MessageHandler,
   void SetTiebreaker(uint64 tiebreaker) { tiebreaker_ = tiebreaker; }
   uint64 Tiebreaker() const { return tiebreaker_; }
 
+  virtual bool SharedSocket() const { return shared_socket_; }
+
   // The thread on which this port performs its I/O.
   talk_base::Thread* thread() { return thread_; }
 
@@ -147,6 +152,7 @@ class Port : public PortInterface, public talk_base::MessageHandler,
   void set_component(int component) { component_ = component; }
 
 
+  uint32 type_preference() const { return type_preference_; }
   void set_type_preference(uint32 preference) {
     type_preference_ = preference;
   }
@@ -205,6 +211,17 @@ class Port : public PortInterface, public talk_base::MessageHandler,
   // Called each time a connection is created.
   sigslot::signal2<Port*, Connection*> SignalConnectionCreated;
 
+  // In a shared socket mode each port which shares the socket will decide
+  // to accept the packet based on the |remote_addr|. Currently only UDP
+  // port implemented this method.
+  // TODO(mallinath) - Make it pure virtual.
+  virtual bool HandleIncomingPacket(
+      talk_base::AsyncPacketSocket* socket, const char* data, size_t size,
+      const talk_base::SocketAddress& remote_addr) {
+    ASSERT(false);
+    return false;
+  }
+
   // Sends a response message (normal or error) to the given request.  One of
   // these methods should be called as a response to SignalUnknownAddress.
   // NOTE: You MUST call CreateConnection BEFORE SendBindingResponse.
@@ -251,14 +268,13 @@ class Port : public PortInterface, public talk_base::MessageHandler,
                             IceMessage* stun_msg,
                             const std::string& remote_ufrag);
 
-  // Called when one of our connections deletes itself.
-  virtual void OnConnectionDestroyed(Connection* conn);
-
  protected:
+  void set_type(const std::string& type) { type_ = type; }
   // Fills in the local address of the port.
   void AddAddress(const talk_base::SocketAddress& address,
                   const talk_base::SocketAddress& base_address,
-                  const std::string& protocol, bool final);
+                  const std::string& protocol, const std::string& type,
+                  uint32 type_preference, bool final);
 
   // Adds the given connection to the list.  (Deleting removes them.)
   void AddConnection(Connection* conn);
@@ -283,6 +299,10 @@ class Port : public PortInterface, public talk_base::MessageHandler,
   bool IsCompatibleAddress(const talk_base::SocketAddress& addr);
 
  private:
+  void Construct();
+  // Called when one of our connections deletes itself.
+  void OnConnectionDestroyed(Connection* conn);
+
   // Checks if this port is useless, and hence, should be destroyed.
   void CheckTimeout();
 
@@ -318,6 +338,7 @@ class Port : public PortInterface, public talk_base::MessageHandler,
   IceProtocolType ice_protocol_;
   TransportRole role_;
   uint64 tiebreaker_;
+  bool shared_socket_;
 
   // Information to use when going through a proxy.
   std::string user_agent_;
@@ -418,7 +439,7 @@ class Connection : public talk_base::MessageHandler,
 
   // Called when this connection should try checking writability again.
   uint32 last_ping_sent() const { return last_ping_sent_; }
-  virtual void Ping(uint32 now);
+  void Ping(uint32 now);
 
   // Called whenever a valid ping is received on this connection.  This is
   // public because the connection intercepts the first ping for us.
@@ -447,7 +468,7 @@ class Connection : public talk_base::MessageHandler,
   Connection(Port* port, size_t index, const Candidate& candidate);
 
   // Called back when StunRequestManager has a stun packet to send
-  virtual void OnSendStunPacket(const void* data, size_t size, StunRequest* req);
+  void OnSendStunPacket(const void* data, size_t size, StunRequest* req);
 
   // Callbacks from ConnectionRequest
   void OnConnectionRequestResponse(ConnectionRequest* req,

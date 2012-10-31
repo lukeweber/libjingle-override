@@ -105,8 +105,7 @@ class CallClient: public sigslot::has_slots<> {
              const std::string& caps_node,
              const std::string& version,
              const char * stunserver,
-             const char * relayserver,
-             const char * turnserver);
+             const char * relayserver);
   ~CallClient();
 
   cricket::MediaSessionClient* media_client() const { return media_client_; }
@@ -300,7 +299,6 @@ class CallClient: public sigslot::has_slots<> {
   buzz::XmppClient* xmpp_client_;
   std::string stunserver_;
   std::string relayserver_;
-  std::string turnserver_;
   talk_base::Thread* worker_thread_;
   talk_base::NetworkManager* network_manager_;
   cricket::PortAllocator* port_allocator_;

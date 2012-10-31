@@ -22,7 +22,6 @@ static const talk_base::SocketAddress kExternalAddr("33.33.33.33", 3333);
 static const talk_base::SocketAddress kStunAddr("44.44.44.44", 4444);
 static const talk_base::SocketAddress kRelayAddr("55.55.55.55", 5555);
 static const talk_base::SocketAddress kProxyAddr("66.66.66.66", 6666);
-static const talk_base::SocketAddress kTurnAddr("77.77.77.77", 7777);
 static const talk_base::ProxyType kProxyType = talk_base::PROXY_HTTPS;
 static const char kChannelName[] = "rtp_test";
 static const int kComponent = 1;
@@ -76,7 +75,8 @@ class FakeStunPort : public StunPort {
 
   // Just set external address and signal that we are done.
   virtual void PrepareAddress() {
-    AddAddress(kExternalAddr, kExternalAddr, "udp", true);
+    AddAddress(kExternalAddr, kExternalAddr, "udp",
+               STUN_PORT_TYPE, ICE_TYPE_PREFERENCE_SRFLX, true);
     SignalAddressReady(this);
   }
 };
@@ -91,7 +91,6 @@ class FakeHttpPortAllocatorSession : public TestHttpPortAllocatorSession {
       int component,
       const std::string& ice_ufrag, const std::string& ice_pwd,
       const std::vector<talk_base::SocketAddress>& stun_hosts,
-      const std::vector<talk_base::SocketAddress>& turn_hosts,
       const std::vector<std::string>& relay_hosts,
       const std::string& relay_token,
       const std::string& agent)
@@ -101,7 +100,6 @@ class FakeHttpPortAllocatorSession : public TestHttpPortAllocatorSession {
                                      ice_ufrag,
                                      ice_pwd,
                                      stun_hosts,
-                                     turn_hosts,
                                      relay_hosts,
                                      relay_token,
                                      agent) {
@@ -152,8 +150,6 @@ class FakeHttpPortAllocator : public HttpPortAllocator {
       const std::string& ice_ufrag, const std::string& ice_pwd) {
     std::vector<talk_base::SocketAddress> stun_hosts;
     stun_hosts.push_back(kStunAddr);
-    std::vector<talk_base::SocketAddress> turn_hosts;
-    turn_hosts.push_back(kTurnAddr);
     std::vector<std::string> relay_hosts;
     relay_hosts.push_back(kRelayHost);
     return new FakeHttpPortAllocatorSession(this,
@@ -162,7 +158,6 @@ class FakeHttpPortAllocator : public HttpPortAllocator {
                                             ice_ufrag,
                                             ice_pwd,
                                             stun_hosts,
-                                            turn_hosts,
                                             relay_hosts,
                                             kRelayToken,
                                             kBrowserAgent);
