@@ -220,9 +220,7 @@ BasicPortAllocator::BasicPortAllocator(
     talk_base::NetworkManager* network_manager,
     talk_base::PacketSocketFactory* socket_factory)
     : network_manager_(network_manager),
-      socket_factory_(socket_factory),
-      turn_username_(""),
-      turn_password_("") {
+      socket_factory_(socket_factory) {
   ASSERT(socket_factory_ != NULL);
   Construct();
 }
@@ -230,9 +228,7 @@ BasicPortAllocator::BasicPortAllocator(
 BasicPortAllocator::BasicPortAllocator(
     talk_base::NetworkManager* network_manager)
     : network_manager_(network_manager),
-      socket_factory_(NULL),
-      turn_username_(""),
-      turn_password_("") {
+      socket_factory_(NULL){
   Construct();
 }
 
@@ -258,9 +254,7 @@ BasicPortAllocator::BasicPortAllocator(
       stun_address_(stun_address),
       relay_address_udp_(relay_address_udp),
       relay_address_tcp_(relay_address_tcp),
-      relay_address_ssl_(relay_address_ssl),
-      turn_username_(""),
-      turn_password_("") {
+      relay_address_ssl_(relay_address_ssl) {
   Construct();
   LOG(INFO) << "LOGT Constructed with addresses";
   LOG(INFO) << "stun_address_(" << stun_address.ToString() << ")";
@@ -273,7 +267,7 @@ void BasicPortAllocator::Construct() {
   LOG_CI;
   best_writable_phase_ = -1;
   // For testing, also helps in sending OFFER Quicker 
-  // best_writable_phase_ = PHASE_TURN;
+  //best_writable_phase_ = PHASE_TURN;
   allow_tcp_listen_ = true;
 }
 
@@ -1097,7 +1091,7 @@ void AllocationSequence::CreateTurnPorts() {
     return;
   }
 
-  std::string password(session_->password());
+  /*std::string password(session_->password());
   std::string username(session_->username());
   BasicPortAllocator *allocator = session_->allocator();
   if(allocator) {
@@ -1113,7 +1107,7 @@ void AllocationSequence::CreateTurnPorts() {
       username << ") with turn_username(" << turnUsername << ")";
       username.assign(turnUsername);
     }
-  }
+  }*/
 
   PortConfiguration::RelayList::const_iterator relay;
   for (relay = config_->relays.begin();
@@ -1129,8 +1123,8 @@ void AllocationSequence::CreateTurnPorts() {
                                       network_, ip_,
                                       session_->allocator()->min_port(),
                                       session_->allocator()->max_port(),
-                                      username,
-                                      password,
+                                      session_->username(),
+                                      session_->password(),
                                       turn_server_addr,
                                       relay->credentials);
     if (port) {

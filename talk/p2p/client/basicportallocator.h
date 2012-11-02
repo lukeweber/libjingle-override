@@ -124,19 +124,6 @@ class BasicPortAllocator : public PortAllocator {
   // phase that the corresponding port was created in.
   void AddWritablePhase(int phase);
 
-  std::string& get_turn_username() {
-    return turn_username_;
-  }
-  void set_turn_username(const char *turn_username) {
-    turn_username_.assign(turn_username);
-  }
-  std::string& get_turn_password() {
-    return turn_password_;
-  }
-  void set_turn_password(const char *turn_password) {
-    turn_password_.assign(turn_password);
-  }
-
   bool allow_tcp_listen() const {
     return allow_tcp_listen_;
   }
@@ -152,8 +139,6 @@ class BasicPortAllocator : public PortAllocator {
   const talk_base::SocketAddress relay_address_udp_;
   const talk_base::SocketAddress relay_address_tcp_;
   const talk_base::SocketAddress relay_address_ssl_;
-  std::string turn_username_;
-  std::string turn_password_;
   std::vector<RelayServerConfig> relays_;
   int best_writable_phase_;
   bool allow_tcp_listen_;
