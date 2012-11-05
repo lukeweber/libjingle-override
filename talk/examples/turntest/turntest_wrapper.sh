@@ -11,6 +11,7 @@
 ##  -p             port. the port to run the connection through
 ##  -j             jobs. the number of processes to start
 ##  -t             threads. the number of threads per processes (recommended 250)
+##  -m             messages. the number of messages to send each way (recommended 1000)
 RESTUND_HOST="127.0.0.1"
 CLIENT_HOST="127.0.0.1"
 TURN_PORT="3478"
@@ -78,7 +79,7 @@ echo "JOBS=$JOBS"
 echo "THREADS=$THREADS"
 echo "MESSAGES=$MESSAGES"
 
-read -p "Press [Enter] key to continue CTRL-C to quit..."
+# read -p "Press [Enter] key to continue CTRL-C to quit..."
 # First possible solution using GNU parallel
 # seq 6000 1000 9000 | parallel -j4 ./turntest --port {}
 

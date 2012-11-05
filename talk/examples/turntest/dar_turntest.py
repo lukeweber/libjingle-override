@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from __future__ import with_statement
-from fabric.api import cd, run, execute, local, env, put, roles, parallel
+from fabric.api import cd, run, execute, local, env, get, put, roles, parallel
 import sys
 import subprocess
 
@@ -61,11 +61,16 @@ def deploy():
 @roles('test_servers')
 @parallel
 def collect_stats():
-    pass
+    mkdir = 'mkdir %s' % env.host
+    local(mkdir)
+    with cd('%(host)s'):
+        get('~/turntest/turn.*.log')
 
 
 def show_stats():
-    pass
+    for log_dir in env.roledefs['test_servers']:
+        cmd = './stats_processor.py %s' % log_dir
+        local(cmd)
 
 
 def start():

@@ -3,139 +3,127 @@ from __future__ import division
 
 import os
 import json
+import sys
+
 
 class StatsProcessor(object):
-  def __init__(self, path):
-    self._total_message_cnt = 0
-    self._total_thread_cnt = 0
-    self._total_allocate_error = 0
-    self._total_allocate_null = 0
-    self._total_bind_error = 0
-    self._total_bind_null = 0
-    self._total_client_to_peer = 0
-    self._total_peer_to_client = 0
-    self._error_lines = []
+    def __init__(self, path):
+        self._total_stats = {}
+        self._total_stats["mc"] = 0
+        self._total_stats["tc"] = 0
+        self._total_stats["ae"] = 0
+        self._total_stats["an"] = 0
+        self._total_stats["be"] = 0
+        self._total_stats["bn"] = 0
+        self._total_stats["cp"] = 0
+        self._total_stats["pc"] = 0
+        self._error_lines = []
+        self._path = path
 
-    self._path = path
+    def get_file_list(self):
+        log_files = [f for f in os.listdir(self._path) if f.endswith(".log")]
+        return log_files
 
-  def get_file_list(self):
-    log_files = [f for f in os.listdir(self._path) if f.endswith(".log")]
-    return log_files
+    def process_log_file(self, log_file):
+        f = open(self._path + '/' + log_file, "r")
+        raw_thread_stats = []
+        message_cnt = 0
+        thread_cnt = 0
+        for json_line in f:
+            try:
+                data = json.loads(json_line)
+            except ValueError:
+                error_line = "%s : %s" % (log_file, json_line)
+                self._error_lines.append(error_line.rstrip("\n"))
+                continue
+            if "process_stats" in data:
+                self.print_process_stats(data)
+                thread_cnt = data["process_stats"]["thread_cnt"]
+                message_cnt = thread_cnt * data["process_stats"]["message_cnt"]
+                self._total_stats["mc"] += message_cnt
+                self._total_stats["tc"] += thread_cnt
+            elif "thread_stats" in data:
+                raw_thread_stats.append(data)
+        if raw_thread_stats:
+            self.process_threads_stats(raw_thread_stats)
+        else:
+            self._error_lines.append("file %s is empty" % log_file)
 
-  def process_log_file(self, log_file):
-    f = open(log_file, "r")
-    raw_thread_stats = []
-    for json_line in f:
-      try:
-        data = json.loads(json_line)
-      except ValueError:
-        error_line = "%s : %s" % (log_file, json_line)
-        self._error_lines.append(error_line.rstrip("\n"))
-        continue
-      if "process_stats" in data:
-        self.print_process_stats(data)
-        thread_cnt = data["process_stats"]["thread_cnt"]
-        message_cnt = thread_cnt * data["process_stats"]["message_cnt"]
-        self._total_message_cnt += message_cnt
-        self._total_thread_cnt += thread_cnt
-      elif "thread_stats" in data:
-        raw_thread_stats.append(data)
-    if raw_thread_stats:
-      self.process_threads_stats(raw_thread_stats, message_cnt)
-    else:
-      self._error_lines.append("file %s is empty" % log_file)
+    def process_threads_stats(self, stats):
+        for thread_stat in stats:
+            ts = thread_stat["thread_stats"]
+            allocation_state = ts["allocation_state"]
+            binding_state = ts["binding_state"]
+            if allocation_state == 1:
+                self._total_stats["ae"] += 1
+            elif allocation_state == 5:
+                self._total_stats["an"] += 1
+            if binding_state == 1:
+                self._total_stats["be"] += 1
+            elif binding_state == 5:
+                self._total_stats["bn"] += 1
+            self._total_stats["cp"] += ts["data_client_peer_error_cnt"]
+            self._total_stats["pc"] += ts["data_client_peer_error_cnt"]
 
-  def process_threads_stats(self, stats, message_cnt):
-    thread_cnt = len(stats)
-    thread_stats = {}
-    thread_stats["allocate_null"] = 0
-    thread_stats["allocate_error"] = 0
-    thread_stats["bind_error"] = 0
-    thread_stats["bind_null"] = 0
-    thread_stats["client_to_peer"] = 0
-    thread_stats["peer_to_client"] = 0
-    for thread_stat in stats:
-      ts = thread_stat["thread_stats"]
-      allocation_state = ts["allocation_state"];
-      binding_state = ts["binding_state"];
-      if allocation_state == 1:
-        thread_stats["allocate_error"] += 1
-      elif allocation_state == 5:
-        thread_stats["allocate_null"] += 1
-      if binding_state == 1:
-        thread_stats["bind_error"] += 1
-      elif binding_state == 5:
-        thread_stats["bind_null"] += 1
+    def print_process_stats(self, process_stats):
+        ps = process_stats["process_stats"]
+        print "Process with %(thread_cnt)s threads, from port %(start_port)s" \
+                % ps
 
-      thread_stats["client_to_peer"] += ts["data_client_peer_error_cnt"]
-      thread_stats["peer_to_client"] += ts["data_peer_client_error_cnt"]
+    def print_total_stats(self):
+        self._total_stats["aep"] = (self._total_stats["ae"] /
+                                    self._total_stats["tc"]) * 100
+        self._total_stats["anp"] = (self._total_stats["an"] /
+                                    self._total_stats["tc"]) * 100
+        self._total_stats["bep"] = (self._total_stats["be"] /
+                                    self._total_stats["tc"]) * 100
+        self._total_stats["bnp"] = (self._total_stats["bn"] /
+                                    self._total_stats["tc"]) * 100
 
-    self._total_allocate_error += thread_stats["allocate_error"]
-    self._total_allocate_null += thread_stats["allocate_null"]
-    self._total_bind_error += thread_stats["bind_error"]
-    self._total_bind_null += thread_stats["bind_null"]
-    self._total_client_to_peer += thread_stats["client_to_peer"]
-    self._total_peer_to_client += thread_stats["peer_to_client"]
-
-    # self.print_threads_stats(thread_stats, thread_cnt, message_cnt)
-
-  def print_process_stats(self, process_stats):
-    ps = process_stats["process_stats"];
-    print ""
-    print "Process with %s threads, from port %s" % (ps["thread_cnt"], ps["start_port"])
-
-  def print_threads_stats(self, stats, thread_cnt, message_cnt):
-    print "  Allocations & Binds failures (%s total)" % (thread_cnt)
-    print "    Allocation errors: %s" % (stats["allocate_error"])
-    print "    Allocation NULLs:  %s" % (stats["allocate_null"])
-    print "    Bind errors:       %s" % (stats["bind_error"])
-    print "    Bind NULLs:        %s" % (stats["bind_null"])
-    print "  Data transfer failures (%s each way)" % (message_cnt)
-    print "    Client -> Peer:    %s" % (stats["client_to_peer"])
-    print "    Peer -> Client:    %s" % (stats["peer_to_client"])
-    print ""
-
-  def print_total_stats(self):
-    allocation_error_per = (self._total_allocate_error / self._total_thread_cnt) * 100;
-    allocation_null_per = (self._total_allocate_null / self._total_thread_cnt) * 100;
-    bind_error_per = (self._total_bind_error / self._total_thread_cnt) * 100;
-    bind_null_per = (self._total_bind_null / self._total_thread_cnt) * 100;
-    client_to_peer_per = (self._total_client_to_peer / self._total_message_cnt) * 100;
-    peer_to_client_per = (self._total_peer_to_client / self._total_message_cnt) * 100;
-    print ""
-    print "========================================="
-    print "============   Total Stats   ============"
-    print "========================================="
-    print "  Allocations & Binds failures (%s total)" % (self._total_thread_cnt)
-    print "    Allocation errors: %s (%0.2f%%)" % (self._total_allocate_error, allocation_error_per)
-    print "    Allocation NULLs:  %s (%0.2f%%)" % (self._total_allocate_null, allocation_null_per)
-    print "    Bind errors:       %s (%0.2f%%)" % (self._total_bind_error, bind_null_per)
-    print "    Bind NULLs:        %s (%0.2f%%)" % (self._total_bind_error, bind_error_per)
-    print "  Data transfer failures (%s each way)" % (self._total_message_cnt)
-    print "    Client -> Peer:    %s (%0.2f%%)" % (self._total_client_to_peer, client_to_peer_per)
-    print "    Peer -> Client:    %s (%0.2f%%)" % (self._total_peer_to_client, peer_to_client_per)
-
-  def process(self):
-    log_files = self.get_file_list()
-    if (log_files):
-      for log_file in log_files:
-        self.process_log_file(log_file)
-      self.print_total_stats()
-      if (len(self._error_lines) > 0):
+        self._total_stats["cpp"] = (self._total_stats["cp"] /
+                                    self._total_stats["mc"]) * 100
+        self._total_stats["pcp"] = (self._total_stats["pc"] /
+                                    self._total_stats["mc"]) * 100
         print ""
-        print ""
-        print "*****************************************"
-        print "**************   Errors   ***************"
-        print "*****************************************"
-        for line in self._error_lines:
-          print line
-    else:
-      print "No log files found"
+        print "========================================="
+        print "============   Total Stats   ============"
+        print "========================================="
+        print " Allocations & Binds failures (%(tc)s tot)" % self._total_stats
+        print "  Allocation errors: %(ae)s (%(aep)0.2f %%)" % self._total_stats
+        print "  Allocation NULLs:  %(an)s (%(anp)0.2f %%)" % self._total_stats
+        print "  Bind errors:       %(be)s (%(bep)0.2f %%)" % self._total_stats
+        print "  Bind NULLs:        %(bn)s (%(bnp)0.2f %%)" % self._total_stats
+        print " Data transfer failures (%(mc)s each way)" % self._total_stats
+        print "   Client -> Peer:   %(cp)s (%(cpp)0.2f %%)" % self._total_stats
+        print "   Peer -> Client:   %(pc)s (%(pcp)0.2f %%)" % self._total_stats
 
-# Gather our code in a main() function
-def main():
-  sp = StatsProcessor(".")
-  sp.process()
+    def process(self):
+        log_files = self.get_file_list()
+        if (log_files):
+            for log_file in log_files:
+                self.process_log_file(log_file)
+            self.print_total_stats()
+            if (len(self._error_lines) > 0):
+                print ""
+                print ""
+                print "*****************************************"
+                print "**************   Errors   ***************"
+                print "*****************************************"
+                for line in self._error_lines:
+                    print line
+        else:
+            print "No log files found"
+
+
+def main(log_dir=None):
+    if log_dir is None:
+        sp = StatsProcessor(".")
+    else:
+        sp = StatsProcessor(log_dir[0])
+    sp.process()
 
 if __name__ == '__main__':
-  main()
+    if len(sys.argv) > 1:
+        main(sys.argv[1:])
+    else:
+        main()
