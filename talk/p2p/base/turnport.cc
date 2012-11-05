@@ -39,6 +39,10 @@
 #include "talk/p2p/base/common.h"
 #include "talk/p2p/base/stun.h"
 
+//NFHACK do not let this get into the master branch
+#define NFHACK_SKIP_INCOMING_MI_CHECK
+#define NFHACK_FORCE_USE_CHANNEL
+
 namespace cricket {
 
 static const int PROTOCOL_UDP = 0x11;
@@ -289,12 +293,14 @@ void TurnPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
   } else {
     // This must be a response for one of our requests.
     // Check success responses, but not errors, for MESSAGE-INTEGRITY.
+#ifndef NFHACK_SKIP_INCOMING_MI_CHECK
     if (IsStunResponseType(msg_type) &&
         !StunMessage::ValidateMessageIntegrity(data, size, hash())) {
       LOG(LS_WARNING) << "Received TURN message with invalid "
                       << "message integrity, msg_type=" << msg_type;
       return;
     }
+#endif
     request_manager_.CheckResponse(data, size);
   }
 }
@@ -723,7 +729,10 @@ int TurnEntry::Send(const void* data, size_t size, bool payload) {
     VERIFY(msg.Write(&buf));
 
     // If we're sending real data, request a channel bind that we can use later.
-    if (payload) {
+#ifndef NFHACK_FORCE_USE_CHANNEL
+    if (payload)
+#endif
+    {
       port_->SendRequest(new TurnChannelBindRequest(
           port_, this, channel_id_, ext_addr_), 0);
     }
