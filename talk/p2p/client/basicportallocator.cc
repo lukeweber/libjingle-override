@@ -542,6 +542,8 @@ void BasicPortAllocatorSession::AddAllocatedPort(Port* port,
   port->set_generation(generation());
   if (allocator_->proxy().type != talk_base::PROXY_NONE)
     port->set_proxy(allocator_->user_agent(), allocator_->proxy());
+  port->set_send_retransmit_count_attribute((allocator_->flags() &
+      PORTALLOCATOR_ENABLE_STUN_RETRANSMIT_ATTRIBUTE) != 0);
 
   PortData data;
   data.port = port;
@@ -1090,24 +1092,6 @@ void AllocationSequence::CreateTurnPorts() {
     LOG(LS_ERROR) << "AllocationSequence: No TURN server configured, skipping.";
     return;
   }
-
-  /*std::string password(session_->password());
-  std::string username(session_->username());
-  BasicPortAllocator *allocator = session_->allocator();
-  if(allocator) {
-    std::string turnPassword(allocator->get_turn_password());
-    std::string turnUsername(allocator->get_turn_username());
-    if(!turnPassword.empty()) {
-      LOG(LS_WARNING) << "AllocationSequence: Overriding ice_pwd(" <<
-      password << ") with turn_password(" << turnPassword << ")";
-      password.assign(turnPassword);
-    }
-    if(!turnUsername.empty()) {
-      LOG(LS_WARNING) << "AllocationSequence: Overriding ice_user(" <<
-      username << ") with turn_username(" << turnUsername << ")";
-      username.assign(turnUsername);
-    }
-  }*/
 
   PortConfiguration::RelayList::const_iterator relay;
   for (relay = config_->relays.begin();
