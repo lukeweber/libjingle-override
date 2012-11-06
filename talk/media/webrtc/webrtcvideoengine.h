@@ -36,11 +36,7 @@
 #include "talk/media/base/videocommon.h"
 #include "talk/media/webrtc/webrtccommon.h"
 #include "talk/session/media/channel.h"
-#ifdef WEBRTC_RELATIVE_PATH
-#include "video_engine/include/vie_base.h"
-#else
-#include "third_party/webrtc/video_engine/include/vie_base.h"
-#endif  // WEBRTC_RELATIVE_PATH
+#include "webrtc/video_engine/include/vie_base.h"
 
 namespace webrtc {
 class VideoCaptureModule;
@@ -136,6 +132,8 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
 
   void IncrementFrameListeners();
   void DecrementFrameListeners();
+
+  VideoFormat GetStartCaptureFormat() const { return default_codec_format_; }
 
  protected:
   // When a video processor registers with the engine.
