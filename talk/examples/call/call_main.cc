@@ -443,7 +443,7 @@ int main(int argc, char **argv) {
 
   XmppPump pump;
   CallClient *client = new CallClient(pump.client(), caps_node, caps_ver, 
-    FLAG_stunserver, FLAG_relayserver);
+    FLAG_stunserver, FLAG_relayserver, FLAG_turnserver);
 
   if (FLAG_voiceinput || FLAG_voiceoutput ||
       FLAG_videoinput || FLAG_videooutput) {
