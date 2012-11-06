@@ -199,7 +199,6 @@ bool MessageQueue::Get(Message *pmsg, int cmsWait, bool process_io) {
       }
 
       // Check for posted events
-
       while (!msgq_.empty()) {
         *pmsg = msgq_.front();
         if (pmsg->ts_sensitive) {
@@ -215,7 +214,7 @@ bool MessageQueue::Get(Message *pmsg, int cmsWait, bool process_io) {
           delete pmsg->pdata;
           continue;
         } else if (MQID_QUIT == pmsg->message_id){
-          break;
+          return false;
         }
         return true;
       }
