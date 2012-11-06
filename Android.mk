@@ -124,7 +124,6 @@ LOCAL_SRC_FILES += \
 		talk/p2p/base/transportchannel.cc \
 		talk/p2p/base/transportchannelproxy.cc \
 		talk/p2p/base/transportdescriptionfactory.cc \
-		talk/p2p/base/udpport.cc \
 		talk/p2p/client/basicportallocator.cc \
 		talk/p2p/client/httpportallocator.cc \
 		talk/p2p/client/socketmonitor.cc \
@@ -182,6 +181,7 @@ LOCAL_C_INCLUDES := \
 	$(MY_THIRD_PARTY_PATH)/libsrtp/source/config \
 	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp/include \
 	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp/crypto/include \
+	$(MY_THIRD_PARTY_PATH) \
 	$(MY_THIRD_PARTY_PATH)/webrtc \
 	$(MY_THIRD_PARTY_PATH)/webrtc/modules/interface \
 	$(MY_THIRD_PARTY_PATH)/expat/files/lib

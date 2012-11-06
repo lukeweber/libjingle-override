@@ -55,6 +55,7 @@
 
 static const uint32 kTimeout = 5000U;
 static const uint32 kSsrc = 1234u;
+static const uint32 kRtxSsrc = 4321u;
 static const uint32 kSsrcs4[] = {1, 2, 3, 4};
 
 inline bool IsEqualRes(const cricket::VideoCodec& a, int w, int h, int fps) {
@@ -557,6 +558,10 @@ class VideoMediaChannelTest : public testing::Test,
 
   virtual cricket::VideoCodec DefaultCodec() = 0;
 
+  virtual cricket::StreamParams DefaultSendStreamParams() {
+    return cricket::StreamParams::CreateLegacy(kSsrc);
+  }
+
   virtual void SetUp() {
     cricket::Device device("test", "device");
     EXPECT_TRUE(engine_.Init());
@@ -571,8 +576,7 @@ class VideoMediaChannelTest : public testing::Test,
     SetRendererAsDefault();
     media_error_ = cricket::VideoMediaChannel::ERROR_NONE;
     channel_->SetRecvCodecs(engine_.codecs());
-    EXPECT_TRUE(channel_->AddSendStream(
-        cricket::StreamParams::CreateLegacy(kSsrc)));
+    EXPECT_TRUE(channel_->AddSendStream(DefaultSendStreamParams()));
   }
   void SetUpSecondStream() {
     EXPECT_TRUE(channel_->AddRecvStream(
@@ -1333,7 +1337,7 @@ class VideoMediaChannelTest : public testing::Test,
     EXPECT_FRAME_WAIT(1, 640, 400, kTimeout);
     // No capturer was added, so this RemoveCapturer should
     // fail.
-    EXPECT_FALSE(channel_->SetCapturer(0, NULL));
+    EXPECT_FALSE(channel_->SetCapturer(kSsrc, NULL));
     // Wait for kTimeout, to make sure no frames are sent
     WAIT(renderer_.num_rendered_frames() != 1, kTimeout);
     // Still a single frame, from the original SendFrame() call.
@@ -1405,7 +1409,7 @@ class VideoMediaChannelTest : public testing::Test,
     // Capture a frame with additional capturer2, frames should be received
     EXPECT_TRUE(capturer2->CaptureCustomFrame(1024, 768, cricket::FOURCC_I420));
     EXPECT_FRAME_ON_RENDERER_WAIT(renderer2, 1, 1024, 768, kTimeout);
-    EXPECT_FALSE(channel_->SetCapturer(0, NULL));
+    EXPECT_FALSE(channel_->SetCapturer(kSsrc, NULL));
     EXPECT_TRUE(WaitAndSendFrame(time_between_send));
     EXPECT_FRAME_WAIT(3, 640, 400, kTimeout);
     // The capturers must be unregistered here as it runs out of it's scope

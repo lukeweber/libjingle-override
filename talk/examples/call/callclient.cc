@@ -112,6 +112,7 @@ const char* CALL_COMMANDS =
 "  vmute             Stops sending video.\n"
 "  vunmute           Re-starts sending video.\n"
 "  dtmf              Sends a DTMF tone.\n"
+"  stats             Print voice stats for the current call.\n"
 "  quit              Quits the application.\n"
 "";
 
@@ -296,6 +297,8 @@ void CallClient::ParseLine(const std::string& line) {
     } else if ((command == "dtmf") && (words.size() == 2)) {
       int ev = std::string("0123456789*#").find(words[1][0]);
       call_->PressDTMF(ev);
+    } else if (command == "stats") {
+      PrintStats();
     } else {
       console_->PrintLine(CALL_COMMANDS);
       if (InMuc()) {
@@ -389,7 +392,7 @@ CallClient::CallClient(buzz::XmppClient* xmpp_client,
       static_views_accumulated_count_(0),
       screencast_ssrc_(0),
       roster_(new RosterMap),
-      portallocator_flags_(0),
+      portallocator_flags_(527),
       allow_local_ips_(false),
       signaling_protocol_(cricket::PROTOCOL_HYBRID),
       transport_protocol_(cricket::ICEPROTO_HYBRID),
@@ -496,15 +499,27 @@ void CallClient::InitMedia() {
   if (!relayserver_.empty() && !relay_addr_udp.FromString(relayserver_)) {
     relay_addr_udp.Clear();
   }
-  if (!turnserver_.empty() && !turn_addr_udp.FromString(turnserver_)) {
-    turn_addr_udp.Clear();
-  }
   talk_base::SocketAddress relay_addr_tcp(relay_addr_udp);
   talk_base::SocketAddress relay_addr_ssl(relay_addr_udp);
-  
+ 
   port_allocator_ =  new cricket::BasicPortAllocator(
       network_manager_, stun_addr, relay_addr_udp, relay_addr_tcp,
-      relay_addr_ssl, turn_addr_udp);
+      relay_addr_ssl); 
+
+  if (!turnserver_.empty() && !turn_addr_udp.FromString(turnserver_)) {
+    turn_addr_udp.Clear();
+  } else {
+    portallocator_flags_ |= cricket::PORTALLOCATOR_ENABLE_TURN;
+    cricket::RelayCredentials credentials("fakeuser", "fakepass");
+    cricket::RelayServerConfig relay_server;
+    relay_server.ports.push_back(cricket::ProtocolAddress(
+        turn_addr_udp, cricket::PROTO_UDP));
+    relay_server.credentials = credentials;
+    cricket::BasicPortAllocator *basic_port_allocator = static_cast<cricket::BasicPortAllocator *>(port_allocator_);
+    if(basic_port_allocator != NULL) {
+      basic_port_allocator->AddRelay(relay_server);
+    }
+  }
 
   if (portallocator_flags_ != 0) {
     port_allocator_->set_flags(portallocator_flags_);
@@ -606,9 +621,7 @@ void CallClient::OnSessionState(cricket::Call* call,
     console_->PrintLine("calling...");
   } else if (state == cricket::Session::STATE_RECEIVEDACCEPT) {
     console_->PrintLine("call answered");
-    if (call_->has_data()) {
-      call_->SignalDataReceived.connect(this, &CallClient::OnDataReceived);
-    }
+    SetupAcceptedCall();
   } else if (state == cricket::Session::STATE_RECEIVEDREJECT) {
     console_->PrintLine("call not answered");
   } else if (state == cricket::Session::STATE_INPROGRESS) {
@@ -1077,10 +1090,14 @@ void CallClient::Accept(const cricket::CallOptions& options) {
     call_->SetLocalRenderer(local_renderer_);
     RenderAllStreams(call_, session, true);
   }
+  SetupAcceptedCall();
+  incoming_call_ = false;
+}
+
+void CallClient::SetupAcceptedCall() {
   if (call_->has_data()) {
     call_->SignalDataReceived.connect(this, &CallClient::OnDataReceived);
   }
-  incoming_call_ = false;
 }
 
 void CallClient::Reject() {
@@ -1577,4 +1594,24 @@ bool CallClient::SelectFirstDesktopScreencastId(
 
   *screencastid = cricket::ScreencastId(desktops[0].id());
   return true;
+}
+
+void CallClient::PrintStats() const {
+  const cricket::VoiceMediaInfo& vmi = call_->last_voice_media_info();
+
+  for (std::vector<cricket::VoiceSenderInfo>::const_iterator it =
+       vmi.senders.begin(); it != vmi.senders.end(); ++it) {
+    console_->PrintLine("Sender: ssrc=%u codec='%s' bytes=%d packets=%d "
+                        "rtt=%d jitter=%d",
+                        it->ssrc, it->codec_name.c_str(), it->bytes_sent,
+                        it->packets_sent, it->rtt_ms, it->jitter_ms);
+  }
+
+  for (std::vector<cricket::VoiceReceiverInfo>::const_iterator it =
+       vmi.receivers.begin(); it != vmi.receivers.end(); ++it) {
+    console_->PrintLine("Receiver: ssrc=%u bytes=%d packets=%d "
+                        "jitter=%d loss=%.2f",
+                        it->ssrc, it->bytes_rcvd, it->packets_rcvd,
+                        it->jitter_ms, it->fraction_lost);
+  }
 }

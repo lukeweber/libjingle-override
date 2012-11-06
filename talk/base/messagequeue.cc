@@ -199,7 +199,6 @@ bool MessageQueue::Get(Message *pmsg, int cmsWait, bool process_io) {
       }
 
       // Check for posted events
-
       while (!msgq_.empty()) {
         *pmsg = msgq_.front();
         if (pmsg->ts_sensitive) {

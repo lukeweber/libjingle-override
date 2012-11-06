@@ -44,15 +44,17 @@ namespace cricket {
 // Clients can override this class to control port allocation, including
 // what kinds of ports are allocated.
 
-const uint32 PORTALLOCATOR_DISABLE_UDP = 0x0001;
-const uint32 PORTALLOCATOR_DISABLE_STUN = 0x0002;
-const uint32 PORTALLOCATOR_DISABLE_RELAY = 0x0004;
-const uint32 PORTALLOCATOR_DISABLE_TCP = 0x0008;
-const uint32 PORTALLOCATOR_DISABLE_TURN = 0x0010;
-const uint32 PORTALLOCATOR_ENABLE_SHAKER = 0x0020;
-const uint32 PORTALLOCATOR_ENABLE_BUNDLE = 0x0040;
-const uint32 PORTALLOCATOR_ENABLE_IPV6 = 0x0080;
-const uint32 PORTALLOCATOR_ENABLE_SHARED_UFRAG = 0x100;
+const uint32 PORTALLOCATOR_DISABLE_UDP = 0x01;
+const uint32 PORTALLOCATOR_DISABLE_STUN = 0x02;
+const uint32 PORTALLOCATOR_DISABLE_RELAY = 0x04;
+const uint32 PORTALLOCATOR_DISABLE_TCP = 0x08;
+const uint32 PORTALLOCATOR_ENABLE_SHAKER = 0x10;
+const uint32 PORTALLOCATOR_ENABLE_BUNDLE = 0x20;
+const uint32 PORTALLOCATOR_ENABLE_IPV6 = 0x40;
+const uint32 PORTALLOCATOR_ENABLE_SHARED_UFRAG = 0x80;
+const uint32 PORTALLOCATOR_ENABLE_SHARED_SOCKET = 0x100;
+const uint32 PORTALLOCATOR_ENABLE_TURN = 0x200;
+const uint32 PORTALLOCATOR_ENABLE_STUN_RETRANSMIT_ATTRIBUTE = 0x400;
 
 const uint32 kDefaultPortAllocatorFlags = 0;
 
@@ -61,7 +63,8 @@ class PortAllocatorSessionMuxer;
 class PortAllocatorSession : public sigslot::has_slots<> {
  public:
   // Content name passed in mostly for logging and debugging.
-  PortAllocatorSession(const std::string content_name,
+  // TODO(mallinath) - Change username and password to ice_ufrag and ice_pwd.
+  PortAllocatorSession(const std::string& content_name,
                        int component,
                        const std::string& username,
                        const std::string& password,

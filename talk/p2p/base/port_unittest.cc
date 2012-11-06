@@ -43,7 +43,6 @@
 #include "talk/p2p/base/relayport.h"
 #include "talk/p2p/base/stunport.h"
 #include "talk/p2p/base/tcpport.h"
-#include "talk/p2p/base/udpport.h"
 #include "talk/p2p/base/teststunserver.h"
 #include "talk/p2p/base/testrelayserver.h"
 #include "talk/p2p/base/transport.h"
@@ -144,12 +143,12 @@ class TestPort : public Port {
 
   virtual void PrepareAddress() {
     talk_base::SocketAddress addr(ip(), min_port());
-    AddAddress(addr, addr, "udp", true);
+    AddAddress(addr, addr, "udp", Type(), type_preference(), true);
   }
 
   // Exposed for testing candidate building.
   void AddCandidateAddress(const talk_base::SocketAddress& addr) {
-    AddAddress(addr, addr, "udp", false);
+    AddAddress(addr, addr, "udp", Type(), type_preference(), false);
   }
 
   virtual Connection* CreateConnection(const Candidate& remote_candidate,
@@ -398,9 +397,9 @@ class PortTest : public testing::Test, public sigslot::has_slots<> {
   }
   StunPort* CreateStunPort(const SocketAddress& addr,
                            talk_base::PacketSocketFactory* factory) {
-    StunPort* port =  StunPort::Create(main_, factory, &network_,
-                                       addr.ipaddr(), 0, 0,
-                                       username_, password_, kStunAddr);
+    StunPort* port = StunPort::Create(main_, factory, &network_,
+                                      addr.ipaddr(), 0, 0,
+                                      username_, password_, kStunAddr);
     port->SetIceProtocolType(ice_protocol_);
     return port;
   }
@@ -1244,6 +1243,9 @@ TEST_F(PortTest, TestSendStunMessageAsIce) {
   EXPECT_TRUE(StunMessage::ValidateFingerprint(
       lport->last_stun_buf()->Data(), lport->last_stun_buf()->Length()));
 
+  // Request should not include ping count.
+  ASSERT_TRUE(msg->GetUInt32(STUN_ATTR_RETRANSMIT_COUNT) == NULL);
+
   // Save a copy of the BINDING-REQUEST for use below.
   talk_base::scoped_ptr<IceMessage> request(CopyStunMessage(msg));
 
@@ -1252,12 +1254,6 @@ TEST_F(PortTest, TestSendStunMessageAsIce) {
   msg = rport->last_stun_msg();
   ASSERT_TRUE(msg != NULL);
   EXPECT_EQ(STUN_BINDING_RESPONSE, msg->type());
-
-  // Response should mirror outstanding ping count of zero.
-  const StunUInt32Attribute* retransmit_attr =
-      msg->GetUInt32(STUN_ATTR_RETRANSMIT_COUNT);
-  ASSERT_TRUE(retransmit_attr != NULL);
-  EXPECT_EQ(0U, retransmit_attr->value());
 
   EXPECT_FALSE(msg->IsLegacy());
   const StunAddressAttribute* addr_attr = msg->GetAddress(
@@ -1279,6 +1275,8 @@ TEST_F(PortTest, TestSendStunMessageAsIce) {
   EXPECT_TRUE(msg->GetByteString(STUN_ATTR_ICE_CONTROLLED) == NULL);
   EXPECT_TRUE(msg->GetByteString(STUN_ATTR_USE_CANDIDATE) == NULL);
 
+  // Response should not include ping count.
+  ASSERT_TRUE(msg->GetUInt32(STUN_ATTR_RETRANSMIT_COUNT) == NULL);
 
   // Respond with a BINDING-ERROR-RESPONSE. This wouldn't happen in real life,
   // but we can do it here.
@@ -1306,8 +1304,11 @@ TEST_F(PortTest, TestSendStunMessageAsIce) {
   EXPECT_TRUE(msg->GetByteString(STUN_ATTR_PRIORITY) == NULL);
 
   // Testing STUN binding requests from rport --> lport, having ICE_CONTROLLED
-  // attribute.
+  // and (incremented) RETRANSMIT_COUNT attributes.
   rport->Reset();
+  rport->set_send_retransmit_count_attribute(true);
+  rconn->Ping(0);
+  rconn->Ping(0);
   rconn->Ping(0);
   ASSERT_TRUE_WAIT(rport->last_stun_msg() != NULL, 1000);
   msg = rport->last_stun_msg();
@@ -1317,6 +1318,22 @@ TEST_F(PortTest, TestSendStunMessageAsIce) {
   ASSERT_TRUE(ice_controlled_attr != NULL);
   EXPECT_EQ(rport->Tiebreaker(), ice_controlled_attr->value());
   EXPECT_TRUE(msg->GetByteString(STUN_ATTR_USE_CANDIDATE) == NULL);
+
+  // Request should include ping count.
+  const StunUInt32Attribute* retransmit_attr =
+      msg->GetUInt32(STUN_ATTR_RETRANSMIT_COUNT);
+  ASSERT_TRUE(retransmit_attr != NULL);
+  EXPECT_EQ(2U, retransmit_attr->value());
+
+  // Respond with a BINDING-RESPONSE.
+  request.reset(CopyStunMessage(msg));
+  lport->SendBindingResponse(request.get(), rport->Candidates()[0].address());
+  msg = lport->last_stun_msg();
+
+  // Response should include same ping count.
+  retransmit_attr = msg->GetUInt32(STUN_ATTR_RETRANSMIT_COUNT);
+  ASSERT_TRUE(retransmit_attr != NULL);
+  EXPECT_EQ(2U, retransmit_attr->value());
 }
 
 TEST_F(PortTest, TestUseCandidateAttribute) {
@@ -1984,6 +2001,30 @@ TEST_F(PortTest, TestWritableState) {
 
   ch1.Stop();
   ch2.Stop();
+}
+
+TEST_F(PortTest, TestTimeoutForNeverWritable) {
+  UDPPort* port1 = CreateUdpPort(kLocalAddr1);
+  UDPPort* port2 = CreateUdpPort(kLocalAddr2);
+
+  // Set up channels.
+  TestChannel ch1(port1, port2);
+  TestChannel ch2(port2, port1);
+
+  // Acquire addresses.
+  ch1.Start();
+  ch2.Start();
+
+  ch1.CreateConnection();
+  ASSERT_TRUE(ch1.conn() != NULL);
+  EXPECT_EQ(Connection::STATE_WRITE_INIT, ch1.conn()->write_state());
+
+  // Attempt to go directly to write timeout.
+  for (uint32 i = 1; i <= CONNECTION_WRITE_CONNECT_FAILURES; ++i) {
+    ch1.Ping(i);
+  }
+  ch1.conn()->UpdateState(CONNECTION_WRITE_TIMEOUT + 500u);
+  EXPECT_EQ(Connection::STATE_WRITE_TIMEOUT, ch1.conn()->write_state());
 }
 
 // TODO(ronghuawu): Add unit tests to verify the RelayEntry::OnConnect.

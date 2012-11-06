@@ -258,6 +258,8 @@ bool ParseIceServers(const webrtc::JsepInterface::IceServers& configuration,
         address = turn_tokens[1];
         turn_config->push_back(TurnConfiguration(address, port,
                                                  username, server.password));
+        // STUN functionality is part of TURN.
+        stun_config->push_back(StunConfiguration(address, port));
         break;
       }
       case INVALID:
@@ -351,7 +353,9 @@ bool PeerConnection::DoInitialize(
   // To handle both internal and externally created port allocator, we will
   // enable BUNDLE here.
   port_allocator_->set_flags(cricket::PORTALLOCATOR_ENABLE_BUNDLE |
-                             cricket::PORTALLOCATOR_ENABLE_SHARED_UFRAG);
+                             cricket::PORTALLOCATOR_ENABLE_SHARED_UFRAG |
+                             cricket::PORTALLOCATOR_ENABLE_SHARED_SOCKET |
+                             cricket::PORTALLOCATOR_ENABLE_TURN);
 
   mediastream_signaling_.reset(new MediaStreamSignaling(
       factory_->signaling_thread(), this));
@@ -456,9 +460,8 @@ void PeerConnection::CreateOffer(CreateSessionDescriptionObserver* observer,
   }
 
   CreateSessionDescriptionMsg* msg = new CreateSessionDescriptionMsg(observer);
-  // TODO(perkj): Take |constraints| into consideration.
   msg->description.reset(
-      session_->CreateOffer(MediaHints(true, true)));
+      session_->CreateOffer(constraints));
 
   if (!msg->description) {
     msg->error = "CreateOffer failed.";
@@ -500,8 +503,7 @@ void PeerConnection::CreateAnswer(
     return;
   }
 
-  // TODO(perkj): Take |constraints| into consideration.
-  msg->description.reset(CreateAnswer(MediaHints(true, true), offer));
+  msg->description.reset(session_->CreateAnswer(constraints, offer));
   if (!msg->description) {
     msg->error = "CreateAnswer failed.";
     signaling_thread()->Post(this, MSG_CREATE_SESSIONDESCRIPTION_FAILED, msg);
