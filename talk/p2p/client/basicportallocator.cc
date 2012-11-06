@@ -1029,7 +1029,8 @@ void AllocationSequence::CreateStunPorts() {
 }
 
 void AllocationSequence::CreateRelayPorts() {
-  if (IsFlagSet(PORTALLOCATOR_DISABLE_RELAY)) {
+  if (IsFlagSet(PORTALLOCATOR_DISABLE_RELAY) ||
+      IsFlagSet(PORTALLOCATOR_ENABLE_TURN)) {
      LOG(LS_VERBOSE) << "AllocationSequence: Relay ports disabled, skipping.";
      return;
   }
