@@ -19,6 +19,7 @@
       'NO_SOUND_SYSTEM',
       'SRTP_RELATIVE_PATH',
       'WEBRTC_RELATIVE_PATH',
+      'USE_WEBRTC_DEV_BRANCH',
       '_USE_32BIT_TIME_T',
     ],
     'configurations': {
@@ -465,8 +466,6 @@
         'talk/p2p/base/transportchannelproxy.h',
         'talk/p2p/base/transportdescriptionfactory.cc',
         'talk/p2p/base/transportdescriptionfactory.h',
-        'talk/p2p/base/udpport.cc',
-        'talk/p2p/base/udpport.h',
         'talk/p2p/client/basicportallocator.cc',
         'talk/p2p/client/basicportallocator.h',
         'talk/p2p/client/httpportallocator.cc',
@@ -629,6 +628,7 @@
         'HAVE_WEBRTC_VOICE',
       ],
       'include_dirs': [
+        '<(DEPTH)/third_party',
         '<(DEPTH)/third_party/webrtc',
       ],
       'sources': [
