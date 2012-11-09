@@ -39,9 +39,6 @@
 #include "talk/p2p/base/common.h"
 #include "talk/p2p/base/stun.h"
 
-//NFHACK do not let this get into the master branch
-#define NFHACK_SKIP_INCOMING_MI_CHECK
-#define NFHACK_FORCE_USE_CHANNEL
 
 namespace cricket {
 
@@ -67,6 +64,7 @@ class TurnAllocateRequest : public StunRequest {
   virtual void OnResponse(StunMessage* response);
   virtual void OnErrorResponse(StunMessage* response);
   virtual void OnTimeout();
+  virtual std::string GetClassname() const { return "TurnAllocateRequest"; }
 
  private:
   // Handles authentication challenge from the server.
@@ -83,6 +81,7 @@ class TurnRefreshRequest : public StunRequest {
   virtual void OnResponse(StunMessage* response);
   virtual void OnErrorResponse(StunMessage* response);
   virtual void OnTimeout();
+  virtual std::string GetClassname() const { return "TurnRefreshRequest"; }
 
  private:
   TurnPort* port_;
@@ -96,6 +95,7 @@ class TurnCreatePermissionRequest : public StunRequest {
   virtual void OnResponse(StunMessage* response);
   virtual void OnErrorResponse(StunMessage* response);
   virtual void OnTimeout();
+  virtual std::string GetClassname() const { return "TurnCreatePermissionRequest"; }
 
  private:
   TurnPort* port_;
@@ -111,6 +111,7 @@ class TurnChannelBindRequest : public StunRequest {
   virtual void OnResponse(StunMessage* response);
   virtual void OnErrorResponse(StunMessage* response);
   virtual void OnTimeout();
+  virtual std::string GetClassname() const { return "TurnChannelBindRequest"; }
 
  private:
   TurnPort* port_;
@@ -140,6 +141,7 @@ class TurnEntry : public sigslot::has_slots<> {
   void OnCreatePermissionError();
   void OnChannelBindSuccess();
   void OnChannelBindError();
+  virtual std::string GetClassname() const { return "TurnEntry"; }
 
  private:
   TurnPort* port_;
@@ -293,14 +295,13 @@ void TurnPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
   } else {
     // This must be a response for one of our requests.
     // Check success responses, but not errors, for MESSAGE-INTEGRITY.
-#ifndef NFHACK_SKIP_INCOMING_MI_CHECK
     if (IsStunResponseType(msg_type) &&
         !StunMessage::ValidateMessageIntegrity(data, size, hash())) {
       LOG(LS_WARNING) << "Received TURN message with invalid "
-                      << "message integrity, msg_type=" << msg_type;
+                      << "message integrity, msg_type=" << msg_type
+                      << "hash=" << hash();
       return;
     }
-#endif
     request_manager_.CheckResponse(data, size);
   }
 }
@@ -729,9 +730,7 @@ int TurnEntry::Send(const void* data, size_t size, bool payload) {
     VERIFY(msg.Write(&buf));
 
     // If we're sending real data, request a channel bind that we can use later.
-#ifndef NFHACK_FORCE_USE_CHANNEL
     if (payload)
-#endif
     {
       port_->SendRequest(new TurnChannelBindRequest(
           port_, this, channel_id_, ext_addr_), 0);
@@ -747,6 +746,8 @@ int TurnEntry::Send(const void* data, size_t size, bool payload) {
 
 void TurnEntry::OnCreatePermissionSuccess() {
   LOG(LS_INFO) << "Create perm for " << ext_addr_.ToString() << " succeeded";
+  //NFHACK this seems logical rather than going the send receive route first
+  port_->SendRequest(new TurnChannelBindRequest(port_, this, channel_id_, ext_addr_), 0);
 }
 
 void TurnEntry::OnCreatePermissionError() {

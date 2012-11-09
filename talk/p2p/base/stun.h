@@ -151,6 +151,7 @@ class StunMessage {
  public:
   StunMessage();
   virtual ~StunMessage();
+  virtual std::string GetClassname() const { return "StunMessage"; }
 
   int type() const { return type_; }
   size_t length() const { return length_; }
@@ -231,6 +232,7 @@ class StunAttribute {
  public:
   virtual ~StunAttribute() {
   }
+  virtual std::string GetClassname() const { return "StunAttribute"; }
 
   int type() const { return type_; }
   size_t length() const { return length_; }
@@ -312,6 +314,7 @@ class StunAddressAttribute : public StunAttribute {
 
   virtual bool Read(talk_base::ByteBuffer* buf);
   virtual bool Write(talk_base::ByteBuffer* buf) const;
+  virtual std::string GetClassname() const { return "StunAddressAttribute"; }
 
  private:
   void EnsureAddressLength() {
@@ -350,6 +353,7 @@ class StunXorAddressAttribute : public StunAddressAttribute {
   }
   virtual bool Read(talk_base::ByteBuffer* buf);
   virtual bool Write(talk_base::ByteBuffer* buf) const;
+  virtual std::string GetClassname() const { return "StunXorAddressAttribute"; }
 
  private:
   talk_base::IPAddress GetXoredIP() const;
@@ -375,6 +379,7 @@ class StunUInt32Attribute : public StunAttribute {
 
   virtual bool Read(talk_base::ByteBuffer* buf);
   virtual bool Write(talk_base::ByteBuffer* buf) const;
+  virtual std::string GetClassname() const { return "StunInt32Attribute"; }
 
  private:
   uint32 bits_;
@@ -395,6 +400,7 @@ class StunUInt64Attribute : public StunAttribute {
 
   virtual bool Read(talk_base::ByteBuffer* buf);
   virtual bool Write(talk_base::ByteBuffer* buf) const;
+  virtual std::string GetClassname() const { return "StunInt64Attribute"; }
 
  private:
   uint64 bits_;
@@ -408,6 +414,7 @@ class StunByteStringAttribute : public StunAttribute {
   StunByteStringAttribute(uint16 type, const void* bytes, size_t length);
   StunByteStringAttribute(uint16 type, uint16 length);
   ~StunByteStringAttribute();
+  virtual std::string GetClassname() const { return "StunByteStringAttribute"; }
 
   virtual StunAttributeValueType value_type() const {
     return STUN_VALUE_BYTE_STRING;
@@ -438,6 +445,7 @@ class StunErrorCodeAttribute : public StunAttribute {
   StunErrorCodeAttribute(uint16 type, int code, const std::string& reason);
   StunErrorCodeAttribute(uint16 type, uint16 length);
   ~StunErrorCodeAttribute();
+  virtual std::string GetClassname() const { return "StunErrorCodeAttribute"; }
 
   virtual StunAttributeValueType value_type() const {
     return STUN_VALUE_ERROR_CODE;
@@ -469,6 +477,7 @@ class StunUInt16ListAttribute : public StunAttribute {
  public:
   StunUInt16ListAttribute(uint16 type, uint16 length);
   ~StunUInt16ListAttribute();
+  virtual std::string GetClassname() const { return "StunUInt16ListAttribute"; }
 
   virtual StunAttributeValueType value_type() const {
     return STUN_VALUE_UINT16_LIST;
@@ -533,6 +542,8 @@ enum RelayAttributeType {
 
 // A "GTURN" STUN message.
 class RelayMessage : public StunMessage {
+ public:
+  virtual std::string GetClassname() const { return "RelayMessage"; }
  protected:
   virtual StunAttributeValueType GetAttributeValueType(int type) const {
     switch (type) {
@@ -575,6 +586,8 @@ enum TurnAttributeType {
 };
 
 class TurnMessage : public StunMessage {
+ public:
+  virtual std::string GetClassname() const { return "TurnMessage"; }
  protected:
   virtual StunAttributeValueType GetAttributeValueType(int type) const {
     switch (type) {
@@ -603,6 +616,8 @@ enum IceAttributeType {
 
 // A RFC 5245 ICE STUN message.
 class IceMessage : public StunMessage {
+ public:
+  virtual std::string GetClassname() const { return "IceMessage"; }
  protected:
   virtual StunAttributeValueType GetAttributeValueType(int type) const {
     switch (type) {
