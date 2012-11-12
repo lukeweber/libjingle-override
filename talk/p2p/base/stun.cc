@@ -926,19 +926,16 @@ bool StunUInt16ListAttribute::Write(ByteBuffer* buf) const {
 }
 
 int GetStunResponseType(int request_type) {
-  return (request_type & 0x110) ? -1 : request_type | 0x100;
+  return (request_type & TURN_CLASS_MASK) ? -1 : request_type | TURN_CLASS_SUCCESS_RESPONSE;
 }
-
 int GetStunErrorResponseType(int request_type) {
-  return (request_type & 0x110) ? -1 : request_type | 0x110;
+  return (request_type & TURN_CLASS_MASK) ? -1 : request_type | TURN_CLASS_ERROR_RESPONSE;
 }
-
 bool IsStunResponseType(int response_type) {
-  return ((response_type & 0x110) == 0x100);
+  return ((response_type & TURN_CLASS_MASK) == TURN_CLASS_SUCCESS_RESPONSE);
 }
-
 bool IsStunErrorResponseType(int response_type) {
-  return ((response_type & 0x110) == 0x110);
+  return ((response_type & TURN_CLASS_MASK) == TURN_CLASS_ERROR_RESPONSE);
 }
 
 }  // namespace cricket

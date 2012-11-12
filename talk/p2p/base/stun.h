@@ -560,13 +560,27 @@ class RelayMessage : public StunMessage {
   virtual StunMessage* CreateNew() const { return new RelayMessage(); }
 };
 
+enum TurnClassType {
+  // THESE ARE ENCODED AS DESCRIBED IN
+  // http://tools.ietf.org/html/rfc5389#section-6
+  //  2  3  4 5 6 7 8 9 0 1 2 3 4 5
+  // +--+--+-+-+-+-+-+-+-+-+-+-+-+-+
+  // |M |M |M|M|M|C|M|M|M|C|M|M|M|M|
+  // |11|10|9|8|7|1|6|5|4|0|3|2|1|0|
+  // +--+--+-+-+-+-+-+-+-+-+-+-+-+-+
+  TURN_CLASS_REQUEST = 0x00,
+  TURN_CLASS_INDICATION = 0x10,
+  TURN_CLASS_SUCCESS_RESPONSE = 0x100,
+  TURN_CLASS_ERROR_RESPONSE = 0x110,
+  TURN_CLASS_MASK = 0x110,
+};
 // Defined in TURN RFC 5766.
 enum TurnMessageType {
-  TURN_REFRESH_REQUEST              = 0x0004,
-  TURN_SEND_INDICATION              = 0x0006,
-  TURN_DATA_INDICATION              = 0x0007,
-  TURN_CREATE_PERMISSION_REQUEST    = 0x0008,
-  TURN_CHANNEL_BIND_REQUEST         = 0x0009
+  TURN_REFRESH_REQUEST              = TURN_CLASS_REQUEST | 0x0004,
+  TURN_SEND_INDICATION              = TURN_CLASS_INDICATION | 0x0006,
+  TURN_DATA_INDICATION              = TURN_CLASS_INDICATION | 0x0007,
+  TURN_CREATE_PERMISSION_REQUEST    = TURN_CLASS_REQUEST | 0x0008,
+  TURN_CHANNEL_BIND_REQUEST         = TURN_CLASS_REQUEST | 0x0009,
 };
 
 enum TurnAttributeType {
