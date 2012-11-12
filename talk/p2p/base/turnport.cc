@@ -746,8 +746,6 @@ int TurnEntry::Send(const void* data, size_t size, bool payload) {
 
 void TurnEntry::OnCreatePermissionSuccess() {
   LOG(LS_INFO) << "Create perm for " << ext_addr_.ToString() << " succeeded";
-  //NFHACK this seems logical rather than going the send receive route first
-  port_->SendRequest(new TurnChannelBindRequest(port_, this, channel_id_, ext_addr_), 0);
 }
 
 void TurnEntry::OnCreatePermissionError() {
