@@ -1065,6 +1065,7 @@ void AllocationSequence::CreateTurnPorts() {
 
     const talk_base::SocketAddress turn_server_addr =
         relay->ports.front().address;
+    const RelayCredentials credentials("fakeuser", "fakepass");
     TurnPort* port = TurnPort::Create(session_->network_thread(),
                                       session_->socket_factory(),
                                       network_, ip_,
@@ -1073,7 +1074,7 @@ void AllocationSequence::CreateTurnPorts() {
                                       session_->username(),
                                       session_->password(),
                                       turn_server_addr,
-                                      relay->credentials);
+                                      credentials);
     if (port) {
       // Increment expected candidate count.
       ++expected_candidates_;
