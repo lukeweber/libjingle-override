@@ -275,14 +275,15 @@ void MessageQueue::Post(MessageHandler *phandler, uint32 id,
 
 void MessageQueue::DoDelayPost(int cmsDelay, uint32 tstamp,
     MessageHandler *phandler, uint32 id, MessageData* pdata) {
+  // Keep thread safe
+  CritScope cs(&crit_);
   if (fStop_)
     return;
+  if (id == MQID_QUIT)
+    fStop_ = true;
 
-  // Keep thread safe
   // Add to the priority queue. Gets sorted soonest first.
   // Signal for the multiplexer to return.
-
-  CritScope cs(&crit_);
   EnsureActive();
   Message msg;
   msg.phandler = phandler;
