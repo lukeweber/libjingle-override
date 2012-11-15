@@ -177,25 +177,6 @@ TurnPort::~TurnPort() {
     DestroyEntry(entries_.front()->address());
   }
 }
-/*TurnPort* TurnPort::Create(talk_base::Thread* thread,
-                        talk_base::PacketSocketFactory* factory,
-                        talk_base::Network* network,
-                        const talk_base::IPAddress& ip,
-                        int min_port, int max_port,
-                        const std::string& username,  // ice username.
-                        const std::string& password,  // ice password.
-                        const talk_base::SocketAddress& server_address,
-                        const RelayCredentials& credentials) {
-  TurnPort* port = new TurnPort(thread, factory, network,
-                                ip, min_port, max_port,
-                                username, password,
-                                server_address, credentials);
-  if (!port->Init()) {
-    delete port;
-    port = NULL;
-  }
-  return port;return NULL;
-}*/
 
 bool TurnPort::Init() {
   socket_.reset(socket_factory()->CreateUdpSocket(
