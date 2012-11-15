@@ -49,7 +49,6 @@
 #include "talk/media/base/voiceprocessor.h"
 #include "talk/media/webrtc/webrtcvoe.h"
 
-
 #ifdef WIN32
 #include <objbase.h>  // NOLINT
 #endif
@@ -116,9 +115,9 @@ const WebRtcVoiceEngine::CodecPref WebRtcVoiceEngine::kCodecPrefs[] = {
   // { "CELT",   32000,  2, 110 },
   // { "G722",   16000,  1, 9 },
   { "ILBC",   8000,   1, 102 },
-  // { "PCMU",   8000,   1, 0 },
-  // { "PCMA",   8000,   1, 8 },
-  // { "CN",     48000,  1, 107 },
+  //{ "PCMU",   8000,   1, 0 },
+  //{ "PCMA",   8000,   1, 8 },
+  //{ "CN",     48000,  1, 107 },
   { "CN",     32000,  1, 106 },
   { "CN",     16000,  1, 105 },
   { "CN",     8000,   1, 13 },
@@ -563,13 +562,13 @@ bool WebRtcVoiceEngine::ApplyOptions(const AudioOptions& options_in) {
     }
   }
 
-    bool auto_gain_control;
-    if (options.auto_gain_control.Get(&auto_gain_control)) {
-      if (voep->SetAgcStatus(auto_gain_control, options.agc_mode) == -1) {
-        LOG_RTCERR2(SetAgcStatus, auto_gain_control, options.agc_mode);
-        return false;
-      }
+  bool auto_gain_control;
+  if (options.auto_gain_control.Get(&auto_gain_control)) {
+    if (voep->SetAgcStatus(auto_gain_control, options.agc_mode) == -1) {
+      LOG_RTCERR2(SetAgcStatus, auto_gain_control, options.agc_mode);
+      return false;
     }
+  }
 
   bool noise_suppression;
   if (options.noise_suppression.Get(&noise_suppression)) {

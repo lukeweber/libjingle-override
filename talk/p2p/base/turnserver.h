@@ -1,258 +1,150 @@
 /*
  * libjingle
- * Copyright 2004--2005, Google Inc.
+ * Copyright 2012, Google Inc.
  *
- * Redistribution and use in source and binary forms, with or without 
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
- *  1. Redistributions of source code must retain the above copyright notice, 
+ *  1. Redistributions of source code must retain the above copyright notice,
  *     this list of conditions and the following disclaimer.
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  3. The name of the author may not be used to endorse or promote products 
+ *  3. The name of the author may not be used to endorse or promote products
  *     derived from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
- * EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
+ * EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
  * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
  * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR 
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_P2P_BASE_RELAYSERVER_H_
-#define TALK_P2P_BASE_RELAYSERVER_H_
+#ifndef TALK_P2P_BASE_TURNSERVER_H_
+#define TALK_P2P_BASE_TURNSERVER_H_
 
-#include <string>
-#include <vector>
+#include <list>
 #include <map>
+#include <set>
+#include <string>
 
-#include "talk/base/asyncudpsocket.h"
-#include "talk/base/socketaddresspair.h"
-#include "talk/base/thread.h"
-#include "talk/base/timeutils.h"
-#include "talk/p2p/base/port.h"
-#include "talk/p2p/base/stun.h"
+#include "talk/base/messagequeue.h"
+#include "talk/base/sigslot.h"
+#include "talk/base/socketaddress.h"
+
+namespace talk_base {
+class AsyncPacketSocket;
+class ByteBuffer;
+class PacketSocketFactory;
+class Thread;
+}
 
 namespace cricket {
 
-class TurnServerBinding;
-class TurnServerConnection;
+class StunMessage;
+class TurnMessage;
 
-// Turns traffic between connections to the server that are "bound" together.
-// All connections created with the same username/password are bound together.
-class TurnServer : public talk_base::MessageHandler,
-                    public sigslot::has_slots<> {
+// The default server port for TURN, as specified in RFC5766.
+const int TURN_SERVER_PORT = 3478;
+
+// The core TURN server class. Give it a socket to listen on via
+// AddInternalServerSocket, and a factory to create external sockets via
+// SetExternalSocketFactory, and it's ready to go.
+// Not yet wired up: the callback to request the password for a user, and
+// TCP support.
+class TurnServer : public sigslot::has_slots<> {
  public:
-  // Creates a server, which will use this thread to post messages to itself.
   explicit TurnServer(talk_base::Thread* thread);
   ~TurnServer();
-  // These need to be static methods or it will confuse them with the global methods in relayserver.cc
-  static void Send(talk_base::AsyncPacketSocket* socket, const char* bytes, size_t size,
-          const talk_base::SocketAddress& addr);
-  static void SendStun(const StunMessage& msg,
-              talk_base::AsyncPacketSocket* socket,
-              const talk_base::SocketAddress& addr);
-  static void SendStunError(const StunMessage& msg, talk_base::AsyncPacketSocket* socket,
-                   const talk_base::SocketAddress& remote_addr, int error_code,
-                   const char* error_desc, const std::string& magic_cookie);
 
-  talk_base::Thread* thread() { return thread_; }
+  // Gets/sets the realm value to use for the server.
+  const std::string& realm() const { return realm_; }
+  void set_realm(const std::string& realm) { realm_ = realm; }
 
-  // Indicates whether we will print updates of the number of bindings.
-  bool log_bindings() const { return log_bindings_; }
-  void set_log_bindings(bool log_bindings) { log_bindings_ = log_bindings; }
+  // Gets/sets the value for the SOFTWARE attribute for TURN messages.
+  const std::string& software() const { return software_; }
+  void set_software(const std::string& software) { software_ = software; }
 
-  // Updates the set of sockets that the server uses to talk to "internal"
-  // clients.  These are clients that do the "port allocations".
-  void AddInternalSocket(talk_base::AsyncPacketSocket* socket);
-  void RemoveInternalSocket(talk_base::AsyncPacketSocket* socket);
-
-  // Updates the set of sockets that the server uses to talk to "external"
-  // clients.  These are the clients that do not do allocations.  They do not
-  // know that these addresses represent a turn server.
-  void AddExternalSocket(talk_base::AsyncPacketSocket* socket);
-  void RemoveExternalSocket(talk_base::AsyncPacketSocket* socket);
-
-  // Starts listening for connections on this sockets. When someone
-  // tries to connect, the connection will be accepted and a new
-  // internal socket will be added.
-  void AddInternalServerSocket(talk_base::AsyncSocket* socket,
-                               cricket::ProtocolType proto);
-
-  // Removes this server socket from the list.
-  void RemoveInternalServerSocket(talk_base::AsyncSocket* socket);
-
-  // Methods for testing and debuging.
-  int GetConnectionCount() const;
-  talk_base::SocketAddressPair GetConnection(int connection) const;
-  bool HasConnection(const talk_base::SocketAddress& address) const;
+  // Starts listening for packets from internal clients.
+  void AddInternalServerSocket(talk_base::AsyncPacketSocket* socket);
+  // Specifies the factory to use for creating external sockets.
+  void SetExternalSocketFactory(talk_base::PacketSocketFactory* factory,
+                                const talk_base::SocketAddress& address);
 
  private:
-  typedef std::vector<talk_base::AsyncPacketSocket*> SocketList;
-  typedef std::map<talk_base::AsyncSocket*,
-                   cricket::ProtocolType> ServerSocketMap;
-  typedef std::map<std::string, TurnServerBinding*> BindingMap;
-  typedef std::map<talk_base::SocketAddressPair,
-                   TurnServerConnection*> ConnectionMap;
+  // The protocol used by the client to connect to the server.
+  enum ProtocolType {
+    TURNPROTO_UNKNOWN,
+    TURNPROTO_UDP,
+    TURNPROTO_TCP,
+    TURNPROTO_SSLTCP
+  };
+  // Encapsulates the client's connection to the server.
+  class Connection {
+   public:
+    Connection() : proto_(TURNPROTO_UNKNOWN) {}
+    Connection(const talk_base::SocketAddress& src,
+               const talk_base::SocketAddress& dst, ProtocolType proto);
+    const talk_base::SocketAddress& src() const { return src_; }
+    const talk_base::SocketAddress& dst() const { return dst_; }
+    bool operator==(const Connection& t) const;
+    bool operator<(const Connection& t) const;
+    std::string ToString() const;
+
+   private:
+    talk_base::SocketAddress src_;
+    talk_base::SocketAddress dst_;
+    ProtocolType proto_;
+  };
+  class Allocation;
+  class Permission;
+  class Channel;
+  typedef std::map<Connection, Allocation*> AllocationMap;
+
+  void OnInternalPacket(talk_base::AsyncPacketSocket* socket, const char* data,
+                        size_t size, const talk_base::SocketAddress& address);
+  void HandleStunMessage(const Connection& conn, const char* data, size_t size);
+  void HandleBindingRequest(const Connection& conn, const StunMessage* msg);
+  void HandleAllocateRequest(const Connection& conn, const TurnMessage* msg,
+                             const std::string& key);
+
+  bool GetKey(const StunMessage* msg, std::string* key);
+  bool CheckAuthorization(const Connection& conn, const StunMessage* msg,
+                          const char* data, size_t size,
+                          const std::string& key);
+  std::string GenerateNonce() const;
+  bool ValidateNonce(const std::string& nonce) const;
+
+  Allocation* FindAllocation(const Connection& conn);
+  Allocation* CreateAllocation(const Connection& conn, int proto,
+                               const std::string& key);
+
+  void SendErrorResponse(const Connection& conn, const StunMessage* req,
+                         int code, const std::string& reason);
+  void SendErrorResponseWithRealmAndNonce(const Connection& conn,
+                                          const StunMessage* req, int code,
+                                          const std::string& reason);
+  void SendStun(const Connection& conn, StunMessage* msg);
+  void Send(const Connection& conn, const talk_base::ByteBuffer& buf);
+
+  void OnAllocationDestroyed(Allocation* allocation);
 
   talk_base::Thread* thread_;
-  bool log_bindings_;
-  SocketList internal_sockets_;
-  SocketList external_sockets_;
-  ServerSocketMap server_sockets_;
-  BindingMap bindings_;
-  ConnectionMap connections_;
-
-  // Called when a packet is received by the server on one of its sockets.
-  void OnInternalPacket(talk_base::AsyncPacketSocket* socket,
-                        const char* bytes, size_t size,
-                        const talk_base::SocketAddress& remote_addr);
-  void OnExternalPacket(talk_base::AsyncPacketSocket* socket,
-                        const char* bytes, size_t size,
-                        const talk_base::SocketAddress& remote_addr);
-
-  void OnReadEvent(talk_base::AsyncSocket* socket);
-
-  // Processes the relevant STUN request types from the client.
-  bool HandleStun(const char* bytes, size_t size,
-                  const talk_base::SocketAddress& remote_addr,
-                  talk_base::AsyncPacketSocket* socket,
-                  std::string* username, StunMessage* msg);
-  void HandleStunAllocate(const char* bytes, size_t size,
-                          const talk_base::SocketAddressPair& ap,
-                          talk_base::AsyncPacketSocket* socket);
-  void HandleStun(TurnServerConnection* int_conn, const char* bytes,
-                  size_t size);
-  void HandleStunAllocate(TurnServerConnection* int_conn,
-                          const StunMessage& msg);
-  void HandleStunSend(TurnServerConnection* int_conn, const StunMessage& msg);
-
-  // Adds/Removes the a connection or binding.
-  void AddConnection(TurnServerConnection* conn);
-  void RemoveConnection(TurnServerConnection* conn);
-  void RemoveBinding(TurnServerBinding* binding);
-
-  // Handle messages in our worker thread.
-  void OnMessage(talk_base::Message *pmsg);
-
-  // Called when the timer for checking lifetime times out.
-  void OnTimeout(TurnServerBinding* binding);
-
-  // Accept connections on this server socket.
-  void AcceptConnection(talk_base::AsyncSocket* server_socket);
-
-  friend class TurnServerConnection;
-  friend class TurnServerBinding;
-};
-
-// Maintains information about a connection to the server.  Each connection is
-// part of one and only one binding.
-class TurnServerConnection {
- public:
-  TurnServerConnection(TurnServerBinding* binding,
-                        const talk_base::SocketAddressPair& addrs,
-                        talk_base::AsyncPacketSocket* socket);
-  ~TurnServerConnection();
-
-  TurnServerBinding* binding() { return binding_; }
-  talk_base::AsyncPacketSocket* socket() { return socket_; }
-
-  // Returns a pair where the source is the remote address and the destination
-  // is the local address.
-  const talk_base::SocketAddressPair& addr_pair() { return addr_pair_; }
-
-  // Sends a packet to the connected client.  If an address is provided, then
-  // we make sure the internal client receives it, wrapping if necessary.
-  void Send(const char* data, size_t size);
-  void Send(const char* data, size_t size,
-            const talk_base::SocketAddress& ext_addr);
-
-  // Sends a STUN message to the connected client with no wrapping.
-  void SendStun(const StunMessage& msg);
-  void SendStunError(const StunMessage& request, int code, const char* desc);
-
-  // A locked connection is one for which we know the intended destination of
-  // any raw packet received.
-  bool locked() const { return locked_; }
-  void Lock();
-  void Unlock();
-
-  // Records the address that raw packets should be forwarded to (for internal
-  // packets only; for external, we already know where they go).
-  const talk_base::SocketAddress& default_destination() const {
-    return default_dest_;
-  }
-  void set_default_destination(const talk_base::SocketAddress& addr) {
-    default_dest_ = addr;
-  }
-
- private:
-  TurnServerBinding* binding_;
-  talk_base::SocketAddressPair addr_pair_;
-  talk_base::AsyncPacketSocket* socket_;
-  bool locked_;
-  talk_base::SocketAddress default_dest_;
-};
-
-// Records a set of internal and external connections that we turn between,
-// or in other words, that are "bound" together.
-class TurnServerBinding : public talk_base::MessageHandler {
- public:
-  TurnServerBinding(
-      TurnServer* server, const std::string& username,
-      const std::string& password, uint32 lifetime);
-  virtual ~TurnServerBinding();
-
-  TurnServer* server() { return server_; }
-  uint32 lifetime() { return lifetime_; }
-  const std::string& username() { return username_; }
-  const std::string& password() { return password_; }
-  const std::string& magic_cookie() { return magic_cookie_; }
-
-  // Adds/Removes a connection into the binding.
-  void AddInternalConnection(TurnServerConnection* conn);
-  void AddExternalConnection(TurnServerConnection* conn);
-
-  // We keep track of the use of each binding.  If we detect that it was not
-  // used for longer than the lifetime, then we send a signal.
-  void NoteUsed();
-  sigslot::signal1<TurnServerBinding*> SignalTimeout;
-
-  // Determines whether the given packet has the magic cookie present (in the
-  // right place).
-  bool HasMagicCookie(const char* bytes, size_t size) const;
-
-  // Determines the connection to use to send packets to or from the given
-  // external address.
-  TurnServerConnection* GetInternalConnection(
-      const talk_base::SocketAddress& ext_addr);
-  TurnServerConnection* GetExternalConnection(
-      const talk_base::SocketAddress& ext_addr);
-
-  // MessageHandler:
-  void OnMessage(talk_base::Message *pmsg);
-
- private:
-  TurnServer* server_;
-
-  std::string username_;
-  std::string password_;
-  std::string magic_cookie_;
-
-  std::vector<TurnServerConnection*> internal_connections_;
-  std::vector<TurnServerConnection*> external_connections_;
-
-  uint32 lifetime_;
-  uint32 last_used_;
-  // TODO: bandwidth
+  std::string nonce_key_;
+  std::string realm_;
+  std::string software_;
+  talk_base::scoped_ptr<talk_base::AsyncPacketSocket> server_socket_;
+  talk_base::scoped_ptr<talk_base::PacketSocketFactory>
+      external_socket_factory_;
+  talk_base::SocketAddress external_addr_;
+  AllocationMap allocations_;
 };
 
 }  // namespace cricket
 
-#endif  // TALK_P2P_BASE_RELAYSERVER_H_
+#endif  // TALK_P2P_BASE_TURNSERVER_H_

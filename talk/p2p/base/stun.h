@@ -93,20 +93,15 @@ enum StunAddressFamily {
 
 // These are the types of STUN error codes defined in RFC 5389 and RFC 5766
 enum StunErrorCode {
-  STUN_ERROR_TRY_ALTERNATE                  = 300,
-  STUN_ERROR_BAD_REQUEST                    = 400,
-  STUN_ERROR_UNAUTHORIZED                   = 401,
-  //STUN_ERROR_FORBIDDEN                      = 403,
-  STUN_ERROR_UNKNOWN_ATTRIBUTE              = 420,
-  STUN_ERROR_STALE_CREDENTIALS              = 430,
-  //STUN_ERROR_ALLOCATION_MISMATCH            = 437,
-  STUN_ERROR_STALE_NONCE                    = 438,
-  //STUN_ERROR_WRONG_CREDENTIALS              = 441,
-  STUN_ERROR_UNSUPPORTED_TRANSPORT_PROTOCOL = 442,
-  STUN_ERROR_ALLOCATION_QUOTA_REACHED       = 486,
-  //STUN_ERROR_ROLE_CONFLICT                  = 487,
-  STUN_ERROR_SERVER_ERROR                   = 500,
-  STUN_ERROR_GLOBAL_FAILURE                 = 600
+  STUN_ERROR_TRY_ALTERNATE              = 300,
+  STUN_ERROR_BAD_REQUEST                = 400,
+  STUN_ERROR_UNAUTHORIZED               = 401,
+  STUN_ERROR_UNKNOWN_ATTRIBUTE          = 420,
+  STUN_ERROR_STALE_CREDENTIALS          = 430,  // GICE only
+  STUN_ERROR_STALE_NONCE                = 438,
+  STUN_ERROR_ALLOCATION_QUOTA_REACHED   = 486, //Unused
+  STUN_ERROR_SERVER_ERROR               = 500,
+  STUN_ERROR_GLOBAL_FAILURE             = 600
 };
 
 // Strings for the error codes above.

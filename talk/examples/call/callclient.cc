@@ -496,9 +496,8 @@ void CallClient::InitMedia() {
   if (!turnserver_.empty() && !turn_addr_udp.FromString(turnserver_)) {
     turn_addr_udp.Clear();
   } else {
-    portallocator_flags_ |= cricket::PORTALLOCATOR_ENABLE_TURN;
     cricket::RelayCredentials credentials("fakeuser", "fakepass");
-    cricket::RelayServerConfig relay_server;
+    cricket::RelayServerConfig relay_server(cricket::RELAY_TURN);
     relay_server.ports.push_back(cricket::ProtocolAddress(
         turn_addr_udp, cricket::PROTO_UDP));
     relay_server.credentials = credentials;

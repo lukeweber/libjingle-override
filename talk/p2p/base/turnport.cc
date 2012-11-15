@@ -27,7 +27,7 @@
 
 #include "talk/p2p/base/turnport.h"
 
-#include <stdio.h>
+#include <functional>
 
 #include "talk/base/asyncpacketsocket.h"
 #include "talk/base/byteorder.h"
@@ -296,9 +296,8 @@ void TurnPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
     // Check success responses, but not errors, for MESSAGE-INTEGRITY.
     if (IsStunSuccessResponseType(msg_type) &&
         !StunMessage::ValidateMessageIntegrity(data, size, hash())) {
-      LOG(LS_WARNING) << "Received TURN message with invalid "
-                      << "message integrity, msg_type=" << msg_type
-                      << "hash=" << hash();
+      LOG_J(LS_WARNING, this) << "Received TURN message with invalid "
+                              << "message integrity, msg_type=" << msg_type;
       return;
     }
     request_manager_.CheckResponse(data, size);
