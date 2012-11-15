@@ -717,6 +717,8 @@ class ConnectionRequest : public StunRequest {
   virtual ~ConnectionRequest() {
   }
 
+  virtual std::string GetClassname() const { return "ConnectionRequest"; }
+
   virtual void Prepare(StunMessage* request) {
     request->SetType(STUN_BINDING_REQUEST);
     std::string username;
@@ -725,6 +727,8 @@ class ConnectionRequest : public StunRequest {
     request->AddAttribute(
         new StunByteStringAttribute(STUN_ATTR_USERNAME, username));
 
+    // Disabling golden-ping since it breaks Android clients. b/7423258
+    // TODO(thaloun): Reenable conditionally for remote clients that support it.
     // connection_ already holds this ping, so subtract one from count.
     if (connection_->port()->send_retransmit_count_attribute()) {
       request->AddAttribute(new StunUInt32Attribute(STUN_ATTR_RETRANSMIT_COUNT,
@@ -851,6 +855,7 @@ void Connection::set_read_state(ReadState value) {
     LOG_J(LS_VERBOSE, this) << "set_read_state";
     SignalStateChange(this);
     CheckTimeout();
+    LOG(INFO) << ToString();
   }
 }
 
@@ -861,6 +866,7 @@ void Connection::set_write_state(WriteState value) {
     LOG_J(LS_VERBOSE, this) << "set_write_state";
     SignalStateChange(this);
     CheckTimeout();
+    LOG(INFO) << ToString();
   }
 }
 

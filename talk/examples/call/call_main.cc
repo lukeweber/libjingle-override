@@ -181,7 +181,7 @@ class DebugLog : public sigslot::has_slots<> {
 static DebugLog debug_log_;
 static const int DEFAULT_PORT = 5222;
 
-#ifdef ANDROID
+#ifdef ANDROID_MEDIA_ENGINE
 static std::vector<cricket::AudioCodec> codecs;
 static const cricket::AudioCodec ISAC(103, "ISAC", 40000, 16000, 1, 0);
 
@@ -246,7 +246,7 @@ int main(int argc, char **argv) {
   DEFINE_string(voiceoutput, NULL, "RTP dump file for voice output.");
   DEFINE_string(videoinput, NULL, "RTP dump file for video input.");
   DEFINE_string(videooutput, NULL, "RTP dump file for video output.");
-  DEFINE_string(turnserver, NULL, "Turn server address to use");
+  DEFINE_string(turnserver, "", "Override a specific turn server.");
   DEFINE_bool(render, true, "Renders the video.");
   DEFINE_bool(datachannel, false, "Enable an RTP data channel.");
   DEFINE_bool(d, false, "Turn on debugging.");
@@ -424,7 +424,7 @@ int main(int argc, char **argv) {
     }
   }
 
-#ifdef ANDROID
+#ifdef ANDROID_MEDIA_ENGINE
   InitAndroidMediaEngineFactory(AndroidMediaEngineFactory);
 #endif
 

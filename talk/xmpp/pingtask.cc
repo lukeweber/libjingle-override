@@ -61,7 +61,7 @@ int PingTask::ProcessStart() {
   if (now >= next_ping_time_) {
     talk_base::scoped_ptr<buzz::XmlElement> stanza(
         MakeIq(buzz::STR_GET, Jid(STR_EMPTY), task_id()));
-    stanza->AddElement(new buzz::XmlElement(QN_PING));
+    stanza->AddElement(new buzz::XmlElement(QN_PING, true));
     SendStanza(stanza.get());
 
     ping_response_deadline_ = now + ping_timeout_millis_;

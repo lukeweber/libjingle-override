@@ -56,7 +56,9 @@ void MediaStreamSignaling::SetLocalStreams(
 cricket::MediaSessionOptions
 MediaStreamSignaling::GetMediaSessionOptions(const MediaHints& hints) const {
   cricket::MediaSessionOptions options;
+#ifdef HAS_WEBRTC_VIDEO
   options.has_video = hints.has_video();
+#endif
   options.has_audio = hints.has_audio();
   // Enable BUNDLE feature by default.
   options.bundle_enabled = true;
@@ -78,6 +80,7 @@ MediaStreamSignaling::GetMediaSessionOptions(const MediaHints& hints) const {
                         stream->label());
     }
 
+#ifdef HAS_WEBRTC_VIDEO
     scoped_refptr<VideoTracks> video_tracks(stream->video_tracks());
     if (video_tracks->count() > 0) {
       options.has_video = true;
@@ -88,6 +91,7 @@ MediaStreamSignaling::GetMediaSessionOptions(const MediaHints& hints) const {
       options.AddStream(cricket::MEDIA_TYPE_VIDEO, track->label(),
                         stream->label());
     }
+#endif
   }
   return options;
 }
@@ -112,6 +116,7 @@ void MediaStreamSignaling::UpdateRemoteStreams(
         desc->streams(), current_streams);
   }
 
+#ifdef HAS_WEBRTC_VIDEO
   const cricket::ContentInfo* video_content = GetFirstVideoContent(remote_desc);
   if (video_content) {
     const cricket::VideoContentDescription* video_desc =
@@ -120,6 +125,7 @@ void MediaStreamSignaling::UpdateRemoteStreams(
     UpdateRemoteStreamsList<VideoTrackInterface, VideoTrack, VideoTrackProxy>(
         video_desc->streams(), current_streams);
   }
+#endif
 
   // Iterate current_streams to find all new streams.
   // Change the state of the new stream and SignalRemoteStreamAdded.
@@ -147,10 +153,12 @@ void MediaStreamSignaling::UpdateRemoteStreams(
     for (size_t j = 0; j < audio_tracklist->count(); ++j) {
       audio_tracklist->at(j)->set_state(MediaStreamTrackInterface::kEnded);
     }
+#ifdef HAS_WEBRTC_VIDEO
     scoped_refptr<VideoTracks> video_tracklist(old_stream->video_tracks());
     for (size_t j = 0; j < video_tracklist->count(); ++j) {
       video_tracklist->at(j)->set_state(MediaStreamTrackInterface::kEnded);
     }
+#endif
     stream_observer_->OnRemoveStream(old_stream);
   }
   // Prepare for next offer.

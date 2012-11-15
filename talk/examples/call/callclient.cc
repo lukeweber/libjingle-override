@@ -389,7 +389,7 @@ CallClient::CallClient(buzz::XmppClient* xmpp_client,
       static_views_accumulated_count_(0),
       screencast_ssrc_(0),
       roster_(new RosterMap),
-      portallocator_flags_(0),
+      portallocator_flags_(527),
       allow_local_ips_(false),
       signaling_protocol_(cricket::PROTOCOL_HYBRID),
       transport_protocol_(cricket::ICEPROTO_HYBRID),
@@ -499,9 +499,6 @@ void CallClient::InitMedia() {
     portallocator_flags_ |= cricket::PORTALLOCATOR_ENABLE_TURN;
     cricket::RelayCredentials credentials("fakeuser", "fakepass");
     cricket::RelayServerConfig relay_server;
-    
-    LOG(LS_WARNING) << "turnserver_=" << turnserver_;
-    LOG(LS_WARNING) << "turn_addr_udp=" << turn_addr_udp.ToString();
     relay_server.ports.push_back(cricket::ProtocolAddress(
         turn_addr_udp, cricket::PROTO_UDP));
     relay_server.credentials = credentials;
@@ -1093,7 +1090,7 @@ void CallClient::SetupAcceptedCall() {
 
 void CallClient::Reject() {
   ASSERT(call_ && incoming_call_);
-  call_->RejectSession(call_->sessions()[0]);
+  call_->RejectSession(call_->sessions()[0], false);
   incoming_call_ = false;
 }
 

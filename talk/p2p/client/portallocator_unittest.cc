@@ -91,8 +91,8 @@ class PortAllocatorTest : public testing::Test, public sigslot::has_slots<> {
                       kRelayTcpIntAddr, kRelayTcpExtAddr,
                       kRelaySslTcpIntAddr, kRelaySslTcpExtAddr),
         allocator_(new cricket::BasicPortAllocator(
-            &network_manager_, kStunAddr,
-            kRelayUdpIntAddr, kRelayTcpIntAddr, kRelaySslTcpIntAddr)),
+            &network_manager_, kStunAddr, kRelayUdpIntAddr, kRelayTcpIntAddr,
+            kRelaySslTcpIntAddr)),
         candidate_allocation_done_(false) {
   }
 

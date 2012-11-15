@@ -248,6 +248,8 @@ std::string BaseSession::StateToString(State state) {
       return "STATE_SENTINITIATE";
     case Session::STATE_RECEIVEDINITIATE:
       return "STATE_RECEIVEDINITIATE";
+    case Session::STATE_RECEIVEDINITIATE_ACK:
+      return "STATE_RECEIVEDINITIATE_ACK";
     case Session::STATE_SENTACCEPT:
       return "STATE_SENTACCEPT";
     case Session::STATE_RECEIVEDACCEPT:
@@ -258,8 +260,12 @@ std::string BaseSession::StateToString(State state) {
       return "STATE_RECEIVEDMODIFY";
     case Session::STATE_SENTREJECT:
       return "STATE_SENTREJECT";
+    case Session::STATE_SENTBUSY:
+      return "STATE_SENTBUSY";
     case Session::STATE_RECEIVEDREJECT:
       return "STATE_RECEIVEDREJECT";
+    case Session::STATE_RECEIVEDBUSY:
+      return "STATE_RECEIVEDBUSY";
     case Session::STATE_SENTREDIRECT:
       return "STATE_SENTREDIRECT";
     case Session::STATE_SENTTERMINATE:
@@ -567,6 +573,7 @@ bool BaseSession::ContentsGrouped() {
 bool BaseSession::MaybeEnableMuxingSupport() {
   bool ret = true;
   if ((state_ == STATE_SENTINITIATE ||
+      state_ == STATE_RECEIVEDINITIATE_ACK ||
       state_ == STATE_RECEIVEDINITIATE) &&
       ((local_description_ == NULL) ||
       (remote_description_ == NULL))) {
@@ -688,6 +695,9 @@ void BaseSession::OnMessage(talk_base::Message *pmsg) {
     // Session timeout has occured.
     SetError(ERROR_TIME);
     break;
+  case MSG_INIT_ACK_TIMEOUT:
+    SetError(ERROR_ACK_TIME);
+    break;
 
   case MSG_STATE:
     switch (state_) {
@@ -784,7 +794,6 @@ bool Session::Accept(const SessionDescription* sdesc) {
 
 bool Session::Reject(const std::string& reason) {
   ASSERT(signaling_thread()->IsCurrent());
-
   // Reject is sent in response to an initiate or modify, to reject the
   // request
   if (state() != STATE_RECEIVEDINITIATE && state() != STATE_RECEIVEDMODIFY)
@@ -796,7 +805,11 @@ bool Session::Reject(const std::string& reason) {
     return false;
   }
 
-  SetState(STATE_SENTREJECT);
+  if (reason == STR_TERMINATE_BUSY) {
+    SetState(STATE_SENTBUSY);
+  } else {
+    SetState(STATE_SENTREJECT);
+  }
   return true;
 }
 
@@ -805,15 +818,15 @@ bool Session::TerminateWithReason(const std::string& reason) {
 
   // Either side can terminate, at any time.
   switch (state()) {
+    case STATE_SENTBUSY:
+    case STATE_SENTREJECT:
+    case STATE_RECEIVEDBUSY:
+    case STATE_RECEIVEDREJECT:
     case STATE_SENTTERMINATE:
     case STATE_RECEIVEDTERMINATE:
-      return false;
-
-    case STATE_SENTREJECT:
-    case STATE_RECEIVEDREJECT:
       // We don't need to send terminate if we sent or received a reject...
       // it's implicit.
-      break;
+      return false;
 
     default:
       SessionError error;
@@ -951,7 +964,7 @@ void Session::OnTransportWritable(Transport* transport) {
   signaling_thread()->Clear(this, MSG_TIMEOUT);
   if (transport->HasChannels() && !transport->writable()) {
     signaling_thread()->PostDelayed(
-        session_manager_->session_timeout() * 1000, this, MSG_TIMEOUT);
+        session_manager_->session_timeout(), this, MSG_TIMEOUT);
   }
 }
 
@@ -1053,10 +1066,12 @@ void Session::OnIncomingResponse(const buzz::XmlElement* orig_stanza,
 }
 
 void Session::OnInitiateAcked() {
-    // TODO: This is to work around server re-ordering
-    // messages.  We send the candidates once the session-initiate
-    // is acked.  Once we have fixed the server to guarantee message
-    // order, we can remove this case.
+  signaling_thread()->Clear(this, MSG_INIT_ACK_TIMEOUT);
+  SetState(STATE_RECEIVEDINITIATE_ACK);
+  // TODO: This is to work around server re-ordering
+  // messages.  We send the candidates once the session-initiate
+  // is acked.  Once we have fixed the server to guarantee message
+  // order, we can remove this case.
   if (!initiate_acked_) {
     initiate_acked_ = true;
     SessionError error;
@@ -1156,7 +1171,7 @@ bool Session::OnInitiateMessage(const SessionMessage& msg,
   SetState(STATE_RECEIVEDINITIATE);
 
   // Users of Session may listen to state change and call Reject().
-  if (state() != STATE_SENTREJECT) {
+  if (state() != STATE_SENTREJECT && state() != STATE_SENTBUSY) {
     if (!OnRemoteCandidates(init.transports, error))
       return false;
   }
@@ -1164,8 +1179,9 @@ bool Session::OnInitiateMessage(const SessionMessage& msg,
 }
 
 bool Session::OnAcceptMessage(const SessionMessage& msg, MessageError* error) {
-  if (!CheckState(STATE_SENTINITIATE, error))
+  if (!CheckSentInitiate(error)) {
     return false;
+  }
 
   SessionAccept accept;
   if (!ParseSessionAccept(msg.protocol, msg.action_elem,
@@ -1188,7 +1204,7 @@ bool Session::OnAcceptMessage(const SessionMessage& msg, MessageError* error) {
   SetState(STATE_RECEIVEDACCEPT);
 
   // Users of Session may listen to state change and call Reject().
-  if (state() != STATE_SENTREJECT) {
+  if (state() != STATE_SENTREJECT && state() != STATE_SENTBUSY) {
     if (!OnRemoteCandidates(accept.transports, error))
       return false;
   }
@@ -1197,10 +1213,11 @@ bool Session::OnAcceptMessage(const SessionMessage& msg, MessageError* error) {
 }
 
 bool Session::OnRejectMessage(const SessionMessage& msg, MessageError* error) {
-  if (!CheckState(STATE_SENTINITIATE, error))
+  SessionTerminate term;
+  if (!CheckSentInitiate(error) &&
+      !ParseSessionTerminate(msg.protocol, msg.action_elem, &term, error))
     return false;
 
-  SetState(STATE_RECEIVEDREJECT);
   return true;
 }
 
@@ -1220,7 +1237,12 @@ bool Session::OnTerminateMessage(const SessionMessage& msg,
     LOG(LS_VERBOSE) << "Received error on call: " << term.debug_reason;
   }
 
-  SetState(STATE_RECEIVEDTERMINATE);
+  if (term.reason == STR_TERMINATE_BUSY) {
+    SetState(STATE_RECEIVEDBUSY);
+  } else {
+    SetState(STATE_RECEIVEDTERMINATE);
+  }
+
   return true;
 }
 
@@ -1301,7 +1323,7 @@ bool BareJidsEqual(const std::string& name1,
 bool Session::OnRedirectError(const SessionRedirect& redirect,
                               SessionError* error) {
   MessageError message_error;
-  if (!CheckState(STATE_SENTINITIATE, &message_error)) {
+  if (!CheckSentInitiate(&message_error)){
     return BadWrite(message_error.text, error);
   }
 
@@ -1319,6 +1341,17 @@ bool Session::OnRedirectError(const SessionRedirect& redirect,
 bool Session::CheckState(State expected, MessageError* error) {
   ASSERT(state() == expected);
   if (state() != expected) {
+    return BadMessage(buzz::QN_STANZA_NOT_ALLOWED,
+                      "message not allowed in current state",
+                      error);
+  }
+  return true;
+}
+
+bool Session::CheckSentInitiate(MessageError* error) {
+  ASSERT(state() == STATE_SENTINITIATE ||
+         state() == STATE_RECEIVEDINITIATE_ACK);
+  if (state() != STATE_SENTINITIATE && state() != STATE_RECEIVEDINITIATE_ACK) {
     return BadMessage(buzz::QN_STANZA_NOT_ALLOWED,
                       "message not allowed in current state",
                       error);
@@ -1345,12 +1378,10 @@ void Session::OnMessage(talk_base::Message* pmsg) {
 
   case MSG_STATE:
     switch (orig_state) {
+    case STATE_SENTBUSY:
     case STATE_SENTREJECT:
+    case STATE_RECEIVEDBUSY:
     case STATE_RECEIVEDREJECT:
-      // Assume clean termination.
-      Terminate();
-      break;
-
     case STATE_SENTTERMINATE:
     case STATE_RECEIVEDTERMINATE:
       session_manager_->DestroySession(this);
@@ -1370,6 +1401,10 @@ bool Session::SendInitiateMessage(const SessionDescription* sdesc,
   init.contents = sdesc->contents();
   init.transports = GetEmptyTransportInfos(init.contents);
   init.groups = sdesc->groups();
+  signaling_thread()->Clear(this, MSG_INIT_ACK_TIMEOUT);
+  signaling_thread()->PostDelayed(
+          session_manager_->session_init_ack_timeout(),
+          this, MSG_INIT_ACK_TIMEOUT);
   return SendMessage(ACTION_SESSION_INITIATE, init, error);
 }
 

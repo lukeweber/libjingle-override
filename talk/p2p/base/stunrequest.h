@@ -44,6 +44,7 @@ class StunRequestManager {
 public:
   StunRequestManager(talk_base::Thread* thread);
   ~StunRequestManager();
+  virtual std::string GetClassname() const { return "StunRequestManager"; }
 
   // Starts sending the given request (perhaps after a delay).
   void Send(StunRequest* request);
@@ -82,9 +83,13 @@ public:
   StunRequest();
   StunRequest(StunMessage* request);
   virtual ~StunRequest();
+  virtual std::string GetClassname() const { return "StunRequest"; }
 
   // Causes our wrapped StunMessage to be Prepared
   void Construct();
+
+  // Used only for debugging
+  std::string ToString() const;
 
   // The manager handling this request (if it has been scheduled for sending).
   StunRequestManager* manager() { return manager_; }

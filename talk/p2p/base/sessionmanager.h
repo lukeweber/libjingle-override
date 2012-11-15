@@ -63,6 +63,9 @@ class SessionManager : public sigslot::has_slots<> {
   int session_timeout() const { return timeout_; }
   void set_session_timeout(int timeout) { timeout_ = timeout; }
 
+  int session_init_ack_timeout() const { return timeout_init_ack_; }
+  void set_session_init_ack_timeout(int timeout) { timeout_init_ack_ = timeout; }
+
   // Set what transport protocol we want to default to.
   void set_transport_protocol(TransportProtocol proto) {
      transport_desc_factory_.set_protocol(proto);
@@ -197,6 +200,7 @@ class SessionManager : public sigslot::has_slots<> {
   talk_base::Thread *signaling_thread_;
   talk_base::Thread *worker_thread_;
   int timeout_;
+  int timeout_init_ack_;
   TransportDescriptionFactory transport_desc_factory_;
   SessionMap session_map_;
   ClientMap client_map_;

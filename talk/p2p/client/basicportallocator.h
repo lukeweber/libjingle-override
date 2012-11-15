@@ -76,6 +76,13 @@ class BasicPortAllocator : public PortAllocator {
   virtual ~BasicPortAllocator();
 
   talk_base::NetworkManager* network_manager() { return network_manager_; }
+  std::string ToString() const {
+    std::stringstream stream;
+    stream << "BasicPortAllocator";
+    return stream.str();
+  }
+
+  virtual std::string GetClassname() const { return "BasicPortAllocatorSession"; }
 
   // If socket_factory() is set to NULL each PortAllocatorSession
   // creates its own socket factory.
@@ -123,7 +130,6 @@ class BasicPortAllocator : public PortAllocator {
   void set_allow_tcp_listen(bool allow_tcp_listen) {
     allow_tcp_listen_ = allow_tcp_listen;
   }
-
  private:
   void Construct();
 
@@ -159,6 +165,7 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
   virtual void StartGetAllPorts();
   virtual void StopGetAllPorts();
   virtual bool IsGettingAllPorts() { return running_; }
+  virtual std::string GetClassname() const { return "BasicPortAllocatorSession"; }
 
  protected:
   // Starts the process of getting the port configurations.
@@ -229,6 +236,8 @@ struct PortConfiguration : public talk_base::MessageData {
   PortConfiguration(const talk_base::SocketAddress& stun_address,
                     const std::string& username,
                     const std::string& password);
+
+  virtual std::string GetClassname() const { return "PortConfiguration"; }
 
   // Adds another relay server, with the given ports and modifier, to the list.
   void AddRelay(const PortList& ports, const RelayCredentials& credentials,

@@ -110,15 +110,15 @@ static void LogMultiline(talk_base::LoggingSeverity sev, char* text) {
 // WebRtcVoiceEngine
 const WebRtcVoiceEngine::CodecPref WebRtcVoiceEngine::kCodecPrefs[] = {
   { "ISAC",   16000,  1, 103 },
-  { "ISAC",   32000,  1, 104 },
-  { "opus",   48000,  1, 111 },
-  { "CELT",   32000,  1, 109 },
-  { "CELT",   32000,  2, 110 },
-  { "G722",   16000,  1, 9 },
+  // { "ISAC",   32000,  1, 104 },
+  // { "opus",   48000,  1, 111 },
+  // { "CELT",   32000,  1, 109 },
+  // { "CELT",   32000,  2, 110 },
+  // { "G722",   16000,  1, 9 },
   { "ILBC",   8000,   1, 102 },
-  { "PCMU",   8000,   1, 0 },
-  { "PCMA",   8000,   1, 8 },
-  { "CN",     48000,  1, 107 },
+  // { "PCMU",   8000,   1, 0 },
+  // { "PCMA",   8000,   1, 8 },
+  // { "CN",     48000,  1, 107 },
   { "CN",     32000,  1, 106 },
   { "CN",     16000,  1, 105 },
   { "CN",     8000,   1, 13 },
@@ -381,15 +381,18 @@ bool WebRtcVoiceEngine::InitInternal() {
     LOG(LS_INFO) << ToString(*it);
   }
 
-#if defined(LINUX) && !defined(HAVE_LIBPULSE)
+
+#if defined(LINUX) && !defined(HAVE_LIBPULSE) && !defined(ANDROID)
   voe_wrapper_sc_->hw()->SetAudioDeviceLayer(webrtc::kAudioLinuxAlsa);
 #endif
 
+#ifndef ANDROID
   // Initialize the VoiceEngine instance that we'll use to play out sound clips.
   if (voe_wrapper_sc_->base()->Init(adm_sc_) == -1) {
     LOG_RTCERR0_EX(Init, voe_wrapper_sc_->error());
     return false;
   }
+#endif
 
   // On Windows, tell it to use the default sound (not communication) devices.
   // First check whether there is a valid sound device for playback.
@@ -430,8 +433,8 @@ void WebRtcVoiceEngine::Terminate() {
     is_dumping_aec_ = false;
   }
 
-  voe_wrapper_sc_->base()->Terminate();
   voe_wrapper_->base()->Terminate();
+  voe_wrapper_sc_->base()->Terminate();
   desired_local_monitor_enable_ = false;
 }
 

@@ -35,7 +35,7 @@
 
 TEST(CallClientTest, CreateCallClientWithDefaultMediaEngine) {
   XmppPump pump;
-  CallClient *client = new CallClient(pump.client(), "app", "version");
+  CallClient *client = new CallClient(pump.client(), "app", "version", NULL, NULL);
   delete client;
 }
 

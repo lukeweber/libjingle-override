@@ -1,0 +1,6 @@
+*.target.mk
+*.Makefile
+*.pyc
+tags
+talk/third_party/*
+talk/build/*

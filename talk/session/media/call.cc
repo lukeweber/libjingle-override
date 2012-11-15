@@ -61,7 +61,7 @@ V FindOrNull(const std::map<K, V>& map,
 }
 
 Call::Call(MediaSessionClient* session_client)
-    : id_(talk_base::CreateRandomId()),
+    : id_(talk_base::CreateRandomNonZeroId()),
       session_client_(session_client),
       local_renderer_(NULL),
       has_video_(false),
@@ -124,11 +124,17 @@ void Call::AcceptSession(Session* session,
   }
 }
 
-void Call::RejectSession(Session* session) {
+void Call::RejectSession(Session* session, bool busy) {
   // Assume polite decline.
   MediaSessionMap::iterator it = media_session_map_.find(session->id());
   if (it != media_session_map_.end())
-    it->second.session->Reject(STR_TERMINATE_DECLINE);
+  {
+    if (busy) {
+      it->second.session->Reject(STR_TERMINATE_BUSY);
+    } else {
+      it->second.session->Reject(STR_TERMINATE_DECLINE);
+    }
+  }
 }
 
 void Call::TerminateSession(Session* session) {

@@ -91,16 +91,22 @@ enum StunAddressFamily {
   STUN_ADDRESS_IPV6                     = 2
 };
 
-// These are the types of STUN error codes defined in RFC 5389.
+// These are the types of STUN error codes defined in RFC 5389 and RFC 5766
 enum StunErrorCode {
-  STUN_ERROR_TRY_ALTERNATE              = 300,
-  STUN_ERROR_BAD_REQUEST                = 400,
-  STUN_ERROR_UNAUTHORIZED               = 401,
-  STUN_ERROR_UNKNOWN_ATTRIBUTE          = 420,
-  STUN_ERROR_STALE_CREDENTIALS          = 430,  // GICE only
-  STUN_ERROR_STALE_NONCE                = 438,
-  STUN_ERROR_SERVER_ERROR               = 500,
-  STUN_ERROR_GLOBAL_FAILURE             = 600
+  STUN_ERROR_TRY_ALTERNATE                  = 300,
+  STUN_ERROR_BAD_REQUEST                    = 400,
+  STUN_ERROR_UNAUTHORIZED                   = 401,
+  //STUN_ERROR_FORBIDDEN                      = 403,
+  STUN_ERROR_UNKNOWN_ATTRIBUTE              = 420,
+  STUN_ERROR_STALE_CREDENTIALS              = 430,
+  //STUN_ERROR_ALLOCATION_MISMATCH            = 437,
+  STUN_ERROR_STALE_NONCE                    = 438,
+  //STUN_ERROR_WRONG_CREDENTIALS              = 441,
+  STUN_ERROR_UNSUPPORTED_TRANSPORT_PROTOCOL = 442,
+  STUN_ERROR_ALLOCATION_QUOTA_REACHED       = 486,
+  //STUN_ERROR_ROLE_CONFLICT                  = 487,
+  STUN_ERROR_SERVER_ERROR                   = 500,
+  STUN_ERROR_GLOBAL_FAILURE                 = 600
 };
 
 // Strings for the error codes above.
@@ -148,6 +154,7 @@ class StunMessage {
  public:
   StunMessage();
   virtual ~StunMessage();
+  virtual std::string GetClassname() const { return "StunMessage"; }
 
   int type() const { return type_; }
   size_t length() const { return length_; }
@@ -201,6 +208,10 @@ class StunMessage {
   // this was successful.
   bool Write(talk_base::ByteBuffer* buf) const;
 
+  // WritesWrites this object into a STUN packet. The return value indicates whether
+  // this was successful.
+  std::string ToString() const;
+
   // Creates an empty message. Overridable by derived classes.
   virtual StunMessage* CreateNew() const { return new StunMessage(); }
 
@@ -224,6 +235,7 @@ class StunAttribute {
  public:
   virtual ~StunAttribute() {
   }
+  virtual std::string GetClassname() const { return "StunAttribute"; }
 
   int type() const { return type_; }
   size_t length() const { return length_; }
@@ -305,6 +317,7 @@ class StunAddressAttribute : public StunAttribute {
 
   virtual bool Read(talk_base::ByteBuffer* buf);
   virtual bool Write(talk_base::ByteBuffer* buf) const;
+  virtual std::string GetClassname() const { return "StunAddressAttribute"; }
 
  private:
   void EnsureAddressLength() {
@@ -343,6 +356,7 @@ class StunXorAddressAttribute : public StunAddressAttribute {
   }
   virtual bool Read(talk_base::ByteBuffer* buf);
   virtual bool Write(talk_base::ByteBuffer* buf) const;
+  virtual std::string GetClassname() const { return "StunXorAddressAttribute"; }
 
  private:
   talk_base::IPAddress GetXoredIP() const;
@@ -368,6 +382,7 @@ class StunUInt32Attribute : public StunAttribute {
 
   virtual bool Read(talk_base::ByteBuffer* buf);
   virtual bool Write(talk_base::ByteBuffer* buf) const;
+  virtual std::string GetClassname() const { return "StunInt32Attribute"; }
 
  private:
   uint32 bits_;
@@ -388,6 +403,7 @@ class StunUInt64Attribute : public StunAttribute {
 
   virtual bool Read(talk_base::ByteBuffer* buf);
   virtual bool Write(talk_base::ByteBuffer* buf) const;
+  virtual std::string GetClassname() const { return "StunInt64Attribute"; }
 
  private:
   uint64 bits_;
@@ -401,6 +417,7 @@ class StunByteStringAttribute : public StunAttribute {
   StunByteStringAttribute(uint16 type, const void* bytes, size_t length);
   StunByteStringAttribute(uint16 type, uint16 length);
   ~StunByteStringAttribute();
+  virtual std::string GetClassname() const { return "StunByteStringAttribute"; }
 
   virtual StunAttributeValueType value_type() const {
     return STUN_VALUE_BYTE_STRING;
@@ -431,6 +448,7 @@ class StunErrorCodeAttribute : public StunAttribute {
   StunErrorCodeAttribute(uint16 type, int code, const std::string& reason);
   StunErrorCodeAttribute(uint16 type, uint16 length);
   ~StunErrorCodeAttribute();
+  virtual std::string GetClassname() const { return "StunErrorCodeAttribute"; }
 
   virtual StunAttributeValueType value_type() const {
     return STUN_VALUE_ERROR_CODE;
@@ -462,6 +480,7 @@ class StunUInt16ListAttribute : public StunAttribute {
  public:
   StunUInt16ListAttribute(uint16 type, uint16 length);
   ~StunUInt16ListAttribute();
+  virtual std::string GetClassname() const { return "StunUInt16ListAttribute"; }
 
   virtual StunAttributeValueType value_type() const {
     return STUN_VALUE_UINT16_LIST;
@@ -534,6 +553,8 @@ enum RelayAttributeType {
 
 // A "GTURN" STUN message.
 class RelayMessage : public StunMessage {
+ public:
+  virtual std::string GetClassname() const { return "RelayMessage"; }
  protected:
   virtual StunAttributeValueType GetAttributeValueType(int type) const {
     switch (type) {
@@ -550,6 +571,19 @@ class RelayMessage : public StunMessage {
   virtual StunMessage* CreateNew() const { return new RelayMessage(); }
 };
 
+enum TurnClassType {
+  // THESE ARE ENCODED AS DESCRIBED IN
+  // http://tools.ietf.org/html/rfc5389#section-6
+  //  2  3  4 5 6 7 8 9 0 1 2 3 4 5
+  // +--+--+-+-+-+-+-+-+-+-+-+-+-+-+
+  // |M |M |M|M|M|C|M|M|M|C|M|M|M|M|
+  // |11|10|9|8|7|1|6|5|4|0|3|2|1|0|
+  // +--+--+-+-+-+-+-+-+-+-+-+-+-+-+
+  TURN_CLASS_REQUEST = 0x000,
+  TURN_CLASS_INDICATION = 0x010,
+  TURN_CLASS_SUCCESS_RESPONSE = 0x100,
+  TURN_CLASS_ERROR_RESPONSE = 0x110,
+};
 // Defined in TURN RFC 5766.
 enum TurnMessageType {
   STUN_ALLOCATE_REQUEST                 = 0x0003,
@@ -596,6 +630,8 @@ extern const char STUN_ERROR_REASON_ALLOCATION_MISMATCH[];
 extern const char STUN_ERROR_REASON_WRONG_CREDENTIALS[];
 extern const char STUN_ERROR_REASON_UNSUPPORTED_PROTOCOL[];
 class TurnMessage : public StunMessage {
+ public:
+  virtual std::string GetClassname() const { return "TurnMessage"; }
  protected:
   virtual StunAttributeValueType GetAttributeValueType(int type) const {
     switch (type) {
@@ -630,6 +666,8 @@ extern const char STUN_ERROR_REASON_ROLE_CONFLICT[];
 
 // A RFC 5245 ICE STUN message.
 class IceMessage : public StunMessage {
+ public:
+  virtual std::string GetClassname() const { return "IceMessage"; }
  protected:
   virtual StunAttributeValueType GetAttributeValueType(int type) const {
     switch (type) {

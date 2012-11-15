@@ -39,6 +39,7 @@
 #include "talk/p2p/base/common.h"
 #include "talk/p2p/base/stun.h"
 
+
 namespace cricket {
 
 // TODO(juberti): Move to stun.h when relay messages have been renamed.
@@ -62,6 +63,7 @@ class TurnAllocateRequest : public StunRequest {
   virtual void OnResponse(StunMessage* response);
   virtual void OnErrorResponse(StunMessage* response);
   virtual void OnTimeout();
+  virtual std::string GetClassname() const { return "TurnAllocateRequest"; }
 
  private:
   // Handles authentication challenge from the server.
@@ -78,6 +80,7 @@ class TurnRefreshRequest : public StunRequest {
   virtual void OnResponse(StunMessage* response);
   virtual void OnErrorResponse(StunMessage* response);
   virtual void OnTimeout();
+  virtual std::string GetClassname() const { return "TurnRefreshRequest"; }
 
  private:
   TurnPort* port_;
@@ -91,6 +94,7 @@ class TurnCreatePermissionRequest : public StunRequest {
   virtual void OnResponse(StunMessage* response);
   virtual void OnErrorResponse(StunMessage* response);
   virtual void OnTimeout();
+  virtual std::string GetClassname() const { return "TurnCreatePermissionRequest"; }
 
  private:
   TurnPort* port_;
@@ -106,6 +110,7 @@ class TurnChannelBindRequest : public StunRequest {
   virtual void OnResponse(StunMessage* response);
   virtual void OnErrorResponse(StunMessage* response);
   virtual void OnTimeout();
+  virtual std::string GetClassname() const { return "TurnChannelBindRequest"; }
 
  private:
   TurnPort* port_;
@@ -136,6 +141,7 @@ class TurnEntry : public sigslot::has_slots<> {
   void OnCreatePermissionError();
   void OnChannelBindSuccess();
   void OnChannelBindError();
+  virtual std::string GetClassname() const { return "TurnEntry"; }
 
  private:
   TurnPort* port_;
@@ -309,8 +315,9 @@ void TurnPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
     // Check success responses, but not errors, for MESSAGE-INTEGRITY.
     if (IsStunSuccessResponseType(msg_type) &&
         !StunMessage::ValidateMessageIntegrity(data, size, hash())) {
-      LOG_J(LS_WARNING, this) << "Received TURN message with invalid "
-                              << "message integrity, msg_type=" << msg_type;
+      LOG(LS_WARNING) << "Received TURN message with invalid "
+                      << "message integrity, msg_type=" << msg_type
+                      << "hash=" << hash();
       return;
     }
     request_manager_.CheckResponse(data, size);

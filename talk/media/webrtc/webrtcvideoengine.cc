@@ -1918,12 +1918,18 @@ bool WebRtcVideoMediaChannel::SetRenderer(uint32 ssrc,
                    << " reuse default channel #"
                    << vie_channel_;
       recv_channels_[0]->SetRenderer(renderer);
+      bool watermark_enabled = (0 != (options_ & OPT_VIDEO_WATERMARK));
+      recv_channels_[0]->render_adapter()->set_watermark_enabled(
+          watermark_enabled);
       return true;
     }
     return false;
   }
 
   recv_channels_[ssrc]->SetRenderer(renderer);
+  bool watermark_enabled = (0 != (options_ & OPT_VIDEO_WATERMARK));
+  recv_channels_[ssrc]->render_adapter()->set_watermark_enabled(
+      watermark_enabled);
   return true;
 }
 

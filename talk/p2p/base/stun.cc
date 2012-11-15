@@ -27,6 +27,7 @@
 
 #include "talk/p2p/base/stun.h"
 
+#include <iostream>
 #include <cstring>
 
 #include "talk/base/byteorder.h"
@@ -90,6 +91,7 @@ bool StunMessage::SetTransactionID(const std::string& str) {
 bool StunMessage::AddAttribute(StunAttribute* attr) {
   // Fail any attributes that aren't valid for this type of message.
   if (attr->value_type() != GetAttributeValueType(attr->type())) {
+    LOG(LS_ERROR) << "TLOG Could not add attribute(" << attr->value_type() << " != " << GetAttributeValueType(attr->type()) << ")";
     return false;
   }
   attrs_->push_back(attr);
@@ -386,6 +388,58 @@ bool StunMessage::Write(ByteBuffer* buf) const {
   }
 
   return true;
+}
+
+std::string StunMessage::ToString() const {
+  std::stringstream stream;
+  int attr_count = attrs_->size();
+  int type = 0;
+  stream << "{this=0x" << std::hex << reinterpret_cast<size_t>(this) << std::dec << ",";
+  stream << "AttributeCount:" << attr_count << ",";
+  //std::string displaystring = "{AttributeCount:"+attr_count+",\n";
+  stream << "StunAttributes:[";
+  for (int i = 0; i < attr_count; ++i) {
+    if(i != 0) {
+      stream << ",";
+    }
+    type = (*attrs_)[i]->type();
+    switch(type){
+      //StunAttributeType
+      case STUN_ATTR_MAPPED_ADDRESS:stream << "STUN_ATTR_MAPPED_ADDRESS";break;
+      case STUN_ATTR_USERNAME:stream << "STUN_ATTR_USERNAME";break;
+      case STUN_ATTR_MESSAGE_INTEGRITY:stream << "STUN_ATTR_MESSAGE_INTEGRITY";break;
+      case STUN_ATTR_ERROR_CODE:stream << "STUN_ATTR_ERROR_CODE";break;
+      case STUN_ATTR_UNKNOWN_ATTRIBUTES:stream << "STUN_ATTR_UNKNOWN_ATTRIBUTES";break;
+      case STUN_ATTR_REALM:stream << "STUN_ATTR_REALM";break;
+      case STUN_ATTR_NONCE:stream << "STUN_ATTR_NONCE";break;
+      case STUN_ATTR_XOR_MAPPED_ADDRESS:stream << "STUN_ATTR_XOR_MAPPED_ADDRESS";break;
+      case STUN_ATTR_SOFTWARE:stream << "STUN_ATTR_SOFTWARE";break;
+      case STUN_ATTR_ALTERNATE_SERVER:stream << "STUN_ATTR_ALTERNATE_SERVER";break;
+      case STUN_ATTR_FINGERPRINT:stream << "STUN_ATTR_FINGERPRINT";break;
+      //RelayAttributeType:
+      case STUN_ATTR_LIFETIME:stream << "STUN_ATTR_LIFETIME";break;
+      case STUN_ATTR_MAGIC_COOKIE:stream << "STUN_ATTR_MAGIC_COOKIE";break;
+      case STUN_ATTR_BANDWIDTH:stream << "STUN_ATTR_BANDWIDTH";break;
+      case STUN_ATTR_DESTINATION_ADDRESS:stream << "STUN_ATTR_DESTINATION_ADDRESS";break;
+      //case STUN_ATTR_SOURCE_ADDRESS2:stream << "STUN_ATTR_SOURCE_ADDRESS2";break;
+      case STUN_ATTR_DATA:stream << "STUN_ATTR_DATA";break;
+      case STUN_ATTR_OPTIONS:stream << "STUN_ATTR_OPTIONS";break;
+      //TurnAttributeType:
+      case STUN_ATTR_CHANNEL_NUMBER:stream << "STUN_ATTR_CHANNEL_NUMBER";break;
+      case STUN_ATTR_XOR_PEER_ADDRESS:stream << "STUN_ATTR_XOR_PEER_ADDRESS";break;
+      case STUN_ATTR_XOR_RELAYED_ADDRESS:stream << "STUN_ATTR_XOR_RELAYED_ADDRESS";break;
+      case STUN_ATTR_REQUESTED_TRANSPORT:stream << "STUN_ATTR_REQUESTED_TRANSPORT";break;
+      //IceAttributeType
+      case STUN_ATTR_PRIORITY:stream << "STUN_ATTR_PRIORITY";break;
+      case STUN_ATTR_USE_CANDIDATE:stream << "STUN_ATTR_USE_CANDIDATE";break;
+      case STUN_ATTR_ICE_CONTROLLED:stream << "STUN_ATTR_ICE_CONTROLLED";break;
+      case STUN_ATTR_ICE_CONTROLLING:stream << "STUN_ATTR_ICE_CONTROLLING";break;
+      default:stream << "STUN_ATTR_UNKNOWN";break;
+    }
+    stream << "=0x" << std::hex << type << std::dec;
+  }
+  stream << "]}";
+  return stream.str();
 }
 
 StunAttributeValueType StunMessage::GetAttributeValueType(int type) const {
@@ -877,27 +931,27 @@ bool StunUInt16ListAttribute::Write(ByteBuffer* buf) const {
 }
 
 int GetStunSuccessResponseType(int req_type) {
-  return IsStunRequestType(req_type) ? (req_type | 0x100) : -1;
+  return IsStunRequestType(req_type) ? (req_type | TURN_CLASS_SUCCESS_RESPONSE) : -1;
 }
 
 int GetStunErrorResponseType(int req_type) {
-  return IsStunRequestType(req_type) ? (req_type | 0x110) : -1;
+  return IsStunRequestType(req_type) ? (req_type | TURN_CLASS_ERROR_RESPONSE) : -1;
 }
 
 bool IsStunRequestType(int msg_type) {
-  return ((msg_type & kStunTypeMask) == 0x000);
+  return ((msg_type & kStunTypeMask) == TURN_CLASS_REQUEST);
 }
 
 bool IsStunIndicationType(int msg_type) {
-  return ((msg_type & kStunTypeMask) == 0x010);
+  return ((msg_type & kStunTypeMask) == TURN_CLASS_INDICATION);
 }
 
 bool IsStunSuccessResponseType(int msg_type) {
-  return ((msg_type & kStunTypeMask) == 0x100);
+  return ((msg_type & kStunTypeMask) == TURN_CLASS_SUCCESS_RESPONSE);
 }
 
 bool IsStunErrorResponseType(int msg_type) {
-  return ((msg_type & kStunTypeMask) == 0x110);
+  return ((msg_type & kStunTypeMask) == TURN_CLASS_ERROR_RESPONSE);
 }
 
 bool ComputeStunCredentialHash(const std::string& username,

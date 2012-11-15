@@ -1255,7 +1255,6 @@ TEST_F(PortTest, TestSendStunMessageAsIce) {
   ASSERT_TRUE(msg != NULL);
   EXPECT_EQ(STUN_BINDING_RESPONSE, msg->type());
 
-
   EXPECT_FALSE(msg->IsLegacy());
   const StunAddressAttribute* addr_attr = msg->GetAddress(
       STUN_ATTR_XOR_MAPPED_ADDRESS);

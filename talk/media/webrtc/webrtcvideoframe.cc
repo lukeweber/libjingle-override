@@ -26,7 +26,7 @@
  */
 
 #include "talk/media/webrtc/webrtcvideoframe.h"
-
+#ifdef HAVE_WEBRTC_VIDEO
 #include "libyuv/convert.h"
 #include "libyuv/convert_from.h"
 #include "libyuv/planar_functions.h"
@@ -379,3 +379,4 @@ void WebRtcVideoFrame::InitToEmptyBuffer(int w, int h,
 }
 
 }  // namespace cricket
+#endif //HAVE_WEBRTC_VIDEO

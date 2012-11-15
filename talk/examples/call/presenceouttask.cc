@@ -122,6 +122,14 @@ PresenceOutTask::TranslateStatus(const Status & s) {
     result->AddText(pri, 1);
 
     if (s.know_capabilities()) {
+#ifdef TUENTI_CUSTOM_BUILD
+      XmlElement *tuenti_data = new XmlElement(QN_TUENTI_DATA, true);
+      XmlElement *tuenti_caps = new XmlElement(QN_TUENTI_CAPS, false);
+      XmlElement *tuenti_voice = new XmlElement(QN_TUENTI_VOICE, false);
+      result->AddElement(tuenti_data);
+      tuenti_data->AddElement(tuenti_caps);
+      tuenti_caps->AddElement(tuenti_voice);
+#else
       result->AddElement(new XmlElement(QN_CAPS_C, true));
       result->AddAttr(QN_NODE, s.caps_node(), 1);
       result->AddAttr(QN_VER, s.version(), 1);
@@ -133,6 +141,7 @@ PresenceOutTask::TranslateStatus(const Status & s) {
       caps.append(s.camera_capability() ? " camera-v1" : "");
 
       result->AddAttr(QN_EXT, caps, 1);
+#endif
     }
 
     // Put the delay mark on the presence according to JEP-0091

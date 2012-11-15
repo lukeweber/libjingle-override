@@ -180,6 +180,19 @@ void PresencePushTask::FillStatus(const Jid& from, const XmlElement* stanza,
       }
     }
 
+#ifdef TUENTI_CUSTOM_BUILD
+    const XmlElement * td = stanza->FirstNamed(QN_TUENTI_DATA);
+    if (td != NULL) {
+        const XmlElement * caps = td->FirstNamed(QN_TUENTI_CAPS);
+        const XmlElement * voice_v1 = caps->FirstNamed(QN_TUENTI_VOICE);
+        if (voice_v1 != NULL) {
+          s->set_voice_capability(true);
+          s->set_know_capabilities(true);
+          s->set_caps_node("http://www.google.com/xmpp/client/caps");
+          s->set_version("1.0");
+        }
+    }
+#else
     const XmlElement * caps = stanza->FirstNamed(QN_CAPS_C);
     if (caps != NULL) {
       std::string node = caps->Attr(QN_NODE);
@@ -197,6 +210,7 @@ void PresencePushTask::FillStatus(const Jid& from, const XmlElement* stanza,
         s->set_video_capability(true);
       }
     }
+#endif
 
     const XmlElement* delay = stanza->FirstNamed(kQnDelayX);
     if (delay != NULL) {

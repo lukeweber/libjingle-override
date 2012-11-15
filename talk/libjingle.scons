@@ -1,6 +1,11 @@
 import talk
 Import("env")
 
+#Needed so mac can compile
+env.Replace(
+  RPATH = [],
+)
+
 talk.Library(env, name = "expat",
              cppdefines = [
                "XML_STATIC",
@@ -12,6 +17,7 @@ talk.Library(env, name = "expat",
              ],
              includedirs = [
                "third_party/expat-2.0.1/lib",
+               "third_party/expat-2.0.1/",
              ],
              win_cppdefines = [
                "COMPILED_FROM_DSP",
@@ -34,6 +40,7 @@ talk.Library(env, name = "gunit",
                "EXPAT_RELATIVE_PATH",
                "GTEST_RELATIVE_PATH",
                "SRTP_RELATIVE_PATH",
+               "GTEST_HAS_RTTI=0",
              ],
 )
 talk.Library(env, name = "srtp",
@@ -133,6 +140,8 @@ talk.Library(env, name = "jingle",
                "media/devices/carbonvideorenderer.cc",
                "media/devices/macdevicemanager.cc",
                "media/devices/macdevicemanagermm.mm",
+               "base/maccocoasocketserver.mm",
+               "base/maccocoathreadhelper.mm",
              ],
              posix_srcs = [
                "base/unixfilesystem.cc",
@@ -147,6 +156,7 @@ talk.Library(env, name = "jingle",
                "GTEST_RELATIVE_PATH",
                "SRTP_RELATIVE_PATH",
                "XML_STATIC",
+               "HAS_OPENSSL_1_0",
              ],
              srcs = [
                "base/asyncfile.cc",
@@ -242,7 +252,9 @@ talk.Library(env, name = "jingle",
                "p2p/base/portproxy.cc",
                "p2p/base/pseudotcp.cc",
                "p2p/base/relayport.cc",
+               "p2p/base/turnport.cc",
                "p2p/base/relayserver.cc",
+               "p2p/base/turnserver.cc",
                "p2p/base/rawtransport.cc",
                "p2p/base/rawtransportchannel.cc",
                "p2p/base/session.cc",
@@ -413,6 +425,7 @@ talk.Library(env, name = "unittest_main",
                "EXPAT_RELATIVE_PATH",
                "GTEST_RELATIVE_PATH",
                "SRTP_RELATIVE_PATH",
+               "GTEST_HAS_RTTI=0",
              ],
 )
 talk.App(env, name = "login",
@@ -476,6 +489,14 @@ talk.App(env, name = "relayserver",
          ],
          srcs = [
            "p2p/base/relayserver_main.cc",
+         ],
+)
+talk.App(env, name = "turnserver",
+         libs = [
+           "jingle",
+         ],
+         srcs = [
+           "p2p/base/turnserver_main.cc",
          ],
 )
 talk.App(env, name = "stunserver",
@@ -607,6 +628,7 @@ talk.Unittest(env, name = "p2p",
                 "p2p/base/pseudotcp_unittest.cc",
                 "p2p/base/relayport_unittest.cc",
                 "p2p/base/relayserver_unittest.cc",
+                "p2p/base/turnserver_unittest.cc",
                 "p2p/base/session_unittest.cc",
                 "p2p/base/stun_unittest.cc",
                 "p2p/base/stunport_unittest.cc",

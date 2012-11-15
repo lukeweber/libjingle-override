@@ -91,6 +91,7 @@ class TurnPort : public Port {
   }
 
   virtual ~TurnPort();
+  virtual std::string GetClassname() const { return "TurnPort"; }
 
   const talk_base::SocketAddress& server_address() const {
     return server_address_;

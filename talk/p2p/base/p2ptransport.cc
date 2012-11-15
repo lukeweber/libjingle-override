@@ -46,7 +46,7 @@
 namespace {
 
 // We only allow usernames to be this many characters or fewer.
-const size_t kMaxUsernameSize = 16;
+const size_t kMaxUsernameSize = 64;
 
 }  // namespace
 

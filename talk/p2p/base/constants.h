@@ -210,6 +210,7 @@ extern const char JINGLE_ERROR_UNKNOWN_SESSION[];
 
 // Call terminate reasons from XEP-166
 extern const char STR_TERMINATE_DECLINE[];  // polite reject
+extern const char STR_TERMINATE_BUSY[];  // busy
 extern const char STR_TERMINATE_SUCCESS[];  // polite hangup
 extern const char STR_TERMINATE_ERROR[];  // something bad happened
 extern const char STR_TERMINATE_INCOMPATIBLE_PARAMETERS[];  // no codecs?

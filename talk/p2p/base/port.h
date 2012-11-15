@@ -39,6 +39,7 @@
 #include "talk/base/sigslot.h"
 #include "talk/base/socketaddress.h"
 #include "talk/base/thread.h"
+#include "talk/p2p/base/timeouts.h"
 #include "talk/p2p/base/candidate.h"
 #include "talk/p2p/base/portinterface.h"
 #include "talk/p2p/base/stun.h"
@@ -59,19 +60,19 @@ extern const char STUN_PORT_TYPE[];
 extern const char RELAY_PORT_TYPE[];
 
 // The length of time we wait before timing out readability on a connection.
-const uint32 CONNECTION_READ_TIMEOUT = 30 * 1000;   // 30 seconds
+const uint32 CONNECTION_READ_TIMEOUT = cricket::kPortTimeoutConnectionReadable;
 
 // The length of time we wait before timing out writability on a connection.
-const uint32 CONNECTION_WRITE_TIMEOUT = 15 * 1000;  // 15 seconds
+const uint32 CONNECTION_WRITE_TIMEOUT = cricket::kPortTimeoutConnectionWriteable;
 
 // The length of time we wait before we become unwritable.
-const uint32 CONNECTION_WRITE_CONNECT_TIMEOUT = 5 * 1000;  // 5 seconds
+const uint32 CONNECTION_WRITE_CONNECT_TIMEOUT = cricket::kPortTimeoutConnectionWriteConnect;
 
 // The number of pings that must fail to respond before we become unwritable.
 const uint32 CONNECTION_WRITE_CONNECT_FAILURES = 5;
 
 // This is the length of time that we wait for a ping response to come back.
-const int CONNECTION_RESPONSE_TIMEOUT = 5 * 1000;   // 5 seconds
+const int CONNECTION_RESPONSE_TIMEOUT = cricket::kPortTimeoutConnectionResponse;
 
 
 enum IcePriorityValue {
@@ -108,6 +109,7 @@ class Port : public PortInterface, public talk_base::MessageHandler,
        int min_port, int max_port, const std::string& username_fragment,
        const std::string& password);
   virtual ~Port();
+  virtual std::string GetClassname() const { return "Port"; }
 
   virtual const std::string& Type() const { return type_; }
   virtual talk_base::Network* Network() const { return network_; }
@@ -366,6 +368,7 @@ class Connection : public talk_base::MessageHandler,
   };
 
   virtual ~Connection();
+  virtual std::string GetClassname() const { return "Connection"; }
 
   // The local port where this connection sends and receives packets.
   Port* port() { return port_; }
@@ -451,7 +454,7 @@ class Connection : public talk_base::MessageHandler,
   void ReceivedPing();
 
   // Debugging description of this connection
-  std::string ToString() const;
+  virtual std::string ToString() const;
 
   bool reported() const { return reported_; }
   void set_reported(bool reported) { reported_ = reported;}
@@ -524,6 +527,7 @@ class Connection : public talk_base::MessageHandler,
 class ProxyConnection : public Connection {
  public:
   ProxyConnection(Port* port, size_t index, const Candidate& candidate);
+  virtual std::string GetClassname() const { return "ProxyConnection"; }
 
   virtual int Send(const void* data, size_t size);
   virtual int GetError() { return error_; }

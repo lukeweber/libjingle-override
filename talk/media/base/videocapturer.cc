@@ -36,6 +36,9 @@
 #include "talk/media/webrtc/webrtcvideoframe.h"
 #endif  // HAVE_WEBRTC_VIDEO
 
+#if defined(HAVE_WEBRTC_VIDEO)
+#include "talk/media/webrtc/webrtcvideoframe.h"
+#endif  // HAVE_WEBRTC_VIDEO
 
 namespace cricket {
 
