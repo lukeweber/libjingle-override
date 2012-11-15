@@ -246,6 +246,7 @@ int main(int argc, char **argv) {
   DEFINE_string(voiceoutput, NULL, "RTP dump file for voice output.");
   DEFINE_string(videoinput, NULL, "RTP dump file for video input.");
   DEFINE_string(videooutput, NULL, "RTP dump file for video output.");
+  DEFINE_string(turnserver, NULL, "Turn server address to use");
   DEFINE_bool(render, true, "Renders the video.");
   DEFINE_bool(datachannel, false, "Enable an RTP data channel.");
   DEFINE_bool(d, false, "Turn on debugging.");
@@ -439,7 +440,8 @@ int main(int argc, char **argv) {
 #endif
 
   XmppPump pump;
-  CallClient *client = new CallClient(pump.client(), caps_node, caps_ver);
+  LOG(LS_WARNING) << "FLAG_turnserver=" << FLAG_turnserver;
+  CallClient *client = new CallClient(pump.client(), caps_node, caps_ver, FLAG_turnserver);
 
   if (FLAG_voiceinput || FLAG_voiceoutput ||
       FLAG_videoinput || FLAG_videooutput) {

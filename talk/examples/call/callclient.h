@@ -65,6 +65,7 @@ struct MucRoomInfo;
 namespace talk_base {
 class Thread;
 class NetworkManager;
+class PacketSocketFactory;
 }  // namespace talk_base
 
 namespace cricket {
@@ -103,7 +104,8 @@ class CallClient: public sigslot::has_slots<> {
  public:
   CallClient(buzz::XmppClient* xmpp_client,
              const std::string& caps_node,
-             const std::string& version);
+             const std::string& version,
+             const std::string& turnserver);
   ~CallClient();
 
   cricket::MediaSessionClient* media_client() const { return media_client_; }
@@ -298,8 +300,10 @@ class CallClient: public sigslot::has_slots<> {
 
   Console *console_;
   buzz::XmppClient* xmpp_client_;
+  std::string turnserver_;
   talk_base::Thread* worker_thread_;
   talk_base::NetworkManager* network_manager_;
+  talk_base::PacketSocketFactory* packet_socket_factory_;
   cricket::PortAllocator* port_allocator_;
   cricket::SessionManager* session_manager_;
   cricket::SessionManagerTask* session_manager_task_;

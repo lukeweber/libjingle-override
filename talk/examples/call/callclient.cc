@@ -37,6 +37,7 @@
 #include "talk/base/stringutils.h"
 #include "talk/base/thread.h"
 #include "talk/base/windowpickerfactory.h"
+#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/examples/call/console.h"
 #include "talk/examples/call/friendinvitesendtask.h"
 #include "talk/examples/call/muc.h"
@@ -367,8 +368,11 @@ void CallClient::ParseLine(const std::string& line) {
 }
 
 CallClient::CallClient(buzz::XmppClient* xmpp_client,
-                       const std::string& caps_node, const std::string& version)
+                       const std::string& caps_node,
+                       const std::string& version,
+                       const std::string& turnserver)
     : xmpp_client_(xmpp_client),
+      turnserver_(turnserver),
       worker_thread_(NULL),
       media_engine_(NULL),
       data_engine_(NULL),
@@ -479,14 +483,33 @@ void CallClient::InitMedia() {
   worker_thread_->Start();
 
   // TODO: It looks like we are leaking many objects. E.g.
-  // |network_manager_| is never deleted.
+  // |network_manager_,packet_socket_factory_| are never deleted.
   network_manager_ = new talk_base::BasicNetworkManager();
+  packet_socket_factory_ = new talk_base::BasicPacketSocketFactory(worker_thread_);
 
   // TODO: Decide if the relay address should be specified here.
   talk_base::SocketAddress stun_addr("stun.l.google.com", 19302);
-  port_allocator_ =  new cricket::BasicPortAllocator(
-      network_manager_, stun_addr, talk_base::SocketAddress(),
-      talk_base::SocketAddress(), talk_base::SocketAddress());
+  talk_base::SocketAddress turn_addr_udp;
+  port_allocator_ =  new cricket::BasicPortAllocator(network_manager_,
+                     packet_socket_factory_,
+                     stun_addr);
+  if (!turnserver_.empty() && !turn_addr_udp.FromString(turnserver_)) {
+    turn_addr_udp.Clear();
+  } else {
+    portallocator_flags_ |= cricket::PORTALLOCATOR_ENABLE_TURN;
+    cricket::RelayCredentials credentials("fakeuser", "fakepass");
+    cricket::RelayServerConfig relay_server;
+    
+    LOG(LS_WARNING) << "turnserver_=" << turnserver_;
+    LOG(LS_WARNING) << "turn_addr_udp=" << turn_addr_udp.ToString();
+    relay_server.ports.push_back(cricket::ProtocolAddress(
+        turn_addr_udp, cricket::PROTO_UDP));
+    relay_server.credentials = credentials;
+    cricket::BasicPortAllocator *basic_port_allocator = static_cast<cricket::BasicPortAllocator *>(port_allocator_);
+    if(basic_port_allocator != NULL) {
+      basic_port_allocator->AddRelay(relay_server);
+    }
+  }
 
   if (portallocator_flags_ != 0) {
     port_allocator_->set_flags(portallocator_flags_);
@@ -618,7 +641,8 @@ void CallClient::OnSpeakerChanged(cricket::Call* call,
 }
 
 void SetMediaCaps(int media_caps, buzz::Status* status) {
-  status->set_voice_capability((media_caps & cricket::AUDIO_RECV) != 0);
+  //status->set_voice_capability((media_caps & cricket::AUDIO_RECV) != 0);
+  status->set_voice_capability(1);//(media_caps & cricket::AUDIO_RECV) != 0);
   status->set_video_capability((media_caps & cricket::VIDEO_RECV) != 0);
   status->set_camera_capability((media_caps & cricket::VIDEO_SEND) != 0);
 }
