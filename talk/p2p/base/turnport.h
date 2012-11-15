@@ -68,17 +68,8 @@ class TurnPort : public Port {
                           int min_port, int max_port,
                           const std::string& username,  // ice username.
                           const std::string& password,  // ice password.
-                          const talk_base::SocketAddress& server_address/*,
-                          const RelayCredentials& credentials*/){return NULL;}
-  static TurnPort* Create(talk_base::Thread* thread,
-                          talk_base::PacketSocketFactory* factory,
-                          talk_base::Network* network,
-                          const talk_base::IPAddress& ip,
-                          int min_port, int max_port,
-                          const std::string& username,  // ice username.
-                          const std::string& password,  // ice password.
                           const talk_base::SocketAddress& server_address,
-                          const RelayCredentials& credentials){return NULL;
+                          const RelayCredentials& credentials){
     TurnPort* port = new TurnPort(thread, factory, network,
                                   ip, min_port, max_port,
                                   username, password,

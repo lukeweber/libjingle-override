@@ -264,7 +264,6 @@ BasicPortAllocator::BasicPortAllocator(
 }
 
 void BasicPortAllocator::Construct() {
-  LOG_CI;
   best_writable_phase_ = -1;
   // For testing, also helps in sending OFFER Quicker 
   //best_writable_phase_ = PHASE_TURN;
@@ -272,7 +271,6 @@ void BasicPortAllocator::Construct() {
 }
 
 BasicPortAllocator::~BasicPortAllocator() {
-  LOG_CI;
 }
 
 int BasicPortAllocator::best_writable_phase() const {
@@ -1093,13 +1091,13 @@ void AllocationSequence::CreateTurnPorts() {
     LOG(LS_ERROR) << "AllocationSequence: No TURN server configured, skipping.";
     return;
   }
-
   PortConfiguration::RelayList::const_iterator relay;
   for (relay = config_->relays.begin();
        relay != config_->relays.end(); ++relay) {
 
-    if (relay->ports.empty())
+    if (relay->ports.empty()){
       continue;
+    }
 
     const talk_base::SocketAddress turn_server_addr =
         relay->ports.front().address;
