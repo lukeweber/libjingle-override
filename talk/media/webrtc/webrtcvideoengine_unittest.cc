@@ -106,7 +106,9 @@ class WebRtcVideoEngineTestFake : public testing::Test {
                     pixel.get(), size, 1, 1, 0, 0, 0)) {
       return false;
     }
-    return channel_->SendFrame(0u, &frame, false);
+    cricket::FakeVideoCapturer capturer;
+    channel_->SendFrame(&capturer, &frame);
+    return true;
   }
   void VerifyVP8SendCodec(int channel_num,
                           unsigned int width,
@@ -260,6 +262,9 @@ TEST_F(WebRtcVideoEngineTestFake, SetSendCodecsRejectBadFormat) {
   // Verify SetSendCodecs failed and send codec is not changed on engine.
   EXPECT_FALSE(channel_->SetSendCodecs(codec_list));
   webrtc::VideoCodec gcodec;
+  // Set plType to something other than the value to test against ensuring
+  // that failure will happen if it is not changed.
+  gcodec.plType = 1;
   EXPECT_EQ(0, vie_.GetSendCodec(channel_num, gcodec));
   EXPECT_EQ(0, gcodec.plType);
 
@@ -269,6 +274,9 @@ TEST_F(WebRtcVideoEngineTestFake, SetSendCodecsRejectBadFormat) {
 
   // Verify SetSendCodecs failed and send codec is not changed on engine.
   EXPECT_FALSE(channel_->SetSendCodecs(codec_list));
+  // Set plType to something other than the value to test against ensuring
+  // that failure will happen if it is not changed.
+  gcodec.plType = 1;
   EXPECT_EQ(0, vie_.GetSendCodec(channel_num, gcodec));
   EXPECT_EQ(0, gcodec.plType);
 }
@@ -287,6 +295,9 @@ TEST_F(WebRtcVideoEngineTestFake, SetSendCodecsRejectBadCodec) {
   // Verify SetSendCodecs failed and send codec is not changed on engine.
   EXPECT_FALSE(channel_->SetSendCodecs(codec_list));
   webrtc::VideoCodec gcodec;
+  // Set plType to something other than the value to test against ensuring
+  // that failure will happen if it is not changed.
+  gcodec.plType = 1;
   EXPECT_EQ(0, vie_.GetSendCodec(channel_num, gcodec));
   EXPECT_EQ(0, gcodec.plType);
 }

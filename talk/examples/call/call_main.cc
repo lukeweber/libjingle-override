@@ -246,8 +246,6 @@ int main(int argc, char **argv) {
   DEFINE_string(voiceoutput, NULL, "RTP dump file for voice output.");
   DEFINE_string(videoinput, NULL, "RTP dump file for video input.");
   DEFINE_string(videooutput, NULL, "RTP dump file for video output.");
-  DEFINE_string(stunserver, "", "Override a specific stun server.");
-  DEFINE_string(relayserver, "", "Override a specific relay server.");
   DEFINE_string(turnserver, "", "Override a specific turn server.");
   DEFINE_bool(render, true, "Renders the video.");
   DEFINE_bool(datachannel, false, "Enable an RTP data channel.");
@@ -442,8 +440,8 @@ int main(int argc, char **argv) {
 #endif
 
   XmppPump pump;
-  CallClient *client = new CallClient(pump.client(), caps_node, caps_ver, 
-    FLAG_stunserver, FLAG_relayserver, FLAG_turnserver);
+  LOG(LS_WARNING) << "FLAG_turnserver=" << FLAG_turnserver;
+  CallClient *client = new CallClient(pump.client(), caps_node, caps_ver, FLAG_turnserver);
 
   if (FLAG_voiceinput || FLAG_voiceoutput ||
       FLAG_videoinput || FLAG_videooutput) {

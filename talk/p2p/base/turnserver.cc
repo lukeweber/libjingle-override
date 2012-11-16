@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2004--2005, Google Inc.
+ * Copyright 2012, Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,782 +27,887 @@
 
 #include "talk/p2p/base/turnserver.h"
 
-#include <iostream>  // NOLINT
-#ifdef POSIX
-#include <errno.h>
-#endif  // POSIX
-
-#include <algorithm>
-
-#include "talk/base/asynctcpsocket.h"
+#include "talk/base/asyncpacketsocket.h"
+#include "talk/base/bytebuffer.h"
 #include "talk/base/helpers.h"
 #include "talk/base/logging.h"
-#include "talk/base/socketadapters.h"
+#include "talk/base/messagedigest.h"
+#include "talk/base/packetsocketfactory.h"
+#include "talk/base/stringencode.h"
+#include "talk/base/thread.h"
+#include "talk/p2p/base/common.h"
+#include "talk/p2p/base/stun.h"
 
 namespace cricket {
 
-// By default, we require a ping every 90 seconds.
-const int MAX_LIFETIME = 15 * 60 * 1000;
+// TODO(juberti): Move this all to a future turnmessage.h
+//static const int IPPROTO_UDP = 17;
+static const int kNonceTimeout = 60 * 60 * 1000;              // 60 minutes
+static const int kDefaultAllocationTimeout = 10 * 60 * 1000;  // 10 minutes
+static const int kPermissionTimeout = 5 * 60 * 1000;          //  5 minutes
+static const int kChannelTimeout = 10 * 60 * 1000;            // 10 minutes
 
-// The number of bytes in each of the usernames we use.
-const uint32 USERNAME_LENGTH = 16;
+static const int kMinChannelNumber = 0x4000;
+static const int kMaxChannelNumber = 0x7FFF;
 
-static const uint32 kMessageAcceptConnection = 1;
+static const size_t kNonceKeySize = 16;
+static const size_t kNonceSize = 40;
 
-// Calls SendTo on the given socket and logs any bad results.
-void TurnServer::Send(talk_base::AsyncPacketSocket* socket, const char* bytes, size_t size,
-          const talk_base::SocketAddress& addr) {
-  std::cout << "LOGT TurnServer::Send" << std::endl;
-  int result = socket->SendTo(bytes, size, addr);
-  if (result < static_cast<int>(size)) {
-    LOG(LS_ERROR) << "SendTo wrote only " << result << " of " << size
-                  << " bytes";
-  } else if (result < 0) {
-    LOG_ERR(LS_ERROR) << "SendTo";
-  }
+static const size_t TURN_CHANNEL_HEADER_SIZE = 4U;
+
+inline bool IsTurnChannelData(uint16 msg_type) {
+  // The first two bits of a channel data message are 0b01.
+  return ((msg_type & 0xC000) == 0x4000);
 }
 
-// Sends the given STUN message on the given socket.
-void TurnServer::SendStun(const StunMessage& msg,
-              talk_base::AsyncPacketSocket* socket,
-              const talk_base::SocketAddress& addr) {
-  std::cout << "LOGT TurnServer::SendStun" << std::endl;
-  std::cout << "LOGT RES = " << msg.ToString() << std::endl;
-  talk_base::ByteBuffer buf;
-  msg.Write(&buf);
-  TurnServer::Send(socket, buf.Data(), buf.Length(), addr);
-}
+// IDs used for posted messages.
+enum {
+  MSG_TIMEOUT,
+};
 
-// Constructs a STUN error response and sends it on the given socket.
-void TurnServer::SendStunError(const StunMessage& msg, talk_base::AsyncPacketSocket* socket,
-                   const talk_base::SocketAddress& remote_addr, int error_code,
-                   const char* error_desc, const std::string& magic_cookie) {
-  std::cout << "LOGT TurnServer::SendStunError" << std::endl;
-  TurnMessage err_msg;
-  err_msg.SetType(GetStunErrorResponseType(msg.type()));
-  err_msg.SetTransactionID(msg.transaction_id());
+// Encapsulates a TURN allocation.
+// The object is created when an allocation request is received, and then
+// handles TURN messages (via HandleTurnMessage) and channel data messages
+// (via HandleChannelData) for this allocation when received by the server.
+// The object self-deletes and informs the server if its lifetime timer expires.
+class TurnServer::Allocation : public talk_base::MessageHandler,
+                               public sigslot::has_slots<> {
+ public:
+  Allocation(TurnServer* server_,
+             talk_base::Thread* thread, const Connection& conn,
+             talk_base::AsyncPacketSocket* server_socket,
+             const std::string& key);
+  virtual ~Allocation();
 
-  StunByteStringAttribute* magic_cookie_attr =
-      StunAttribute::CreateByteString(cricket::STUN_ATTR_MAGIC_COOKIE);
-  if (magic_cookie.size() == 0) {
-    magic_cookie_attr->CopyBytes(cricket::TURN_MAGIC_COOKIE_VALUE,
-                                 sizeof(cricket::TURN_MAGIC_COOKIE_VALUE));
-  } else {
-    magic_cookie_attr->CopyBytes(magic_cookie.c_str(), magic_cookie.size());
-  }
-  err_msg.AddAttribute(magic_cookie_attr);
+  const Connection& conn() const { return conn_; }
+  const std::string& key() const { return key_; }
+  const std::string& transaction_id() const { return transaction_id_; }
+  const std::string& username() const { return username_; }
 
-  StunErrorCodeAttribute* err_code = StunAttribute::CreateErrorCode();
-  err_code->SetClass(error_code / 100);
-  err_code->SetNumber(error_code % 100);
-  err_code->SetReason(error_desc);
-  err_msg.AddAttribute(err_code);
+  std::string ToString() const;
 
-  TurnServer::SendStun(err_msg, socket, remote_addr);
-}
+  void HandleTurnMessage(const TurnMessage* msg);
+  void HandleChannelData(const char* data, size_t size);
 
-TurnServer::TurnServer(talk_base::Thread* thread)
-  : thread_(thread), log_bindings_(true) {
-  std::cout << "LOGT TurnServer::TurnServer" << std::endl;
-}
+  sigslot::signal1<Allocation*> SignalDestroyed;
 
-TurnServer::~TurnServer() {
-  std::cout << "LOGT TurnServer::~TurnServer" << std::endl;
-  // Deleting the binding will cause it to be removed from the map.
-  while (!bindings_.empty())
-    delete bindings_.begin()->second;
-  for (size_t i = 0; i < internal_sockets_.size(); ++i)
-    delete internal_sockets_[i];
-  for (size_t i = 0; i < external_sockets_.size(); ++i)
-    delete external_sockets_[i];
-  while (!server_sockets_.empty()) {
-    talk_base::AsyncSocket* socket = server_sockets_.begin()->first;
-    server_sockets_.erase(server_sockets_.begin()->first);
-    delete socket;
-  }
-}
+ private:
+  typedef std::list<Permission*> PermissionList;
+  typedef std::list<Channel*> ChannelList;
 
-void TurnServer::AddInternalSocket(talk_base::AsyncPacketSocket* socket) {
-  std::cout << "LOGT TurnServer::AddInternalSocket" << std::endl;
-  ASSERT(internal_sockets_.end() ==
-      std::find(internal_sockets_.begin(), internal_sockets_.end(), socket));
-  internal_sockets_.push_back(socket);
-  socket->SignalReadPacket.connect(this, &TurnServer::OnInternalPacket);
-}
+  void HandleAllocateRequest(const TurnMessage* msg);
+  void HandleRefreshRequest(const TurnMessage* msg);
+  void HandleSendIndication(const TurnMessage* msg);
+  void HandleCreatePermissionRequest(const TurnMessage* msg);
+  void HandleChannelBindRequest(const TurnMessage* msg);
 
-void TurnServer::RemoveInternalSocket(talk_base::AsyncPacketSocket* socket) {
-  std::cout << "LOGT TurnServer::RemoveInternalSocket" << std::endl;
-  SocketList::iterator iter =
-      std::find(internal_sockets_.begin(), internal_sockets_.end(), socket);
-  ASSERT(iter != internal_sockets_.end());
-  internal_sockets_.erase(iter);
-  socket->SignalReadPacket.disconnect(this);
-}
+  void OnExternalPacket(talk_base::AsyncPacketSocket* socket,
+                        const char* data, size_t size,
+                        const talk_base::SocketAddress& addr);
 
-void TurnServer::AddExternalSocket(talk_base::AsyncPacketSocket* socket) {
-  std::cout << "LOGT TurnServer::AddExternalSocket" << std::endl;
-  ASSERT(external_sockets_.end() ==
-      std::find(external_sockets_.begin(), external_sockets_.end(), socket));
-  external_sockets_.push_back(socket);
-  socket->SignalReadPacket.connect(this, &TurnServer::OnExternalPacket);
-}
+  static int ComputeLifetime(const TurnMessage* msg);
+  bool HasPermission(const talk_base::IPAddress& addr);
+  void AddPermission(const talk_base::IPAddress& addr);
+  Permission* FindPermission(const talk_base::IPAddress& addr) const;
+  Channel* FindChannel(int channel_id) const;
+  Channel* FindChannel(const talk_base::SocketAddress& addr) const;
 
-void TurnServer::RemoveExternalSocket(talk_base::AsyncPacketSocket* socket) {
-  std::cout << "LOGT TurnServer::RemoveExternalSocket" << std::endl;
-  SocketList::iterator iter =
-      std::find(external_sockets_.begin(), external_sockets_.end(), socket);
-  ASSERT(iter != external_sockets_.end());
-  external_sockets_.erase(iter);
-  socket->SignalReadPacket.disconnect(this);
-}
+  void SendResponse(TurnMessage* msg);
+  void SendBadRequestResponse(const TurnMessage* req);
+  void SendErrorResponse(const TurnMessage* req, int code,
+                         const std::string& reason);
+  void SendExternal(const void* data, size_t size,
+                    const talk_base::SocketAddress& peer);
 
-void TurnServer::AddInternalServerSocket(talk_base::AsyncSocket* socket,
-                                          cricket::ProtocolType proto) {
-  std::cout << "LOGT TurnServer::AddInternalServerSocket" << std::endl;
-  ASSERT(server_sockets_.end() ==
-         server_sockets_.find(socket));
-  server_sockets_[socket] = proto;
-  socket->SignalReadEvent.connect(this, &TurnServer::OnReadEvent);
-}
+  void OnPermissionDestroyed(Permission* perm);
+  void OnChannelDestroyed(Channel* channel);
+  virtual void OnMessage(talk_base::Message* msg);
 
-void TurnServer::RemoveInternalServerSocket(
-    talk_base::AsyncSocket* socket) {
-  std::cout << "LOGT TurnServer::RemoveInternalServerSocket" << std::endl;
-  ServerSocketMap::iterator iter = server_sockets_.find(socket);
-  ASSERT(iter != server_sockets_.end());
-  server_sockets_.erase(iter);
-  socket->SignalReadEvent.disconnect(this);
-}
+  TurnServer* server_;
+  talk_base::Thread* thread_;
+  Connection conn_;
+  talk_base::scoped_ptr<talk_base::AsyncPacketSocket> external_socket_;
+  std::string key_;
+  std::string transaction_id_;
+  std::string username_;
+  PermissionList perms_;
+  ChannelList channels_;
+};
 
-int TurnServer::GetConnectionCount() const {
-  std::cout << "LOGT TurnServer::GetConnectionCount" << std::endl;
-  return connections_.size();
-}
+// Encapsulates a TURN permission.
+// The object is created when a create permission request is received by an
+// allocation, and self-deletes when its lifetime timer expires.
+class TurnServer::Permission : public talk_base::MessageHandler {
+ public:
+  Permission(talk_base::Thread* thread, const talk_base::IPAddress& peer);
+  ~Permission();
 
-talk_base::SocketAddressPair TurnServer::GetConnection(int connection) const {
-  std::cout << "LOGT TurnServer::GetConnection" << std::endl;
-  int i = 0;
-  for (ConnectionMap::const_iterator it = connections_.begin();
-       it != connections_.end(); ++it) {
-    if (i == connection) {
-      return it->second->addr_pair();
-    }
-    ++i;
-  }
-  return talk_base::SocketAddressPair();
-}
+  const talk_base::IPAddress& peer() const { return peer_; }
+  void Refresh();
 
-bool TurnServer::HasConnection(const talk_base::SocketAddress& address) const {
-  std::cout << "LOGT TurnServer::HasConnection" << std::endl;
-  for (ConnectionMap::const_iterator it = connections_.begin();
-       it != connections_.end(); ++it) {
-    if (it->second->addr_pair().destination() == address) {
-      return true;
-    }
-  }
-  return false;
-}
+  sigslot::signal1<Permission*> SignalDestroyed;
 
-void TurnServer::OnReadEvent(talk_base::AsyncSocket* socket) {
-  std::cout << "LOGT TurnServer::OnReadEvent" << std::endl;
-  ASSERT(server_sockets_.find(socket) != server_sockets_.end());
-  AcceptConnection(socket);
-}
+ private:
+  virtual void OnMessage(talk_base::Message* msg);
 
-void TurnServer::OnInternalPacket(
-    talk_base::AsyncPacketSocket* socket, const char* bytes, size_t size,
-    const talk_base::SocketAddress& remote_addr) {
-  std::cout << "LOGT TurnServer::OnInternalPacket" << std::endl;
+  talk_base::Thread* thread_;
+  talk_base::IPAddress peer_;
+};
 
-  // Get the address of the connection we just received on.
-  talk_base::SocketAddressPair ap(remote_addr, socket->GetLocalAddress());
-  ASSERT(!ap.destination().IsNil());
+// Encapsulates a TURN channel binding.
+// The object is created when a channel bind request is received by an
+// allocation, and self-deletes when its lifetime timer expires.
+class TurnServer::Channel : public talk_base::MessageHandler {
+ public:
+  Channel(talk_base::Thread* thread, int id,
+                     const talk_base::SocketAddress& peer);
+  ~Channel();
 
-  // If this did not come from an existing connection, it should be a STUN
-  // allocate request.
-  ConnectionMap::iterator piter = connections_.find(ap);
-  if (piter == connections_.end()) {
-    HandleStunAllocate(bytes, size, ap, socket);
-    return;
-  }
+  int id() const { return id_; }
+  const talk_base::SocketAddress& peer() const { return peer_; }
+  void Refresh();
 
-  TurnServerConnection* int_conn = piter->second;
+  sigslot::signal1<Channel*> SignalDestroyed;
 
-  // Handle STUN requests to the server itself.
-  if (int_conn->binding()->HasMagicCookie(bytes, size)) {
-    HandleStun(int_conn, bytes, size);
-    return;
-  }
+ private:
+  virtual void OnMessage(talk_base::Message* msg);
 
-  // Otherwise, this is a non-wrapped packet that we are to forward.  Make sure
-  // that this connection has been locked.  (Otherwise, we would not know what
-  // address to forward to.)
-  if (!int_conn->locked()) {
-    LOG(LS_WARNING) << "Dropping packet: connection not locked";
-    return;
-  }
+  talk_base::Thread* thread_;
+  int id_;
+  talk_base::SocketAddress peer_;
+};
 
-  // Forward this to the destination address into the connection.
-  TurnServerConnection* ext_conn = int_conn->binding()->GetExternalConnection(
-      int_conn->default_destination());
-  if (ext_conn && ext_conn->locked()) {
-    // TODO: Check the HMAC.
-    ext_conn->Send(bytes, size);
-  } else {
-    // This happens very often and is not an error.
-    LOG(LS_INFO) << "Dropping packet: no external connection";
-  }
-}
-
-void TurnServer::OnExternalPacket(
-    talk_base::AsyncPacketSocket* socket, const char* bytes, size_t size,
-    const talk_base::SocketAddress& remote_addr) {
-  std::cout << "LOGT TurnServer::OnExternalPacket" << std::endl;
-
-  // Get the address of the connection we just received on.
-  talk_base::SocketAddressPair ap(remote_addr, socket->GetLocalAddress());
-  ASSERT(!ap.destination().IsNil());
-
-  // If this connection already exists, then forward the traffic.
-  ConnectionMap::iterator piter = connections_.find(ap);
-  if (piter != connections_.end()) {
-    // TODO: Check the HMAC.
-    TurnServerConnection* ext_conn = piter->second;
-    TurnServerConnection* int_conn =
-        ext_conn->binding()->GetInternalConnection(
-            ext_conn->addr_pair().source());
-    ASSERT(int_conn != NULL);
-    int_conn->Send(bytes, size, ext_conn->addr_pair().source());
-    ext_conn->Lock();  // allow outgoing packets
-    return;
-  }
-
-  // The first packet should always be a STUN / TURN packet.  If it isn't, then
-  // we should just ignore this packet.
-  TurnMessage msg;
-  talk_base::ByteBuffer buf(bytes, size);
-  if (!msg.Read(&buf)) {
-    LOG(LS_WARNING) << "Dropping packet: first packet not STUN";
-    return;
-  }
-
-  // The initial packet should have a username (which identifies the binding).
-  const StunByteStringAttribute* username_attr =
-      msg.GetByteString(STUN_ATTR_USERNAME);
-  if (!username_attr) {
-    LOG(LS_WARNING) << "Dropping packet: no username";
-    return;
-  }
-
-  uint32 length = talk_base::_min(static_cast<uint32>(username_attr->length()),
-                                  USERNAME_LENGTH);
-  std::string username(username_attr->bytes(), length);
-  // TODO: Check the HMAC.
-
-  // The binding should already be present.
-  BindingMap::iterator biter = bindings_.find(username);
-  if (biter == bindings_.end()) {
-    LOG(LS_WARNING) << "Dropping packet: no binding with username";
-    return;
-  }
-
-  // Add this authenticted connection to the binding.
-  TurnServerConnection* ext_conn =
-      new TurnServerConnection(biter->second, ap, socket);
-  ext_conn->binding()->AddExternalConnection(ext_conn);
-  AddConnection(ext_conn);
-
-  // We always know where external packets should be forwarded, so we can lock
-  // them from the beginning.
-  ext_conn->Lock();
-
-  // Send this message on the appropriate internal connection.
-  TurnServerConnection* int_conn = ext_conn->binding()->GetInternalConnection(
-      ext_conn->addr_pair().source());
-  ASSERT(int_conn != NULL);
-  int_conn->Send(bytes, size, ext_conn->addr_pair().source());
-}
-
-bool TurnServer::HandleStun(
-    const char* bytes, size_t size, const talk_base::SocketAddress& remote_addr,
-    talk_base::AsyncPacketSocket* socket, std::string* username,
-    StunMessage* msg) {
-  std::cout << "LOGT TurnServer::HandleStun1" << std::endl;
-
-  // Parse this into a stun message. Eat the message if this fails.
-  talk_base::ByteBuffer buf(bytes, size);
-  if (!msg->Read(&buf)) {
-    std::cout << "LOGT TurnServer::HandleStun1 FAILED" << std::endl;
+static bool InitResponse(const StunMessage* req, StunMessage* resp) {
+  int resp_type = (req) ? GetStunSuccessResponseType(req->type()) : -1;
+  if (resp_type == -1)
     return false;
-  }
-
-  // The initial packet should have a username (which identifies the binding).
-  const StunByteStringAttribute* username_attr =
-      msg->GetByteString(STUN_ATTR_USERNAME);
-  if (!username_attr) {
-    SendStunError(*msg, socket, remote_addr, 432, "Missing Username", "");
-    return false;
-  }
-
-  // Record the username if requested.
-  if (username)
-    username->append(username_attr->bytes(), username_attr->length());
-
-  // TODO: Check for unknown attributes (<= 0x7fff)
-
+  resp->SetType(resp_type);
+  resp->SetTransactionID(req->transaction_id());
   return true;
 }
 
-void TurnServer::HandleStunAllocate(
-    const char* bytes, size_t size, const talk_base::SocketAddressPair& ap,
-    talk_base::AsyncPacketSocket* socket) {
-  std::cout << "LOGT TurnServer::HandleStunAllocate1" << std::endl;
-  // Make sure this is a valid STUN request.
-  TurnMessage request;
-  std::string username;
-  if (!HandleStun(bytes, size, ap.source(), socket, &username, &request))
-    return;
-
-  // Make sure this is a an allocate request.
-  if (request.type() != STUN_ALLOCATE_REQUEST) {
-    SendStunError(request,
-                  socket,
-                  ap.source(),
-                  600,
-                  "Operation Not Supported",
-                  "");
-  std::cout << "LOGT TurnServer::HandleStunAllocate1-Begin" << std::endl <<
-  "username: " << username << std::endl <<
-  "bytes: " << bytes << std::endl <<
-  "LOGT TurnServer::HandleStunAllocate1-End" << std::endl;
-    return;
-  }
-
-  // TODO: Check the HMAC.
-
-  // Find or create the binding for this username.
-
-  TurnServerBinding* binding;
-
-  BindingMap::iterator biter = bindings_.find(username);
-  if (biter != bindings_.end()) {
-    binding = biter->second;
-  } else {
-    // NOTE: In the future, bindings will be created by the bot only.  This
-    //       else-branch will then disappear.
-
-    // Compute the appropriate lifetime for this binding.
-    uint32 lifetime = MAX_LIFETIME;
-    const StunUInt32Attribute* lifetime_attr =
-        request.GetUInt32(STUN_ATTR_LIFETIME);
-    if (lifetime_attr)
-      lifetime = talk_base::_min(lifetime, lifetime_attr->value() * 1000);
-
-    binding = new TurnServerBinding(this, username, "0", lifetime);
-    binding->SignalTimeout.connect(this, &TurnServer::OnTimeout);
-    bindings_[username] = binding;
-
-    if (log_bindings_) {
-      LOG(LS_INFO) << "Added new binding " << username << ", "
-                   << bindings_.size() << " total";
-    }
-  }
-
-  // Add this connection to the binding.  It starts out unlocked.
-  TurnServerConnection* int_conn =
-      new TurnServerConnection(binding, ap, socket);
-  binding->AddInternalConnection(int_conn);
-  AddConnection(int_conn);
-
-  // Now that we have a connection, this other method takes over.
-  HandleStunAllocate(int_conn, request);
-}
-
-void TurnServer::HandleStun(
-    TurnServerConnection* int_conn, const char* bytes, size_t size) {
-  std::cout << "LOGT TurnServer::HandleStun2" << std::endl;
-
-  // Make sure this is a valid STUN request.
-  TurnMessage request;
-  std::string username;
-  if (!HandleStun(bytes, size, int_conn->addr_pair().source(),
-                  int_conn->socket(), &username, &request))
-    return;
-
-  // Make sure the username is the one were were expecting.
-  if (username != int_conn->binding()->username()) {
-    int_conn->SendStunError(request, 430, "Stale Credentials");
-    return;
-  }
-
-  // TODO: Check the HMAC.
-
-  // Send this request to the appropriate handler.
-  if (request.type() == STUN_SEND_REQUEST)
-    HandleStunSend(int_conn, request);
-  else if (request.type() == STUN_ALLOCATE_REQUEST)
-    HandleStunAllocate(int_conn, request);
-  else
-    int_conn->SendStunError(request, 600, "Operation Not Supported");
-}
-
-void TurnServer::HandleStunAllocate(
-    TurnServerConnection* int_conn, const StunMessage& request) {
-  std::cout << "LOGT TurnServer::HandleStunAllocate2" << std::endl;
-  std::cout << "LOGT REQ = " << request.ToString() << std::endl;
-
-  // Create a response message that includes an address with which external
-  // clients can communicate.
-
-  TurnMessage response;
-  response.SetType(STUN_ALLOCATE_RESPONSE);
-  response.SetTransactionID(request.transaction_id());
-
-  StunByteStringAttribute* magic_cookie_attr =
-      StunAttribute::CreateByteString(cricket::STUN_ATTR_MAGIC_COOKIE);
-  magic_cookie_attr->CopyBytes(int_conn->binding()->magic_cookie().c_str(),
-                               int_conn->binding()->magic_cookie().size());
-  response.AddAttribute(magic_cookie_attr);
-
-  size_t index = rand() % external_sockets_.size();
-  talk_base::SocketAddress ext_addr =
-      external_sockets_[index]->GetLocalAddress();
-
-  StunAddressAttribute* addr_attr =
-      StunAttribute::CreateXorAddress(STUN_ATTR_XOR_RELAYED_ADDRESS);
-  addr_attr->SetIP(ext_addr.ipaddr());
-  addr_attr->SetPort(ext_addr.port());
-  response.AddAttribute(addr_attr);
-
-  StunUInt32Attribute* res_lifetime_attr =
-      StunAttribute::CreateUInt32(STUN_ATTR_LIFETIME);
-  res_lifetime_attr->SetValue(int_conn->binding()->lifetime() / 1000);
-  response.AddAttribute(res_lifetime_attr);
-
-  // TODO: Support transport-prefs (preallocate RTCP port).
-  // TODO: Support bandwidth restrictions.
-  // TODO: Add message integrity check.
-
-  // Send a response to the caller.
-  int_conn->SendStun(response);
-}
-
-void TurnServer::HandleStunSend(
-    TurnServerConnection* int_conn, const StunMessage& request) {
-  std::cout << "LOGT TurnServer::HandleStunSend" << std::endl;
-
-  const StunAddressAttribute* addr_attr =
-      request.GetAddress(STUN_ATTR_DESTINATION_ADDRESS);
-  if (!addr_attr) {
-    int_conn->SendStunError(request, 400, "Bad Request");
-    return;
-  }
-
-  const StunByteStringAttribute* data_attr =
-      request.GetByteString(STUN_ATTR_DATA);
-  if (!data_attr) {
-    int_conn->SendStunError(request, 400, "Bad Request");
-    return;
-  }
-
-  talk_base::SocketAddress ext_addr(addr_attr->ipaddr(), addr_attr->port());
-  TurnServerConnection* ext_conn =
-      int_conn->binding()->GetExternalConnection(ext_addr);
-  if (!ext_conn) {
-    // Create a new connection to establish the relationship with this binding.
-    ASSERT(external_sockets_.size() == 1);
-    talk_base::AsyncPacketSocket* socket = external_sockets_[0];
-    talk_base::SocketAddressPair ap(ext_addr, socket->GetLocalAddress());
-    ext_conn = new TurnServerConnection(int_conn->binding(), ap, socket);
-    ext_conn->binding()->AddExternalConnection(ext_conn);
-    AddConnection(ext_conn);
-  }
-
-  // If this connection has pinged us, then allow outgoing traffic.
-  if (ext_conn->locked())
-    ext_conn->Send(data_attr->bytes(), data_attr->length());
-
-  const StunUInt32Attribute* options_attr =
-      request.GetUInt32(STUN_ATTR_OPTIONS);
-  if (options_attr && (options_attr->value() & 0x01)) {
-    int_conn->set_default_destination(ext_addr);
-    int_conn->Lock();
-
-    TurnMessage response;
-    response.SetType(STUN_SEND_RESPONSE);
-    response.SetTransactionID(request.transaction_id());
-
-    StunByteStringAttribute* magic_cookie_attr =
-        StunAttribute::CreateByteString(cricket::STUN_ATTR_MAGIC_COOKIE);
-    magic_cookie_attr->CopyBytes(int_conn->binding()->magic_cookie().c_str(),
-                                 int_conn->binding()->magic_cookie().size());
-    response.AddAttribute(magic_cookie_attr);
-
-    StunUInt32Attribute* options2_attr =
-      StunAttribute::CreateUInt32(cricket::STUN_ATTR_OPTIONS);
-    options2_attr->SetValue(0x01);
-    response.AddAttribute(options2_attr);
-
-    int_conn->SendStun(response);
-  }
-}
-
-void TurnServer::AddConnection(TurnServerConnection* conn) {
-  std::cout << "LOGT TurnServer::AddConnection" << std::endl;
-  ASSERT(connections_.find(conn->addr_pair()) == connections_.end());
-  connections_[conn->addr_pair()] = conn;
-}
-
-void TurnServer::RemoveConnection(TurnServerConnection* conn) {
-  std::cout << "LOGT TurnServer::RemoveConnection" << std::endl;
-  ConnectionMap::iterator iter = connections_.find(conn->addr_pair());
-  ASSERT(iter != connections_.end());
-  connections_.erase(iter);
-}
-
-void TurnServer::RemoveBinding(TurnServerBinding* binding) {
-  std::cout << "LOGT TurnServer::RemoveBinding" << std::endl;
-  BindingMap::iterator iter = bindings_.find(binding->username());
-  ASSERT(iter != bindings_.end());
-  bindings_.erase(iter);
-
-  if (log_bindings_) {
-    LOG(LS_INFO) << "Removed binding " << binding->username() << ", "
-                 << bindings_.size() << " remaining";
-  }
-}
-
-void TurnServer::OnMessage(talk_base::Message *pmsg) {
-  std::cout << "LOGT TurnServer::OnMessage" << std::endl;
-  ASSERT(pmsg->message_id == kMessageAcceptConnection);
-  talk_base::MessageData* data = pmsg->pdata;
-  talk_base::AsyncSocket* socket =
-      static_cast <talk_base::TypedMessageData<talk_base::AsyncSocket*>*>
-      (data)->data();
-  AcceptConnection(socket);
-  delete data;
-}
-
-void TurnServer::OnTimeout(TurnServerBinding* binding) {
-  std::cout << "LOGT TurnServer::OnTimeout" << std::endl;
-  // This call will result in all of the necessary clean-up. We can't call
-  // delete here, because you can't delete an object that is signaling you.
-  thread_->Dispose(binding);
-}
-
-void TurnServer::AcceptConnection(talk_base::AsyncSocket* server_socket) {
-  std::cout << "LOGT TurnServer::AcceptConnection" << std::endl;
-  // Check if someone is trying to connect to us.
-  talk_base::SocketAddress accept_addr;
-  talk_base::AsyncSocket* accepted_socket =
-      server_socket->Accept(&accept_addr);
-  if (accepted_socket != NULL) {
-    // We had someone trying to connect, now check which protocol to
-    // use and create a packet socket.
-    ASSERT(server_sockets_[server_socket] == cricket::PROTO_TCP ||
-           server_sockets_[server_socket] == cricket::PROTO_SSLTCP);
-    if (server_sockets_[server_socket] == cricket::PROTO_SSLTCP) {
-      accepted_socket = new talk_base::AsyncSSLServerSocket(accepted_socket);
-    }
-    talk_base::AsyncTCPSocket* tcp_socket =
-        new talk_base::AsyncTCPSocket(accepted_socket, false);
-
-    // Finally add the socket so it can start communicating with the client.
-    AddInternalSocket(tcp_socket);
-  }
-}
-
-TurnServerConnection::TurnServerConnection(
-    TurnServerBinding* binding, const talk_base::SocketAddressPair& addrs,
-    talk_base::AsyncPacketSocket* socket)
-  : binding_(binding), addr_pair_(addrs), socket_(socket), locked_(false) {
-  std::cout << "LOGT TurnServerConnection::TurnServerConnection" << std::endl;
-  // The creation of a new connection constitutes a use of the binding.
-  binding_->NoteUsed();
-}
-
-TurnServerConnection::~TurnServerConnection() {
-  std::cout << "LOGT TurnServerConnection::~TurnServerConnection1" << std::endl;
-  // Remove this connection from the server's map (if it exists there).
-  binding_->server()->RemoveConnection(this);
-}
-
-void TurnServerConnection::Send(const char* data, size_t size) {
-  std::cout << "LOGT TurnServerConnection::~TurnServerConnection2" << std::endl;
-  // Note that the binding has been used again.
-  binding_->NoteUsed();
-
-  cricket::TurnServer::Send(socket_, data, size, addr_pair_.source());
-}
-
-void TurnServerConnection::Send(
-    const char* data, size_t size, const talk_base::SocketAddress& from_addr) {
-  std::cout << "LOGT TurnServerConnection::Send" << std::endl;
-  // If the from address is known to the client, we don't need to send it.
-  if (locked() && (from_addr == default_dest_)) {
-    Send(data, size);
-    return;
-  }
-
-  // Wrap the given data in a data-indication packet.
-
-  TurnMessage msg;
-  msg.SetType(STUN_DATA_INDICATION);
-
-  StunByteStringAttribute* magic_cookie_attr =
-      StunAttribute::CreateByteString(cricket::STUN_ATTR_MAGIC_COOKIE);
-  magic_cookie_attr->CopyBytes(binding_->magic_cookie().c_str(),
-                               binding_->magic_cookie().size());
-  msg.AddAttribute(magic_cookie_attr);
-
-  StunAddressAttribute* addr_attr =
-      StunAttribute::CreateAddress(STUN_ATTR_SOURCE_ADDRESS2);
-  addr_attr->SetIP(from_addr.ipaddr());
-  addr_attr->SetPort(from_addr.port());
-  msg.AddAttribute(addr_attr);
-
-  StunByteStringAttribute* data_attr =
-      StunAttribute::CreateByteString(STUN_ATTR_DATA);
-  ASSERT(size <= 65536);
-  data_attr->CopyBytes(data, uint16(size));
-  msg.AddAttribute(data_attr);
-
-  SendStun(msg);
-}
-
-void TurnServerConnection::SendStun(const StunMessage& msg) {
-  std::cout << "LOGT TurnServerConnection::SendStun" << std::endl;
-  // Note that the binding has been used again.
-  binding_->NoteUsed();
-
-  cricket::TurnServer::SendStun(msg, socket_, addr_pair_.source());
-}
-
-void TurnServerConnection::SendStunError(
-      const StunMessage& request, int error_code, const char* error_desc) {
-  std::cout << "LOGT TurnServerConnection::SendStunError" << std::endl;
-  // An error does not indicate use.  If no legitimate use off the binding
-  // occurs, we want it to be cleaned up even if errors are still occuring.
-
-  cricket::TurnServer::SendStunError(
-      request, socket_, addr_pair_.source(), error_code, error_desc,
-      binding_->magic_cookie());
-}
-
-void TurnServerConnection::Lock() {
-  std::cout << "LOGT TurnServerConnection::Lock" << std::endl;
-  locked_ = true;
-}
-
-void TurnServerConnection::Unlock() {
-  std::cout << "LOGT TurnServerConnection::Unlock" << std::endl;
-  locked_ = false;
-}
-
-// IDs used for posted messages:
-const uint32 MSG_LIFETIME_TIMER = 1;
-
-TurnServerBinding::TurnServerBinding(
-    TurnServer* server, const std::string& username,
-    const std::string& password, uint32 lifetime)
-  : server_(server), username_(username), password_(password),
-    lifetime_(lifetime) {
-  std::cout << "LOGT TurnServerBinding::TurnServerBinding" << std::endl;
-  // For now, every connection uses the standard magic cookie value.
-  magic_cookie_.append(
-      reinterpret_cast<const char*>(TURN_MAGIC_COOKIE_VALUE),
-      sizeof(TURN_MAGIC_COOKIE_VALUE));
-
-  // Initialize the last-used time to now.
-  NoteUsed();
-
-  // Set the first timeout check.
-  server_->thread()->PostDelayed(lifetime_, this, MSG_LIFETIME_TIMER);
-}
-
-TurnServerBinding::~TurnServerBinding() {
-  std::cout << "LOGT TurnServerBinding::~TurnServerBinding" << std::endl;
-  // Clear the outstanding timeout check.
-  server_->thread()->Clear(this);
-
-  // Clean up all of the connections.
-  for (size_t i = 0; i < internal_connections_.size(); ++i)
-    delete internal_connections_[i];
-  for (size_t i = 0; i < external_connections_.size(); ++i)
-    delete external_connections_[i];
-
-  // Remove this binding from the server's map.
-  server_->RemoveBinding(this);
-}
-
-void TurnServerBinding::AddInternalConnection(TurnServerConnection* conn) {
-  std::cout << "LOGT TurnServerBinding::AddInternalConnection" << std::endl;
-  internal_connections_.push_back(conn);
-}
-
-void TurnServerBinding::AddExternalConnection(TurnServerConnection* conn) {
-  std::cout << "LOGT TurnServerBinding::AddExternalConnection" << std::endl;
-  external_connections_.push_back(conn);
-}
-
-void TurnServerBinding::NoteUsed() {
-  std::cout << "LOGT TurnServerBinding::NoteUsed" << std::endl;
-  last_used_ = talk_base::Time();
-}
-
-bool TurnServerBinding::HasMagicCookie(const char* bytes, size_t size) const {
-  std::cout << "LOGT TurnServerBinding::HasMagicCookie" << std::endl;
-  if (size < 24 + magic_cookie_.size()) {
+static bool InitErrorResponse(const StunMessage* req, int code,
+                              const std::string& reason, StunMessage* resp) {
+  int resp_type = (req) ? GetStunErrorResponseType(req->type()) : -1;
+  if (resp_type == -1)
     return false;
+  resp->SetType(resp_type);
+  resp->SetTransactionID(req->transaction_id());
+  VERIFY(resp->AddAttribute(new cricket::StunErrorCodeAttribute(
+      STUN_ATTR_ERROR_CODE, code, reason)));
+  return true;
+}
+
+TurnServer::TurnServer(talk_base::Thread* thread)
+    : thread_(thread),
+      nonce_key_(talk_base::CreateRandomString(kNonceKeySize)) {
+}
+
+TurnServer::~TurnServer() {
+  for (AllocationMap::iterator it = allocations_.begin();
+       it != allocations_.end(); ++it) {
+    delete it->second;
+  }
+}
+
+void TurnServer::AddInternalServerSocket(talk_base::AsyncPacketSocket* socket) {
+  ASSERT(server_socket_ == NULL);
+  server_socket_.reset(socket);
+  socket->SignalReadPacket.connect(this, &TurnServer::OnInternalPacket);
+}
+
+void TurnServer::SetExternalSocketFactory(
+    talk_base::PacketSocketFactory* factory,
+    const talk_base::SocketAddress& external_addr) {
+  external_socket_factory_.reset(factory);
+  external_addr_ = external_addr;
+}
+
+void TurnServer::OnInternalPacket(talk_base::AsyncPacketSocket* socket,
+                                  const char* data, size_t size,
+                                  const talk_base::SocketAddress& addr) {
+  // Fail if the packet is too small to even contain a channel header.
+  if (size < TURN_CHANNEL_HEADER_SIZE) {
+   return;
+  }
+
+  Connection conn(addr, socket->GetLocalAddress(), TURNPROTO_UDP);
+  uint16 msg_type = talk_base::GetBE16(data);
+  if (!IsTurnChannelData(msg_type)) {
+    // This is a STUN message.
+    HandleStunMessage(conn, data, size);
   } else {
-    return 0 == std::memcmp(
-        bytes + 24, magic_cookie_.c_str(), magic_cookie_.size());
-  }
-}
-
-TurnServerConnection* TurnServerBinding::GetInternalConnection(
-    const talk_base::SocketAddress& ext_addr) {
-  std::cout << "LOGT TurnServerBinding::GetInternalConnection" << std::endl;
-
-  // Look for an internal connection that is locked to this address.
-  for (size_t i = 0; i < internal_connections_.size(); ++i) {
-    if (internal_connections_[i]->locked() &&
-        (ext_addr == internal_connections_[i]->default_destination()))
-      return internal_connections_[i];
-  }
-
-  // If one was not found, we send to the first connection.
-  ASSERT(internal_connections_.size() > 0);
-  return internal_connections_[0];
-}
-
-TurnServerConnection* TurnServerBinding::GetExternalConnection(
-    const talk_base::SocketAddress& ext_addr) {
-  std::cout << "LOGT TurnServerBinding::GetExternalConnection" << std::endl;
-  for (size_t i = 0; i < external_connections_.size(); ++i) {
-    if (ext_addr == external_connections_[i]->addr_pair().source())
-      return external_connections_[i];
-  }
-  return 0;
-}
-
-void TurnServerBinding::OnMessage(talk_base::Message *pmsg) {
-  std::cout << "LOGT TurnServerBinding::OnMessage" << std::endl;
-  if (pmsg->message_id == MSG_LIFETIME_TIMER) {
-    ASSERT(!pmsg->pdata);
-
-    // If the lifetime timeout has been exceeded, then send a signal.
-    // Otherwise, just keep waiting.
-    if (talk_base::Time() >= last_used_ + lifetime_) {
-      LOG(LS_INFO) << "Expiring binding " << username_;
-      SignalTimeout(this);
-    } else {
-      server_->thread()->PostDelayed(lifetime_, this, MSG_LIFETIME_TIMER);
+    // This is a channel message; let the allocation handle it.
+    Allocation* allocation = FindAllocation(conn);
+    if (allocation) {
+      allocation->HandleChannelData(data, size);
     }
-
-  } else {
-    ASSERT(false);
   }
+}
+
+void TurnServer::HandleStunMessage(const Connection& conn, const char* data,
+                                   size_t size) {
+  TurnMessage msg;
+  talk_base::ByteBuffer buf(data, size);
+  if (!msg.Read(&buf) || (buf.Length() > 0)) {
+    LOG(LS_WARNING) << "Received invalid STUN message";
+    return;
+  }
+
+  // If it's a STUN binding request, handle that specially.
+  if (msg.type() == STUN_BINDING_REQUEST) {
+    HandleBindingRequest(conn, &msg);
+    return;
+  }
+
+  // Look up the key that we'll use to validate the M-I. If we have an
+  // existing allocation, the key will already be cached.
+  Allocation* allocation = FindAllocation(conn);
+  std::string key;
+  if (!allocation) {
+    GetKey(&msg, &key);
+  } else {
+    key = allocation->key();
+  }
+
+  // Ensure the message is authorized; only needed for requests.
+  if (IsStunRequestType(msg.type())) {
+    if (!CheckAuthorization(conn, &msg, data, size, key)) {
+      return;
+    }
+  }
+
+  if (!allocation && msg.type() == STUN_ALLOCATE_REQUEST) {
+    // This is a new allocate request.
+    HandleAllocateRequest(conn, &msg, key);
+  } else if (allocation &&
+             (msg.type() != STUN_ALLOCATE_REQUEST ||
+              msg.transaction_id() == allocation->transaction_id())) {
+    // This is a non-allocate request, or a retransmit of an allocate.
+    // Check that the username matches the previous username used.
+    if (IsStunRequestType(msg.type()) &&
+        msg.GetByteString(STUN_ATTR_USERNAME)->GetString() !=
+            allocation->username()) {
+      SendErrorResponse(conn, &msg, STUN_ERROR_WRONG_CREDENTIALS,
+                        STUN_ERROR_REASON_WRONG_CREDENTIALS);
+      return;
+    }
+    allocation->HandleTurnMessage(&msg);
+  } else {
+    // Allocation mismatch.
+    SendErrorResponse(conn, &msg, STUN_ERROR_ALLOCATION_MISMATCH,
+                      STUN_ERROR_REASON_ALLOCATION_MISMATCH);
+  }
+}
+
+bool TurnServer::GetKey(const StunMessage* msg, std::string* key) {
+  const StunByteStringAttribute* username_attr =
+      msg->GetByteString(STUN_ATTR_USERNAME);
+  if (!username_attr) {
+    return false;
+  }
+
+  // TODO(juberti): Implement the password hook here.
+  std::string username = username_attr->GetString();
+  return ComputeStunCredentialHash(username, realm_, username, key);
+}
+
+bool TurnServer::CheckAuthorization(const Connection& conn,
+                                    const StunMessage* msg,
+                                    const char* data, size_t size,
+                                    const std::string& key) {
+  // RFC 5389, 10.2.2.
+  ASSERT(IsStunRequestType(msg->type()));
+  const StunByteStringAttribute* mi_attr =
+      msg->GetByteString(STUN_ATTR_MESSAGE_INTEGRITY);
+  const StunByteStringAttribute* username_attr =
+      msg->GetByteString(STUN_ATTR_USERNAME);
+  const StunByteStringAttribute* realm_attr =
+      msg->GetByteString(STUN_ATTR_REALM);
+  const StunByteStringAttribute* nonce_attr =
+      msg->GetByteString(STUN_ATTR_NONCE);
+
+  // Fail if no M-I.
+  if (!mi_attr) {
+    SendErrorResponseWithRealmAndNonce(conn, msg, STUN_ERROR_UNAUTHORIZED,
+                                       STUN_ERROR_REASON_UNAUTHORIZED);
+    return false;
+  }
+
+  // Fail if there is M-I but no username, nonce, or realm.
+  if (!username_attr || !realm_attr || !nonce_attr) {
+    SendErrorResponse(conn, msg, STUN_ERROR_BAD_REQUEST,
+                      STUN_ERROR_REASON_BAD_REQUEST);
+    return false;
+  }
+
+  // Fail if bad nonce.
+  if (!ValidateNonce(nonce_attr->GetString())) {
+    SendErrorResponseWithRealmAndNonce(conn, msg, STUN_ERROR_STALE_NONCE,
+                                       STUN_ERROR_REASON_STALE_NONCE);
+    return false;
+  }
+
+  // Fail if bad username or M-I.
+  // We need |data| and |size| for the call to ValidateMessageIntegrity.
+  if (key.empty() || !StunMessage::ValidateMessageIntegrity(data, size, key)) {
+    SendErrorResponseWithRealmAndNonce(conn, msg, STUN_ERROR_UNAUTHORIZED,
+                                       STUN_ERROR_REASON_UNAUTHORIZED);
+    return false;
+  }
+
+  // Success.
+  return true;
+}
+
+void TurnServer::HandleBindingRequest(const Connection& conn,
+                                      const StunMessage* req) {
+  StunMessage response;
+  InitResponse(req, &response);
+
+  // Tell the user the address that we received their request from.
+  StunAddressAttribute* mapped_addr_attr;
+  mapped_addr_attr = new StunXorAddressAttribute(
+      STUN_ATTR_XOR_MAPPED_ADDRESS, conn.src());
+  VERIFY(response.AddAttribute(mapped_addr_attr));
+
+  SendStun(conn, &response);
+}
+
+void TurnServer::HandleAllocateRequest(const Connection& conn,
+                                       const TurnMessage* msg,
+                                       const std::string& key) {
+  // Check the parameters in the request.
+  const StunUInt32Attribute* transport_attr =
+      msg->GetUInt32(STUN_ATTR_REQUESTED_TRANSPORT);
+  if (!transport_attr) {
+    SendErrorResponse(conn, msg, STUN_ERROR_BAD_REQUEST,
+                      STUN_ERROR_REASON_BAD_REQUEST);
+    return;
+  }
+
+  // Only UDP is supported right now.
+  int proto = transport_attr->value() >> 24;
+  if (proto != IPPROTO_UDP) {
+    SendErrorResponse(conn, msg, STUN_ERROR_UNSUPPORTED_PROTOCOL,
+                      STUN_ERROR_REASON_UNSUPPORTED_PROTOCOL);
+    return;
+  }
+
+  // Create the allocation and let it send the success response.
+  // If the actual socket allocation fails, send an internal error.
+  Allocation* alloc = CreateAllocation(conn, proto, key);
+  if (alloc) {
+    alloc->HandleTurnMessage(msg);
+  } else {
+    SendErrorResponse(conn, msg, STUN_ERROR_SERVER_ERROR,
+                      "Failed to allocate socket");
+  }
+}
+
+std::string TurnServer::GenerateNonce() const {
+  // Generate a nonce of the form hex(now + HMAC-MD5(nonce_key_, now))
+  uint32 now = talk_base::Time();
+  std::string input(reinterpret_cast<const char*>(&now), sizeof(now));
+  std::string nonce = talk_base::hex_encode(input.c_str(), input.size());
+  nonce += talk_base::ComputeHmac(talk_base::DIGEST_MD5, nonce_key_, input);
+  ASSERT(nonce.size() == kNonceSize);
+  return nonce;
+}
+
+bool TurnServer::ValidateNonce(const std::string& nonce) const {
+  // Check the size.
+  if (nonce.size() != kNonceSize) {
+    return false;
+  }
+
+  // Decode the timestamp.
+  uint32 then;
+  char* p = reinterpret_cast<char*>(&then);
+  size_t len = talk_base::hex_decode(p, sizeof(then),
+      nonce.substr(0, sizeof(then) * 2));
+  if (len != sizeof(then)) {
+    return false;
+  }
+
+  // Verify the HMAC.
+  if (nonce.substr(sizeof(then) * 2) != talk_base::ComputeHmac(
+      talk_base::DIGEST_MD5, nonce_key_, std::string(p, sizeof(then)))) {
+    return false;
+  }
+
+  // Validate the timestamp.
+  return talk_base::TimeSince(then) < kNonceTimeout;
+}
+
+TurnServer::Allocation* TurnServer::FindAllocation(const Connection& conn) {
+  AllocationMap::const_iterator it = allocations_.find(conn);
+  return (it != allocations_.end()) ? it->second : NULL;
+}
+
+TurnServer::Allocation* TurnServer::CreateAllocation(const Connection& conn,
+                                                     int proto,
+                                                     const std::string& key) {
+  talk_base::AsyncPacketSocket* external_socket = (external_socket_factory_) ?
+      external_socket_factory_->CreateUdpSocket(external_addr_, 0, 0) : NULL;
+  if (!external_socket) {
+    return NULL;
+  }
+
+  // The Allocation takes ownership of the socket.
+  Allocation* allocation = new Allocation(this,
+      thread_, conn, external_socket, key);
+  allocation->SignalDestroyed.connect(this, &TurnServer::OnAllocationDestroyed);
+  allocations_[conn] = allocation;
+  return allocation;
+}
+
+void TurnServer::SendErrorResponse(const Connection& conn,
+                                   const StunMessage* req,
+                                   int code, const std::string& reason) {
+  TurnMessage resp;
+  InitErrorResponse(req, code, reason, &resp);
+  LOG(LS_INFO) << "Sending error response, type=" << resp.type()
+               << ", code=" << code << ", reason=" << reason;
+  SendStun(conn, &resp);
+}
+
+void TurnServer::SendErrorResponseWithRealmAndNonce(const Connection& conn,
+                                                    const StunMessage* msg,
+                                                    int code,
+                                                    const std::string& reason) {
+  TurnMessage resp;
+  InitErrorResponse(msg, code, reason, &resp);
+  VERIFY(resp.AddAttribute(new StunByteStringAttribute(
+      STUN_ATTR_NONCE, GenerateNonce())));
+  VERIFY(resp.AddAttribute(new StunByteStringAttribute(
+      STUN_ATTR_REALM, realm_)));
+  SendStun(conn, &resp);
+}
+
+void TurnServer::SendStun(const Connection& conn, StunMessage* msg) {
+  talk_base::ByteBuffer buf;
+  // Add a SOFTWARE attribute if one is set.
+  if (!software_.empty()) {
+    VERIFY(msg->AddAttribute(
+        new StunByteStringAttribute(STUN_ATTR_SOFTWARE, software_)));
+  }
+  msg->Write(&buf);
+  Send(conn, buf);
+}
+
+void TurnServer::Send(const Connection& conn,
+                      const talk_base::ByteBuffer& buf) {
+  // TODO(juberti): Pick which socket to send on, once we have TCP support.
+  server_socket_->SendTo(buf.Data(), buf.Length(), conn.src());
+}
+
+void TurnServer::OnAllocationDestroyed(Allocation* allocation) {
+  AllocationMap::iterator it = allocations_.find(allocation->conn());
+  if (it != allocations_.end())
+    allocations_.erase(it);
+}
+
+TurnServer::Connection::Connection(const talk_base::SocketAddress& src,
+                                   const talk_base::SocketAddress& dst,
+                                   ProtocolType proto)
+    : src_(src), dst_(dst), proto_(proto) {
+}
+
+bool TurnServer::Connection::operator==(const Connection& c) const {
+  return src_ == c.src_ && dst_ == c.dst_ && proto_ == c.proto_;
+}
+
+bool TurnServer::Connection::operator<(const Connection& c) const {
+  return src_ < c.src_ || dst_ < c.dst_ || proto_ < c.proto_;
+}
+
+std::string TurnServer::Connection::ToString() const {
+  const char* const kProtos[] = {
+      "unknown", "udp", "tcp", "ssltcp"
+  };
+  std::ostringstream ost;
+  ost << src_.ToString() << "-" << dst_.ToString() << ":"<< kProtos[proto_];
+  return ost.str();
+}
+
+TurnServer::Allocation::Allocation(TurnServer* server,
+                                   talk_base::Thread* thread,
+                                   const Connection& conn,
+                                   talk_base::AsyncPacketSocket* socket,
+                                   const std::string& key)
+    : server_(server),
+      thread_(thread),
+      conn_(conn),
+      external_socket_(socket),
+      key_(key) {
+  external_socket_->SignalReadPacket.connect(
+      this, &TurnServer::Allocation::OnExternalPacket);
+}
+
+TurnServer::Allocation::~Allocation() {
+  for (ChannelList::iterator it = channels_.begin();
+       it != channels_.end(); ++it) {
+    delete *it;
+  }
+  for (PermissionList::iterator it = perms_.begin();
+       it != perms_.end(); ++it) {
+    delete *it;
+  }
+  thread_->Clear(this, MSG_TIMEOUT);
+  LOG_J(LS_INFO, this) << "Allocation destroyed";
+}
+
+std::string TurnServer::Allocation::ToString() const {
+  std::ostringstream ost;
+  ost << "Alloc[" << conn_.ToString() << "]";
+  return ost.str();
+}
+
+void TurnServer::Allocation::HandleTurnMessage(const TurnMessage* msg) {
+  ASSERT(msg != NULL);
+  switch (msg->type()) {
+    case STUN_ALLOCATE_REQUEST:
+      HandleAllocateRequest(msg);
+      break;
+    case TURN_REFRESH_REQUEST:
+      HandleRefreshRequest(msg);
+      break;
+    case TURN_SEND_INDICATION:
+      HandleSendIndication(msg);
+      break;
+    case TURN_CREATE_PERMISSION_REQUEST:
+      HandleCreatePermissionRequest(msg);
+      break;
+    case TURN_CHANNEL_BIND_REQUEST:
+      HandleChannelBindRequest(msg);
+      break;
+    default:
+      // Not sure what to do with this, just eat it.
+      LOG_J(LS_WARNING, this) << "Invalid TURN message type received: "
+                              << msg->type();
+  }
+}
+
+void TurnServer::Allocation::HandleAllocateRequest(const TurnMessage* msg) {
+  // Copy the important info from the allocate request.
+  transaction_id_ = msg->transaction_id();
+  const StunByteStringAttribute* username_attr =
+      msg->GetByteString(STUN_ATTR_USERNAME);
+  ASSERT(username_attr != NULL);
+  username_ = username_attr->GetString();
+
+  // Figure out the lifetime and start the allocation timer.
+  int lifetime_secs = ComputeLifetime(msg);
+  thread_->PostDelayed(lifetime_secs * 1000, this, MSG_TIMEOUT);
+
+  LOG_J(LS_INFO, this) << "Created allocation, lifetime=" << lifetime_secs;
+
+  // We've already validated all the important bits; just send a response here.
+  TurnMessage response;
+  InitResponse(msg, &response);
+
+  StunAddressAttribute* mapped_addr_attr =
+      new StunXorAddressAttribute(STUN_ATTR_XOR_MAPPED_ADDRESS, conn_.src());
+  StunAddressAttribute* relayed_addr_attr =
+      new StunXorAddressAttribute(STUN_ATTR_XOR_RELAYED_ADDRESS,
+          external_socket_->GetLocalAddress());
+  StunUInt32Attribute* lifetime_attr =
+      new StunUInt32Attribute(STUN_ATTR_LIFETIME, lifetime_secs);
+  VERIFY(response.AddAttribute(mapped_addr_attr));
+  VERIFY(response.AddAttribute(relayed_addr_attr));
+  VERIFY(response.AddAttribute(lifetime_attr));
+
+  SendResponse(&response);
+}
+
+void TurnServer::Allocation::HandleRefreshRequest(const TurnMessage* msg) {
+  // Figure out the new lifetime.
+  int lifetime_secs = ComputeLifetime(msg);
+
+  // Reset the expiration timer.
+  thread_->Clear(this, MSG_TIMEOUT);
+  thread_->PostDelayed(lifetime_secs * 1000, this, MSG_TIMEOUT);
+
+  LOG_J(LS_INFO, this) << "Refreshed allocation, lifetime=" << lifetime_secs;
+
+  // Send a success response with a LIFETIME attribute.
+  TurnMessage response;
+  InitResponse(msg, &response);
+
+  StunUInt32Attribute* lifetime_attr =
+      new StunUInt32Attribute(STUN_ATTR_LIFETIME, lifetime_secs);
+  VERIFY(response.AddAttribute(lifetime_attr));
+
+  SendResponse(&response);
+}
+
+void TurnServer::Allocation::HandleSendIndication(const TurnMessage* msg) {
+  // Check mandatory attributes.
+  const StunByteStringAttribute* data_attr = msg->GetByteString(STUN_ATTR_DATA);
+  const StunAddressAttribute* peer_attr =
+      msg->GetAddress(STUN_ATTR_XOR_PEER_ADDRESS);
+  if (!data_attr || !peer_attr) {
+    LOG_J(LS_WARNING, this) << "Received invalid send indication";
+    return;
+  }
+
+  // If a permission exists, send the data on to the peer.
+  if (HasPermission(peer_attr->GetAddress().ipaddr())) {
+    SendExternal(data_attr->bytes(), data_attr->length(),
+                 peer_attr->GetAddress());
+  } else {
+    LOG_J(LS_WARNING, this) << "Received send indication without permission"
+                            << "peer=" << peer_attr->GetAddress();
+  }
+}
+
+void TurnServer::Allocation::HandleCreatePermissionRequest(
+    const TurnMessage* msg) {
+  // Check mandatory attributes.
+  const StunAddressAttribute* peer_attr =
+      msg->GetAddress(STUN_ATTR_XOR_PEER_ADDRESS);
+  if (!peer_attr) {
+    SendBadRequestResponse(msg);
+    return;
+  }
+
+  // Add this permission.
+  AddPermission(peer_attr->GetAddress().ipaddr());
+
+  LOG_J(LS_INFO, this) << "Created permission, peer="
+                       << peer_attr->GetAddress();
+
+  // Send a success response.
+  TurnMessage response;
+  InitResponse(msg, &response);
+  SendResponse(&response);
+}
+
+void TurnServer::Allocation::HandleChannelBindRequest(const TurnMessage* msg) {
+  // Check mandatory attributes.
+  const StunUInt32Attribute* channel_attr =
+      msg->GetUInt32(STUN_ATTR_CHANNEL_NUMBER);
+  const StunAddressAttribute* peer_attr =
+      msg->GetAddress(STUN_ATTR_XOR_PEER_ADDRESS);
+  if (!channel_attr || !peer_attr) {
+    SendBadRequestResponse(msg);
+    return;
+  }
+
+  // Check that channel id is valid.
+  int channel_id = channel_attr->value() >> 16;
+  if (channel_id < kMinChannelNumber || channel_id > kMaxChannelNumber) {
+    SendBadRequestResponse(msg);
+    return;
+  }
+
+  // Check that this channel id isn't bound to another transport address, and
+  // that this transport address isn't bound to another channel id.
+  Channel* channel1 = FindChannel(channel_id);
+  Channel* channel2 = FindChannel(peer_attr->GetAddress());
+  if (channel1 != channel2) {
+    SendBadRequestResponse(msg);
+    return;
+  }
+
+  // Add or refresh this channel.
+  if (!channel1) {
+    channel1 = new Channel(thread_, channel_id, peer_attr->GetAddress());
+    channel1->SignalDestroyed.connect(this,
+        &TurnServer::Allocation::OnChannelDestroyed);
+    channels_.push_back(channel1);
+  } else {
+    channel1->Refresh();
+  }
+
+  // Channel binds also refresh permissions.
+  AddPermission(peer_attr->GetAddress().ipaddr());
+
+  LOG_J(LS_INFO, this) << "Bound channel, id=" << channel_id
+                       << ", peer=" << peer_attr->GetAddress();
+
+  // Send a success response.
+  TurnMessage response;
+  InitResponse(msg, &response);
+  SendResponse(&response);
+}
+
+void TurnServer::Allocation::HandleChannelData(const char* data, size_t size) {
+  // Extract the channel number from the data.
+  uint16 channel_id = talk_base::GetBE16(data);
+  Channel* channel = FindChannel(channel_id);
+  if (channel) {
+    // Send the data to the peer address.
+    SendExternal(data + TURN_CHANNEL_HEADER_SIZE,
+                 size - TURN_CHANNEL_HEADER_SIZE, channel->peer());
+  } else {
+    LOG_J(LS_WARNING, this) << "Received channel data for invalid channel, id="
+                            << channel_id;
+  }
+}
+
+void TurnServer::Allocation::OnExternalPacket(
+    talk_base::AsyncPacketSocket* socket,
+    const char* data, size_t size,
+    const talk_base::SocketAddress& addr) {
+  ASSERT(external_socket_.get() == socket);
+  Channel* channel = FindChannel(addr);
+  if (channel) {
+    // There is a channel bound to this address. Send as a channel message.
+    talk_base::ByteBuffer buf;
+    buf.WriteUInt16(channel->id());
+    buf.WriteUInt16(size);
+    buf.WriteBytes(data, size);
+    server_->Send(conn_, buf);
+  } else if (HasPermission(addr.ipaddr())) {
+    // No channel, but a permission exists. Send as a data indication.
+    TurnMessage msg;
+    msg.SetType(TURN_DATA_INDICATION);
+    msg.SetTransactionID(
+        talk_base::CreateRandomString(kStunTransactionIdLength));
+    VERIFY(msg.AddAttribute(new StunXorAddressAttribute(
+        STUN_ATTR_XOR_PEER_ADDRESS, addr)));
+    VERIFY(msg.AddAttribute(new StunByteStringAttribute(
+        STUN_ATTR_DATA, data, size)));
+    server_->SendStun(conn_, &msg);
+  } else {
+    LOG_J(LS_WARNING, this) << "Received external packet without permission, "
+                            << "peer=" << addr;
+  }
+}
+
+int TurnServer::Allocation::ComputeLifetime(const TurnMessage* msg) {
+  // Return the smaller of our default lifetime and the requested lifetime.
+  uint32 lifetime = kDefaultAllocationTimeout / 1000;  // convert to seconds
+  const StunUInt32Attribute* lifetime_attr = msg->GetUInt32(STUN_ATTR_LIFETIME);
+  if (lifetime_attr && lifetime_attr->value() < lifetime) {
+    lifetime = lifetime_attr->value();
+  }
+  return lifetime;
+}
+
+bool TurnServer::Allocation::HasPermission(const talk_base::IPAddress& addr) {
+  return (FindPermission(addr) != NULL);
+}
+
+void TurnServer::Allocation::AddPermission(const talk_base::IPAddress& addr) {
+  Permission* perm = FindPermission(addr);
+  if (!perm) {
+    perms_.push_back(new Permission(thread_, addr));
+  } else {
+    perm->Refresh();
+  }
+}
+
+TurnServer::Permission* TurnServer::Allocation::FindPermission(
+    const talk_base::IPAddress& addr) const {
+  for (PermissionList::const_iterator it = perms_.begin();
+       it != perms_.end(); ++it) {
+    if ((*it)->peer() == addr)
+      return *it;
+  }
+  return NULL;
+}
+
+TurnServer::Channel* TurnServer::Allocation::FindChannel(int channel_id) const {
+  for (ChannelList::const_iterator it = channels_.begin();
+       it != channels_.end(); ++it) {
+    if ((*it)->id() == channel_id)
+      return *it;
+  }
+  return NULL;
+}
+
+TurnServer::Channel* TurnServer::Allocation::FindChannel(
+    const talk_base::SocketAddress& addr) const {
+  for (ChannelList::const_iterator it = channels_.begin();
+       it != channels_.end(); ++it) {
+    if ((*it)->peer() == addr)
+      return *it;
+  }
+  return NULL;
+}
+
+void TurnServer::Allocation::SendResponse(TurnMessage* msg) {
+  // Success responses always have M-I.
+  msg->AddMessageIntegrity(key_);
+  server_->SendStun(conn_, msg);
+}
+
+void TurnServer::Allocation::SendBadRequestResponse(const TurnMessage* req) {
+  SendErrorResponse(req, STUN_ERROR_BAD_REQUEST, STUN_ERROR_REASON_BAD_REQUEST);
+}
+
+void TurnServer::Allocation::SendErrorResponse(const TurnMessage* req, int code,
+                                       const std::string& reason) {
+  server_->SendErrorResponse(conn_, req, code, reason);
+}
+
+void TurnServer::Allocation::SendExternal(const void* data, size_t size,
+                                  const talk_base::SocketAddress& peer) {
+  external_socket_->SendTo(data, size, peer);
+}
+
+void TurnServer::Allocation::OnMessage(talk_base::Message* msg) {
+  ASSERT(msg->message_id == MSG_TIMEOUT);
+  SignalDestroyed(this);
+  delete this;
+}
+
+void TurnServer::Allocation::OnPermissionDestroyed(Permission* perm) {
+  PermissionList::iterator it = std::find(perms_.begin(), perms_.end(), perm);
+  ASSERT(it != perms_.end());
+  perms_.erase(it);
+}
+
+void TurnServer::Allocation::OnChannelDestroyed(Channel* channel) {
+  ChannelList::iterator it =
+      std::find(channels_.begin(), channels_.end(), channel);
+  ASSERT(it != channels_.end());
+  channels_.erase(it);
+}
+
+TurnServer::Permission::Permission(talk_base::Thread* thread,
+                                   const talk_base::IPAddress& peer)
+    : thread_(thread), peer_(peer) {
+  Refresh();
+}
+
+TurnServer::Permission::~Permission() {
+  thread_->Clear(this, MSG_TIMEOUT);
+}
+
+void TurnServer::Permission::Refresh() {
+  thread_->Clear(this, MSG_TIMEOUT);
+  thread_->PostDelayed(kPermissionTimeout, this, MSG_TIMEOUT);
+}
+
+void TurnServer::Permission::OnMessage(talk_base::Message* msg) {
+  ASSERT(msg->message_id == MSG_TIMEOUT);
+  SignalDestroyed(this);
+  delete this;
+}
+
+TurnServer::Channel::Channel(talk_base::Thread* thread, int id,
+                             const talk_base::SocketAddress& peer)
+    : thread_(thread), id_(id), peer_(peer) {
+  Refresh();
+}
+
+TurnServer::Channel::~Channel() {
+  thread_->Clear(this, MSG_TIMEOUT);
+}
+
+void TurnServer::Channel::Refresh() {
+  thread_->Clear(this, MSG_TIMEOUT);
+  thread_->PostDelayed(kChannelTimeout, this, MSG_TIMEOUT);
+}
+
+void TurnServer::Channel::OnMessage(talk_base::Message* msg) {
+  ASSERT(msg->message_id == MSG_TIMEOUT);
+  SignalDestroyed(this);
+  delete this;
 }
 
 }  // namespace cricket

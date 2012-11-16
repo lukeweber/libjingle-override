@@ -25,42 +25,37 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_APP_WEBRTC_VIDEOTRACK_H_
-#define TALK_APP_WEBRTC_VIDEOTRACK_H_
+#ifndef TALK_P2P_BASE_TESTTURNSERVER_H_
+#define TALK_P2P_BASE_TESTTURNSERVER_H_
 
-#include <string>
+#include "talk/base/asyncudpsocket.h"
+#include "talk/base/basicpacketsocketfactory.h"
+#include "talk/base/thread.h"
+#include "talk/p2p/base/turnserver.h"
 
-#include "talk/app/webrtc/mediastreamtrack.h"
-#include "talk/app/webrtc/videosourceinterface.h"
-#include "talk/app/webrtc/videotrackrenderers.h"
-#include "talk/base/scoped_ref_ptr.h"
-#include "talk/media/base/videocapturer.h"
+namespace cricket {
 
-namespace webrtc {
+static const char kTestRealm[] = "example.org";
+static const char kTestSoftware[] = "TestTurnServer";
 
-class VideoTrack : public MediaStreamTrack<VideoTrackInterface> {
+class TestTurnServer {
  public:
-  static talk_base::scoped_refptr<VideoTrack> Create(
-      const std::string& label, VideoSourceInterface* source);
-
-  virtual void AddRenderer(VideoRendererInterface* renderer);
-  virtual void RemoveRenderer(VideoRendererInterface* renderer);
-  virtual cricket::VideoRenderer* FrameInput();
-  virtual VideoSourceInterface* GetSource() const {
-    return video_source_.get();
+  TestTurnServer(talk_base::Thread* thread,
+                 const talk_base::SocketAddress& udp_int_addr,
+                 const talk_base::SocketAddress& udp_ext_addr)
+     : server_(thread) {
+    server_.AddInternalServerSocket(talk_base::AsyncUDPSocket::Create(
+        thread->socketserver(), udp_int_addr));
+    server_.SetExternalSocketFactory(new talk_base::BasicPacketSocketFactory(),
+        udp_ext_addr);
+    server_.set_realm(kTestRealm);
+    server_.set_software(kTestSoftware);
   }
-  virtual bool set_enabled(bool enable);
-  virtual std::string kind() const;
-
- protected:
-  VideoTrack(const std::string& label, VideoSourceInterface* video_source);
-  ~VideoTrack();
 
  private:
-  VideoTrackRenderers renderers_;
-  talk_base::scoped_refptr<VideoSourceInterface> video_source_;
+  TurnServer server_;
 };
 
-}  // namespace webrtc
+}  // namespace cricket
 
-#endif  // TALK_APP_WEBRTC_VIDEOTRACK_H_
+#endif  // TALK_P2P_BASE_TESTTURNSERVER_H_

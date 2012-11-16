@@ -48,6 +48,18 @@ class TurnAllocateRequest;
 class TurnEntry;
 
 class TurnPort : public Port {
+ protected:
+  TurnPort(talk_base::Thread* thread,
+           talk_base::PacketSocketFactory* factory,
+           talk_base::Network* network,
+           const talk_base::IPAddress& ip,
+           int min_port, int max_port,
+           const std::string& username,
+           const std::string& password,
+           const talk_base::SocketAddress& server_address,
+           const RelayCredentials& credentials);
+
+  bool Init();
  public:
   static TurnPort* Create(talk_base::Thread* thread,
                           talk_base::PacketSocketFactory* factory,
@@ -57,7 +69,7 @@ class TurnPort : public Port {
                           const std::string& username,  // ice username.
                           const std::string& password,  // ice password.
                           const talk_base::SocketAddress& server_address,
-                          const RelayCredentials& credentials) {
+                          const RelayCredentials& credentials){
     TurnPort* port = new TurnPort(thread, factory, network,
                                   ip, min_port, max_port,
                                   username, password,
@@ -91,20 +103,9 @@ class TurnPort : public Port {
 
   const std::string& hash() const { return hash_; }
 
- protected:
-  TurnPort(talk_base::Thread* thread,
-           talk_base::PacketSocketFactory* factory,
-           talk_base::Network* network,
-           const talk_base::IPAddress& ip,
-           int min_port, int max_port,
-           const std::string& username,
-           const std::string& password,
-           const talk_base::SocketAddress& server_address,
-           const RelayCredentials& credentials);
-
-  bool Init();
 
  private:
+  typedef std::list<TurnEntry*> EntryList;
   void set_nonce(const std::string& nonce) { nonce_ = nonce; }
   void set_realm(const std::string& realm) {
     if (realm != realm_) {
@@ -134,8 +135,9 @@ class TurnPort : public Port {
   int Send(const void* data, size_t size);
   void UpdateHash();
 
-  TurnEntry* FindEntry(const talk_base::SocketAddress& address);
-  TurnEntry* FindEntry(int channel_id);
+  bool HasPermission(const talk_base::IPAddress& ipaddr) const;
+  TurnEntry* FindEntry(const talk_base::SocketAddress& address) const;
+  TurnEntry* FindEntry(int channel_id) const;
   TurnEntry* CreateEntry(const talk_base::SocketAddress& address);
   void DestroyEntry(const talk_base::SocketAddress& address);
 
@@ -152,7 +154,7 @@ class TurnPort : public Port {
   std::string hash_;        // Digest of username:realm:password
 
   int next_channel_number_;
-  std::list<TurnEntry*> entries_;
+  EntryList entries_;
 
   friend class TurnEntry;
   friend class TurnAllocateRequest;
