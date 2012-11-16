@@ -29,6 +29,8 @@
 
 #include "talk/base/thread.h"
 #include "talk/base/scoped_ptr.h"
+#include "talk/base/asyncudpsocket.h"
+#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/turnserver.h"
 
 int main(int argc, char **argv) {
@@ -60,21 +62,23 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  talk_base::scoped_ptr<talk_base::AsyncUDPSocket> ext_socket(
+  talk_base::BasicPacketSocketFactory *packet_socket_factory = new talk_base::BasicPacketSocketFactory(pthMain);
+  /*talk_base::scoped_ptr<talk_base::AsyncUDPSocket> ext_socket(
       talk_base::AsyncUDPSocket::Create(pthMain->socketserver(), ext_addr));
   if (!ext_socket.get()) {
     std::cerr << "Failed to create a UDP socket bound at"
               << ext_addr.ToString() << std::endl;
     return 1;
-  }
+  }*/
 
   cricket::TurnServer server(pthMain);
-  server.AddInternalSocket(int_socket.get());
-  server.AddExternalSocket(ext_socket.get());
+  server.AddInternalServerSocket(int_socket.get());
+  server.SetExternalSocketFactory(packet_socket_factory, ext_addr);
 
   std::cout << "Listening internally at " << int_addr.ToString() << std::endl;
   std::cout << "Listening externally at " << ext_addr.ToString() << std::endl;
 
   pthMain->Run();
+  delete packet_socket_factory;
   return 0;
 }

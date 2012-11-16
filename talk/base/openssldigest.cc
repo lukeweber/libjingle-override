@@ -31,6 +31,7 @@
 
 #include "talk/base/common.h"
 
+
 namespace talk_base {
 
 OpenSSLDigest::OpenSSLDigest(const std::string& algorithm) {
