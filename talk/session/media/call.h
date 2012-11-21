@@ -129,6 +129,7 @@ class Call : public talk_base::MessageHandler, public sigslot::has_slots<> {
 
   // Sets a flag on the chatapp that will redirect the call to voicemail once
   // the call has been terminated
+  sigslot::signal0<> SignalAudioPlayout;
   sigslot::signal0<> SignalSetupToCallVoicemail;
   sigslot::signal2<Call*, Session*> SignalAddSession;
   sigslot::signal2<Call*, Session*> SignalRemoveSession;

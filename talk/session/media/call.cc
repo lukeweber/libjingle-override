@@ -671,6 +671,7 @@ void Call::StopConnectionMonitor(Session* session) {
 void Call::StartAudioMonitor(Session* session, int cms) {
   VoiceChannel* voice_channel = GetVoiceChannel(session);
   if (voice_channel) {
+    SignalAudioPlayout();
     voice_channel->SignalAudioMonitor.connect(this, &Call::OnAudioMonitor);
     voice_channel->StartAudioMonitor(cms);
   }
