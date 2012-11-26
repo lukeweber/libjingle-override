@@ -104,12 +104,21 @@ typedef signed char int8;
 #if defined(__arm__) || defined(_M_ARM)
 #define CPU_ARM 1
 #endif
-#if defined(CPU_X86) && defined(CPU_ARM)
-#error CPU_X86 and CPU_ARM both defined.
+
+//Detect mips
+#if defined(__MIPSEL__)
+#define CPU_MIPS 1
 #endif
+
+#if (defined(CPU_X86) && defined(CPU_ARM)) || \
+    (defined(CPU_X86) && defined(CPU_MIPS)) || \
+    (defined(CPU_ARM) && defined(CPU_MIPS))
+#error Multiple CPU architectures are defined.
+#endif
+
 #if !defined(ARCH_CPU_BIG_ENDIAN) && !defined(ARCH_CPU_LITTLE_ENDIAN)
 // x86, arm or GCC provided __BYTE_ORDER__ macros
-#if CPU_X86 || CPU_ARM ||  \
+#if CPU_X86 || CPU_ARM || CPU_MIPS || \
   (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
 #define ARCH_CPU_LITTLE_ENDIAN
 #elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
