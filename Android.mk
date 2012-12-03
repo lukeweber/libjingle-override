@@ -232,7 +232,10 @@ LOCAL_C_INCLUDES := \
 	$(MY_THIRD_PARTY_PATH) \
 	$(MY_THIRD_PARTY_PATH)/webrtc \
 	$(MY_THIRD_PARTY_PATH)/webrtc/modules/interface \
-	$(MY_THIRD_PARTY_PATH)/expat/files/lib
+	$(MY_THIRD_PARTY_PATH)/expat/files/lib \
+	$(MY_GTEST_PATH) \
+	$(MY_GTEST_PATH)/include
+
 
 LOCAL_C_INCLUDES += $(LIBJINGLE_C_INCLUDE)
 
@@ -269,3 +272,8 @@ LOCAL_CFLAGS += \
 	-DUSE_WEBRTC_313_BRANCH
 
 include $(BUILD_STATIC_LIBRARY)
+
+ifeq ($(ENABLE_UNITTEST), 1)
+$(info Build unittest for libjingle)
+include $(LOCAL_PATH)/unittest.mk
+endif
