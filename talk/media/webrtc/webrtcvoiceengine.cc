@@ -1556,7 +1556,7 @@ bool WebRtcVoiceMediaChannel::SetSendCodecs(
       // clockrate for the codec we are going to use.
       if (it->clockrate == send_codec.plfreq) {
         LOG(LS_INFO) << "Enabling VAD";
-        if (engine()->voe()->codec()->SetVADStatus(voe_channel(), true) == -1) {
+        if (engine()->voe()->codec()->SetVADStatus(voe_channel(), true, webrtc::kVadAggressiveLow) == -1) {
           LOG_RTCERR2(SetVADStatus, voe_channel(), true);
           return false;
         }
