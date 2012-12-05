@@ -39,7 +39,8 @@ class SystemInfo {
   enum Architecture {
     SI_ARCH_X86 = 0,
     SI_ARCH_X64 = 1,
-    SI_ARCH_ARM = 2
+    SI_ARCH_ARM = 2,
+    SI_ARCH_MIPS = 3
   };
 
   SystemInfo();

@@ -60,9 +60,14 @@ LOCAL_MODULE_TAGS := optional
 
 #
 # disabled_tests: talk/base/cpumonitor_unittest.cc
+#                 talk/base/atomicops_unittest.cc
+# Not used currently libjingle. Impl doesn't support platforms < armv7
+# Could see base/atomicops.h from chromium if we wanted to implement this in
+# the future as an Optimization. CriticalSeciton makes reference to replacing
+# their AtomicOps class with something more efficient.
+#
 LOCAL_BASE_SRC_FILES := \
 	talk/base/asynchttprequest_unittest.cc \
-	talk/base/atomicops_unittest.cc \
 	talk/base/autodetectproxy_unittest.cc \
 	talk/base/bandwidthsmoother_unittest.cc \
 	talk/base/base64_unittest.cc \

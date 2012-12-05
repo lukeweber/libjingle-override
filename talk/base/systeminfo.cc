@@ -130,6 +130,8 @@ SystemInfo::SystemInfo()
   cpu_arch_ = SI_ARCH_X64;
 #elif defined(__i386__) || defined(_M_IX86)
   cpu_arch_ = SI_ARCH_X86;
+#elif defined(__MIPSEL__)
+  cpu_arch_ = SI_ARCH_MIPS;
 #else
 #error "Unknown architecture."
 #endif
