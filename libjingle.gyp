@@ -142,6 +142,11 @@
           'OSX',
         ],
       }],
+      ['OS=="ios"', {
+        'defines': [
+          'IOS',
+        ],
+      }],
       ['os_posix == 1', {
         'defines': [
           'POSIX',
@@ -350,6 +355,10 @@
         'talk/xmpp/xmpptask.cc',
         'talk/xmpp/xmpptask.h',
       ],
+      'include_dirs': [
+        '<(DEPTH)/third_party/libjingle',
+        '<(DEPTH)/third_party/expat/files/lib',
+      ],
       'conditions': [
         ['OS=="win"', {
           'sources': [
@@ -478,6 +487,10 @@
         'talk/session/tunnel/pseudotcpchannel.h',
         'talk/session/tunnel/tunnelsessionclient.cc',
         'talk/session/tunnel/tunnelsessionclient.h',
+      ],
+      'include_dirs': [
+        '<(DEPTH)/third_party/libjingle',
+        '<(DEPTH)/third_party/gtest/include',
       ],
       'dependencies': [
         'libjingle',
@@ -629,6 +642,7 @@
       ],
       'include_dirs': [
         '<(DEPTH)/third_party',
+        '<(DEPTH)/third_party/libjingle',
         '<(DEPTH)/third_party/webrtc',
       ],
       'sources': [
