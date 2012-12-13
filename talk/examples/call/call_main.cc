@@ -468,6 +468,8 @@ int main(int argc, char **argv) {
   client->SetMultiSessionEnabled(multisession_enabled);
   console->Start();
 
+  client->SetPortAllocatorFilter(cricket::PORTALLOCATOR_FILTER_ALLOW_TURN);
+
   if (debug) {
     pump.client()->SignalLogInput.connect(&debug_log_, &DebugLog::Input);
     pump.client()->SignalLogOutput.connect(&debug_log_, &DebugLog::Output);

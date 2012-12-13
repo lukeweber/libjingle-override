@@ -36,6 +36,7 @@
 #include "talk/p2p/base/common.h"
 #include "talk/p2p/base/relayport.h"  // For RELAY_PORT_TYPE.
 #include "talk/p2p/base/stunport.h"  // For STUN_PORT_TYPE.
+#include "talk/p2p/base/portallocator.h"  // For connection filter
 
 namespace {
 
@@ -536,6 +537,15 @@ bool P2PTransportChannel::CreateConnection(PortInterface* port,
                                            bool readable) {
   // Look for an existing connection with this remote address.  If one is not
   // found, then we can create a new connection for this address.
+
+  // Filter out the connections other that relay server, if we're on our 3G
+  if (allocator_->filter() == PORTALLOCATOR_FILTER_ALLOW_TURN
+      && (port->Type() != RELAY_PORT_TYPE
+        && remote_candidate.type() != RELAY_PORT_TYPE)) {
+    LOG(INFO) << "LOGT Filtering out connection, only TURN allowed";
+    return false;
+  }
+
   Connection* connection = port->GetConnection(remote_candidate.address());
   if (connection != NULL) {
     // It is not legal to try to change any of the parameters of an existing

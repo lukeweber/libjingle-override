@@ -389,7 +389,8 @@ CallClient::CallClient(buzz::XmppClient* xmpp_client,
       static_views_accumulated_count_(0),
       screencast_ssrc_(0),
       roster_(new RosterMap),
-      portallocator_flags_(527),
+      portallocator_flags_(0),
+      portallocator_filter_(0),
       allow_local_ips_(false),
       signaling_protocol_(cricket::PROTOCOL_HYBRID),
       transport_protocol_(cricket::ICEPROTO_HYBRID),
@@ -509,6 +510,9 @@ void CallClient::InitMedia() {
 
   if (portallocator_flags_ != 0) {
     port_allocator_->set_flags(portallocator_flags_);
+  }
+  if (portallocator_filter_ != cricket::kDefaultPortAllocatorFilter) {
+    port_allocator_->set_filter(portallocator_filter_);
   }
   session_manager_ = new cricket::SessionManager(
       port_allocator_, worker_thread_);

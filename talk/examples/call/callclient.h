@@ -153,6 +153,7 @@ class CallClient: public sigslot::has_slots<> {
   void LeaveMuc(const std::string& room);
   void SetNick(const std::string& muc_nick);
   void SetPortAllocatorFlags(uint32 flags) { portallocator_flags_ = flags; }
+  void SetPortAllocatorFilter(uint32 filter) { portallocator_filter_ = filter; }
   void SetAllowLocalIps(bool allow_local_ips) {
     allow_local_ips_ = allow_local_ips;
   }
@@ -336,6 +337,7 @@ class CallClient: public sigslot::has_slots<> {
   buzz::FriendInviteSendTask* friend_invite_send_;
   RosterMap* roster_;
   uint32 portallocator_flags_;
+  uint32 portallocator_filter_;
 
   bool allow_local_ips_;
   cricket::SignalingProtocol signaling_protocol_;

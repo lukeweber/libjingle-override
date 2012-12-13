@@ -55,7 +55,13 @@ const uint32 PORTALLOCATOR_ENABLE_SHARED_UFRAG = 0x80;
 const uint32 PORTALLOCATOR_ENABLE_SHARED_SOCKET = 0x100;
 const uint32 PORTALLOCATOR_ENABLE_STUN_RETRANSMIT_ATTRIBUTE = 0x200;
 
+enum {
+  PORTALLOCATOR_FILTER_ALLOW_NONE = 0,
+  PORTALLOCATOR_FILTER_ALLOW_TURN,
+};
+
 const uint32 kDefaultPortAllocatorFlags = 0;
+const uint32 kDefaultPortAllocatorFilter = PORTALLOCATOR_FILTER_ALLOW_NONE;
 
 class PortAllocatorSessionMuxer;
 
@@ -112,6 +118,7 @@ class PortAllocator : public sigslot::has_slots<> {
  public:
   PortAllocator() :
       flags_(kDefaultPortAllocatorFlags),
+      filter_(kDefaultPortAllocatorFilter),
       min_port_(0),
       max_port_(0) {
   }
@@ -129,6 +136,9 @@ class PortAllocator : public sigslot::has_slots<> {
 
   uint32 flags() const { return flags_; }
   void set_flags(uint32 flags) { flags_ = flags; }
+
+  uint32 filter() { return filter_; };
+  void set_filter(uint32 filter) { filter_ = filter; };
 
   const std::string& user_agent() const { return agent_; }
   const talk_base::ProxyInfo& proxy() const { return proxy_; }
@@ -160,6 +170,7 @@ class PortAllocator : public sigslot::has_slots<> {
   typedef std::map<std::string, PortAllocatorSessionMuxer*> SessionMuxerMap;
 
   uint32 flags_;
+  uint32 filter_;
   std::string agent_;
   talk_base::ProxyInfo proxy_;
   int min_port_;
