@@ -145,6 +145,7 @@
       ['OS=="ios"', {
         'defines': [
           'IOS',
+          'CARBON_DEPRECATED',
         ],
       }],
       ['os_posix == 1', {
@@ -360,26 +361,6 @@
         '<(DEPTH)/third_party/expat/files/lib',
       ],
       'conditions': [
-        ['OS=="win"', {
-          'sources': [
-            'talk/base/win32socketinit.cc',
-            'talk/base/schanneladapter.cc',
-            'talk/base/schanneladapter.h',
-            'talk/base/win32.cc',
-            'talk/base/win32.h',
-            'talk/base/win32filesystem.cc',
-            'talk/base/win32filesystem.h',
-            'talk/base/win32window.h',
-            'talk/base/win32window.cc',
-            'talk/base/win32securityerrors.cc',
-            'talk/base/winfirewall.cc',
-            'talk/base/winfirewall.h',
-            'talk/base/winping.cc',
-            'talk/base/winping.h',
-          ],
-          # Suppress warnings about WIN32_LEAN_AND_MEAN.
-          'msvs_disabled_warnings': [ 4005 ],
-        }],
         ['os_posix == 1', {
           'sources': [
             'talk/base/unixfilesystem.cc',
@@ -406,6 +387,47 @@
             'talk/base/macutils.cc',
             'talk/base/macutils.h',
           ],
+        }],
+        ['OS=="ios"', {
+          'sources': [
+            'talk/base/macasyncsocket.cc',
+            'talk/base/maccocoathreadhelper.mm',
+            'talk/base/macconversion.cc',
+            'talk/base/macsocketserver.cc',
+            'talk/base/macutils.cc',
+            'talk/base/scoped_autorelease_pool.mm',
+            'talk/base/scoped_autorelease_pool.h',
+          ],
+          'link_settings': {
+            'xcode_settings': {
+              'OTHER_LDFLAGS': [
+                '-framework CoreFoundation',
+                '-framework IOKit',
+                '-framework Security',
+                '-framework SystemConfiguration',
+              ],
+            },
+          },
+        }],
+        ['OS=="win"', {
+          'sources': [
+            'talk/base/win32socketinit.cc',
+            'talk/base/schanneladapter.cc',
+            'talk/base/schanneladapter.h',
+            'talk/base/win32.cc',
+            'talk/base/win32.h',
+            'talk/base/win32filesystem.cc',
+            'talk/base/win32filesystem.h',
+            'talk/base/win32window.h',
+            'talk/base/win32window.cc',
+            'talk/base/win32securityerrors.cc',
+            'talk/base/winfirewall.cc',
+            'talk/base/winfirewall.h',
+            'talk/base/winping.cc',
+            'talk/base/winping.h',
+          ],
+          # Suppress warnings about WIN32_LEAN_AND_MEAN.
+          'msvs_disabled_warnings': [ 4005 ],
         }],
       ],
     },  # target libjingle
