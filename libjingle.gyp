@@ -390,10 +390,13 @@
         }],
         ['OS=="ios"', {
           'sources': [
+#            'talk/base/maccocoasocketserver.mm',
+#            'talk/base/maccocoasocketserver.h',
             'talk/base/macasyncsocket.cc',
-            'talk/base/maccocoathreadhelper.mm',
             'talk/base/macconversion.cc',
             'talk/base/macsocketserver.cc',
+            'talk/base/maccocoathreadhelper.mm',
+            'talk/base/maccocoathreadhelper.h',
             'talk/base/macutils.cc',
             'talk/base/scoped_autorelease_pool.mm',
             'talk/base/scoped_autorelease_pool.h',
@@ -402,6 +405,7 @@
             'xcode_settings': {
               'OTHER_LDFLAGS': [
                 '-framework CoreFoundation',
+                '-framework Foundation',
                 '-framework IOKit',
                 '-framework Security',
                 '-framework SystemConfiguration',
