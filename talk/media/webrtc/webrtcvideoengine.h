@@ -162,9 +162,7 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   bool SetCapturer(VideoCapturer* capturer);
 
   // webrtc::TraceCallback implementation.
-  virtual void Print(const webrtc::TraceLevel level, const char* trace_string,
-                     const int length);
-
+  virtual void Print(webrtc::TraceLevel level, const char* trace, int length);
   void ClearCapturer();
 
   talk_base::scoped_ptr<ViEWrapper> vie_wrapper_;

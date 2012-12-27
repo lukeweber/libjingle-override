@@ -51,6 +51,7 @@ enum {
   MSG_EARLYMEDIATIMEOUT,
   MSG_CANINSERTDTMF,
   MSG_INSERTDTMF,
+  MSG_GETSTATS,
   MSG_SETRENDERER,
   MSG_ADDRECVSTREAM,
   MSG_REMOVERECVSTREAM,
@@ -68,6 +69,7 @@ enum {
   MSG_SETCHANNELOPTIONS,
   MSG_SCALEVOLUME,
   MSG_HANDLEVIEWREQUEST,
+  MSG_READYTOSENDDATA,
   MSG_SENDDATA,
   MSG_DATARECEIVED,
   MSG_SETCAPTURER,
@@ -163,6 +165,15 @@ struct ScaleVolumeMessageData : public talk_base::MessageData {
   double left;
   double right;
   bool result;
+};
+
+struct VoiceStatsMessageData : public talk_base::MessageData {
+  explicit VoiceStatsMessageData(VoiceMediaInfo* stats)
+      : result(false),
+        stats(stats) {
+  }
+  bool result;
+  VoiceMediaInfo* stats;
 };
 
 struct PacketMessageData : public talk_base::MessageData {
@@ -402,7 +413,7 @@ BaseChannel::BaseChannel(talk_base::Thread* thread,
       remote_content_direction_(MD_INACTIVE),
       has_received_packet_(false),
       dtls_keyed_(false),
-      crypto_required_(false) {
+      secure_required_(false) {
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   LOG(LS_INFO) << "Created channel for " << content_name;
 }
@@ -670,7 +681,7 @@ bool BaseChannel::SendPacket(bool rtcp, talk_base::Buffer* packet) {
 
     // Update the length of the packet now that we've added the auth tag.
     packet->SetLength(len);
-  } else if (crypto_required_) {
+  } else if (secure_required_) {
     // This is a double check for something that supposedly can't happen.
     LOG(LS_ERROR) <<
         "Trying to send insecure packet when crypto is required by policy";
@@ -747,7 +758,7 @@ void BaseChannel::HandlePacket(bool rtcp, talk_base::Buffer* packet) {
     }
 
     packet->SetLength(len);
-  } else if (crypto_required_) {
+  } else if (secure_required_) {
     // This is a double check for something that supposedly can't happen.
     LOG(LS_ERROR) <<
         "Trying to receive insecure packet when crypto is required by policy";
@@ -1219,8 +1230,8 @@ bool BaseChannel::UpdateRemoteStreams_w(
 
 bool BaseChannel::SetBaseLocalContent_w(const MediaContentDescription* content,
                                         ContentAction action) {
-  // Cache crypto_required_ for belt and suspenders check on SendPacket
-  crypto_required_ = content->crypto_required();
+  // Cache secure_required_ for belt and suspenders check on SendPacket
+  secure_required_ = content->crypto_required();
   bool ret = UpdateLocalStreams_w(content->streams(), action);
   // Set local SRTP parameters (what we will encrypt with).
   ret &= SetSrtp_w(content->cryptos(), action, CS_LOCAL);
@@ -1246,6 +1257,9 @@ bool BaseChannel::SetBaseRemoteContent_w(const MediaContentDescription* content,
   if (content->rtp_header_extensions_set()) {
     ret &= media_channel()->SetSendRtpHeaderExtensions(
         content->rtp_header_extensions());
+  }
+  if (content->bandwidth() != kAutoBandwidth) {
+    ret &= media_channel()->SetSendBandwidth(false, content->bandwidth());
   }
   set_remote_content_direction(content->direction());
   return ret;
@@ -1431,6 +1445,11 @@ bool VoiceChannel::SetOutputScaling(uint32 ssrc, double left, double right) {
   Send(MSG_SCALEVOLUME, &data);
   return data.result;
 }
+bool VoiceChannel::GetStats(VoiceMediaInfo* stats) {
+  VoiceStatsMessageData data(stats);
+  Send(MSG_GETSTATS, &data);
+  return data.result;
+}
 
 void VoiceChannel::StartMediaMonitor(int cms) {
   media_monitor_.reset(new VoiceMediaMonitor(media_channel(), worker_thread(),
@@ -1467,11 +1486,16 @@ bool VoiceChannel::IsAudioMonitorRunning() const {
 }
 
 void VoiceChannel::StartTypingMonitor(const TypingMonitorOptions& settings) {
-  // Don't allow resetting parameters on the fly.
-  if (!typing_monitor_) {
-    typing_monitor_.reset(new TypingMonitor(this, worker_thread(), settings));
-    SignalAutoMuted.repeat(typing_monitor_->SignalMuted);
-  }
+  typing_monitor_.reset(new TypingMonitor(this, worker_thread(), settings));
+  SignalAutoMuted.repeat(typing_monitor_->SignalMuted);
+}
+
+void VoiceChannel::StopTypingMonitor() {
+  typing_monitor_.reset();
+}
+
+bool VoiceChannel::IsTypingMonitorRunning() const {
+  return typing_monitor_;
 }
 
 bool VoiceChannel::MuteStream_w(uint32 ssrc, bool mute) {
@@ -1642,6 +1666,10 @@ bool VoiceChannel::SetOutputScaling_w(uint32 ssrc, double left, double right) {
   return media_channel()->SetOutputScaling(ssrc, left, right);
 }
 
+bool VoiceChannel::GetStats_w(VoiceMediaInfo* stats) {
+  return media_channel()->GetStats(stats);
+}
+
 bool VoiceChannel::SetChannelOptions(const AudioOptions& options) {
   AudioOptionsMessageData data(options);
   Send(MSG_SETCHANNELOPTIONS, &data);
@@ -1686,6 +1714,12 @@ void VoiceChannel::OnMessage(talk_base::Message *pmsg) {
       ScaleVolumeMessageData* data =
           static_cast<ScaleVolumeMessageData*>(pmsg->pdata);
       data->result = SetOutputScaling_w(data->ssrc, data->left, data->right);
+      break;
+    }
+    case MSG_GETSTATS: {
+      VoiceStatsMessageData* data =
+          static_cast<VoiceStatsMessageData*>(pmsg->pdata);
+      data->result = GetStats_w(data->stats);
       break;
     }
     case MSG_CHANNEL_ERROR: {
@@ -1965,10 +1999,6 @@ bool VideoChannel::SetRemoteContent_w(const MediaContentDescription* content,
       // Log an error on failure, but don't abort the call.
       LOG(LS_ERROR) << "Failed to set video channel options";
     }
-    // Set bandwidth parameters (what the other side wants to get, default=auto)
-    int bandwidth_bps = video->bandwidth();
-    bool auto_bandwidth = (bandwidth_bps == kAutoBandwidth);
-    ret &= media_channel()->SetSendBandwidth(auto_bandwidth, bandwidth_bps);
   }
 
   // If everything worked, see if we can start sending.
@@ -2398,11 +2428,21 @@ void DataChannel::ChangeState() {
     LOG(LS_ERROR) << "Failed to SetSend on data channel";
   }
 
+  // Post to trigger SignalReadyToSendData.
+  signaling_thread()->Post(this, MSG_READYTOSENDDATA,
+                           new BoolMessageData(send));
+
   LOG(LS_INFO) << "Changing data state, recv=" << recv << " send=" << send;
 }
 
 void DataChannel::OnMessage(talk_base::Message *pmsg) {
   switch (pmsg->message_id) {
+    case MSG_READYTOSENDDATA: {
+      BoolMessageData* data = static_cast<BoolMessageData*>(pmsg->pdata);
+      SignalReadyToSendData(data->data());
+      delete data;
+      break;
+    }
     case MSG_SENDDATA: {
       SendDataMessageData* data =
           static_cast<SendDataMessageData*>(pmsg->pdata);

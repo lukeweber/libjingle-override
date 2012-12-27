@@ -8,8 +8,10 @@ vars = {
 
   "googlecode_url": "http://%s.googlecode.com/svn",
   "chromium_trunk" : "http://src.chromium.org/svn/trunk",
-  "chromium_revision": "164065",
-  "webrtc_revision": "3037",
+  "chromium_git": "https://chromium.googlesource.com",
+
+  "chromium_revision": "172329",
+  "webrtc_revision": "3255",
 }
 
 # NOTE: Prefer revision numbers to tags for svn deps. Use http rather than
@@ -99,6 +101,12 @@ deps_os = {
     "third_party/cygwin":
       (Var("googlecode_url") % "webrtc") + "/deps/third_party/cygwin@2672",
 
+    "third_party/winsdk_samples":
+      (Var("googlecode_url") % "webrtc") + "/stable/third_party/winsdk_samples@" + Var("webrtc_revision"),
+
+    "third_party/winsdk_samples/src":
+      (Var("googlecode_url") % "webrtc") + "/deps/third_party/winsdk_samples_v71@3145",
+
     # Used by libjpeg-turbo.
     "third_party/yasm/binaries":
       From("chromium_deps", "src/third_party/yasm/binaries"),
@@ -118,6 +126,14 @@ deps_os = {
     "third_party/gold":
       From("chromium_deps", "src/third_party/gold"),
   },
+
+  "android": {
+    "third_party/android_tools":
+      From("chromium_deps", "src/third_party/android_tools"),
+
+    "third_party/openssl":
+      From("chromium_deps", "src/third_party/openssl"),
+  }
 }
 
 hooks = [

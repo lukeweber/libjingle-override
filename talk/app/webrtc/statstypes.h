@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2004 Google Inc.
+ * Copyright 2012, Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,59 +25,49 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_SESSION_MEDIA_TYPINGMONITOR_H_
-#define TALK_SESSION_MEDIA_TYPINGMONITOR_H_
+// This file contains structures used for retrieving statistics from an ongoing
+// libjingle session.
 
-#include "talk/base/messagehandler.h"
-#include "talk/media/base/mediachannel.h"
+#ifndef TALK_APP_WEBRTC_STATSTYPES_H_
+#define TALK_APP_WEBRTC_STATSTYPES_H_
 
-namespace talk_base {
-class Thread;
-}
+#include <string>
+#include <vector>
 
-namespace cricket {
+#include "talk/base/basictypes.h"
 
-class VoiceChannel;
-class BaseChannel;
+namespace webrtc {
 
-struct TypingMonitorOptions {
-  int cost_per_typing;
-  int mute_period;
-  int penalty_decay;
-  int reporting_threshold;
-  int time_window;
-  int type_event_delay;
-  size_t min_participants;
+// StatsElement contains a time stamped list of name/value pairs.
+struct StatsElement {
+  StatsElement() : timestamp(0) { }
+  double timestamp;  // Time since 1970-01-01T00:00:00Z in milliseconds.
+  struct Value {
+    std::string name;
+    std::string value;
+  };
+  typedef std::vector<Value> Values;
+  Values values;
+
+  // StatsValue names
+  static const char kStatsValueNameAudioOutputLevel[];
 };
 
-/**
- * An object that observes a channel and listens for typing detection warnings,
- * which can be configured to mute audio capture of that channel for some period
- * of time.  The purpose is to automatically mute someone if they are disturbing
- * a conference with loud keystroke audio signals.
- */
-class TypingMonitor
-    : public talk_base::MessageHandler, public sigslot::has_slots<> {
- public:
-  TypingMonitor(VoiceChannel* channel, talk_base::Thread* worker_thread,
-                const TypingMonitorOptions& params);
-  ~TypingMonitor();
+// StatsReport contains local and remote StatsElements that pertain to the same
+// object, for instance a SSRC.
+struct StatsReport {
+  std::string id;  // SSRC in decimal for SSRCs
+  std::string type;  // "SSRC" for SSRCs
+  StatsElement local;  // Statistics gathered locally.
+  StatsElement remote;  // Statistics received in a RTCP report.
 
-  sigslot::signal2<BaseChannel*, bool> SignalMuted;
-
-  void OnChannelMuted();
-
- private:
-  void OnVoiceChannelError(uint32 ssrc, VoiceMediaChannel::Error error);
-  void OnMessage(talk_base::Message* msg);
-
-  VoiceChannel* channel_;
-  talk_base::Thread* worker_thread_;
-  int mute_period_;
-  bool has_pending_unmute_;
+  // StatsReport of |type| = "ssrc" is statistics for a specific rtp stream.
+  // The |id| field is the SSRC in decimal form of the rtp stream.
+  static const char kStatsReportTypeSsrc[];
 };
 
-}  // namespace cricket
+typedef std::vector<StatsReport> StatsReports;
 
-#endif  // TALK_SESSION_MEDIA_TYPINGMONITOR_H_
+}  // namespace webrtc
 
+#endif  // TALK_APP_WEBRTC_STATSTYPES_H_

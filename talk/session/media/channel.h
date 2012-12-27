@@ -92,12 +92,14 @@ class BaseChannel
   void set_optimistic_data_send(bool value) { optimistic_data_send_ = value; }
   bool optimistic_data_send() const { return optimistic_data_send_; }
 
-  // This function returns true iff we are using SRTP.
+  // This function returns true if we are using SRTP.
   bool secure() const { return srtp_filter_.IsActive(); }
   // The following function returns true if we are using
   // DTLS-based keying. If you turned off SRTP later, however
   // you could have secure() == false and dtls_secure() == true.
   bool secure_dtls() const { return dtls_keyed_; }
+  // This function returns true if we require secure channel for call setup.
+  bool secure_required() const { return secure_required_; }
 
   bool writable() const { return writable_; }
   bool IsStreamMuted(uint32 ssrc);
@@ -340,7 +342,7 @@ class BaseChannel
   std::set<uint32> muted_streams_;
   bool has_received_packet_;
   bool dtls_keyed_;
-  bool crypto_required_;
+  bool secure_required_;
 };
 
 // VoiceChannel is a specialization that adds support for early media, DTMF,
@@ -379,6 +381,8 @@ class VoiceChannel : public BaseChannel {
   // 0 to 15 which corresponding to DTMF event 0-9, *, #, A-D.
   bool InsertDtmf(uint32 ssrc, int event_code, int duration, int flags);
   bool SetOutputScaling(uint32 ssrc, double left, double right);
+  // Get statistics about the current media session.
+  bool GetStats(VoiceMediaInfo* stats);
 
   // Monitoring functions
   sigslot::signal2<VoiceChannel*, const std::vector<ConnectionInfo>&>
@@ -394,6 +398,8 @@ class VoiceChannel : public BaseChannel {
   sigslot::signal2<VoiceChannel*, const AudioInfo&> SignalAudioMonitor;
 
   void StartTypingMonitor(const TypingMonitorOptions& settings);
+  void StopTypingMonitor();
+  bool IsTypingMonitorRunning() const;
 
   // Overrides BaseChannel::MuteStream_w.
   virtual bool MuteStream_w(uint32 ssrc, bool mute);
@@ -426,6 +432,7 @@ class VoiceChannel : public BaseChannel {
   bool CanInsertDtmf_w();
   bool InsertDtmf_w(uint32 ssrc, int event, int duration, int flags);
   bool SetOutputScaling_w(uint32 ssrc, double left, double right);
+  bool GetStats_w(VoiceMediaInfo* stats);
 
   virtual void OnMessage(talk_base::Message* pmsg);
   virtual void GetSrtpCiphers(std::vector<std::string>* ciphers) const;
@@ -589,6 +596,11 @@ class DataChannel : public BaseChannel {
                    const ReceiveDataParams&,
                    const std::string&>
       SignalDataReceived;
+  // Signal for notifying when the channel becomes ready to send data.
+  // That occurs when the channel is enabled, the transport is writable and
+  // both local and remote descriptions are set.
+  // TODO(perkj): Signal this per SSRC stream.
+  sigslot::signal1<bool> SignalReadyToSendData;
 
  private:
   struct SendDataMessageData : public talk_base::MessageData {

@@ -176,7 +176,7 @@ class MediaContentDescription : public ContentDescription {
   }
   // True iff the client supports multiple streams.
   void set_multistream(bool multistream) { multistream_ = multistream; }
-  bool multistream() const { return multistream_;  }
+  bool multistream() const { return multistream_; }
   const StreamParamsVec& streams() const {
     return streams_;
   }
@@ -366,6 +366,7 @@ class MediaSessionDescriptionFactory {
 };
 
 // Convenience functions.
+bool IsMediaContent(const ContentInfo* content);
 bool IsAudioContent(const ContentInfo* content);
 bool IsVideoContent(const ContentInfo* content);
 bool IsDataContent(const ContentInfo* content);

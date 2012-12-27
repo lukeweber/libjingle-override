@@ -28,6 +28,7 @@
 #include "talk/app/webrtc/webrtcsession.h"
 
 #include <algorithm>
+#include <vector>
 
 #include "talk/app/webrtc/jsepicecandidate.h"
 #include "talk/app/webrtc/jsepsessiondescription.h"
@@ -69,14 +70,16 @@ const char MediaConstraintsInterface::kOfferToReceiveVideo[] =
 // DTLS-SRTP pseudo-constraints.
 const char MediaConstraintsInterface::kEnableDtlsSrtp[] =
     "DtlsSrtpKeyAgreement";
-const char MediaConstraintsInterface::kValueTrue[] = "true";
+// DataChannel pseudo constraints.
+const char MediaConstraintsInterface::kEnableRtpDataChannels[] =
+    "RtpDataChannels";
 
 // Arbitrary constant used as prefix for the identity.
 // Chosen to make the certificates more readable.
 const char kWebRTCIdentityPrefix[] = "WebRTC";
 
-const char MediaConstraintsInterface::kTrue[] = "true";
-const char MediaConstraintsInterface::kFalse[] = "false";
+const char MediaConstraintsInterface::kValueTrue[] = "true";
+const char MediaConstraintsInterface::kValueFalse[] = "false";
 
 // Compares |answer| against |offer|. Comparision is done
 // for number of m-lines in answer against offer. If matches true will be
@@ -188,6 +191,41 @@ static bool GetVideoSsrcByName(const SessionDescription* session_description,
   return true;
 }
 
+static bool GetNameBySsrc(const SessionDescription* session_description,
+                          uint32 ssrc, std::string* name) {
+  ASSERT(name != NULL);
+
+  cricket::StreamParams stream_out;
+  const cricket::ContentInfo* audio_info =
+      cricket::GetFirstAudioContent(session_description);
+  if (!audio_info) {
+    return false;
+  }
+  const cricket::MediaContentDescription* audio_content =
+      static_cast<const cricket::MediaContentDescription*>(
+          audio_info->description);
+
+  if (cricket::GetStreamBySsrc(audio_content->streams(), ssrc, &stream_out)) {
+    *name = stream_out.name;
+    return true;
+  }
+
+  const cricket::ContentInfo* video_info =
+      cricket::GetFirstVideoContent(session_description);
+  if (!video_info) {
+    return false;
+  }
+  const cricket::MediaContentDescription* video_content =
+      static_cast<const cricket::MediaContentDescription*>(
+          video_info->description);
+
+  if (cricket::GetStreamBySsrc(video_content->streams(), ssrc, &stream_out)) {
+    *name = stream_out.name;
+    return true;
+  }
+  return false;
+}
+
 // RFC4733
 //  +-------+--------+------+---------+
 //  | Event | Code   | Type | Volume? |
@@ -214,41 +252,6 @@ static bool GetDtmfCode(char tone, int* code, int* duration) {
   }
   return true;
 }
-
-WebRtcSession::WebRtcSession(cricket::ChannelManager* channel_manager,
-                             talk_base::Thread* signaling_thread,
-                             talk_base::Thread* worker_thread,
-                             cricket::PortAllocator* port_allocator,
-                             MediaStreamSignaling* mediastream_signaling)
-    : cricket::BaseSession(signaling_thread, worker_thread, port_allocator,
-                           talk_base::ToString(talk_base::CreateRandomId()),
-                           cricket::NS_JINGLE_RTP, false),
-      channel_manager_(channel_manager),
-      session_desc_factory_(channel_manager, &transport_desc_factory_),
-      mediastream_signaling_(mediastream_signaling),
-      ice_observer_(NULL),
-      // RFC 4566 suggested a Network Time Protocol (NTP) format timestamp
-      // as the session id and session version. To simplify, it should be fine
-      // to just use a random number as session id and start version from
-      // |kInitSessionVersion|.
-      session_id_(talk_base::ToString(talk_base::CreateRandomId())),
-      session_version_(kInitSessionVersion),
-      older_version_remote_peer_(false) {
-  transport_desc_factory_.set_protocol(cricket::ICEPROTO_HYBRID);
-}
-
-WebRtcSession::~WebRtcSession() {
-  if (voice_channel_) {
-    channel_manager_->DestroyVoiceChannel(voice_channel_.release());
-  }
-  if (video_channel_) {
-    channel_manager_->DestroyVideoChannel(video_channel_.release());
-  }
-  for (size_t i = 0; i < saved_candidates_.size(); ++i) {
-    delete saved_candidates_[i];
-  }
-}
-
 
 static bool FindConstraint(const MediaConstraintsInterface::Constraints&
   constraints, const std::string& key, std::string* value) {
@@ -285,6 +288,44 @@ static bool FindConstraint(const MediaConstraintsInterface* constraints,
   return false;
 }
 
+WebRtcSession::WebRtcSession(cricket::ChannelManager* channel_manager,
+                             talk_base::Thread* signaling_thread,
+                             talk_base::Thread* worker_thread,
+                             cricket::PortAllocator* port_allocator,
+                             MediaStreamSignaling* mediastream_signaling)
+    : cricket::BaseSession(signaling_thread, worker_thread, port_allocator,
+                           talk_base::ToString(talk_base::CreateRandomId()),
+                           cricket::NS_JINGLE_RTP, false),
+      channel_manager_(channel_manager),
+      session_desc_factory_(channel_manager, &transport_desc_factory_),
+      mediastream_signaling_(mediastream_signaling),
+      ice_observer_(NULL),
+      // RFC 4566 suggested a Network Time Protocol (NTP) format timestamp
+      // as the session id and session version. To simplify, it should be fine
+      // to just use a random number as session id and start version from
+      // |kInitSessionVersion|.
+      session_id_(talk_base::ToString(talk_base::CreateRandomId())),
+      session_version_(kInitSessionVersion),
+      older_version_remote_peer_(false),
+      allow_rtp_data_engine_(false) {
+  transport_desc_factory_.set_protocol(cricket::ICEPROTO_HYBRID);
+}
+
+WebRtcSession::~WebRtcSession() {
+  if (voice_channel_.get()) {
+    channel_manager_->DestroyVoiceChannel(voice_channel_.release());
+  }
+  if (video_channel_.get()) {
+    channel_manager_->DestroyVideoChannel(video_channel_.release());
+  }
+  if (data_channel_.get()) {
+    channel_manager_->DestroyDataChannel(data_channel_.release());
+  }
+  for (size_t i = 0; i < saved_candidates_.size(); ++i) {
+    delete saved_candidates_[i];
+  }
+}
+
 bool WebRtcSession::Initialize(const MediaConstraintsInterface* constraints) {
   // TODO(perkj): Take |constraints| into consideration. Return false if not all
   // mandatory constraints can be fulfilled. Note that |constraints|
@@ -312,6 +353,13 @@ bool WebRtcSession::Initialize(const MediaConstraintsInterface* constraints) {
     transport_desc_factory_.set_secure(cricket::SEC_ENABLED);
   }
 #endif
+  // Enable creation of RTP data channels if the kEnableRtpDataChannels is set.
+  std::string value;
+  allow_rtp_data_engine_ = FindConstraint(
+      constraints, MediaConstraintsInterface::kEnableRtpDataChannels,
+      &value, NULL) && value == MediaConstraintsInterface::kValueTrue;
+  if (allow_rtp_data_engine_)
+    mediastream_signaling_->SetDataChannelFactory(this);
 
   // Make sure SessionDescriptions only contains the StreamParams we negotiate.
   session_desc_factory_.set_add_legacy_streams(false);
@@ -387,13 +435,13 @@ SessionDescriptionInterface* WebRtcSession::CreateOffer(
   if (FindConstraint(constraints,
                      MediaConstraintsInterface::kOfferToReceiveAudio,
                      &value, NULL)) {
-    receive_audio = (value == MediaConstraintsInterface::kTrue);
+    receive_audio = (value == MediaConstraintsInterface::kValueTrue);
   }
   bool receive_video = false;
   if (FindConstraint(constraints,
                      MediaConstraintsInterface::kOfferToReceiveVideo,
                      &value, NULL)) {
-    receive_video = (value == MediaConstraintsInterface::kTrue);
+    receive_video = (value == MediaConstraintsInterface::kValueTrue);
   }
 
   return CreateOffer(MediaHints(receive_audio, receive_video));
@@ -443,13 +491,13 @@ SessionDescriptionInterface* WebRtcSession::CreateAnswer(
   if (FindConstraint(constraints,
                      MediaConstraintsInterface::kOfferToReceiveAudio,
                      &value, NULL)) {
-    receive_audio = (value == MediaConstraintsInterface::kTrue);
+    receive_audio = (value == MediaConstraintsInterface::kValueTrue);
   }
   bool receive_video = true;
   if (FindConstraint(constraints,
                      MediaConstraintsInterface::kOfferToReceiveVideo,
                      &value, NULL)) {
-    receive_video = (value == MediaConstraintsInterface::kTrue);
+    receive_video = (value == MediaConstraintsInterface::kValueTrue);
   }
   return CreateAnswer(MediaHints(receive_audio, receive_video), offer);
 }
@@ -488,6 +536,9 @@ bool WebRtcSession::SetLocalDescription(Action action,
     set_initiator(true);
   }
 
+  // Update the MediaContentDescription crypto settings as per the policy set.
+  UpdateSessionDescriptionSecurePolicy(desc->description());
+
   set_local_description(desc->description()->Copy());
   local_desc_.reset(desc);
 
@@ -504,6 +555,10 @@ bool WebRtcSession::SetLocalDescription(Action action,
   }
   // Kick starting the ice candidates allocation.
   StartCandidatesAllocation();
+
+  // Update state and SSRC of local MediaStreams and DataChannels based on the
+  // local session description.
+  mediastream_signaling_->UpdateLocalStreams(local_desc_.get());
 
   return error() == cricket::BaseSession::ERROR_NONE;
 }
@@ -529,8 +584,6 @@ bool WebRtcSession::SetRemoteDescription(Action action,
                   << "Rejecting answer.";
     return false;
   }
-
-  HandleBackwardCompatibility(desc);
 
   if (session_desc_factory_.secure() == cricket::SEC_REQUIRED &&
       !HasCrypto(desc->description())) {
@@ -580,14 +633,14 @@ bool WebRtcSession::UpdateSessionState(
     if (PushdownTransportDescription(source, cricket::CA_OFFER)) {
       SetState(source == cricket::CS_LOCAL ?
         STATE_SENTINITIATE : STATE_RECEIVEDINITIATE);
-      ret = true;
+      ret = (error() == cricket::BaseSession::ERROR_NONE);
     }
   } else if (action == kPrAnswer) {
     if (PushdownTransportDescription(source, cricket::CA_PRANSWER)) {
       EnableChannels();
       SetState(source == cricket::CS_LOCAL ?
           STATE_SENTPRACCEPT : STATE_RECEIVEDPRACCEPT);
-      ret = true;
+      ret = (error() == cricket::BaseSession::ERROR_NONE);
     }
   } else if (action == kAnswer) {
     // Remove channel and transport proxies, if MediaContentDescription is
@@ -600,7 +653,7 @@ bool WebRtcSession::UpdateSessionState(
       EnableChannels();
       SetState(source == cricket::CS_LOCAL ?
           STATE_SENTACCEPT : STATE_RECEIVEDACCEPT);
-      ret = true;
+      ret = (error() == cricket::BaseSession::ERROR_NONE);
     }
   }
   return ret;
@@ -637,6 +690,18 @@ bool WebRtcSession::ProcessIceMessage(const IceCandidateInterface* candidate) {
   return UseCandidatesInSessionDescription(remote_desc_.get());
 }
 
+bool WebRtcSession::GetLocalTrackName(uint32 ssrc, std::string* name) {
+  if (!BaseSession::local_description())
+    return false;
+  return GetNameBySsrc(BaseSession::local_description(), ssrc, name);
+}
+
+bool WebRtcSession::GetRemoteTrackName(uint32 ssrc, std::string* name) {
+  if (!BaseSession::remote_description())
+      return false;
+  return GetNameBySsrc(BaseSession::remote_description(), ssrc, name);
+}
+
 void WebRtcSession::SetAudioPlayout(const std::string& name, bool enable) {
   ASSERT(signaling_thread()->IsCurrent());
   if (!voice_channel_) {
@@ -644,8 +709,7 @@ void WebRtcSession::SetAudioPlayout(const std::string& name, bool enable) {
     return;
   }
   uint32 ssrc = 0;
-  if (!VERIFY(GetAudioSsrcByName(BaseSession::remote_description(),
-                                 name, &ssrc))) {
+  if (!VERIFY(mediastream_signaling_->GetRemoteTrackSsrc(name, &ssrc))) {
     LOG(LS_ERROR) << "Trying to enable/disable an unexisting audio SSRC.";
     return;
   }
@@ -679,7 +743,7 @@ bool WebRtcSession::SetCaptureDevice(const std::string& name,
   }
   uint32 ssrc = 0;
   if (!VERIFY(GetVideoSsrcByName(BaseSession::local_description(),
-                                 name, &ssrc) || camera == NULL)) {
+                                 name, &ssrc))) {
     LOG(LS_ERROR) << "Trying to set camera device on a unknown  SSRC.";
     return false;
   }
@@ -701,7 +765,7 @@ void WebRtcSession::SetVideoPlayout(const std::string& name,
   }
 
   uint32 ssrc = 0;
-  if (GetVideoSsrcByName(BaseSession::remote_description(), name, &ssrc)) {
+  if (mediastream_signaling_->GetRemoteTrackSsrc(name, &ssrc)) {
     video_channel_->SetRenderer(ssrc, enable ? renderer : NULL);
   } else {
     // Allow that |name| does not exist if renderer is null but assert
@@ -792,6 +856,22 @@ bool WebRtcSession::SendDtmf(const std::string& send_name,
   return true;
 }
 
+talk_base::scoped_refptr<DataChannel> WebRtcSession::CreateDataChannel(
+      const std::string& label,
+      const DataChannelInit* config) {
+  if (!allow_rtp_data_engine_) {
+    LOG(LS_ERROR) << "CreateDataChannel: Data is not supported in this call.";
+    return NULL;
+  }
+  talk_base::scoped_refptr<DataChannel> channel(
+      DataChannel::Create(this, label, config));
+  if (channel == NULL)
+    return NULL;
+  if (!mediastream_signaling_->AddDataChannel(channel))
+    return NULL;
+  return channel;
+}
+
 void WebRtcSession::OnMessage(talk_base::Message* msg) {
   switch (msg->message_id) {
     case MSG_CANDIDATE_TIMEOUT:
@@ -802,6 +882,10 @@ void WebRtcSession::OnMessage(talk_base::Message* msg) {
       cricket::BaseSession::OnMessage(msg);
       break;
   }
+}
+
+void WebRtcSession::OnFirstPacketReceived(cricket::BaseChannel* channel) {
+  mediastream_signaling_->SetMediaReceived();
 }
 
 void WebRtcSession::OnTransportRequestSignaling(
@@ -878,6 +962,9 @@ void WebRtcSession::EnableChannels() {
 
   if (video_channel_ && !video_channel_->enabled())
     video_channel_->Enable(true);
+
+  if (data_channel_.get() && !data_channel_->enabled())
+    data_channel_->Enable(true);
 }
 
 void WebRtcSession::ProcessNewLocalCandidate(
@@ -971,6 +1058,7 @@ void WebRtcSession::RemoveUnusedChannelsAndTransports(
       cricket::GetFirstAudioContent(desc);
   if ((!voice_info || voice_info->rejected) && voice_channel_) {
     const std::string content_name = voice_channel_->content_name();
+    voice_channel_->SignalFirstPacketReceived.disconnect(this);
     channel_manager_->DestroyVoiceChannel(voice_channel_.release());
     DestroyTransportProxy(content_name);
   }
@@ -979,7 +1067,16 @@ void WebRtcSession::RemoveUnusedChannelsAndTransports(
       cricket::GetFirstVideoContent(desc);
   if ((!video_info || video_info->rejected) && video_channel_) {
     const std::string content_name = video_channel_->content_name();
+    video_channel_->SignalFirstPacketReceived.disconnect(this);
     channel_manager_->DestroyVideoChannel(video_channel_.release());
+    DestroyTransportProxy(content_name);
+  }
+
+  const cricket::ContentInfo* data_info =
+      cricket::GetFirstDataContent(desc);
+  if ((!data_info || data_info->rejected) && data_channel_.get()) {
+    const std::string content_name = data_channel_->content_name();
+    channel_manager_->DestroyDataChannel(data_channel_.release());
     DestroyTransportProxy(content_name);
   }
 }
@@ -1010,6 +1107,15 @@ bool WebRtcSession::CreateChannels(Action action,
     }
   }
 
+  const cricket::ContentInfo* data = cricket::GetFirstDataContent(desc);
+  if (allow_rtp_data_engine_ && data && !data->rejected &&
+      !data_channel_.get()) {
+    if (!CreateDataChannel(desc)) {
+      LOG(LS_ERROR) << "Failed to create data channel.";
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -1017,6 +1123,9 @@ bool WebRtcSession::CreateVoiceChannel(const SessionDescription* desc) {
   const cricket::ContentInfo* voice = cricket::GetFirstAudioContent(desc);
   voice_channel_.reset(channel_manager_->CreateVoiceChannel(
       this, voice->name, true));
+  if (voice_channel_)
+    voice_channel_->SignalFirstPacketReceived.connect(
+        this, &WebRtcSession::OnFirstPacketReceived);
   return voice_channel_ ? true : false;
 }
 
@@ -1024,7 +1133,20 @@ bool WebRtcSession::CreateVideoChannel(const SessionDescription* desc) {
   const cricket::ContentInfo* video = cricket::GetFirstVideoContent(desc);
   video_channel_.reset(channel_manager_->CreateVideoChannel(
       this, video->name, true, voice_channel_.get()));
+  if (video_channel_)
+    video_channel_->SignalFirstPacketReceived.connect(
+        this, &WebRtcSession::OnFirstPacketReceived);
   return video_channel_ ? true : false;
+}
+
+bool WebRtcSession::CreateDataChannel(const SessionDescription* desc) {
+  const cricket::ContentInfo* data = cricket::GetFirstDataContent(desc);
+  data_channel_.reset(channel_manager_->CreateDataChannel(
+      this, data->name, true));
+  if (!data_channel_.get()) {
+    return false;
+  }
+  return true;
 }
 
 void WebRtcSession::CopySavedCandidates(
@@ -1040,40 +1162,24 @@ void WebRtcSession::CopySavedCandidates(
   saved_candidates_.clear();
 }
 
-void WebRtcSession::HandleBackwardCompatibility(
-    SessionDescriptionInterface* remote_desc) {
-  if (!remote_desc || !remote_desc->description() ||
-      remote_desc->session_version().empty()) {
+void WebRtcSession::UpdateSessionDescriptionSecurePolicy(
+    SessionDescription* sdesc) {
+  if (!sdesc) {
     return;
   }
 
-  // If the remote description has the init session version smaller than
-  // kInitSessionVersion, we consider it's a older client.
-  const uint64 remote_session_version =
-      talk_base::FromString<uint64>(remote_desc->session_version());
-  if (remote_session_version < kInitSessionVersion) {
-    older_version_remote_peer_ = true;
-  }
-  if (!older_version_remote_peer_) {
-    return;
-  }
-
-  // The RFC 5245 ICE is not supported before this version.
-  SessionDescription* desc = remote_desc->description();
-  const ContentInfos& contents = desc->contents();
-  // Update the TransportType of all the contents to NS_GINGLE_P2P, which means
-  // RFC 5245 ICE is not supported.
-  for (size_t i = 0; i < contents.size(); ++i) {
-    const TransportInfo* transport_info =
-        desc->GetTransportInfoByName(contents[i].name);
-    if (!transport_info) {
-      LOG(LS_WARNING) << "No transport info for content: " << contents[i].name;
-      continue;
+  // Updating the |crypto_required_| in MediaContentDescription to the
+  // appropriate state based on the current security policy.
+  for (cricket::ContentInfos::iterator iter = sdesc->contents().begin();
+       iter != sdesc->contents().end(); ++iter) {
+    if (cricket::IsMediaContent(&*iter)) {
+      MediaContentDescription* mdesc =
+          static_cast<MediaContentDescription*> (iter->description);
+      if (mdesc) {
+        mdesc->set_crypto_required(
+            session_desc_factory_.secure() == cricket::SEC_REQUIRED);
+      }
     }
-    TransportInfo new_transport_info = *transport_info;
-    desc->RemoveTransportInfoByName(contents[i].name);
-    new_transport_info.description.transport_type = cricket::NS_GINGLE_P2P;
-    desc->AddTransportInfo(new_transport_info);
   }
 }
 

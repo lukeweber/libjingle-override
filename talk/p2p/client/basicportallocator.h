@@ -168,7 +168,7 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
 
  private:
   void OnConfigReady(PortConfiguration* config);
-  void OnConfigTimeout();
+  void OnConfigStop();
   void AllocatePorts();
   void OnAllocate();
   void DoAllocate();
@@ -178,7 +178,8 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
                                PortConfiguration* config, uint32* flags);
   void AddAllocatedPort(Port* port, AllocationSequence* seq,
                         bool prepare_address = true);
-  void OnAddressReady(Port* port);
+  void OnCandidateReady(Port* port, const Candidate& c);
+  void OnPortReady(Port* port);
   void OnProtocolEnabled(AllocationSequence* seq, ProtocolType proto);
   void OnPortDestroyed(PortInterface* port);
   void OnAddressError(Port* port);

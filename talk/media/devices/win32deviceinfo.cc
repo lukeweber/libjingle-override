@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2004 Google Inc.
+ * Copyright 2012 Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,59 +25,38 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_SESSION_MEDIA_TYPINGMONITOR_H_
-#define TALK_SESSION_MEDIA_TYPINGMONITOR_H_
-
-#include "talk/base/messagehandler.h"
-#include "talk/media/base/mediachannel.h"
-
-namespace talk_base {
-class Thread;
-}
+#include "talk/media/devices/deviceinfo.h"
 
 namespace cricket {
 
-class VoiceChannel;
-class BaseChannel;
+bool GetUsbUvcId(const Device& device, std::string* uvc_id) {
+  // Both PID and VID are 4 characters.
+  const int id_size = 4;
+  const char vid[] = "vid_";  // Also contains '\0'.
+  const size_t vid_location = device.id.find(vid);
+  if (vid_location == std::string::npos ||
+      vid_location + sizeof(vid) - 1 + id_size > device.id.size()) {
+    return false;
+  }
+  const char pid[] = "pid_";
+  const size_t pid_location = device.id.find(pid);
+  if (pid_location == std::string::npos ||
+      pid_location + sizeof(pid) - 1 + id_size > device.id.size()) {
+    return false;
+  }
+  std::string id_vendor = device.id.substr(vid_location + sizeof(vid) - 1,
+                                           id_size);
+  std::string id_product = device.id.substr(pid_location + sizeof(pid) -1,
+                                            id_size);
+  uvc_id->clear();
+  uvc_id->append(id_vendor);
+  uvc_id->append(":");
+  uvc_id->append(id_product);
+  return true;
+}
 
-struct TypingMonitorOptions {
-  int cost_per_typing;
-  int mute_period;
-  int penalty_decay;
-  int reporting_threshold;
-  int time_window;
-  int type_event_delay;
-  size_t min_participants;
-};
-
-/**
- * An object that observes a channel and listens for typing detection warnings,
- * which can be configured to mute audio capture of that channel for some period
- * of time.  The purpose is to automatically mute someone if they are disturbing
- * a conference with loud keystroke audio signals.
- */
-class TypingMonitor
-    : public talk_base::MessageHandler, public sigslot::has_slots<> {
- public:
-  TypingMonitor(VoiceChannel* channel, talk_base::Thread* worker_thread,
-                const TypingMonitorOptions& params);
-  ~TypingMonitor();
-
-  sigslot::signal2<BaseChannel*, bool> SignalMuted;
-
-  void OnChannelMuted();
-
- private:
-  void OnVoiceChannelError(uint32 ssrc, VoiceMediaChannel::Error error);
-  void OnMessage(talk_base::Message* msg);
-
-  VoiceChannel* channel_;
-  talk_base::Thread* worker_thread_;
-  int mute_period_;
-  bool has_pending_unmute_;
-};
+bool GetUsbVersion(const Device& device, std::string* usb_version) {
+  return false;
+}
 
 }  // namespace cricket
-
-#endif  // TALK_SESSION_MEDIA_TYPINGMONITOR_H_
-

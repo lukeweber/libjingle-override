@@ -52,7 +52,7 @@ void Break() {
 #if WIN32
   ::DebugBreak();
 #elif OSX  // !WIN32
-  ::Debugger();
+  __asm__("int $3");
 #else // !OSX && !WIN32
 #if _DEBUG_HAVE_BACKTRACE
   OutputTrace();

@@ -79,7 +79,7 @@ class WebRtcVideoCapturer : public VideoCapturer,
   virtual void OnIncomingCapturedFrame(const WebRtc_Word32 id,
                                        webrtc::I420VideoFrame& frame);
   virtual void OnIncomingCapturedEncodedFrame(const WebRtc_Word32 id,
-                                              webrtc::VideoFrame& frame) {
+      webrtc::VideoFrame& frame, webrtc::VideoCodecType codec_type) {
   }
   virtual void OnCaptureDelayChanged(const WebRtc_Word32 id,
                                      const WebRtc_Word32 delay);

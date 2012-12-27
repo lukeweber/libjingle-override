@@ -38,6 +38,7 @@ enum {
   MSG_ICESTATE,
   MSG_CANSENDDTMF,
   MSG_SEND_DTMF,
+  MSG_CREATEDATACHANNEL,
   MSG_TERMINATE,
   MSG_CREATEOFFER,
   MSG_CREATEOFFERJSEP00,
@@ -52,6 +53,7 @@ enum {
   MSG_PROCESSICEMESSAGEJSEP00,
   MSG_GETLOCALDESCRIPTION,
   MSG_GETREMOTEDESCRIPTION,
+  MSG_GETSTATS,
 };
 
 struct MediaStreamParams : public talk_base::MessageData {
@@ -74,6 +76,18 @@ struct IceConfigurationParams : public talk_base::MessageData {
   }
   const webrtc::JsepInterface::IceServers* configuration;
   const webrtc::MediaConstraintsInterface* constraints;
+  bool result;
+};
+
+struct StatsParams : public talk_base::MessageData {
+  StatsParams(webrtc::StatsObserver* observer,
+              webrtc::MediaStreamTrackInterface* track)
+    : observer(observer),
+      track(track),
+      result(false) {
+    }
+  webrtc::StatsObserver* observer;
+  webrtc::MediaStreamTrackInterface* track;
   bool result;
 };
 
@@ -158,6 +172,18 @@ class SendDtmfMessageData : public talk_base::MessageData {
   bool result;
 };
 
+struct CreateDataChannelMessageData : public talk_base::MessageData {
+  CreateDataChannelMessageData(std::string label,
+                               const webrtc::DataChannelInit* init)
+      : label(label),
+        init(init) {
+  }
+
+  std::string label;
+  const webrtc::DataChannelInit* init;
+  talk_base::scoped_refptr<webrtc::DataChannelInterface> data_channel;
+};
+
 }  // namespace
 
 namespace webrtc {
@@ -221,6 +247,16 @@ void PeerConnectionProxy::RemoveStream(MediaStreamInterface* remove_stream) {
   peerconnection_->RemoveStream(remove_stream);
 }
 
+bool PeerConnectionProxy::GetStats(StatsObserver* observer,
+                                   MediaStreamTrackInterface* track) {
+  if (!signaling_thread_->IsCurrent()) {
+    StatsParams msg(observer, track);
+    signaling_thread_->Send(this, MSG_GETSTATS, &msg);
+    return msg.result;
+  }
+  return peerconnection_->GetStats(observer, track);
+}
+
 PeerConnectionInterface::ReadyState PeerConnectionProxy::ready_state() {
   if (!signaling_thread_->IsCurrent()) {
     ReadyStateMessage msg;
@@ -257,6 +293,17 @@ bool PeerConnectionProxy::SendDtmf(const AudioTrackInterface* send_track,
     return msg.result;
   }
   return peerconnection_->SendDtmf(send_track, tones, duration, play_track);
+}
+
+talk_base::scoped_refptr<DataChannelInterface>
+PeerConnectionProxy::CreateDataChannel(const std::string& label,
+                                       const DataChannelInit* config) {
+  if (!signaling_thread_->IsCurrent()) {
+    CreateDataChannelMessageData msg(label, config);
+    signaling_thread_->Send(this, MSG_CREATEDATACHANNEL, &msg);
+    return msg.data_channel;
+  }
+  return peerconnection_->CreateDataChannel(label, config);
 }
 
 bool PeerConnectionProxy::StartIce(IceOptions options) {
@@ -436,15 +483,18 @@ void PeerConnectionProxy::OnMessage(talk_base::Message* msg) {
       peerconnection_->RemoveStream(param->stream);
       break;
     }
+    case MSG_GETSTATS: {
+      StatsParams* param(static_cast<StatsParams*> (data));
+      param->result = peerconnection_->GetStats(param->observer, param->track);
+      break;
+    }
     case MSG_RETURNLOCALMEDIASTREAMS: {
-      StreamCollectionParams* param(
-          static_cast<StreamCollectionParams*> (data));
+      StreamCollectionParams* param(static_cast<StreamCollectionParams*>(data));
       param->streams = peerconnection_->local_streams();
       break;
     }
     case MSG_RETURNREMOTEMEDIASTREAMS: {
-      StreamCollectionParams* param(
-          static_cast<StreamCollectionParams*> (data));
+      StreamCollectionParams* param(static_cast<StreamCollectionParams*>(data));
       param->streams = peerconnection_->remote_streams();
       break;
     }
@@ -467,6 +517,13 @@ void PeerConnectionProxy::OnMessage(talk_base::Message* msg) {
       SendDtmfMessageData* param(static_cast<SendDtmfMessageData*> (data));
       param->result = peerconnection_->SendDtmf(param->send_track,
           param->tones, param->duration, param->play_track);
+      break;
+    }
+    case MSG_CREATEDATACHANNEL: {
+      CreateDataChannelMessageData* param(
+          static_cast<CreateDataChannelMessageData*>(data));
+      param->data_channel = peerconnection_->CreateDataChannel(param->label,
+                                                               param->init);
       break;
     }
     case MSG_CREATEOFFERJSEP00: {
