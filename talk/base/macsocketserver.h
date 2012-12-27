@@ -8,6 +8,11 @@
 #ifdef OSX // Invalid on IOS
 #include <Carbon/Carbon.h>
 #endif
+
+#ifdef IOS
+#include <CoreFoundation/CoreFoundation.h>
+#endif
+
 #include "talk/base/physicalsocketserver.h"
 
 namespace talk_base {
