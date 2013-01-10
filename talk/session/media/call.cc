@@ -46,7 +46,7 @@ const int kDTMFDelay = 300;  // msec
 const size_t kMaxDTMFDigits = 30;
 const int kSendToVoicemailTimeout = 1000*20;
 const int kNoVoicemailTimeout = 1000*180;
-const int kMediaMonitorInterval = 1000*15;
+const int kMediaMonitorInterval = 1000*5;
 // In order to be the same as the server-side switching, this must be 100.
 const int kAudioMonitorPollPeriodMillis = 100;
 

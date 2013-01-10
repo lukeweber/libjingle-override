@@ -48,7 +48,8 @@ static const int TURN_ALLOCATE_ERROR_RESPONSE = STUN_ALLOCATE_ERROR_RESPONSE;
 
 static const int TURN_DEFAULT_PORT = 3478;
 static const int TURN_CHANNEL_NUMBER_START = 0x4000;
-static const int TURN_CHANNEL_BINDING_TIMEOUT = 10 * 60 * 1000;  // 10 minutes
+// this isn't default but we make it smaller to get the permission refresh for free
+static const int TURN_CHANNEL_BINDING_TIMEOUT = 5 * 60 * 1000; // 5 minutes 
 
 static const size_t TURN_CHANNEL_HEADER_SIZE = 4U;
 
