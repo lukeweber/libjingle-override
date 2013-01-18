@@ -84,10 +84,19 @@ Call::~Call() {
 Session* Call::InitiateSession(const buzz::Jid& to,
                                const buzz::Jid& initiator,
                                const CallOptions& options) {
+    const std::string call_tracker_id = "";
+    return this->InitiateSession(to, initiator, options, call_tracker_id);
+}
+
+Session* Call::InitiateSession(const buzz::Jid& to,
+                               const buzz::Jid& initiator,
+                               const CallOptions& options,
+                               const std::string& call_tracker_id) {
   const SessionDescription* offer = session_client_->CreateOffer(options);
 
   Session* session = session_client_->CreateSession(this);
   session->set_initiator_name(initiator.Str());
+  session->set_call_tracker_id(call_tracker_id);
 
   AddSession(session, offer);
   session->Initiate(to.Str(), offer);

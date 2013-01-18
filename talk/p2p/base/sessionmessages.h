@@ -76,9 +76,10 @@ struct SessionMessage {
   SessionMessage() : action_elem(NULL), stanza(NULL) {}
 
   SessionMessage(SignalingProtocol protocol, ActionType type,
-                 const std::string& sid, const std::string& initiator) :
+                 const std::string& sid, const std::string& initiator,
+                 const std::string& call_tracker_id) :
       protocol(protocol), type(type), sid(sid), initiator(initiator),
-      action_elem(NULL), stanza(NULL) {}
+      call_tracker_id(call_tracker_id), action_elem(NULL), stanza(NULL) {}
 
   std::string id;
   std::string from;
@@ -87,6 +88,7 @@ struct SessionMessage {
   ActionType type;
   std::string sid;  // session id
   std::string initiator;
+  std::string call_tracker_id;
 
   // Used for further parsing when necessary.
   // Represents <session> or <jingle>.

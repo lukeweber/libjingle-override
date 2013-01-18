@@ -65,6 +65,9 @@ class Call : public talk_base::MessageHandler, public sigslot::has_slots<> {
 
   // |initiator| can be empty.
   Session* InitiateSession(const buzz::Jid& to, const buzz::Jid& initiator,
+                           const CallOptions& options,
+                           const std::string& call_tracker_id);
+  Session* InitiateSession(const buzz::Jid& to, const buzz::Jid& initiator,
                            const CallOptions& options);
   void AcceptSession(Session* session, const CallOptions& options);
   void RejectSession(Session* session, bool busy);

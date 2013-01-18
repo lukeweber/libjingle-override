@@ -538,6 +538,9 @@ class Session : public BaseSession {
   // In special cases, may be different than both local_name and remote_name.
   const std::string& initiator_name() const { return initiator_name_; }
 
+  void set_call_tracker_id(const std::string& id) { call_tracker_id_ = id; }
+  const std::string& call_tracker_id() const { return call_tracker_id_; }
+
   SignalingProtocol current_protocol() const { return current_protocol_; }
 
   void set_current_protocol(SignalingProtocol protocol) {
@@ -716,6 +719,7 @@ class Session : public BaseSession {
   bool initiate_acked_;
   std::string local_name_;
   std::string initiator_name_;
+  std::string call_tracker_id_;
   std::string remote_name_;
   SessionClient* client_;
   TransportParser* transport_parser_;

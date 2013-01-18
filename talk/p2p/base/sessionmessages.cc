@@ -174,6 +174,7 @@ bool ParseJingleSessionMessage(const buzz::XmlElement* jingle,
   msg->type = ToActionType(type_string);
   msg->sid = jingle->Attr(QN_SID);
   msg->initiator = GetXmlAttr(jingle, QN_INITIATOR, buzz::STR_EMPTY);
+  msg->call_tracker_id = GetXmlAttr(jingle, QN_CALL_TRACKER_ID, buzz::STR_EMPTY);
   msg->action_elem = jingle;
 
   if (msg->type == ACTION_UNKNOWN)
@@ -228,6 +229,9 @@ buzz::XmlElement* WriteJingleAction(const SessionMessage& msg,
   jingle->AddAttr(QN_SID, msg.sid);
   if (msg.type == ACTION_SESSION_INITIATE) {
     jingle->AddAttr(QN_INITIATOR, msg.initiator);
+    if (msg.call_tracker_id != "") {
+      jingle->AddAttr(QN_CALL_TRACKER_ID, msg.call_tracker_id);
+    }
   }
   AddXmlChildren(jingle, action_elems);
   return jingle;

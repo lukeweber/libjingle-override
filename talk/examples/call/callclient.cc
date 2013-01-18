@@ -878,7 +878,7 @@ bool CallClient::PlaceCall(const std::string& name,
 
   if (!call_) {
     call_ = media_client_->CreateCall();
-    AddSession(call_->InitiateSession(jid, media_client_->jid(), options));
+    AddSession(call_->InitiateSession(jid, media_client_->jid(), options, "TestCallId"));
   }
   media_client_->SetFocus(call_);
   if (call_->has_video() && render_) {

@@ -81,6 +81,7 @@ const char LN_DESCRIPTION[] = "description";
 const char LN_PAYLOADTYPE[] = "payload-type";
 const buzz::StaticQName QN_ID = { NS_EMPTY, "id" };
 const buzz::StaticQName QN_SID = { NS_EMPTY, "sid" };
+const buzz::StaticQName QN_CALL_TRACKER_ID = {NS_EMPTY, "callid"};
 const buzz::StaticQName QN_NAME = { NS_EMPTY, "name" };
 const buzz::StaticQName QN_CLOCKRATE = { NS_EMPTY, "clockrate" };
 const buzz::StaticQName QN_BITRATE = { NS_EMPTY, "bitrate" };

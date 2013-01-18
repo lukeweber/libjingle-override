@@ -728,6 +728,7 @@ Session::Session(SessionManager* session_manager,
   session_manager_ = session_manager;
   local_name_ = local_name;
   initiator_name_ = initiator_name;
+  call_tracker_id_ = "";
   transport_parser_ = new P2PTransportParser();
   client_ = client;
   initiate_acked_ = false;
@@ -1163,6 +1164,7 @@ bool Session::OnInitiateMessage(const SessionMessage& msg,
 
   set_remote_name(msg.from);
   set_initiator_name(msg.initiator);
+  set_call_tracker_id(msg.call_tracker_id);
   set_remote_description(new SessionDescription(init.ClearContents(),
                                                 init.transports,
                                                 init.groups));
@@ -1510,7 +1512,7 @@ bool Session::SendMessage(ActionType type, const XmlElements& action_elems,
   talk_base::scoped_ptr<buzz::XmlElement> stanza(
       new buzz::XmlElement(buzz::QN_IQ));
 
-  SessionMessage msg(current_protocol_, type, id(), initiator_name());
+  SessionMessage msg(current_protocol_, type, id(), initiator_name(), call_tracker_id());
   msg.to = remote_name();
   WriteSessionMessage(msg, action_elems, stanza.get());
 
@@ -1554,7 +1556,7 @@ bool Session::WriteActionMessage(SignalingProtocol protocol,
   if (!WriteSessionAction(protocol, action, &action_elems, error))
     return false;
 
-  SessionMessage msg(protocol, type, id(), initiator_name());
+  SessionMessage msg(protocol, type, id(), initiator_name(), call_tracker_id());
   msg.to = remote_name();
 
   WriteSessionMessage(msg, action_elems, stanza);

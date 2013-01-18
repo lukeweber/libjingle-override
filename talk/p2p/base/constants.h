@@ -96,6 +96,7 @@ extern const char LN_DESCRIPTION[];
 extern const char LN_PAYLOADTYPE[];
 extern const buzz::StaticQName QN_ID;
 extern const buzz::StaticQName QN_SID;
+extern const buzz::StaticQName QN_CALL_TRACKER_ID;
 extern const buzz::StaticQName QN_NAME;
 extern const buzz::StaticQName QN_CLOCKRATE;
 extern const buzz::StaticQName QN_BITRATE;
