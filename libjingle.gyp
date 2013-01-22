@@ -392,8 +392,10 @@
           'sources': [
 #            'talk/base/maccocoasocketserver.mm',
 #            'talk/base/maccocoasocketserver.h',
+            'talk/base/macasyncsocket.h',
             'talk/base/macasyncsocket.cc',
             'talk/base/macconversion.cc',
+            'talk/base/macsocketserver.h',
             'talk/base/macsocketserver.cc',
             'talk/base/maccocoathreadhelper.mm',
             'talk/base/maccocoathreadhelper.h',
