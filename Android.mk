@@ -234,8 +234,8 @@ LOCAL_C_INCLUDES := \
 	$(MY_THIRD_PARTY_PATH)/webrtc/modules/interface \
 	$(MY_THIRD_PARTY_PATH)/expat/files/lib \
 	$(MY_GTEST_PATH) \
-	$(MY_GTEST_PATH)/include
-
+	$(MY_GTEST_PATH)/include \
+	$(MY_THIRD_PARTY_PATH)/libyuv/include/
 
 LOCAL_C_INCLUDES += $(LIBJINGLE_C_INCLUDE)
 

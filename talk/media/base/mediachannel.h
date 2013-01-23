@@ -241,7 +241,8 @@ enum VideoMediaChannelOptions {
   // Enable video noise reduction.
   OPT_VIDEO_NOISE_REDUCTION = 0x80000,
   // Enable WebRTC leaky bucket when sending media packets.
-  OPT_VIDEO_LEAKY_BUCKET = 0x800000
+  OPT_VIDEO_LEAKY_BUCKET = 0x160000,
+  OPT_VIDEO_WATERMARK = 0x320000,
 };
 
 // DTMF flags to control if a DTMF tone should be played and/or sent.
