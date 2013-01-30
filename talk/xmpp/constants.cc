@@ -246,6 +246,9 @@ const StaticQName QN_BIND_BIND = { NS_BIND, "bind" };
 const StaticQName QN_BIND_RESOURCE = { NS_BIND, "resource" };
 const StaticQName QN_BIND_JID = { NS_BIND, "jid" };
 
+const StaticQName QN_REQUEST = { NS_MSG_RECEIPTS, "request" };
+const StaticQName QN_RECEIVED = { NS_MSG_RECEIPTS, "received" };
+
 const StaticQName QN_MESSAGE = { NS_CLIENT, "message" };
 const StaticQName QN_BODY = { NS_CLIENT, "body" };
 const StaticQName QN_SUBJECT = { NS_CLIENT, "subject" };
@@ -409,6 +412,9 @@ const StaticQName QN_DISCO_FEATURE = { NS_DISCO_INFO, "feature" };
 
 const StaticQName QN_DISCO_ITEMS_QUERY = { NS_DISCO_ITEMS, "query" };
 const StaticQName QN_DISCO_ITEM = { NS_DISCO_ITEMS, "item" };
+
+// JEP 0184
+const char NS_MSG_RECEIPTS[] = "urn:xmpp:receipts";
 
 // JEP 0020
 const char NS_FEATURE[] = "http://jabber.org/protocol/feature-neg";

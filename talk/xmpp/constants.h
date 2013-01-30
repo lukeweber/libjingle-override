@@ -34,6 +34,7 @@
 
 namespace buzz {
 
+extern const char NS_MSG_RECEIPTS[];
 extern const char NS_CLIENT[];
 extern const char NS_SERVER[];
 extern const char NS_STREAM[];
@@ -205,6 +206,9 @@ extern const StaticQName QN_STANZA_TEXT;
 extern const StaticQName QN_BIND_BIND;
 extern const StaticQName QN_BIND_RESOURCE;
 extern const StaticQName QN_BIND_JID;
+
+extern const StaticQName QN_REQUEST;
+extern const StaticQName QN_RECEIVED;
 
 extern const StaticQName QN_MESSAGE;
 extern const StaticQName QN_BODY;
