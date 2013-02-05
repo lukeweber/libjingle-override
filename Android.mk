@@ -1,8 +1,6 @@
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
-include $(MY_ROOT_PATH)/android-webrtc.mk
-include $(LOCAL_PATH)/config.mk
 
 LOCAL_ARM_MODE := arm
 LOCAL_MODULE := libjingle

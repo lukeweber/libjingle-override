@@ -2,39 +2,7 @@ LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
 include $(MY_ROOT_PATH)/android-webrtc.mk
-include $(LOCAL_PATH)/config.mk
-
-MY_LIBJINGLE_C_INCLUDES := \
-	$(MY_THIRD_PARTY_PATH)/openssl/openssl/include \
-	$(MY_THIRD_PARTY_PATH)/openssl/config/android \
-	$(MY_THIRD_PARTY_PATH)/libsrtp/source/config \
-	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp \
-	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp/include \
-	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp/crypto/include \
-	$(MY_THIRD_PARTY_PATH) \
-	$(MY_THIRD_PARTY_PATH)/webrtc \
-	$(MY_THIRD_PARTY_PATH)/webrtc/modules/interface \
-	$(MY_THIRD_PARTY_PATH)/expat/files/lib
-
-MY_UNITTEST_CFLAGS :=  $(LIBJINGLE_CPPFLAGS) \
-	-DHAVE_STDLIB_H \
-	-DHAVE_STRING_H \
-	-DCPU_RISC \
-	-DSIZEOF_UNSIGNED_LONG=4 \
-	-DSIZEOF_UNSIGNED_LONG_LONG=8 \
-	-DHAVE_STDINT_H \
-	-DHAVE_INTTYPES_H \
-	-DHAVE_NETINET_IN_H \
-	-DHAVE_UINT64_T \
-	-DHAVE_UINT32_T \
-	-DHAVE_UINT16_T \
-	-DHAVE_UINT8_T \
-	-DHAVE_UINT_T \
-	-DUSE_WEBRTC_313_BRANCH
-
-GTEST_C_INCLUDES := \
-	$(MY_GTEST_PATH) \
-	$(MY_GTEST_PATH)/include
+include $(MY_ROOT_PATH)/libjingle_config.mk
 
 include $(CLEAR_VARS)
 LOCAL_MODULE:= libjingle_unittest_main
