@@ -35,13 +35,16 @@ const int kExceptionSignals[] = {
   SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS, -1
 };
 
+const char kCrashedMarker[] = "[ CRASHED      ]\n";
+
 struct sigaction g_old_sa[NSIG];
 
 // This function runs in a compromised context. It should not allocate memory.
 void SignalHandler(int sig, siginfo_t *info, void *reserved)
 {
   // Output the crash marker.
-  __android_log_write(ANDROID_LOG_ERROR, "chromium", "[ CRASHED      ]");
+  write(STDOUT_FILENO, kCrashedMarker, sizeof(kCrashedMarker) -1);
+  __android_log_write(ANDROID_LOG_ERROR, "webrtcjingle", kCrashedMarker);
   g_old_sa[sig].sa_sigaction(sig, info, reserved);
 }
 
@@ -145,6 +148,8 @@ JNIEXPORT void JNICALL Java_org_chromium_native_1test_ChromeNativeTestActivity_n
     jobject obj,
     jstring jfiles_dir,
     jobject app_context) {
+
+  InstallHandlers();
 
   const char* nativeDir = env->GetStringUTFChars(jfiles_dir, NULL);
   // A few options, such "--gtest_list_tests", will just use printf directly
