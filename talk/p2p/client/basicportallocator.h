@@ -99,6 +99,9 @@ class BasicPortAllocator : public PortAllocator {
   virtual void AddRelay(const RelayServerConfig& relay) {
     relays_.push_back(relay);
   }
+  virtual void ClearAllRelays() {
+    relays_.clear();
+  }
 
   // Returns the best (highest priority) phase that has produced a port that
   // produced a writable connection.  If no writable connections have been
