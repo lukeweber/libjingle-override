@@ -53,6 +53,8 @@ extern const char NS_VCARD_UPDATE[];
 extern const char STR_CLIENT[];
 extern const char STR_SERVER[];
 extern const char STR_STREAM[];
+extern const char STR_PRESIN4[];
+extern const char STR_DENY_ALL_PRESIN_AND_MESSAGE[];
 
 extern const char STR_GET[];
 extern const char STR_SET[];

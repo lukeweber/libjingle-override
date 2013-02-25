@@ -58,6 +58,8 @@ const char NS_VCARD_UPDATE[] = "vcard-temp:x:update";
 const char STR_CLIENT[] = "client";
 const char STR_SERVER[] = "server";
 const char STR_STREAM[] = "stream";
+const char STR_PRESIN4[] = "presin4";
+const char STR_DENY_ALL_PRESIN_AND_MESSAGE[] = "deny-all-presin-and-message";
 
 const char STR_GET[] = "get";
 const char STR_SET[] = "set";
