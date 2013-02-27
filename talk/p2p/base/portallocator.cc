@@ -60,7 +60,14 @@ PortAllocatorSession* PortAllocator::CreateSession(
     const std::string& ice_ufrag,
     const std::string& ice_pwd) {
   if (flags_ & PORTALLOCATOR_ENABLE_BUNDLE) {
-    PortAllocatorSessionMuxer* muxer = GetSessionMuxer(sid);
+    // If we just use |sid| as key in identifying PortAllocatorSessionMuxer,
+    // ICE restart will not result in different candidates, as |sid| will
+    // be same. To yield different candiates we are using combination of
+    // |ice_ufrag| and |ice_pwd|.
+    // Ideally |ice_ufrag| and |ice_pwd| should change together, but
+    // there can be instances where only ice_pwd will be changed.
+    std::string key_str = ice_ufrag + ":" + ice_pwd;
+    PortAllocatorSessionMuxer* muxer = GetSessionMuxer(key_str);
     if (!muxer) {
       PortAllocatorSession* session_impl = CreateSessionInternal(
           content_name, component, ice_ufrag, ice_pwd);
@@ -69,7 +76,7 @@ PortAllocatorSession* PortAllocator::CreateSession(
       muxer->SignalDestroyed.connect(
           this, &PortAllocator::OnSessionMuxerDestroyed);
       // Add PortAllocatorSession to the map.
-      muxers_[sid] = muxer;
+      muxers_[key_str] = muxer;
     }
     PortAllocatorSessionProxy* proxy =
         new PortAllocatorSessionProxy(content_name, component, flags_);
@@ -80,8 +87,8 @@ PortAllocatorSession* PortAllocator::CreateSession(
 }
 
 PortAllocatorSessionMuxer* PortAllocator::GetSessionMuxer(
-    const std::string& sid) const {
-  SessionMuxerMap::const_iterator iter = muxers_.find(sid);
+    const std::string& key) const {
+  SessionMuxerMap::const_iterator iter = muxers_.find(key);
   if (iter != muxers_.end())
     return iter->second;
   return NULL;

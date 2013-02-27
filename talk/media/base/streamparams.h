@@ -75,8 +75,8 @@ struct StreamParams {
   }
 
   bool operator==(const StreamParams& other) const {
-    return (nick == other.nick &&
-            name == other.name &&
+    return (groupid == other.groupid &&
+            id == other.id &&
             ssrcs == other.ssrcs &&
             ssrc_groups == other.ssrc_groups &&
             type == other.type &&
@@ -137,9 +137,9 @@ struct StreamParams {
   // Resource of the MUC jid of the participant of with this stream.
   // For 1:1 calls, should be left empty (which means remote streams
   // and local streams should not be mixed together).
-  std::string nick;
-  // Unique name of this source (unique per-nick, not for all nicks)
-  std::string name;
+  std::string groupid;
+  // Unique per-groupid, not across all groupids
+  std::string id;
   std::vector<uint32> ssrcs;  // All SSRCs for this source
   std::vector<SsrcGroup> ssrc_groups;  // e.g. FID, FEC, SIM
   // Examples: "camera", "screencast"
@@ -156,28 +156,53 @@ struct StreamParams {
                         uint32* secondary_ssrc) const;
 };
 
+// A Stream can be selected by either groupid+id or ssrc.
+struct StreamSelector {
+  explicit StreamSelector(uint32 ssrc) :
+      ssrc(ssrc) {
+  }
+
+  StreamSelector(const std::string& groupid,
+                 const std::string& streamid) :
+      ssrc(0),
+      groupid(groupid),
+      streamid(streamid) {
+  }
+
+  bool Matches(const StreamParams& stream) const {
+    if (ssrc == 0) {
+      return stream.groupid == groupid && stream.id == streamid;
+    } else {
+      return stream.has_ssrc(ssrc);
+    }
+  }
+
+  uint32 ssrc;
+  std::string groupid;
+  std::string streamid;
+};
+
 typedef std::vector<StreamParams> StreamParamsVec;
 
-// Finds the stream in streams with the specified ssrc.
-// If you are only interested in the stream exist it is ok to call this function
-// stream_out = NULL.
+// Finds the stream in streams.  Returns true if found.
+bool GetStream(const StreamParamsVec& streams,
+               const StreamSelector& selector,
+               StreamParams* stream_out);
 bool GetStreamBySsrc(const StreamParamsVec& streams, uint32 ssrc,
                      StreamParams* stream_out);
+bool GetStreamByIds(const StreamParamsVec& streams,
+                    const std::string& groupid,
+                    const std::string& id,
+                    StreamParams* stream_out);
 
-// Finds the stream in streams with the specified nick and name.
-// If you are only interested in the stream exist it is ok to call this function
-// stream_out = NULL.
-bool GetStreamByNickAndName(const StreamParamsVec& streams,
-                            const std::string& nick,
-                            const std::string& name,
-                            StreamParams* stream_out);
-
-// Removes the stream with ssrc from streams. Returns true if a stream is
-// removed, false otherwise.
+// Removes the stream from streams. Returns true if a stream is
+// found and removed.
+bool RemoveStream(StreamParamsVec* streams,
+                  const StreamSelector& selector);
 bool RemoveStreamBySsrc(StreamParamsVec* streams, uint32 ssrc);
-bool RemoveStreamByNickAndName(StreamParamsVec* streams,
-                               const std::string& nick,
-                               const std::string& name);
+bool RemoveStreamByIds(StreamParamsVec* streams,
+                       const std::string& groupid,
+                       const std::string& id);
 
 }  // namespace cricket
 

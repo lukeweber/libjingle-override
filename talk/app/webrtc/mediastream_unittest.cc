@@ -94,12 +94,12 @@ class MediaStreamTest: public testing::Test {
 };
 
 TEST_F(MediaStreamTest, GetTrackInfo) {
-  ASSERT_EQ(1u, stream_->video_tracks()->count());
-  ASSERT_EQ(1u, stream_->audio_tracks()->count());
+  ASSERT_EQ(1u, stream_->GetVideoTracks().size());
+  ASSERT_EQ(1u, stream_->GetAudioTracks().size());
 
   // Verify the video track.
   scoped_refptr<webrtc::MediaStreamTrackInterface> video_track(
-      stream_->video_tracks()->at(0));
+      stream_->GetVideoTracks()[0]);
   EXPECT_EQ(0, video_track->id().compare(kVideoTrackId));
   EXPECT_TRUE(video_track->enabled());
 
@@ -113,7 +113,7 @@ TEST_F(MediaStreamTest, GetTrackInfo) {
 
   // Verify the audio track.
   scoped_refptr<webrtc::MediaStreamTrackInterface> audio_track(
-      stream_->audio_tracks()->at(0));
+      stream_->GetAudioTracks()[0]);
   EXPECT_EQ(0, audio_track->id().compare(kAudioTrackId));
   EXPECT_TRUE(audio_track->enabled());
   ASSERT_EQ(1u, stream_->GetAudioTracks().size());
@@ -135,12 +135,12 @@ TEST_F(MediaStreamTest, RemoveTrack) {
   EXPECT_TRUE(stream_->RemoveTrack(audio_track_));
   EXPECT_FALSE(stream_->RemoveTrack(audio_track_));
   EXPECT_EQ(0u, stream_->GetAudioTracks().size());
-  EXPECT_EQ(0u, stream_->audio_tracks()->count());
+  EXPECT_EQ(0u, stream_->GetAudioTracks().size());
 
   EXPECT_TRUE(stream_->RemoveTrack(video_track_));
   EXPECT_FALSE(stream_->RemoveTrack(video_track_));
   EXPECT_EQ(0u, stream_->GetVideoTracks().size());
-  EXPECT_EQ(0u, stream_->video_tracks()->count());
+  EXPECT_EQ(0u, stream_->GetVideoTracks().size());
 }
 
 TEST_F(MediaStreamTest, ChangeVideoTrack) {

@@ -66,10 +66,14 @@
 #include "talk/media/devices/videorendererfactory.h"
 #include "talk/media/webrtc/webrtcvideocapturer.h"
 #include "third_party/icu/public/common/unicode/unistr.h"
+#include "third_party/webrtc/system_wrappers/interface/trace.h"
+#include "third_party/webrtc/video_engine/include/vie_base.h"
+#include "third_party/webrtc/voice_engine/include/voe_base.h"
 
 using icu::UnicodeString;
 using webrtc::AudioSourceInterface;
 using webrtc::AudioTrackInterface;
+using webrtc::AudioTrackVector;
 using webrtc::CreateSessionDescriptionObserver;
 using webrtc::IceCandidateInterface;
 using webrtc::LocalMediaStreamInterface;
@@ -85,23 +89,96 @@ using webrtc::SetSessionDescriptionObserver;
 using webrtc::VideoRendererInterface;
 using webrtc::VideoSourceInterface;
 using webrtc::VideoTrackInterface;
+using webrtc::VideoTrackVector;
 using webrtc::VideoRendererInterface;
 
 // Abort the process if |x| is false, emitting |msg|.
-#define CHECK(x, msg) if (x) {} else {                                  \
-  LOG(LS_ERROR) << __FILE__ << ":" << __LINE__ << ": " << msg; \
-  abort();                                                     \
+#define CHECK(x, msg)                                                          \
+  if (x) {} else {                                                             \
+    LOG(LS_ERROR) << __FILE__ << ":" << __LINE__ << ": " << msg;               \
+    abort();                                                                   \
   }
 // Abort the process if |jni| has a Java exception pending, emitting |msg|.
-#define CHECK_EXCEPTION(jni, msg) if (0) {} else {      \
-  if (jni->ExceptionCheck()) { \
-    jni->ExceptionDescribe();  \
-    jni->ExceptionClear(); \
-    CHECK(0, msg); \
-  } \
+#define CHECK_EXCEPTION(jni, msg)                                              \
+  if (0) {} else {                                                             \
+    if (jni->ExceptionCheck()) {                                               \
+      jni->ExceptionDescribe();                                                \
+      jni->ExceptionClear();                                                   \
+      CHECK(0, msg);                                                           \
+    }                                                                          \
   }
 
 namespace {
+
+// Deal with difference in signatures between Oracle's jni.h and Android's.
+static JNIEnv* AttachCurrentThread(JavaVM* jvm) {
+#ifdef _JAVASOFT_JNI_H_  // Oracle's jni.h violates the JNI spec!
+  void* env;
+#else
+  JNIEnv* env;
+#endif
+  CHECK(!jvm->AttachCurrentThread(&env, NULL), "Failed to attach thread");
+  CHECK(env, "AttachCurrentThread handed back NULL!");
+  return reinterpret_cast<JNIEnv*>(env);
+}
+
+// Android's FindClass() is trickier than usual because the app-specific
+// ClassLoader is not consulted when there is no app-specific frame on the
+// stack.  Consequently, we only look up classes once in JNI_OnLoad.
+// http://developer.android.com/training/articles/perf-jni.html#faq_FindClass
+class ClassReferenceHolder {
+ public:
+  explicit ClassReferenceHolder(JNIEnv* jni) {
+    LoadClass(jni, "java/nio/ByteBuffer");
+    LoadClass(jni, "org/webrtc/AudioTrack");
+    LoadClass(jni, "org/webrtc/IceCandidate");
+    LoadClass(jni, "org/webrtc/MediaSource$State");
+    LoadClass(jni, "org/webrtc/MediaStream");
+    LoadClass(jni, "org/webrtc/MediaStreamTrack$State");
+    LoadClass(jni, "org/webrtc/PeerConnection$IceState");
+    LoadClass(jni, "org/webrtc/PeerConnection$Observer$StateType");
+    LoadClass(jni, "org/webrtc/PeerConnection$SignalingState");
+    LoadClass(jni, "org/webrtc/SessionDescription");
+    LoadClass(jni, "org/webrtc/SessionDescription$Type");
+    LoadClass(jni, "org/webrtc/VideoRenderer$I420Frame");
+    LoadClass(jni, "org/webrtc/VideoTrack");
+  }
+
+  ~ClassReferenceHolder() {
+    CHECK(classes_.empty(), "Must call FreeReferences() before dtor!");
+  }
+
+  void FreeReferences(JNIEnv* jni) {
+    for (std::map<std::string, jclass>::const_iterator it = classes_.begin();
+         it != classes_.end(); ++it) {
+      jni->DeleteGlobalRef(it->second);
+    }
+    classes_.clear();
+  }
+
+  jclass GetClass(const std::string& name) {
+    std::map<std::string, jclass>::iterator it = classes_.find(name);
+    CHECK(it != classes_.end(), "Unexpected GetClass() call for: " << name);
+    return it->second;
+  }
+
+ private:
+  void LoadClass(JNIEnv* jni, const std::string& name) {
+    jclass localRef = jni->FindClass(name.c_str());
+    CHECK_EXCEPTION(jni, "error during FindClass: " << name);
+    CHECK(localRef, name);
+    jclass globalRef = reinterpret_cast<jclass>(jni->NewGlobalRef(localRef));
+    CHECK_EXCEPTION(jni, "error during NewGlobalRef: " << name);
+    CHECK(globalRef, name);
+    bool inserted = classes_.insert(std::make_pair(name, globalRef)).second;
+    CHECK(inserted, "Duplicate class name: " << name);
+  }
+
+  std::map<std::string, jclass> classes_;
+};
+
+// Allocated in JNI_OnLoad(), freed in JNI_OnUnLoad().
+static ClassReferenceHolder* g_class_reference_holder = NULL;
 
 // JNIEnv-helper methods that CHECK success: no Java exception thrown and found
 // object/class/method/field is non-null.
@@ -133,10 +210,7 @@ jfieldID GetFieldID(
 }
 
 jclass FindClass(JNIEnv* jni, const char* name) {
-  jclass c = jni->FindClass(name);
-  CHECK_EXCEPTION(jni, "error during FindClass");
-  CHECK(c, name);
-  return c;
+  return g_class_reference_holder->GetClass(name);
 }
 
 jclass GetObjectClass(JNIEnv* jni, jobject object) {
@@ -172,6 +246,64 @@ void DeleteGlobalRef(JNIEnv* jni, jobject o) {
   CHECK_EXCEPTION(jni, "error during DeleteGlobalRef");
 }
 
+// Given a jweak reference, allocate a (strong) local reference scoped to the
+// lifetime of this object if the weak reference is still valid, or NULL
+// otherwise.
+class WeakRef {
+ public:
+  WeakRef(JNIEnv* jni, jweak ref)
+      : jni_(jni), obj_(jni_->NewLocalRef(ref)) {
+    CHECK_EXCEPTION(jni, "error during NewLocalRef");
+  }
+  ~WeakRef() {
+    if (obj_) {
+      jni_->DeleteLocalRef(obj_);
+      CHECK_EXCEPTION(jni_, "error during DeleteLocalRef");
+    }
+  }
+  jobject obj() { return obj_; }
+
+ private:
+  JNIEnv* const jni_;
+  jobject const obj_;
+};
+
+// Given a local ref, take ownership of it and delete the ref when this goes out
+// of scope.
+template<class T>  // T is jclass, jobject, jintArray, etc.
+class ScopedLocalRef {
+ public:
+  ScopedLocalRef(JNIEnv* jni, T obj)
+      : jni_(jni), obj_(obj) {}
+  ~ScopedLocalRef() {
+    jni_->DeleteLocalRef(obj_);
+  }
+  T operator*() const {
+    return obj_;
+  }
+ private:
+  JNIEnv* jni_;
+  T obj_;
+};
+
+// Scoped holder for global Java refs.
+class ScopedGlobalRef {
+ public:
+  explicit ScopedGlobalRef(JNIEnv* jni, jobject obj)
+      : obj_(jni->NewGlobalRef(obj)) {
+    CHECK(!jni->GetJavaVM(&jvm_), "Failed to GetJavaVM");
+  }
+  ~ScopedGlobalRef() {
+    DeleteGlobalRef(AttachCurrentThread(jvm_), obj_);
+  }
+  jobject operator*() const {
+    return obj_;
+  }
+ private:
+  JavaVM* jvm_;
+  jobject obj_;
+};
+
 // Return the (singleton) Java Enum object corresponding to |index|;
 // |state_class_fragment| is something like "MediaSource$State".
 jobject JavaEnumFromIndex(
@@ -180,35 +312,14 @@ jobject JavaEnumFromIndex(
   jclass state_class = FindClass(jni, state_class_name.c_str());
   jmethodID state_values_id = GetStaticMethodID(
       jni, state_class, "values", ("()[L" + state_class_name  + ";").c_str());
-  jobjectArray state_values = (jobjectArray)jni->CallStaticObjectMethod(
-      state_class, state_values_id);
+  ScopedLocalRef<jobjectArray> state_values(
+      jni,
+      (jobjectArray)jni->CallStaticObjectMethod(state_class, state_values_id));
   CHECK_EXCEPTION(jni, "error during CallStaticObjectMethod");
-  jobject ret = jni->GetObjectArrayElement(state_values, index);
+  jobject ret = jni->GetObjectArrayElement(*state_values, index);
   CHECK_EXCEPTION(jni, "error during GetObjectArrayElement");
   return ret;
 }
-
-// Given a jweak reference, allocate a (strong) local reference scoped to the
-// lifetime of this object if the weak reference is still valid, or NULL
-// otherwise.
-class ScopedLocalRef {
- public:
-  ScopedLocalRef(JNIEnv* jni, jweak ref)
-      : jni_(jni), ref_(jni_->NewLocalRef(ref)) {
-    CHECK_EXCEPTION(jni, "error during NewLocalRef");
-  }
-  ~ScopedLocalRef() {
-    if (ref_) {
-      jni_->DeleteLocalRef(ref_);
-      CHECK_EXCEPTION(jni_, "error during DeleteLocalRef");
-    }
-  }
-  jobject ref() { return ref_; }
-
- private:
-  JNIEnv* const jni_;
-  jobject const ref_;
-};
 
 // Given a UTF-8 encoded |native| string return a new (UTF-16) jstring.
 static jstring JavaStringFromStdString(JNIEnv* jni, const std::string& native) {
@@ -238,9 +349,9 @@ class ConstraintsWrapper;
 class PCOJava : public PeerConnectionObserver {
  public:
   PCOJava(JNIEnv* jni, jobject j_observer)
-      : j_observer_global_(NewGlobalRef(jni, j_observer)),
+      : j_observer_global_(jni, j_observer),
         j_observer_class_((jclass)NewGlobalRef(
-            jni, GetObjectClass(jni, j_observer_global_))),
+            jni, GetObjectClass(jni, *j_observer_global_))),
         j_media_stream_class_((jclass)NewGlobalRef(
             jni, FindClass(jni, "org/webrtc/MediaStream"))),
         j_media_stream_ctor_(GetMethodID(jni,
@@ -256,9 +367,7 @@ class PCOJava : public PeerConnectionObserver {
     CHECK(!jni->GetJavaVM(&jvm_), "Failed to GetJavaVM");
   }
 
-  virtual ~PCOJava() {
-    DeleteGlobalRef(jni(), j_observer_global_);
-  }
+  virtual ~PCOJava() {}
 
   virtual void OnIceCandidate(const IceCandidateInterface* candidate) {
     std::string sdp;
@@ -266,21 +375,21 @@ class PCOJava : public PeerConnectionObserver {
     jclass candidate_class = FindClass(jni(), "org/webrtc/IceCandidate");
     jmethodID ctor = GetMethodID(jni(), candidate_class,
         "<init>", "(Ljava/lang/String;ILjava/lang/String;)V");
-    jobject j_candidate = jni()->NewObject(
+    ScopedLocalRef<jobject> j_candidate(jni(), jni()->NewObject(
         candidate_class, ctor,
         JavaStringFromStdString(jni(), candidate->sdp_mid()),
         candidate->sdp_mline_index(),
-        JavaStringFromStdString(jni(), sdp));
+        JavaStringFromStdString(jni(), sdp)));
     CHECK_EXCEPTION(jni(), "error during NewObject");
     jmethodID m = GetMethodID(jni(), j_observer_class_,
                               "onIceCandidate", "(Lorg/webrtc/IceCandidate;)V");
-    jni()->CallVoidMethod(j_observer_global_, m, j_candidate);
+    jni()->CallVoidMethod(*j_observer_global_, m, *j_candidate);
     CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
   virtual void OnError() {
     jmethodID m = GetMethodID(jni(), j_observer_class_, "onError", "(V)V");
-    jni()->CallVoidMethod(j_observer_global_, m);
+    jni()->CallVoidMethod(*j_observer_global_, m);
     CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
@@ -293,8 +402,9 @@ class PCOJava : public PeerConnectionObserver {
     jmethodID m = GetMethodID(
         jni(), j_observer_class_, "onStateChange",
         "(Lorg/webrtc/PeerConnection$Observer$StateType;)V");
-    jni()->CallVoidMethod(j_observer_global_, m, JavaEnumFromIndex(
+    ScopedLocalRef<jobject> state_changed(jni(), JavaEnumFromIndex(
         jni(), "PeerConnection$Observer$StateType", stateChanged));
+    jni()->CallVoidMethod(*j_observer_global_, m, *state_changed);
     CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
@@ -309,47 +419,51 @@ class PCOJava : public PeerConnectionObserver {
   }
 
   virtual void OnAddStream(MediaStreamInterface* stream) {
-    jobject j_stream = jni()->NewObject(
-        j_media_stream_class_, j_media_stream_ctor_, (jlong)stream);
+    ScopedLocalRef<jobject> j_stream(jni(), jni()->NewObject(
+        j_media_stream_class_, j_media_stream_ctor_, (jlong)stream));
     CHECK_EXCEPTION(jni(), "error during NewObject");
 
-    for (size_t i = 0; i < stream->audio_tracks()->count(); ++i) {
-      AudioTrackInterface* track = stream->audio_tracks()->at(i);
+    AudioTrackVector audio_tracks = stream->GetAudioTracks();
+    for (size_t i = 0; i < audio_tracks.size(); ++i) {
+      AudioTrackInterface* track = audio_tracks[i];
       jstring id = JavaStringFromStdString(jni(), track->id());
-      jobject j_track = jni()->NewObject(
-          j_audio_track_class_, j_audio_track_ctor_, (jlong)track, id);
+      ScopedLocalRef<jobject> j_track(jni(), jni()->NewObject(
+          j_audio_track_class_, j_audio_track_ctor_, (jlong)track, id));
       CHECK_EXCEPTION(jni(), "error during NewObject");
       jfieldID audio_tracks_id = GetFieldID(jni(),
           j_media_stream_class_, "audioTracks", "Ljava/util/List;");
-      jobject audio_tracks = GetObjectField(jni(), j_stream, audio_tracks_id);
+      ScopedLocalRef<jobject> audio_tracks(jni(), GetObjectField(
+          jni(), *j_stream, audio_tracks_id));
       jmethodID add = GetMethodID(jni(),
-          GetObjectClass(jni(), audio_tracks), "add", "(Ljava/lang/Object;)Z");
-      jboolean added = jni()->CallBooleanMethod(audio_tracks, add, j_track);
+          GetObjectClass(jni(), *audio_tracks), "add", "(Ljava/lang/Object;)Z");
+      jboolean added = jni()->CallBooleanMethod(*audio_tracks, add, *j_track);
       CHECK_EXCEPTION(jni(), "error during CallBooleanMethod");
       CHECK(added, "");
     }
 
-    for (size_t i = 0; i < stream->video_tracks()->count(); ++i) {
-      VideoTrackInterface* track = stream->video_tracks()->at(i);
+    VideoTrackVector video_tracks = stream->GetVideoTracks();
+    for (size_t i = 0; i < video_tracks.size(); ++i) {
+      VideoTrackInterface* track = video_tracks[i];
       jstring id = JavaStringFromStdString(jni(), track->id());
-      jobject j_track = jni()->NewObject(
-          j_video_track_class_, j_video_track_ctor_, (jlong)track, id);
+      ScopedLocalRef<jobject> j_track(jni(), jni()->NewObject(
+          j_video_track_class_, j_video_track_ctor_, (jlong)track, id));
       CHECK_EXCEPTION(jni(), "error during NewObject");
       jfieldID video_tracks_id = GetFieldID(jni(),
           j_media_stream_class_, "videoTracks", "Ljava/util/List;");
-      jobject video_tracks = GetObjectField(jni(), j_stream, video_tracks_id);
+      ScopedLocalRef<jobject> video_tracks(jni(), GetObjectField(
+          jni(), *j_stream, video_tracks_id));
       jmethodID add = GetMethodID(jni(),
-          GetObjectClass(jni(), video_tracks), "add", "(Ljava/lang/Object;)Z");
-      jboolean added = jni()->CallBooleanMethod(video_tracks, add, j_track);
+          GetObjectClass(jni(), *video_tracks), "add", "(Ljava/lang/Object;)Z");
+      jboolean added = jni()->CallBooleanMethod(*video_tracks, add, *j_track);
       CHECK_EXCEPTION(jni(), "error during CallBooleanMethod");
       CHECK(added, "");
     }
-    streams_[stream] = jni()->NewWeakGlobalRef(j_stream);
+    streams_[stream] = jni()->NewWeakGlobalRef(*j_stream);
     CHECK_EXCEPTION(jni(), "error during NewWeakGlobalRef");
 
     jmethodID m = GetMethodID(jni(),
         j_observer_class_, "onAddStream", "(Lorg/webrtc/MediaStream;)V");
-    jni()->CallVoidMethod(j_observer_global_, m, j_stream);
+    jni()->CallVoidMethod(*j_observer_global_, m, *j_stream);
     CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
@@ -357,14 +471,14 @@ class PCOJava : public PeerConnectionObserver {
     NativeToJavaStreamsMap::iterator it = streams_.find(stream);
     CHECK(it != streams_.end(), "unexpected stream: " << std::hex << stream);
 
-    ScopedLocalRef s(jni(), it->second);
+    WeakRef s(jni(), it->second);
     streams_.erase(it);
-    if (!s.ref())
+    if (!s.obj())
       return;
 
     jmethodID m = GetMethodID(jni(),
         j_observer_class_, "onRemoveStream", "(Lorg/webrtc/MediaStream;)V");
-    jni()->CallVoidMethod(j_observer_global_, m, s.ref());
+    jni()->CallVoidMethod(*j_observer_global_, m, s.obj());
     CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
@@ -377,14 +491,11 @@ class PCOJava : public PeerConnectionObserver {
 
  private:
   JNIEnv* jni() {
-    JNIEnv* jni;
-    CHECK(!jvm_->AttachCurrentThread(reinterpret_cast<void**>(&jni), NULL),
-          "Failed to attach thread");
-    return jni;
+    return AttachCurrentThread(jvm_);
   }
 
   JavaVM* jvm_;
-  const jobject j_observer_global_;
+  const ScopedGlobalRef j_observer_global_;
   const jclass j_observer_class_;
   const jclass j_media_stream_class_;
   const jmethodID j_media_stream_ctor_;
@@ -492,7 +603,7 @@ class SdpObserverWrapper : public T {
     CHECK(!jni->GetJavaVM(&jvm_), "Failed to GetJavaVM");
   }
 
-  ~SdpObserverWrapper() {
+  virtual ~SdpObserverWrapper() {
     DeleteGlobalRef(jni(), j_observer_global_);
     DeleteGlobalRef(jni(), j_observer_class_);
   }
@@ -507,8 +618,8 @@ class SdpObserverWrapper : public T {
     jmethodID m = GetMethodID(
         jni(), j_observer_class_, "onSuccess",
         "(Lorg/webrtc/SessionDescription;)V");
-    jobject j_sdp = JavaSdpFromNativeSdp(jni(), desc);
-    jni()->CallVoidMethod(j_observer_global_, m, j_sdp);
+    ScopedLocalRef<jobject> j_sdp(jni(), JavaSdpFromNativeSdp(jni(), desc));
+    jni()->CallVoidMethod(j_observer_global_, m, *j_sdp);
     CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
@@ -522,10 +633,7 @@ class SdpObserverWrapper : public T {
 
  private:
   JNIEnv* jni() {
-    JNIEnv* jni;
-    CHECK(!jvm_->AttachCurrentThread(reinterpret_cast<void**>(&jni), NULL),
-          "Failed to attach thread");
-    return jni;
+    return AttachCurrentThread(jvm_);
   }
 
   talk_base::scoped_ptr<ConstraintsWrapper> constraints_;
@@ -542,9 +650,13 @@ typedef SdpObserverWrapper<SetSessionDescriptionObserver> SetSdpObserverWrapper;
 // webrtc::VideoRendererInterface.
 class VideoRendererWrapper : public VideoRendererInterface {
  public:
-  explicit VideoRendererWrapper(cricket::VideoRenderer* renderer)
-      : renderer_(renderer) {}
-  ~VideoRendererWrapper() {}
+  static VideoRendererWrapper* Create(cricket::VideoRenderer* renderer) {
+    if (renderer)
+      return new VideoRendererWrapper(renderer);
+    return NULL;
+  }
+
+  virtual ~VideoRendererWrapper() {}
 
   virtual void SetSize(int width, int height) {
     const bool kNotReserved = false;  // What does this param mean??
@@ -556,7 +668,79 @@ class VideoRendererWrapper : public VideoRendererInterface {
   }
 
  private:
+  explicit VideoRendererWrapper(cricket::VideoRenderer* renderer)
+      : renderer_(renderer) {}
+
   talk_base::scoped_ptr<cricket::VideoRenderer> renderer_;
+};
+
+// Wrapper dispatching webrtc::VideoRendererInterface to a Java VideoRenderer
+// instance.
+class JavaVideoRendererWrapper : public VideoRendererInterface {
+ public:
+  JavaVideoRendererWrapper(JNIEnv* jni, jobject j_callbacks)
+      : j_callbacks_(jni, j_callbacks) {
+    CHECK(!jni->GetJavaVM(&jvm_), "Failed to GetJavaVM");
+    j_set_size_id_ = GetMethodID(
+        jni, GetObjectClass(jni, j_callbacks), "setSize", "(II)V");
+    j_render_frame_id_ = GetMethodID(
+        jni, GetObjectClass(jni, j_callbacks), "renderFrame",
+        "(Lorg/webrtc/VideoRenderer$I420Frame;)V");
+    j_frame_class_ = FindClass(jni, "org/webrtc/VideoRenderer$I420Frame");
+    j_frame_ctor_id_ = GetMethodID(
+        jni, j_frame_class_, "<init>", "(II[I[Ljava/nio/ByteBuffer;)V");
+    j_byte_buffer_class_ = FindClass(jni, "java/nio/ByteBuffer");
+    CHECK_EXCEPTION(jni, "");
+  }
+
+  virtual void SetSize(int width, int height) {
+    jni()->CallVoidMethod(*j_callbacks_, j_set_size_id_, width, height);
+    CHECK_EXCEPTION(jni(), "");
+  }
+
+  virtual void RenderFrame(const cricket::VideoFrame* frame) {
+    ScopedLocalRef<jobject> j_frame(jni(), CricketToJavaFrame(frame));
+    jni()->CallVoidMethod(*j_callbacks_, j_render_frame_id_, *j_frame);
+    CHECK_EXCEPTION(jni(), "");
+  }
+
+ private:
+  // Return a VideoRenderer.I420Frame referring to the data in |frame|.
+  jobject CricketToJavaFrame(const cricket::VideoFrame* frame) {
+    ScopedLocalRef<jintArray> strides(jni(), jni()->NewIntArray(3));
+    jint* strides_array = jni()->GetIntArrayElements(*strides, NULL);
+    strides_array[0] = frame->GetYPitch();
+    strides_array[1] = frame->GetUPitch();
+    strides_array[2] = frame->GetVPitch();
+    jni()->ReleaseIntArrayElements(*strides, strides_array, 0);
+    ScopedLocalRef<jobjectArray> planes(
+        jni(), jni()->NewObjectArray(3, j_byte_buffer_class_, NULL));
+    ScopedLocalRef<jobject> y_buffer(jni(), jni()->NewDirectByteBuffer(
+        const_cast<uint8*>(frame->GetYPlane()),
+        frame->GetYPitch() * frame->GetHeight()));
+    ScopedLocalRef<jobject> u_buffer(jni(), jni()->NewDirectByteBuffer(
+        const_cast<uint8*>(frame->GetUPlane()), frame->GetChromaSize()));
+    ScopedLocalRef<jobject> v_buffer(jni(), jni()->NewDirectByteBuffer(
+        const_cast<uint8*>(frame->GetVPlane()), frame->GetChromaSize()));
+    jni()->SetObjectArrayElement(*planes, 0, *y_buffer);
+    jni()->SetObjectArrayElement(*planes, 1, *u_buffer);
+    jni()->SetObjectArrayElement(*planes, 2, *v_buffer);
+    return jni()->NewObject(
+        j_frame_class_, j_frame_ctor_id_,
+        frame->GetWidth(), frame->GetHeight(), *strides, *planes);
+  }
+
+  JNIEnv* jni() {
+    return AttachCurrentThread(jvm_);
+  }
+
+  JavaVM* jvm_;
+  ScopedGlobalRef j_callbacks_;
+  jmethodID j_set_size_id_;
+  jmethodID j_render_frame_id_;
+  jclass j_frame_class_;
+  jmethodID j_frame_ctor_id_;
+  jclass j_byte_buffer_class_;
 };
 
 }  // anonymous namespace
@@ -566,6 +750,32 @@ class VideoRendererWrapper : public VideoRendererInterface {
 // Eliminates unnecessary boilerplate and line-wraps, reducing visual clutter.
 #define JOW(rettype, name) extern "C" rettype JNIEXPORT JNICALL \
   Java_org_webrtc_##name
+
+static JavaVM* g_jvm = NULL;
+extern "C" jint JNIEXPORT JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
+  CHECK(!g_jvm, "JNI_OnLoad called more than once!");
+  g_jvm = jvm;
+  CHECK(g_jvm, "JNI_OnLoad handed NULL?");
+
+  JNIEnv* jni;
+  if (jvm->GetEnv(reinterpret_cast<void**>(&jni), JNI_VERSION_1_6) != JNI_OK)
+    return -1;
+  g_class_reference_holder = new ClassReferenceHolder(jni);
+
+  webrtc::Trace::CreateTrace();
+  CHECK(!webrtc::Trace::SetTraceFile("/sdcard/trace.txt", false),
+        "SetTraceFile failed");
+  CHECK(!webrtc::Trace::SetLevelFilter(webrtc::kTraceAll),
+        "SetLevelFilter failed");
+
+  return JNI_VERSION_1_6;
+}
+
+extern "C" jint JNIEXPORT JNICALL JNI_OnUnLoad(JavaVM *jvm, void *reserved) {
+  webrtc::Trace::ReturnTrace();
+  delete g_class_reference_holder;
+  g_class_reference_holder = NULL;
+}
 
 JOW(void, PeerConnection_freePeerConnection)(JNIEnv*, jclass, jlong j_p) {
   reinterpret_cast<PeerConnectionInterface*>(j_p)->Release();
@@ -606,8 +816,19 @@ JOW(jlong, PeerConnectionFactory_nativeCreateObserver)(
   return (jlong)new PCOJava(jni, j_observer);
 }
 
+#ifdef ANDROID
+JOW(jboolean, PeerConnectionFactory_initializeAndroidGlobals)(
+    JNIEnv* jni, jclass, jobject context) {
+  CHECK(g_jvm, "JNI_OnLoad failed to run?");
+  bool failure = false;
+  failure |= webrtc::VideoEngine::SetAndroidObjects(g_jvm, context);
+  failure |= webrtc::VoiceEngine::SetAndroidObjects(g_jvm, jni, context);
+  return !failure;
+}
+#endif  // ANDROID
+
 JOW(jlong, PeerConnectionFactory_nativeCreatePeerConnectionFactory)(
-    JNIEnv*, jclass) {
+    JNIEnv* jni, jclass) {
   talk_base::scoped_refptr<PeerConnectionFactoryInterface> factory(
       webrtc::CreatePeerConnectionFactory());
   return (jlong)factory.release();
@@ -718,13 +939,15 @@ static talk_base::scoped_refptr<PeerConnectionInterface> ExtractNativePC(
 }
 
 JOW(jobject, PeerConnection_getLocalDescription)(JNIEnv* jni, jobject j_pc) {
-  return JavaSdpFromNativeSdp(
-      jni, ExtractNativePC(jni, j_pc)->local_description());
+  const SessionDescriptionInterface* sdp =
+      ExtractNativePC(jni, j_pc)->local_description();
+  return sdp ? JavaSdpFromNativeSdp(jni, sdp) : NULL;
 }
 
 JOW(jobject, PeerConnection_getRemoteDescription)(JNIEnv* jni, jobject j_pc) {
-  return JavaSdpFromNativeSdp(
-      jni, ExtractNativePC(jni, j_pc)->remote_description());
+  const SessionDescriptionInterface* sdp =
+      ExtractNativePC(jni, j_pc)->remote_description();
+  return sdp ? JavaSdpFromNativeSdp(jni, sdp) : NULL;
 }
 
 JOW(void, PeerConnection_createOffer)(
@@ -851,17 +1074,27 @@ JOW(jlong, VideoCapturer_nativeCreateVideoCapturer)(
       cricket::DeviceManagerFactory::Create());
   CHECK(device_manager->Init(), "DeviceManager::Init() failed");
   cricket::Device device;
-  if (!device_manager->GetVideoCaptureDevice(device_name, &device))
+  if (!device_manager->GetVideoCaptureDevice(device_name, &device)) {
+    LOG(LS_ERROR) << "GetVideoCaptureDevice failed";
     return 0;
+  }
   talk_base::scoped_ptr<cricket::VideoCapturer> capturer(
       device_manager->CreateVideoCapturer(device));
   return (jlong)capturer.release();
 }
 
-JOW(jlong, VideoRenderer_nativeCreateVideoRenderer)(
+JOW(jlong, VideoRenderer_nativeCreateGuiVideoRenderer)(
     JNIEnv* jni, jclass, int x, int y) {
-  talk_base::scoped_ptr<VideoRendererWrapper> renderer(new VideoRendererWrapper(
-      cricket::VideoRendererFactory::CreateGuiVideoRenderer(x, y)));
+  talk_base::scoped_ptr<VideoRendererWrapper> renderer(
+      VideoRendererWrapper::Create(
+          cricket::VideoRendererFactory::CreateGuiVideoRenderer(x, y)));
+  return (jlong)renderer.release();
+}
+
+JOW(jlong, VideoRenderer_nativeWrapVideoRenderer)(
+    JNIEnv* jni, jclass, jobject j_callbacks) {
+  talk_base::scoped_ptr<JavaVideoRendererWrapper> renderer(
+      new JavaVideoRendererWrapper(jni, j_callbacks));
   return (jlong)renderer.release();
 }
 

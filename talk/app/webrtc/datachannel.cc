@@ -124,15 +124,26 @@ void DataChannel::SetReceiveSsrc(uint32 receive_ssrc) {
 
 // The remote peer request that this channel shall be closed.
 void DataChannel::RemotePeerRequestClose() {
-  receive_ssrc_set_ = false;
-  send_ssrc_set_ = false;
-  SetState(kClosing);
-  UpdateState();
+  DoClose();
 }
 
 void DataChannel::SetSendSsrc(uint32 send_ssrc) {
   send_ssrc_ = send_ssrc;
   send_ssrc_set_ = true;
+  UpdateState();
+}
+
+// The underlaying data engine is closing.
+// This function make sure the DataChannel is disconneced and change state to
+// kClosed.
+void DataChannel::OnDataEngineClose() {
+  DoClose();
+}
+
+void DataChannel::DoClose() {
+  receive_ssrc_set_ = false;
+  send_ssrc_set_ = false;
+  SetState(kClosing);
   UpdateState();
 }
 

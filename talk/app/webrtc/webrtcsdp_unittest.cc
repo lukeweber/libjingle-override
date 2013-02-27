@@ -477,19 +477,19 @@ class WebRtcSdpTest : public testing::Test {
         new VideoContentDescription());
     video_desc_ = video.get();
     StreamParams video_stream1;
-    video_stream1.name = kVideoTrackId1;
+    video_stream1.id = kVideoTrackId1;
     video_stream1.cname = kStream1Cname;
     video_stream1.sync_label = kStreamLabel1;
     video_stream1.ssrcs.push_back(kVideoTrack1Ssrc);
     video->AddStream(video_stream1);
     StreamParams video_stream2;
-    video_stream2.name = kVideoTrackId2;
+    video_stream2.id = kVideoTrackId2;
     video_stream2.cname = kStream1Cname;
     video_stream2.sync_label = kStreamLabel1;
     video_stream2.ssrcs.push_back(kVideoTrack2Ssrc);
     video->AddStream(video_stream2);
     StreamParams video_stream3;
-    video_stream3.name = kVideoTrackId3;
+    video_stream3.id = kVideoTrackId3;
     video_stream3.cname = kStream2Cname;
     video_stream3.sync_label = kStreamLabel2;
     video_stream3.ssrcs.push_back(kVideoTrack3Ssrc);
@@ -655,13 +655,13 @@ class WebRtcSdpTest : public testing::Test {
     AudioContentDescription* audio = new AudioContentDescription();
     audio->set_rtcp_mux(true);
     StreamParams audio_stream1;
-    audio_stream1.name = kAudioTrackId1;
+    audio_stream1.id = kAudioTrackId1;
     audio_stream1.cname = kStream1Cname;
     audio_stream1.sync_label = kStreamLabel1;
     audio_stream1.ssrcs.push_back(kAudioTrack1Ssrc);
     audio->AddStream(audio_stream1);
     StreamParams audio_stream2;
-    audio_stream2.name = kAudioTrackId2;
+    audio_stream2.id = kAudioTrackId2;
     audio_stream2.cname = kStream2Cname;
     audio_stream2.sync_label = kStreamLabel2;
     audio_stream2.ssrcs.push_back(kAudioTrack2Ssrc);
@@ -1024,7 +1024,7 @@ class WebRtcSdpTest : public testing::Test {
 
     data_desc_->AddCodec(DataCodec(101, "google-data", 1));
     StreamParams data_stream;
-    data_stream.name = kDataChannelMsid;
+    data_stream.id = kDataChannelMsid;
     data_stream.cname = kDataChannelCname;
     data_stream.sync_label = kDataChannelLabel;
     data_stream.ssrcs.push_back(kDataChannelSsrc);
@@ -1724,7 +1724,7 @@ TEST_F(WebRtcSdpTest, DeserializeCodecParam) {
                                        // in the map.
       "a=rtpmap:103 ISAC/16000\r\n"  // Pltype 103 listed before 104 in the map.
       "a=rtpmap:104 CELT/32000/2\r\n"
-      "a=fmtp:111 minptime=10\r\n"
+      "a=fmtp:111 0-15,66,70 minptime=10\r\n"
       "a=maxptime:40\r\n";
 
   // Deserialize

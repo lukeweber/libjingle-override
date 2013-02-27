@@ -639,6 +639,30 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
     EXPECT_TRUE(channel2_->rtcp_transport_channel() != NULL);
   }
 
+  // Test that SetLocalContent and SetRemoteContent properly set
+  // video options to the media channel.
+  void TestSetContentsVideoOptions() {
+    CreateChannels(0, 0);
+    typename T::Content content;
+    CreateContent(0, kPcmuCodec, kH264Codec, &content);
+    content.set_buffered_mode_latency(101);
+    EXPECT_TRUE(channel1_->SetLocalContent(&content, CA_OFFER));
+    EXPECT_EQ(0U, media_channel1_->codecs().size());
+    cricket::VideoOptions options;
+    ASSERT_TRUE(media_channel1_->GetOptions(&options));
+    int latency = 0;
+    EXPECT_TRUE(options.buffered_mode_latency.Get(&latency));
+    EXPECT_EQ(101, latency);
+    content.set_buffered_mode_latency(102);
+    EXPECT_TRUE(channel1_->SetRemoteContent(&content, CA_ANSWER));
+    ASSERT_EQ(1U, media_channel1_->codecs().size());
+    EXPECT_TRUE(CodecMatches(content.codecs()[0],
+                             media_channel1_->codecs()[0]));
+    ASSERT_TRUE(media_channel1_->GetOptions(&options));
+    EXPECT_TRUE(options.buffered_mode_latency.Get(&latency));
+    EXPECT_EQ(102, latency);
+  }
+
   // Test that SetRemoteContent properly deals with a content update.
   void TestSetRemoteContentUpdate() {
     CreateChannels(0, 0);
@@ -688,20 +712,20 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
   // MediaContentDescription to do an update.
   void TestUpdateStreamsInLocalContent() {
     cricket::StreamParams stream1;
-    stream1.name = "Stream1";
-    stream1.nick = "1";
+    stream1.groupid = "group1";
+    stream1.id = "stream1";
     stream1.ssrcs.push_back(kSsrc1);
     stream1.cname = "stream1_cname";
 
     cricket::StreamParams stream2;
-    stream2.name = "Stream2";
-    stream2.nick = "2";
+    stream2.groupid = "group2";
+    stream2.id = "stream2";
     stream2.ssrcs.push_back(kSsrc2);
     stream2.cname = "stream2_cname";
 
     cricket::StreamParams stream3;
-    stream3.name = "Stream3";
-    stream3.nick = "3";
+    stream3.groupid = "group3";
+    stream3.id = "stream3";
     stream3.ssrcs.push_back(kSsrc3);
     stream3.cname = "stream3_cname";
 
@@ -755,20 +779,20 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
   // MediaContentDescription to do an update.
   void TestUpdateStreamsInRemoteContent() {
     cricket::StreamParams stream1;
-    stream1.name = "Stream1";
-    stream1.nick = "1";
+    stream1.id = "Stream1";
+    stream1.groupid = "1";
     stream1.ssrcs.push_back(kSsrc1);
     stream1.cname = "stream1_cname";
 
     cricket::StreamParams stream2;
-    stream2.name = "Stream2";
-    stream2.nick = "2";
+    stream2.id = "Stream2";
+    stream2.groupid = "2";
     stream2.ssrcs.push_back(kSsrc2);
     stream2.cname = "stream2_cname";
 
     cricket::StreamParams stream3;
-    stream3.name = "Stream3";
-    stream3.nick = "3";
+    stream3.id = "Stream3";
+    stream3.groupid = "3";
     stream3.ssrcs.push_back(kSsrc3);
     stream3.cname = "stream3_cname";
 
@@ -822,12 +846,14 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
   // CA_OFFER / CA_ANSWER.
   void TestChangeStreamParamsInContent() {
     cricket::StreamParams stream1;
-    stream1.name = "Stream1";
+    stream1.groupid = "group1";
+    stream1.id = "stream1";
     stream1.ssrcs.push_back(kSsrc1);
     stream1.cname = "stream1_cname";
 
     cricket::StreamParams stream2;
-    stream2.name = "Stream2";
+    stream2.groupid = "group1";
+    stream2.id = "stream2";
     stream2.ssrcs.push_back(kSsrc2);
     stream2.cname = "stream2_cname";
 
@@ -2336,6 +2362,10 @@ TEST_F(VideoChannelTest, TestSetContentsRtcpMuxWithPrAnswer) {
   Base::TestSetContentsRtcpMux();
 }
 
+TEST_F(VideoChannelTest, TestSetContentsVideoOptions) {
+  Base::TestSetContentsVideoOptions();
+}
+
 TEST_F(VideoChannelTest, TestSetRemoteContentUpdate) {
   Base::TestSetRemoteContentUpdate();
 }
@@ -2530,6 +2560,11 @@ TEST_F(VideoChannelTest, TestSrtpError) {
 
 TEST_F(VideoChannelTest, TestApplyViewRequest) {
   CreateChannels(0, 0);
+  cricket::StreamParams stream2;
+  stream2.id = "stream2";
+  stream2.ssrcs.push_back(2222);
+  local_media_content1_.AddStream(stream2);
+
   EXPECT_TRUE(SendInitiate());
   EXPECT_TRUE(SendAccept());
 
@@ -2540,25 +2575,42 @@ TEST_F(VideoChannelTest, TestApplyViewRequest) {
   EXPECT_EQ(cricket::VideoFormat::FpsToInterval(30), send_format.interval);
 
   cricket::ViewRequest request;
-  request.static_video_views.push_back(
-      cricket::StaticVideoView(kSsrc1, 320, 200, 15));
+  // stream1: 320x200x15; stream2: 0x0x0
+  request.static_video_views.push_back(cricket::StaticVideoView(
+      cricket::StreamSelector(kSsrc1), 320, 200, 15));
   EXPECT_TRUE(channel1_->ApplyViewRequest(request));
   EXPECT_TRUE(media_channel1_->GetSendStreamFormat(kSsrc1, &send_format));
   EXPECT_EQ(320, send_format.width);
   EXPECT_EQ(200, send_format.height);
   EXPECT_EQ(cricket::VideoFormat::FpsToInterval(15), send_format.interval);
+  EXPECT_TRUE(media_channel1_->GetSendStreamFormat(2222, &send_format));
+  EXPECT_EQ(0, send_format.width);
+  EXPECT_EQ(0, send_format.height);
 
-  // Short term hack for view request with SSRC 0. TODO(whyuan): Remove this
-  // once Reflector uses the correct SSRC in view request (b/5977302).
+  // stream1: 160x100x8; stream2: 0x0x0
   request.static_video_views.clear();
-  request.static_video_views.push_back(
-      cricket::StaticVideoView(0, 160, 100, 8));
+  request.static_video_views.push_back(cricket::StaticVideoView(
+      cricket::StreamSelector(kSsrc1), 160, 100, 8));
   EXPECT_TRUE(channel1_->ApplyViewRequest(request));
   EXPECT_TRUE(media_channel1_->GetSendStreamFormat(kSsrc1, &send_format));
   EXPECT_EQ(160, send_format.width);
   EXPECT_EQ(100, send_format.height);
   EXPECT_EQ(cricket::VideoFormat::FpsToInterval(8), send_format.interval);
 
+  // stream1: 0x0x0; stream2: 640x400x30
+  request.static_video_views.clear();
+  request.static_video_views.push_back(cricket::StaticVideoView(
+      cricket::StreamSelector("", stream2.id), 640, 400, 30));
+  EXPECT_TRUE(channel1_->ApplyViewRequest(request));
+  EXPECT_TRUE(media_channel1_->GetSendStreamFormat(kSsrc1, &send_format));
+  EXPECT_EQ(0, send_format.width);
+  EXPECT_EQ(0, send_format.height);
+  EXPECT_TRUE(media_channel1_->GetSendStreamFormat(2222, &send_format));
+  EXPECT_EQ(640, send_format.width);
+  EXPECT_EQ(400, send_format.height);
+  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(30), send_format.interval);
+
+  // stream1: 0x0x0; stream2: 0x0x0
   request.static_video_views.clear();
   EXPECT_TRUE(channel1_->ApplyViewRequest(request));
   EXPECT_TRUE(media_channel1_->GetSendStreamFormat(kSsrc1, &send_format));

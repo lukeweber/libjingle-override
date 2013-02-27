@@ -190,7 +190,7 @@ TEST_F(AsyncHttpRequestTest, TestGetToNonServer) {
   req->Release();
 }
 
-TEST_F(AsyncHttpRequestTest, TestGetToInvalidHostname) {
+TEST_F(AsyncHttpRequestTest, DISABLED_TestGetToInvalidHostname) {
   AsyncHttpRequest* req = CreateGetRequest(
       "invalid", server().address().port(),
       kServerGetPath);

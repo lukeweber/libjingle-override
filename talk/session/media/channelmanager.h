@@ -88,7 +88,9 @@ class ChannelManager : public talk_base::MessageHandler,
   // Retrieves the list of supported audio & video codec types.
   // Can be called before starting the media engine.
   void GetSupportedAudioCodecs(std::vector<AudioCodec>* codecs) const;
+  void GetSupportedAudioRtpHeaderExtensions(RtpHeaderExtensions* ext) const;
   void GetSupportedVideoCodecs(std::vector<VideoCodec>* codecs) const;
+  void GetSupportedVideoRtpHeaderExtensions(RtpHeaderExtensions* ext) const;
   void GetSupportedDataCodecs(std::vector<DataCodec>* codecs) const;
 
   // Indicates whether the media engine is started.
@@ -138,10 +140,10 @@ class ChannelManager : public talk_base::MessageHandler,
   bool SetOutputVolume(int level);
   bool IsSameCapturer(const std::string& capturer_name,
                       VideoCapturer* capturer);
-  bool GetVideoOptions(std::string* cam_device);
-  // Create capturer based on what has been set in SetVideoOptions().
+  bool GetCaptureDevice(std::string* cam_device);
+  // Create capturer based on what has been set in SetCaptureDevice().
   VideoCapturer* CreateVideoCapturer();
-  bool SetVideoOptions(const std::string& cam_device);
+  bool SetCaptureDevice(const std::string& cam_device);
   bool SetDefaultVideoEncoderConfig(const VideoEncoderConfig& config);
 
   // Starts/stops the local microphone and enables polling of the input level.
@@ -197,7 +199,7 @@ class ChannelManager : public talk_base::MessageHandler,
   sigslot::signal2<VideoCapturer*, CaptureState> SignalVideoCaptureStateChange;
 
   // Returns the current selected device. Note: Subtly different from
-  // GetVideoOptions(). See member video_device_ for more details.
+  // GetCaptureDevice(). See member video_device_ for more details.
   // This API is mainly a hook used by unittests.
   const std::string& video_device_name() const { return video_device_name_; }
 
@@ -242,7 +244,7 @@ class ChannelManager : public talk_base::MessageHandler,
   bool GetOutputVolume_w(int* level);
   bool SetOutputVolume_w(int level);
   bool SetLocalMonitor_w(bool enable);
-  bool SetVideoOptions_w(const Device* cam_device);
+  bool SetCaptureDevice_w(const Device* cam_device);
   bool SetDefaultVideoEncoderConfig_w(const VideoEncoderConfig& config);
   bool SetLocalRenderer_w(VideoRenderer* renderer);
   bool SetVideoCapturer_w(VideoCapturer* capturer);

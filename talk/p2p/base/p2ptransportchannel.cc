@@ -169,7 +169,8 @@ P2PTransportChannel::P2PTransportChannel(const std::string& content_name,
     was_timed_out_(true),
     protocol_type_(ICEPROTO_GOOGLE),
     role_(ROLE_UNKNOWN),
-    tiebreaker_(0) {
+    tiebreaker_(0),
+    remote_candidate_generation_(0) {
 }
 
 P2PTransportChannel::~P2PTransportChannel() {
@@ -231,12 +232,40 @@ void P2PTransportChannel::SetIceProtocolType(IceProtocolType type) {
   }
 }
 
-void P2PTransportChannel::SetIceUfrag(const std::string& ice_ufrag) {
+void P2PTransportChannel::SetIceCredentials(const std::string& ice_ufrag,
+                                            const std::string& ice_pwd) {
+  ASSERT(worker_thread_ == talk_base::Thread::Current());
+  bool ice_restart = false;
+  if (!ice_ufrag_.empty() && !ice_pwd_.empty()) {
+    ice_restart = ice_ufrag_ != ice_ufrag && ice_pwd_!= ice_pwd;
+  }
+
   ice_ufrag_ = ice_ufrag;
+  ice_pwd_ = ice_pwd;
+
+  if (ice_restart) {
+    // Restart candidate gathering.
+    Allocate();
+  }
 }
 
-void P2PTransportChannel::SetIcePwd(const std::string& ice_pwd) {
-  ice_pwd_ = ice_pwd;
+void P2PTransportChannel::SetRemoteIceCredentials(const std::string& ice_ufrag,
+                                                  const std::string& ice_pwd) {
+  ASSERT(worker_thread_ == talk_base::Thread::Current());
+  bool ice_restart = false;
+  if (!remote_ice_ufrag_.empty() && !remote_ice_pwd_.empty()) {
+    ice_restart = remote_ice_ufrag_ != ice_ufrag && remote_ice_pwd_!= ice_pwd;
+  }
+
+  remote_ice_ufrag_ = ice_ufrag;
+  remote_ice_pwd_ = ice_pwd;
+
+  if (ice_restart) {
+    // |candidate.generation()| is not signaled in ICEPROTO_RFC5245.
+    // Therefore we need to keep track of the remote ice restart so
+    // newer connections are prioritized over the older.
+    ++remote_candidate_generation_;
+  }
 }
 
 // Go into the state of processing candidates, and running in general
@@ -504,6 +533,10 @@ bool P2PTransportChannel::CreateConnections(const Candidate &remote_candidate,
                                             bool readable) {
   ASSERT(worker_thread_ == talk_base::Thread::Current());
 
+  Candidate new_remote_candidate(remote_candidate);
+  new_remote_candidate.set_generation(
+      GetRemoteCandidateGeneration(remote_candidate));
+
   // Add a new connection for this candidate to every port that allows such a
   // connection (i.e., if they have compatible protocols) and that does not
   // already have a connection to an equivalent candidate.  We must be careful
@@ -514,7 +547,7 @@ bool P2PTransportChannel::CreateConnections(const Candidate &remote_candidate,
 
   std::vector<PortInterface *>::reverse_iterator it;
   for (it = ports_.rbegin(); it != ports_.rend(); ++it) {
-    if (CreateConnection(*it, remote_candidate, origin_port, readable)) {
+    if (CreateConnection(*it, new_remote_candidate, origin_port, readable)) {
       if (*it == origin_port)
         created = true;
     }
@@ -522,12 +555,13 @@ bool P2PTransportChannel::CreateConnections(const Candidate &remote_candidate,
 
   if ((origin_port != NULL) &&
       std::find(ports_.begin(), ports_.end(), origin_port) == ports_.end()) {
-    if (CreateConnection(origin_port, remote_candidate, origin_port, readable))
+    if (CreateConnection(
+        origin_port, new_remote_candidate, origin_port, readable))
       created = true;
   }
 
   // Remember this remote candidate so that we can add it to future ports.
-  RememberRemoteCandidate(remote_candidate, origin_port);
+  RememberRemoteCandidate(new_remote_candidate, origin_port);
 
   return created;
 }
@@ -589,6 +623,20 @@ bool P2PTransportChannel::FindConnection(
   return citer != connections_.end();
 }
 
+uint32 P2PTransportChannel::GetRemoteCandidateGeneration(
+    const Candidate& candidate) {
+  if (protocol_type_ == ICEPROTO_GOOGLE) {
+    // The Candidate.generation() can be trusted. Nothing needs to be done.
+    return candidate.generation();
+  }
+  // |candidate.generation()| is not signaled in ICEPROTO_RFC5245.
+  // Therefore we need to keep track of the remote ice restart so
+  // newer connections are prioritized over the older.
+  ASSERT(candidate.generation() == 0 ||
+         candidate.generation() == remote_candidate_generation_);
+  return remote_candidate_generation_;
+}
+
 // Maintain our remote candidate list, adding this new remote one.
 void P2PTransportChannel::RememberRemoteCandidate(
     const Candidate& remote_candidate, PortInterface* origin_port) {
@@ -617,7 +665,6 @@ void P2PTransportChannel::RememberRemoteCandidate(
   // Try this candidate for all future ports.
   remote_candidates_.push_back(RemoteCandidate(remote_candidate, origin_port));
 }
-
 
 // Set options on ourselves is simply setting options on all of our available
 // port objects.

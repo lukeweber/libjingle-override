@@ -38,9 +38,6 @@
 
 namespace webrtc {
 
-class AudioMediaStreamTrackList;
-class VideoMediaStreamTrackList;
-
 class MediaStream : public Notifier<LocalMediaStreamInterface> {
  public:
   static talk_base::scoped_refptr<MediaStream> Create(const std::string& label);
@@ -55,10 +52,6 @@ class MediaStream : public Notifier<LocalMediaStreamInterface> {
       FindAudioTrack(const std::string& track_id);
   virtual talk_base::scoped_refptr<VideoTrackInterface>
       FindVideoTrack(const std::string& track_id);
-
-  // TODO(perkj): Remove when there are no callers.
-  virtual AudioTracks* audio_tracks() OVERRIDE;
-  virtual VideoTracks* video_tracks() OVERRIDE;
 
   virtual AudioTrackVector GetAudioTracks() OVERRIDE { return audio_tracks_; }
   virtual VideoTrackVector GetVideoTracks() OVERRIDE { return video_tracks_; }
@@ -75,11 +68,6 @@ class MediaStream : public Notifier<LocalMediaStreamInterface> {
   std::string label_;
   AudioTrackVector audio_tracks_;
   VideoTrackVector video_tracks_;
-
-  // TODO(perkj): Remove when there are no callers to audio_tracks and
-  // video_tracks.
-  talk_base::scoped_refptr <AudioMediaStreamTrackList> audio_track_list_;
-  talk_base::scoped_refptr <VideoMediaStreamTrackList> video_track_list_;
 };
 
 }  // namespace webrtc

@@ -42,6 +42,7 @@
 #include "talk/base/stringutils.h"
 #include "talk/base/thread.h"
 #include "talk/base/timeutils.h"
+#include "talk/media/base/constants.h"
 #include "talk/media/base/rtputils.h"
 #include "talk/media/base/streamparams.h"
 #include "talk/media/base/videorenderer.h"
@@ -91,6 +92,11 @@ static const bool kRembReceiving = true;
 // http://tools.ietf.org/html/rfc5450
 static const char kRtpTimestampOffsetHeaderExtension[] =
     "urn:ietf:params:rtp-hdrext:toffset";
+
+// RTP Header extensions supported by WebRtcVideoeEngine and the preferred id.
+static const RtpHeaderExtension kWebRtcVideoEngineRtpHeaderExtensions[] = {
+    RtpHeaderExtension(kRtpTimestampOffsetHeaderExtension, 2),
+};
 
 struct FlushBlackFrameData : public talk_base::MessageData {
   FlushBlackFrameData(uint32 s, int64 t) : ssrc(s), timestamp(t) {
@@ -578,6 +584,13 @@ void WebRtcVideoEngine::Construct(ViEWrapper* vie_wrapper,
     LOG(LS_ERROR) << "Failed to initialize list of supported codec types";
   }
 
+
+  // Load our RTP Header extensions.
+  rtp_header_extensions_ =
+      std::vector<RtpHeaderExtension>(
+          kWebRtcVideoEngineRtpHeaderExtensions,
+          kWebRtcVideoEngineRtpHeaderExtensions +
+          ARRAY_SIZE(kWebRtcVideoEngineRtpHeaderExtensions));
 }
 
 WebRtcVideoEngine::~WebRtcVideoEngine() {
@@ -832,6 +845,11 @@ const std::vector<VideoCodec>& WebRtcVideoEngine::codecs() const {
   return video_codecs_;
 }
 
+const std::vector<RtpHeaderExtension>&
+WebRtcVideoEngine::rtp_header_extensions() const {
+  return rtp_header_extensions_;
+}
+
 void WebRtcVideoEngine::SetLogging(int min_sev, const char* filter) {
   // if min_sev == -1, we keep the current log level.
   if (min_sev >= 0) {
@@ -884,6 +902,7 @@ bool WebRtcVideoEngine::CanSendCodec(const VideoCodec& requested,
     out->id = requested.id;
     out->name = requested.name;
     out->preference = requested.preference;
+    out->params = requested.params;
     out->framerate = talk_base::_min(requested.framerate, local_max->framerate);
     out->width = 0;
     out->height = 0;
@@ -947,6 +966,11 @@ static void ConvertToCricketVideoCodec(
   out_codec->width = in_codec.width;
   out_codec->height = in_codec.height;
   out_codec->framerate = in_codec.maxFramerate;
+  out_codec->SetParam(kCodecParamMinBitrate, in_codec.minBitrate);
+  out_codec->SetParam(kCodecParamMaxBitrate, in_codec.maxBitrate);
+  if (in_codec.qpMax) {
+    out_codec->SetParam(kCodecParamMaxQuantization, in_codec.qpMax);
+  }
 }
 
 bool WebRtcVideoEngine::ConvertFromCricketVideoCodec(
@@ -978,11 +1002,32 @@ bool WebRtcVideoEngine::ConvertFromCricketVideoCodec(
   if (in_codec.framerate != 0)
     out_codec->maxFramerate = in_codec.framerate;
 
-  // Init the codec with the default bandwidth options.
-  out_codec->minBitrate = kMinVideoBitrate;
-  out_codec->startBitrate = kStartVideoBitrate;
-  out_codec->maxBitrate = kMaxVideoBitrate;
+  // Convert bitrate parameters.
+  int max_bitrate = kMaxVideoBitrate;
+  int min_bitrate = kMinVideoBitrate;
+  int start_bitrate = kStartVideoBitrate;
 
+  in_codec.GetParam(kCodecParamMinBitrate, &min_bitrate);
+  in_codec.GetParam(kCodecParamMaxBitrate, &max_bitrate);
+
+  if (max_bitrate < min_bitrate) {
+    return false;
+  }
+  start_bitrate = talk_base::_max(start_bitrate, min_bitrate);
+  start_bitrate = talk_base::_min(start_bitrate, max_bitrate);
+
+  out_codec->minBitrate = min_bitrate;
+  out_codec->startBitrate = start_bitrate;
+  out_codec->maxBitrate = max_bitrate;
+
+  // Convert general codec parameters.
+  int max_quantization = 0;
+  if (in_codec.GetParam(kCodecParamMaxQuantization, &max_quantization)) {
+    if (max_quantization < 0) {
+      return false;
+    }
+    out_codec->qpMax = max_quantization;
+  }
   return true;
 }
 
@@ -1295,7 +1340,7 @@ bool WebRtcVideoMediaChannel::SetSendCodecs(
   webrtc::VideoCodec& codec(send_codecs[0]);
 
   if (!SetSendCodec(
-          codec, send_min_bitrate_, send_start_bitrate_, send_max_bitrate_)) {
+          codec, codec.minBitrate, codec.startBitrate, codec.maxBitrate)) {
     return false;
   }
 
@@ -2173,6 +2218,9 @@ bool WebRtcVideoMediaChannel::MuteStream(uint32 ssrc, bool on) {
 
 bool WebRtcVideoMediaChannel::SetRecvRtpHeaderExtensions(
     const std::vector<RtpHeaderExtension>& extensions) {
+  if (receive_extensions_ == extensions) {
+    return true;
+  }
   // Enable RTP timestamp offset extension if requested.
   receive_extensions_ = extensions;
 
@@ -2291,13 +2339,24 @@ bool WebRtcVideoMediaChannel::SetOptions(const VideoOptions &options) {
   bool buffer_latency_changed =
       (options_.buffered_mode_latency != options.buffered_mode_latency);
 
+  bool conference_mode_changed =
+      (options_.conference_mode != options.conference_mode);
+
   // Save the options, to be interpreted where appropriate.
   options_ = options;
 
   // Adjust send codec bitrate if needed.
   int conf_max_bitrate = kDefaultConferenceModeMaxVideoBitrate;
-  int expected_bitrate = InConferenceMode() ?
-      conf_max_bitrate : kMaxVideoBitrate;
+
+  int expected_bitrate = send_max_bitrate_;
+  if (InConferenceMode()) {
+    expected_bitrate = conf_max_bitrate;
+  } else if (conference_mode_changed) {
+    // This is a special case for turning conference mode off.
+    // Max bitrate should go back to the default maximum value instead
+    // of the current maximum.
+    expected_bitrate = kMaxVideoBitrate;
+  }
 
   if (send_codec_ &&
       (send_max_bitrate_ != expected_bitrate || denoiser_changed)) {
@@ -2329,9 +2388,17 @@ bool WebRtcVideoMediaChannel::SetOptions(const VideoOptions &options) {
             cricket::kBufferedModeDisabled);
     for (SendChannelMap::iterator it = send_channels_.begin();
         it != send_channels_.end(); ++it) {
-      if (engine()->vie()->rtp()->EnableSenderStreamingMode(
+      if (engine()->vie()->rtp()->SetSenderBufferingMode(
           it->second->channel_id(), buffer_latency) != 0) {
-        LOG_RTCERR2(EnableSenderStreamingMode, it->second->channel_id(),
+        LOG_RTCERR2(SetSenderBufferingMode, it->second->channel_id(),
+                    buffer_latency);
+      }
+    }
+    for (RecvChannelMap::iterator it = recv_channels_.begin();
+        it != recv_channels_.end(); ++it) {
+      if (engine()->vie()->rtp()->SetReceiverBufferingMode(
+          it->second->channel_id(), buffer_latency) != 0) {
+        LOG_RTCERR2(SetReceiverBufferingMode, it->second->channel_id(),
                     buffer_latency);
       }
     }
@@ -2639,6 +2706,16 @@ bool WebRtcVideoMediaChannel::ConfigureReceiving(int channel_id,
     return false;
   }
 
+  int buffer_latency =
+      options_.buffered_mode_latency.GetWithDefaultIfUnset(
+          cricket::kBufferedModeDisabled);
+  if (buffer_latency != cricket::kBufferedModeDisabled) {
+    if (engine()->vie()->rtp()->SetReceiverBufferingMode(
+        channel_id, buffer_latency) != 0) {
+      LOG_RTCERR2(SetReceiverBufferingMode, channel_id, buffer_latency);
+    }
+  }
+
   if (render_started_) {
     if (engine_->vie()->render()->StartRender(channel_id) != 0) {
       LOG_RTCERR1(StartRender, channel_id);
@@ -2718,9 +2795,9 @@ bool WebRtcVideoMediaChannel::ConfigureSending(int channel_id,
       options_.buffered_mode_latency.GetWithDefaultIfUnset(
           cricket::kBufferedModeDisabled);
   if (buffer_latency != cricket::kBufferedModeDisabled) {
-    if (engine()->vie()->rtp()->EnableSenderStreamingMode(
-            channel_id, buffer_latency) != 0) {
-      LOG_RTCERR2(EnableSenderStreamingMode, channel_id, buffer_latency);
+    if (engine()->vie()->rtp()->SetSenderBufferingMode(
+        channel_id, buffer_latency) != 0) {
+      LOG_RTCERR2(SetSenderBufferingMode, channel_id, buffer_latency);
     }
   }
 
@@ -2845,6 +2922,34 @@ bool WebRtcVideoMediaChannel::SetSendCodec(
 }
 
 
+static std::string ToString(webrtc::VideoCodecComplexity complexity) {
+  switch (complexity) {
+    case webrtc::kComplexityNormal:
+      return "normal";
+    case webrtc::kComplexityHigh:
+      return "high";
+    case webrtc::kComplexityHigher:
+      return "higher";
+    case webrtc::kComplexityMax:
+      return "max";
+    default:
+      return "unknown";
+  }
+}
+
+static std::string ToString(webrtc::VP8ResilienceMode resilience) {
+  switch (resilience) {
+    case webrtc::kResilienceOff:
+      return "off";
+    case webrtc::kResilientStream:
+      return "stream";
+    case webrtc::kResilientFrames:
+      return "frames";
+    default:
+      return "unknown";
+  }
+}
+
 void WebRtcVideoMediaChannel::LogSendCodecChange(const std::string& reason) {
   webrtc::VideoCodec vie_codec;
   if (engine()->vie()->codec()->GetSendCodec(vie_channel_, vie_codec) != 0) {
@@ -2856,11 +2961,33 @@ void WebRtcVideoMediaChannel::LogSendCodecChange(const std::string& reason) {
                << vie_codec.plName << "/"
                << vie_codec.width << "x" << vie_codec.height << "x"
                << static_cast<int>(vie_codec.maxFramerate) << "fps"
-               << "@" << vie_codec.maxBitrate << "kbps";
+               << "@" << vie_codec.maxBitrate << "kbps"
+               << " (min=" << vie_codec.minBitrate << "kbps,"
+               << " start=" << vie_codec.startBitrate << "kbps)";
+  LOG(LS_INFO) << "Video max quantization: " << vie_codec.qpMax;
   if (webrtc::kVideoCodecVP8 == vie_codec.codecType) {
     LOG(LS_INFO) << "VP8 number of temporal layers: "
                  << static_cast<int>(
-                    vie_codec.codecSpecific.VP8.numberOfTemporalLayers);
+                     vie_codec.codecSpecific.VP8.numberOfTemporalLayers);
+    LOG(LS_INFO) << "VP8 options : "
+                 << "picture loss indication = "
+                 << vie_codec.codecSpecific.VP8.pictureLossIndicationOn
+                 << ", feedback mode = "
+                 << vie_codec.codecSpecific.VP8.feedbackModeOn
+                 << ", complexity = "
+                 << ToString(vie_codec.codecSpecific.VP8.complexity)
+                 << ", resilience = "
+                 << ToString(vie_codec.codecSpecific.VP8.resilience)
+                 << ", denoising = "
+                 << vie_codec.codecSpecific.VP8.denoisingOn
+                 << ", error concealment = "
+                 << vie_codec.codecSpecific.VP8.errorConcealmentOn
+                 << ", automatic resize = "
+                 << vie_codec.codecSpecific.VP8.automaticResizeOn
+                 << ", frame dropping = "
+                 << vie_codec.codecSpecific.VP8.frameDroppingOn
+                 << ", key frame interval = "
+                 << vie_codec.codecSpecific.VP8.keyFrameInterval;
   }
 
 }

@@ -159,10 +159,13 @@ bool Call::SendViewRequest(Session* session,
     bool found = false;
     MediaStreams* recv_streams = GetMediaStreams(session);
     if (recv_streams)
-      found = recv_streams->GetVideoStreamBySsrc(it->ssrc, &found_stream);
+      found = recv_streams->GetVideoStream(it->selector, &found_stream);
     if (!found) {
-      LOG(LS_WARNING) <<
-          "Tried sending view request for bad ssrc: " << it->ssrc;
+      LOG(LS_WARNING) << "Trying to send view request for ("
+                      << it->selector.ssrc << ", '"
+                      << it->selector.groupid << "', '"
+                      << it->selector.streamid << "'"
+                      << ") is not in the local streams.";
       return false;
     }
   }
@@ -450,7 +453,7 @@ cricket::VideoFormat ScreencastFormatFromFps(int fps) {
 }
 
 bool Call::StartScreencast(Session* session,
-                           const std::string& stream_name, uint32 ssrc,
+                           const std::string& streamid, uint32 ssrc,
                            const ScreencastId& screencastid, int fps) {
   MediaSessionMap::iterator it = media_session_map_.find(session->id());
   if (it == media_session_map_.end()) {
@@ -491,10 +494,10 @@ bool Call::StartScreencast(Session* session,
   it->second.started_screencasts.insert(
       std::make_pair(ssrc, StartedCapture(capturer, format)));
 
-  // TODO(pthatcher): Verify we aren't re-using an existing name or
+  // TODO(pthatcher): Verify we aren't re-using an existing id or
   // ssrc.
   StreamParams stream;
-  stream.name = stream_name;
+  stream.id = streamid;
   stream.ssrcs.push_back(ssrc);
   VideoContentDescription* video = CreateVideoStreamUpdate(stream);
 
@@ -505,7 +508,7 @@ bool Call::StartScreencast(Session* session,
 }
 
 bool Call::StopScreencast(Session* session,
-                          const std::string& stream_name, uint32 ssrc) {
+                          const std::string& streamid, uint32 ssrc) {
   if (!StopScreencastWithoutSendingUpdate(session, ssrc)) {
     return false;
   }
@@ -518,7 +521,7 @@ bool Call::StopScreencast(Session* session,
   }
 
   StreamParams stream;
-  stream.name = stream_name;
+  stream.id = streamid;
   // No ssrcs
   VideoContentDescription* video = CreateVideoStreamUpdate(stream);
 
@@ -734,7 +737,7 @@ void Call::OnSpeakerMonitor(CurrentSpeakerMonitor* monitor, uint32 ssrc) {
   MediaStreams* recv_streams = GetMediaStreams(session);
   if (recv_streams) {
     StreamParams stream;
-    recv_streams->GetAudioStreamBySsrc(ssrc, &stream);
+    recv_streams->GetAudioStream(StreamSelector(ssrc), &stream);
     SignalSpeakerMonitor(this, session, stream);
   }
 }
@@ -930,7 +933,7 @@ void FindStreamChanges(const std::vector<StreamParams>& streams,
   for (std::vector<StreamParams>::const_iterator update = updates.begin();
        update != updates.end(); ++update) {
     StreamParams stream;
-    if (GetStreamByNickAndName(streams, update->nick, update->name, &stream)) {
+    if (GetStreamByIds(streams, update->groupid, update->id, &stream)) {
       if (!update->has_ssrcs()) {
         removed_streams->push_back(stream);
       }
@@ -997,7 +1000,7 @@ void Call::RemoveRecvStream(const StreamParams& stream,
     // TODO(pthatcher): Change RemoveRecvStream to take a stream argument.
     channel->RemoveRecvStream(stream.first_ssrc());
   }
-  RemoveStreamByNickAndName(recv_streams, stream.nick, stream.name);
+  RemoveStreamByIds(recv_streams, stream.groupid, stream.id);
 }
 
 void Call::OnReceivedTerminateReason(Session* session,

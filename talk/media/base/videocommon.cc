@@ -77,8 +77,8 @@ void ComputeScale(int frame_width, int frame_height,
   // For VP8 the values for max width and height can be found here
   // webrtc/src/video_engine/vie_defines.h (kViEMaxCodecWidth and
   // kViEMaxCodecHeight)
-  const int kMaxWidth = 4048;
-  const int kMaxHeight = 3040;
+  const int kMaxWidth = 4096;
+  const int kMaxHeight = 3072;
   const int kMaxPixels = 2880 * 1800;
   int new_frame_width = frame_width;
   int new_frame_height = frame_height;

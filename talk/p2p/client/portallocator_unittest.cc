@@ -65,6 +65,8 @@ static const char kIceUfrag0[] = "TESTICEUFRAG0000";
 // Based on ICE_PWD_LENGTH
 static const char kIcePwd0[] = "TESTICEPWD00000000000000";
 
+static const char kContentName[] = "test content";
+
 namespace cricket {
 
 // Helper for dumping candidates
@@ -119,14 +121,20 @@ class PortAllocatorTest : public testing::Test, public sigslot::has_slots<> {
 
   cricket::PortAllocatorSession* CreateSession(
       const std::string& sid, int component) {
-    return CreateSession(sid, "test content", component);
+    return CreateSession(sid, kContentName, component);
   }
 
   cricket::PortAllocatorSession* CreateSession(
       const std::string& sid, const std::string& content_name, int component) {
+    return CreateSession(sid, content_name, component, kIceUfrag0, kIcePwd0);
+  }
+
+  cricket::PortAllocatorSession* CreateSession(
+      const std::string& sid, const std::string& content_name, int component,
+      const std::string& ice_ufrag, const std::string& ice_pwd) {
     cricket::PortAllocatorSession* session =
         allocator_->CreateSession(
-            sid, content_name, component, kIceUfrag0, kIcePwd0);
+            sid, content_name, component, ice_ufrag, ice_pwd);
     session->SignalPortReady.connect(this,
             &PortAllocatorTest::OnPortReady);
     session->SignalCandidatesReady.connect(this,
@@ -541,22 +549,13 @@ TEST_F(PortAllocatorTest, TestGetAllPortsRestarts) {
 }
 
 TEST_F(PortAllocatorTest, TestBasicMuxFeatures) {
+  AddInterface(kClientAddr);
   allocator().set_flags(cricket::PORTALLOCATOR_ENABLE_BUNDLE);
   // Session ID - session1.
   talk_base::scoped_ptr<cricket::PortAllocatorSession> session1(
       CreateSession("session1", cricket::ICE_CANDIDATE_COMPONENT_RTP));
   talk_base::scoped_ptr<cricket::PortAllocatorSession> session2(
       CreateSession("session1", cricket::ICE_CANDIDATE_COMPONENT_RTCP));
-  // We know that PortAllocator is creating a proxy session when bundle flag
-  // is enabled, it's safe to type cast session objects.
-  cricket::PortAllocatorSessionProxy* proxy1 =
-      static_cast<cricket::PortAllocatorSessionProxy*>(session1.get());
-  ASSERT_TRUE(proxy1 != NULL);
-  cricket::PortAllocatorSessionProxy* proxy2 =
-      static_cast<cricket::PortAllocatorSessionProxy*>(session2.get());
-  ASSERT_TRUE(proxy2 != NULL);
-  EXPECT_EQ(proxy1->impl(), proxy2->impl());
-  AddInterface(kClientAddr);
   session1->GetInitialPorts();
   session2->GetInitialPorts();
   // Each session should receive two proxy ports of local and stun.
@@ -571,6 +570,7 @@ TEST_F(PortAllocatorTest, TestBasicMuxFeatures) {
 
   EXPECT_PRED5(CheckCandidate, candidates_[3],
       cricket::ICE_CANDIDATE_COMPONENT_RTCP, "stun", "udp", kClientAddr);
+
   talk_base::scoped_ptr<cricket::PortAllocatorSession> session3(
       CreateSession(
           "session1", cricket::ICE_CANDIDATE_COMPONENT_RTP));
@@ -580,15 +580,75 @@ TEST_F(PortAllocatorTest, TestBasicMuxFeatures) {
   // allocated proxy session.
   talk_base::Thread::Current()->ProcessMessages(1000);
   EXPECT_EQ(6U, ports_.size());
-  // Creating a PortAllocatorSession with different session name from above.
-  // In this case proxy PAS should have a different PAS.
-  // Session ID - session2.
+  EXPECT_PRED5(CheckCandidate, candidates_[4],
+      cricket::ICE_CANDIDATE_COMPONENT_RTP, "local", "udp", kClientAddr);
+  EXPECT_PRED5(CheckCandidate, candidates_[5],
+      cricket::ICE_CANDIDATE_COMPONENT_RTP, "stun", "udp", kClientAddr);
+  // Compare candidate address with previously allocated. Address should match.
+  EXPECT_EQ(candidates_[1].address(), candidates_[4].address());
+  EXPECT_EQ(candidates_[3].address(), candidates_[5].address());
+}
+
+// This test verifies by changing ice_ufrag and/or ice_pwd
+// will result in different set of candidates when BUNDLE is enabled.
+// If BUNDLE is disabled, CreateSession will always allocate new
+// set of candidates.
+TEST_F(PortAllocatorTest, TestBundleIceRestart) {
+  AddInterface(kClientAddr);
+  allocator().set_flags(cricket::PORTALLOCATOR_ENABLE_BUNDLE);
+  // Session ID - session1.
+  talk_base::scoped_ptr<cricket::PortAllocatorSession> session1(
+      CreateSession("session1", kContentName,
+                    cricket::ICE_CANDIDATE_COMPONENT_RTP,
+                    kIceUfrag0, kIcePwd0));
+  session1->GetInitialPorts();
+  ASSERT_EQ_WAIT(2U, ports_.size(), 1000);
+  EXPECT_EQ(2U, candidates_.size());
+  EXPECT_PRED5(CheckCandidate, candidates_[0],
+      cricket::ICE_CANDIDATE_COMPONENT_RTP, "local", "udp", kClientAddr);
+  EXPECT_PRED5(CheckCandidate, candidates_[1],
+      cricket::ICE_CANDIDATE_COMPONENT_RTP, "stun", "udp", kClientAddr);
+
+  // Allocate a different session with sid |session1| and different ice_ufrag.
+  talk_base::scoped_ptr<cricket::PortAllocatorSession> session2(
+      CreateSession("session1", kContentName,
+                    cricket::ICE_CANDIDATE_COMPONENT_RTP,
+                    "TestIceUfrag", kIcePwd0));
+  session2->GetInitialPorts();
+  ASSERT_EQ_WAIT(4U, ports_.size(), 1000);
+  EXPECT_EQ(4U, candidates_.size());
+  // Verifying the candidate address different from previously allocated
+  // address.
+  // Skipping verification of component id and candidate type.
+  EXPECT_NE(candidates_[0].address(), candidates_[2].address());
+  EXPECT_NE(candidates_[1].address(), candidates_[3].address());
+
+  // Allocating a different session with sid |session1| and
+  // different ice_pwd.
+  talk_base::scoped_ptr<cricket::PortAllocatorSession> session3(
+      CreateSession("session1", kContentName,
+                    cricket::ICE_CANDIDATE_COMPONENT_RTP,
+                    kIceUfrag0, "TestIcePwd"));
+  session3->GetInitialPorts();
+  ASSERT_EQ_WAIT(6U, ports_.size(), 1000);
+  EXPECT_EQ(6U, candidates_.size());
+  // Verifying the candidate address different from previously
+  // allocated address.
+  EXPECT_NE(candidates_[2].address(), candidates_[4].address());
+  EXPECT_NE(candidates_[3].address(), candidates_[5].address());
+
+  // Allocating a session with by changing both ice_ufrag and ice_pwd.
   talk_base::scoped_ptr<cricket::PortAllocatorSession> session4(
-        CreateSession(
-            "session2", cricket::ICE_CANDIDATE_COMPONENT_RTP));
-  cricket::PortAllocatorSessionProxy* proxy4 =
-        static_cast<cricket::PortAllocatorSessionProxy*>(session4.get());
-  EXPECT_NE(proxy4->impl(), proxy1->impl());
+      CreateSession("session1", kContentName,
+                    cricket::ICE_CANDIDATE_COMPONENT_RTP,
+                    "TestIceUfrag", "TestIcePwd"));
+  session4->GetInitialPorts();
+  ASSERT_EQ_WAIT(8U, ports_.size(), 1000);
+  EXPECT_EQ(8U, candidates_.size());
+  // Verifying the candidate address different from previously
+  // allocated address.
+  EXPECT_NE(candidates_[4].address(), candidates_[6].address());
+  EXPECT_NE(candidates_[5].address(), candidates_[7].address());
 }
 
 // Test that when the PORTALLOCATOR_ENABLE_SHARED_UFRAG is enabled we got same

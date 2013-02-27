@@ -64,11 +64,11 @@ std::string SsrcGroup::ToString() const {
 std::string StreamParams::ToString() const {
   std::ostringstream ost;
   ost << "{";
-  if (!nick.empty()) {
-    ost << "nick:" << nick << ";";
+  if (!groupid.empty()) {
+    ost << "groupid:" << groupid << ";";
   }
-  if (!name.empty()) {
-    ost << "name:" << name << ";";
+  if (!id.empty()) {
+    ost << "id:" << id << ";";
   }
   ost << SsrcsToString(ssrcs) << ";";
   ost << "ssrc_groups:";
@@ -127,62 +127,56 @@ bool StreamParams::GetSecondarySsrc(const std::string& semantics,
   return false;
 }
 
-bool GetStreamBySsrc(const StreamParamsVec& streams, uint32 ssrc,
-                     StreamParams* stream_out) {
+bool GetStream(const StreamParamsVec& streams,
+               const StreamSelector& selector,
+               StreamParams* stream_out) {
   for (StreamParamsVec::const_iterator stream = streams.begin();
        stream != streams.end(); ++stream) {
-    if (stream->has_ssrc(ssrc)) {
-      if (stream_out != NULL)
+    if (selector.Matches(*stream)) {
+      if (stream_out != NULL) {
         *stream_out = *stream;
+      }
       return true;
     }
   }
   return false;
 }
 
-bool GetStreamByNickAndName(const StreamParamsVec& streams,
-                            const std::string& nick,
-                            const std::string& name,
-                            StreamParams* stream_out) {
-  for (StreamParamsVec::const_iterator stream = streams.begin();
-       stream != streams.end(); ++stream) {
-    if (stream->nick == nick && stream->name == name) {
-      if (stream_out != NULL)
-        *stream_out = *stream;
-      return true;
+bool GetStreamBySsrc(const StreamParamsVec& streams, uint32 ssrc,
+                     StreamParams* stream_out) {
+  return GetStream(streams, StreamSelector(ssrc), stream_out);
+}
+
+bool GetStreamByIds(const StreamParamsVec& streams,
+                    const std::string& groupid,
+                    const std::string& id,
+                    StreamParams* stream_out) {
+  return GetStream(streams, StreamSelector(groupid, id), stream_out);
+}
+
+bool RemoveStream(StreamParamsVec* streams,
+                  const StreamSelector& selector) {
+  bool ret = false;
+  for (StreamParamsVec::iterator stream = streams->begin();
+       stream != streams->end(); ) {
+    if (selector.Matches(*stream)) {
+      stream = streams->erase(stream);
+      ret = true;
+    } else {
+      ++stream;
     }
   }
-  return false;
+  return ret;
 }
 
 bool RemoveStreamBySsrc(StreamParamsVec* streams, uint32 ssrc) {
-  bool ret = false;
-  for (StreamParamsVec::iterator stream = streams->begin();
-       stream != streams->end(); ) {
-    if (stream->has_ssrc(ssrc)) {
-      stream = streams->erase(stream);
-      ret = true;
-    } else {
-      ++stream;
-    }
-  }
-  return ret;
+  return RemoveStream(streams, StreamSelector(ssrc));
 }
 
-bool RemoveStreamByNickAndName(StreamParamsVec* streams,
-                               const std::string& nick,
-                               const std::string& name) {
-  bool ret = false;
-  for (StreamParamsVec::iterator stream = streams->begin();
-       stream != streams->end(); ) {
-    if (stream->nick == nick && stream->name == name) {
-      stream = streams->erase(stream);
-      ret = true;
-    } else {
-      ++stream;
-    }
-  }
-  return ret;
+bool RemoveStreamByIds(StreamParamsVec* streams,
+                       const std::string& groupid,
+                       const std::string& id) {
+  return RemoveStream(streams, StreamSelector(groupid, id));
 }
 
 }  // namespace cricket

@@ -142,10 +142,6 @@ class VideoTrackInterface : public MediaStreamTrackInterface {
   virtual ~VideoTrackInterface() {}
 };
 
-// TODO(perkj): Deprecate and remove LocalAudioTrackInterface when no clients
-// use it.
-typedef VideoTrackInterface LocalVideoTrackInterface;
-
 // AudioSourceInterface is a reference counted source used for AudioTracks.
 // The same source can be used in multiple AudioTracks.
 // TODO(perkj): Extend this class with necessary methods to allow separate
@@ -161,32 +157,10 @@ class AudioTrackInterface : public MediaStreamTrackInterface {
   virtual ~AudioTrackInterface() {}
 };
 
-// TODO(perkj): Deprecate and remove LocalAudioTrackInterface when no clients
-// use it.
-typedef AudioTrackInterface LocalAudioTrackInterface;
-
-// List of of tracks.
-// Deprecated: Please use TrackVectors.
-template <class TrackType>
-class MediaStreamTrackListInterface : public talk_base::RefCountInterface {
- public:
-  virtual size_t count() const = 0;
-  virtual TrackType* at(size_t index) = 0;
-  virtual TrackType* Find(const std::string& id) = 0;
-
- protected:
-  virtual ~MediaStreamTrackListInterface() {}
-};
-
 typedef std::vector<talk_base::scoped_refptr<AudioTrackInterface> >
     AudioTrackVector;
 typedef std::vector<talk_base::scoped_refptr<VideoTrackInterface> >
     VideoTrackVector;
-
-// Deprecated: Please use AudioTrackVector.
-typedef MediaStreamTrackListInterface<AudioTrackInterface> AudioTracks;
-// Deprecated: Please use VideoTrackVector.
-typedef MediaStreamTrackListInterface<VideoTrackInterface> VideoTracks;
 
 class MediaStreamInterface : public talk_base::RefCountInterface,
                              public NotifierInterface {
@@ -204,11 +178,6 @@ class MediaStreamInterface : public talk_base::RefCountInterface,
   virtual bool AddTrack(VideoTrackInterface* track) = 0;
   virtual bool RemoveTrack(AudioTrackInterface* track) = 0;
   virtual bool RemoveTrack(VideoTrackInterface* track) = 0;
-
-  // Deprecated: Please use GetAudioTracks.
-  virtual AudioTracks* audio_tracks() = 0;
-  // Deprecated: Please use GetVideoTracks.
-  virtual VideoTracks* video_tracks() = 0;
 
  protected:
   virtual ~MediaStreamInterface() {}

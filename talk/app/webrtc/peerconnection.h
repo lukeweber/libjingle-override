@@ -76,8 +76,6 @@ class PeerConnection : public PeerConnectionInterface,
   virtual bool GetStats(StatsObserver* observer,
                         webrtc::MediaStreamTrackInterface* track);
 
-  // TODO(perkj): Remove ready_state when callers removed. It is deprecated.
-  virtual ReadyState ready_state() { return signaling_state(); }
   virtual SignalingState signaling_state();
 
   // TODO(bemasc): Remove ice_state() when callers are removed.
@@ -100,6 +98,8 @@ class PeerConnection : public PeerConnectionInterface,
   virtual bool UpdateIce(const IceServers& configuration,
                          const MediaConstraintsInterface* constraints);
   virtual bool AddIceCandidate(const IceCandidateInterface* candidate);
+
+  virtual void Close();
 
  protected:
   virtual ~PeerConnection();
@@ -136,6 +136,10 @@ class PeerConnection : public PeerConnectionInterface,
 
   void PostSetSessionDescriptionFailure(SetSessionDescriptionObserver* observer,
                                         const std::string& error);
+
+  bool IsClosed() const {
+    return signaling_state_ == PeerConnectionInterface::kClosed;
+  }
 
   // Storing the factory as a scoped reference pointer ensures that the memory
   // in the PeerConnectionFactoryImpl remains available as long as the

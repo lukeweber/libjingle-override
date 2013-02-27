@@ -115,8 +115,8 @@ class MediaSessionClient : public SessionClient, public sigslot::has_slots<> {
   bool SetOutputVolume(int level) {
     return channel_manager_->SetOutputVolume(level);
   }
-  bool SetVideoOptions(const std::string& cam_device) {
-    return channel_manager_->SetVideoOptions(cam_device);
+  bool SetCaptureDevice(const std::string& cam_device) {
+    return channel_manager_->SetCaptureDevice(cam_device);
   }
 
   SessionDescription* CreateOffer(const CallOptions& options) {

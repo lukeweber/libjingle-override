@@ -76,7 +76,8 @@
             {
               'variables': {
                 'java_src_dir': 'app/webrtc/java/src',
-                'java_files': [
+                'webrtc_modules_dir': '<(DEPTH)/third_party/webrtc/modules',
+                'peerconnection_java_files': [
                   'app/webrtc/java/src/org/webrtc/AudioSource.java',
                   'app/webrtc/java/src/org/webrtc/AudioTrack.java',
                   'app/webrtc/java/src/org/webrtc/IceCandidate.java',
@@ -94,6 +95,18 @@
                   'app/webrtc/java/src/org/webrtc/VideoSource.java',
                   'app/webrtc/java/src/org/webrtc/VideoTrack.java',
                 ],
+                # TODO(fischman): extract this into a webrtc gyp var that can be
+                # included here, or better yet, build a proper .jar in webrtc
+                # and include it here.
+                'android_java_files': [
+                  '<(webrtc_modules_dir)/audio_device/android/org/webrtc/voiceengine/WebRTCAudioDevice.java',
+                  '<(webrtc_modules_dir)/video_capture/android/java/org/webrtc/videoengine/CaptureCapabilityAndroid.java',
+                  '<(webrtc_modules_dir)/video_capture/android/java/org/webrtc/videoengine/VideoCaptureAndroid.java',
+                  '<(webrtc_modules_dir)/video_capture/android/java/org/webrtc/videoengine/VideoCaptureDeviceInfoAndroid.java',
+                  '<(webrtc_modules_dir)/video_render/android/java/org/webrtc/videoengine/ViEAndroidGLES20.java',
+                  '<(webrtc_modules_dir)/video_render/android/java/org/webrtc/videoengine/ViERenderer.java',
+                  '<(webrtc_modules_dir)/video_render/android/java/org/webrtc/videoengine/ViESurfaceRenderer.java',
+                ],
               },
               'action_name': 'create_jar',
               'inputs': [
@@ -103,11 +116,24 @@
               'outputs': [
                 '<(PRODUCT_DIR)/libjingle_peerconnection.jar',
               ],
+              'conditions': [
+                ['OS=="android"', {
+                  'variables': {
+                    'java_files': ['<@(peerconnection_java_files)', '<@(android_java_files)'],
+                    'build_classpath': '<(java_src_dir):<(DEPTH)/third_party/android_tools/sdk/platforms/android-16/android.jar',
+                  },
+                }, {
+                  'variables': {
+                    'java_files': ['<@(peerconnection_java_files)'],
+                    'build_classpath': '<(java_src_dir)',
+                  },
+                }],
+              ],
               'action': [
-                'build/build_jar.sh', '<@(_outputs)', '<(INTERMEDIATE_DIR)',
-                '<(java_src_dir)',
-                '<(PRODUCT_DIR)/libjingle_peerconnection_so.so',
-                '', '<@(java_files)'
+                'build/build_jar.sh', '/usr', '<@(_outputs)',
+                '<(INTERMEDIATE_DIR)',
+                '<(build_classpath)',
+                '<@(java_files)'
               ],
             },
           ],
@@ -159,6 +185,8 @@
         'base/httpcommon.cc',
         'base/httprequest.cc',
         'base/httpserver.cc',
+        'base/ifaddrs-android.cc',
+        'base/ifaddrs-android.h',
         'base/ipaddress.cc',
         'base/json.cc',
         'base/logging.cc',
@@ -511,6 +539,11 @@
             },
           },
         }],
+        ['OS=="android"', {
+          'sources': [
+            'media/devices/androiddevicemanager.cc',
+          ],
+        }],
       ],
     },  # target libjingle_media
     {
@@ -607,8 +640,7 @@
         'app/webrtc/mediastreamsignaling.cc',
         'app/webrtc/mediastreamtrackproxy.cc',
         'app/webrtc/peerconnection.cc',
-        'app/webrtc/peerconnectionfactory.cc',
-        'app/webrtc/peerconnectionproxy.cc',
+        'app/webrtc/peerconnectionfactory.cc',        
         'app/webrtc/portallocatorfactory.cc',
         'app/webrtc/statscollector.cc',
         'app/webrtc/videosourceproxy.cc',

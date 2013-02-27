@@ -40,12 +40,11 @@
 #include <vector>
 
 #include "talk/base/basictypes.h"
+#include "talk/media/base/streamparams.h"
 #include "talk/p2p/base/parsing.h"
 #include "talk/p2p/base/sessiondescription.h"
 
 namespace cricket {
-
-struct StreamParams;
 
 // A collection of audio and video and data streams. Most of the
 // methods are merely for convenience. Many of these methods are keyed
@@ -67,30 +66,21 @@ struct MediaStreams {
   const std::vector<StreamParams>& video() const { return video_; }
   const std::vector<StreamParams>& data() const { return data_; }
 
-  // Remove the streams with the given name.  Names are only unique to
-  // nicks, so you need the nick as well.
-  bool GetAudioStreamByNickAndName(
-      const std::string& nick, const std::string& name, StreamParams* source);
-  bool GetVideoStreamByNickAndName(
-      const std::string& nick, const std::string& name, StreamParams* source);
-  bool GetDataStreamByNickAndName(
-      const std::string& nick, const std::string& name, StreamParams* source);
-  // Get the source with the given ssrc.  Returns true if found.
-  bool GetAudioStreamBySsrc(uint32 ssrc, StreamParams* source);
-  bool GetVideoStreamBySsrc(uint32 ssrc, StreamParams* source);
-  bool GetDataStreamBySsrc(uint32 ssrc, StreamParams* source);
-  // Add a source.
-  void AddAudioStream(const StreamParams& source);
-  void AddVideoStream(const StreamParams& source);
-  void AddDataStream(const StreamParams& source);
-  // Remove the source with the given name.  Names are only unique to
-  // nicks, so you need the nick as well.
-  void RemoveAudioStreamByNickAndName(const std::string& nick,
-                                      const std::string& name);
-  void RemoveVideoStreamByNickAndName(const std::string& nick,
-                                      const std::string& name);
-  void RemoveDataStreamByNickAndName(const std::string& nick,
-                                      const std::string& name);
+  // Gets a stream, returning true if found.
+  bool GetAudioStream(
+      const StreamSelector& selector, StreamParams* stream);
+  bool GetVideoStream(
+      const StreamSelector& selector, StreamParams* stream);
+  bool GetDataStream(
+      const StreamSelector& selector, StreamParams* stream);
+  // Adds a stream.
+  void AddAudioStream(const StreamParams& stream);
+  void AddVideoStream(const StreamParams& stream);
+  void AddDataStream(const StreamParams& stream);
+  // Removes a stream, returning true if found and removed.
+  bool RemoveAudioStream(const StreamSelector& selector);
+  bool RemoveVideoStream(const StreamSelector& selector);
+  bool RemoveDataStream(const StreamSelector& selector);
 
  private:
   std::vector<StreamParams> audio_;
@@ -104,14 +94,16 @@ struct MediaStreams {
 // represents one such view.  We currently only support "static"
 // views.
 struct StaticVideoView {
-  StaticVideoView(uint32 ssrc, int width, int height, int framerate)
-      : ssrc(ssrc),
+  StaticVideoView(const StreamSelector& selector,
+                  int width, int height, int framerate)
+      : selector(selector),
         width(width),
         height(height),
         framerate(framerate),
-        preference(0) {}
+        preference(0) {
+  }
 
-  uint32 ssrc;
+  StreamSelector selector;
   int width;
   int height;
   int framerate;

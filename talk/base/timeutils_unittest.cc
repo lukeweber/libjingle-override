@@ -143,4 +143,21 @@ TEST(TimeTest, BoundaryComparison) {
   EXPECT_EQ(-100, TimeDiff(ts_earlier, ts_later));
 }
 
-} // namespace talk_base
+TEST(TimeTest, CurrentTmTime) {
+  struct tm tm;
+  int microseconds;
+
+  time_t before = ::time(NULL);
+  CurrentTmTime(&tm, &microseconds);
+  time_t after = ::time(NULL);
+
+  // Assert that 'tm' represents a time between 'before' and 'after'.
+  // mktime() uses local time, so we have to compensate for that.
+  time_t local_delta = before - ::mktime(::gmtime(&before));  // NOLINT
+  time_t t = ::mktime(&tm) + local_delta;
+
+  EXPECT_TRUE(before <= t && t <= after);
+  EXPECT_TRUE(0 <= microseconds && microseconds < 1000000);
+}
+
+}  // namespace talk_base

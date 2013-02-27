@@ -167,6 +167,7 @@ TransportChannelImpl* Transport::CreateChannel_w(int component) {
   if (local_description_) {
     ApplyLocalTransportDescription_w(impl);
     if (remote_description_) {
+      ApplyRemoteTransportDescription_w(impl);
       ApplyNegotiatedTransportDescription_w(impl);
     }
   }
@@ -576,6 +577,11 @@ bool Transport::SetRemoteTransportDescription_w(
   talk_base::CritScope cs(&crit_);
   remote_description_.reset(new TransportDescription(desc));
 
+  for (ChannelMap::iterator iter = channels_.begin();
+       iter != channels_.end(); ++iter) {
+    ret &= ApplyRemoteTransportDescription_w(iter->second.get());
+  }
+
   // If PRANSWER/ANSWER is set, we should decide transport protocol type.
   if (action == CA_PRANSWER || action == CA_ANSWER) {
     ret = NegotiateTransportDescription_w(CA_OFFER);
@@ -585,8 +591,14 @@ bool Transport::SetRemoteTransportDescription_w(
 }
 
 bool Transport::ApplyLocalTransportDescription_w(TransportChannelImpl* ch) {
-  ch->SetIceUfrag(local_description_->ice_ufrag);
-  ch->SetIcePwd(local_description_->ice_pwd);
+  ch->SetIceCredentials(local_description_->ice_ufrag,
+                        local_description_->ice_pwd);
+  return true;
+}
+
+bool Transport::ApplyRemoteTransportDescription_w(TransportChannelImpl* ch) {
+  ch->SetRemoteIceCredentials(remote_description_->ice_ufrag,
+                              remote_description_->ice_ufrag);
   return true;
 }
 

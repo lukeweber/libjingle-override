@@ -219,10 +219,10 @@ bool CanAddLocalMediaStream(webrtc::StreamCollectionInterface* current_streams,
   bool audio_track_exist = false;
   for (size_t j = 0; j < current_streams->count(); ++j) {
     if (!audio_track_exist) {
-      audio_track_exist = current_streams->at(j)->audio_tracks()->count() > 0;
+      audio_track_exist = current_streams->at(j)->GetAudioTracks().size() > 0;
     }
   }
-  if (audio_track_exist && (new_stream->audio_tracks()->count() > 0)) {
+  if (audio_track_exist && (new_stream->GetAudioTracks().size() > 0)) {
     LOG(LS_ERROR) << "AddStream - Currently only one audio track is supported"
                   << "per PeerConnection.";
     return false;
@@ -316,6 +316,9 @@ PeerConnection::remote_streams() {
 
 bool PeerConnection::AddStream(MediaStreamInterface* local_stream,
                                const MediaConstraintsInterface* constraints) {
+  if (IsClosed()) {
+    return false;
+  }
   if (!CanAddLocalMediaStream(local_media_streams_, local_stream))
     return false;
 
@@ -328,6 +331,9 @@ bool PeerConnection::AddStream(MediaStreamInterface* local_stream,
 }
 
 void PeerConnection::RemoveStream(MediaStreamInterface* remove_stream) {
+  if (IsClosed()) {
+    return;
+  }
   local_media_streams_->RemoveStream(remove_stream);
   mediastream_signaling_->SetLocalStreams(local_media_streams_);
   observer_->OnRenegotiationNeeded();
@@ -406,7 +412,6 @@ void PeerConnection::CreateOffer(CreateSessionDescriptionObserver* observer,
     LOG(LS_ERROR) << "CreateOffer - observer is NULL.";
     return;
   }
-
   CreateSessionDescriptionMsg* msg = new CreateSessionDescriptionMsg(observer);
   msg->description.reset(
       session_->CreateOffer(constraints));
@@ -427,7 +432,6 @@ void PeerConnection::CreateAnswer(
     LOG(LS_ERROR) << "CreateAnswer - observer is NULL.";
     return;
   }
-
   CreateSessionDescriptionMsg* msg = new CreateSessionDescriptionMsg(observer);
   // TODO(perkj): This checks should be done by the session. Not here.
   // Clean this up once the old Jsep API has been removed.
@@ -466,6 +470,7 @@ void PeerConnection::SetLocalDescription(
     PostSetSessionDescriptionFailure(observer, "SessionDescription is NULL.");
     return;
   }
+
   // Update stats here so that we have the most recent stats for tracks and
   // streams that might be removed by updating the session description.
   stats_.UpdateStats();
@@ -531,6 +536,18 @@ const SessionDescriptionInterface* PeerConnection::remote_description() const {
   return session_->remote_description();
 }
 
+void PeerConnection::Close() {
+  // Update stats here so that we have the most recent stats for tracks and
+  // streams before the channels are closed.
+  stats_.UpdateStats();
+
+  // Remove any association between local MediaStreams and this session by
+  // providing an empty collection instead of |local_media_streams_|.
+  stream_handler_->CommitLocalStreams(StreamCollection::Create());
+
+  session_->Terminate();
+}
+
 void PeerConnection::OnSessionStateChange(cricket::BaseSession* /*session*/,
                                           cricket::BaseSession::State state) {
   switch (state) {
@@ -551,6 +568,9 @@ void PeerConnection::OnSessionStateChange(cricket::BaseSession* /*session*/,
     case cricket::BaseSession::STATE_SENTACCEPT:
     case cricket::BaseSession::STATE_RECEIVEDACCEPT:
       ChangeSignalingState(PeerConnectionInterface::kStable);
+      break;
+    case cricket::BaseSession::STATE_RECEIVEDTERMINATE:
+      ChangeSignalingState(PeerConnectionInterface::kClosed);
       break;
     default:
       break;
@@ -641,6 +661,9 @@ void PeerConnection::OnIceConnectionChange(
 
 void PeerConnection::OnIceGatheringChange(
     PeerConnectionInterface::IceGatheringState new_state) {
+  if (IsClosed()) {
+    return;
+  }
   ice_gathering_state_ = new_state;
   signaling_thread()->Post(this, MSG_ICEGATHERINGCHANGE);
 }
@@ -666,12 +689,16 @@ void PeerConnection::OnIceComplete() {
 void PeerConnection::ChangeSignalingState(
     PeerConnectionInterface::SignalingState signaling_state) {
   signaling_state_ = signaling_state;
-  observer_->OnSignalingChange(signaling_state_);
-  observer_->OnStateChange(PeerConnectionObserver::kSignalingState);
   if (signaling_state == kClosed) {
     ice_connection_state_ = kIceConnectionClosed;
     observer_->OnIceConnectionChange(ice_connection_state_);
+    if (ice_gathering_state_ != kIceGatheringComplete) {
+      ice_gathering_state_ = kIceGatheringComplete;
+      observer_->OnIceGatheringChange(ice_gathering_state_);
+    }
   }
+  observer_->OnSignalingChange(signaling_state_);
+  observer_->OnStateChange(PeerConnectionObserver::kSignalingState);
 }
 
 }  // namespace webrtc

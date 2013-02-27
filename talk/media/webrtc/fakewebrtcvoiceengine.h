@@ -381,6 +381,7 @@ class FakeWebRtcVoiceEngine
       if (strcmp(it->plname, codec.plname) == 0 &&
           it->plfreq == codec.plfreq) {
         it->pltype = codec.pltype;
+        it->channels = codec.channels;
         return 0;
       }
     }
@@ -403,6 +404,7 @@ class FakeWebRtcVoiceEngine
          it != ch->recv_codecs.end(); ++it) {
       if (strcmp(it->plname, codec.plname) == 0 &&
           it->plfreq == codec.plfreq &&
+          it->channels == codec.channels &&
           it->pltype != -1) {
         codec.pltype = it->pltype;
         return 0;
@@ -757,6 +759,7 @@ class FakeWebRtcVoiceEngine
   WEBRTC_STUB(SetInitTimestamp, (int channel, unsigned int timestamp));
   WEBRTC_STUB(SetInitSequenceNumber, (int channel, short sequenceNumber));
   WEBRTC_STUB(SetMinimumPlayoutDelay, (int channel, int delayMs));
+  WEBRTC_STUB(SetInitialPlayoutDelay, (int channel, int delay_ms));
   WEBRTC_STUB(GetDelayEstimate, (int channel, int& delayMs));
 
   // webrtc::VoEVolumeControl

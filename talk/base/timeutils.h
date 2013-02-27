@@ -28,9 +28,7 @@
 #ifndef TALK_BASE_TIMEUTILS_H_
 #define TALK_BASE_TIMEUTILS_H_
 
-#ifndef WIN32
 #include <time.h>
-#endif
 
 #include "talk/base/basictypes.h"
 
@@ -51,6 +49,9 @@ typedef uint32 TimeStamp;
 uint32 Time();
 // Returns the current time in nanoseconds.
 uint64 TimeNanos();
+
+// Stores current time in *tm and microseconds in *microseconds.
+void CurrentTmTime(struct tm *tm, int *microseconds);
 
 // Returns a future timestamp, 'elapsed' milliseconds from now.
 uint32 TimeAfter(int32 elapsed);

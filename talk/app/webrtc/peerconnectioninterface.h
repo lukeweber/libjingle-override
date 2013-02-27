@@ -225,11 +225,6 @@ class PeerConnectionInterface : public talk_base::RefCountInterface {
   // take the ownership of the |candidate|.
   virtual bool AddIceCandidate(const IceCandidateInterface* candidate) = 0;
 
-  // Deprecated, please use SignalingState instead.
-  // TODO(perkj): Remove ready_state when callers are changed.
-  typedef SignalingState ReadyState;
-  virtual ReadyState ready_state() = 0;
-
   // Returns the current SignalingState.
   virtual SignalingState signaling_state() = 0;
 
@@ -239,6 +234,9 @@ class PeerConnectionInterface : public talk_base::RefCountInterface {
   virtual IceState ice_state() = 0;
   virtual IceConnectionState ice_connection_state() = 0;
   virtual IceGatheringState ice_gathering_state() = 0;
+
+  // Terminates all media and closes the transport.
+  virtual void Close() = 0;
 
  protected:
   // Dtor protected as objects shouldn't be deleted via this interface.
@@ -378,16 +376,6 @@ class PeerConnectionFactoryInterface : public talk_base::RefCountInterface {
       CreateAudioTrack(const std::string& label,
                        AudioSourceInterface* source) = 0;
 
-  // Deprecated: Please use the version that take a source as input.
-  virtual talk_base::scoped_refptr<LocalVideoTrackInterface>
-      CreateLocalVideoTrack(const std::string& label,
-                            cricket::VideoCapturer* video_device) = 0;
-
-  // Deprecated: Please use the version that take a source as input.
-  virtual talk_base::scoped_refptr<LocalAudioTrackInterface>
-      CreateLocalAudioTrack(const std::string& label,
-                            AudioDeviceModule* audio_device) = 0;
-
  protected:
   // Dtor and ctor protected as objects shouldn't be created or deleted via
   // this interface.
@@ -406,15 +394,6 @@ talk_base::scoped_refptr<PeerConnectionFactoryInterface>
 CreatePeerConnectionFactory(talk_base::Thread* worker_thread,
                             talk_base::Thread* signaling_thread,
                             AudioDeviceModule* default_adm);
-
-// TODO(perkj): The JsepInterface has been combined with
-// PeerConnectionInterface. Remove the below interface once no clients use
-// JsepInterface::IceServer.
-class JsepInterface {
- public:
-  typedef PeerConnectionInterface::IceServer IceServer;
-  typedef std::vector<PeerConnectionInterface::IceServer> IceServers;
-};
 
 }  // namespace webrtc
 

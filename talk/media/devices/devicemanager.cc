@@ -38,7 +38,7 @@
 #include "talk/media/devices/deviceinfo.h"
 #include "talk/media/devices/filevideocapturer.h"
 
-#if !(defined(IOS) || defined(ANDROID))
+#if !defined(IOS)
 
 #if defined(HAVE_WEBRTC_VIDEO)
 #include "talk/media/webrtc/webrtcvideocapturer.h"
@@ -149,8 +149,8 @@ bool DeviceManager::GetAudioOutputDevice(const std::string& name, Device* out) {
 
 bool DeviceManager::GetVideoCaptureDevices(std::vector<Device>* devices) {
   devices->clear();
-#if defined(IOS) || defined(ANDROID)
-  // On Android, we treat the camera(s) as a single device. Even if there are
+#if defined(IOS)
+  // On iOS, we treat the camera(s) as a single device. Even if there are
   // multiple cameras, that's abstracted away at a higher level.
   Device dev("camera", "1");    // name and ID
   devices->push_back(dev);
@@ -204,7 +204,7 @@ void DeviceManager::ClearVideoCaptureDeviceMaxFormat(
 }
 
 VideoCapturer* DeviceManager::CreateVideoCapturer(const Device& device) const {
-#if defined(IOS) || defined(ANDROID)
+#if defined(IOS)
   LOG_F(LS_ERROR) << " should never be called!";
   return NULL;
 #else

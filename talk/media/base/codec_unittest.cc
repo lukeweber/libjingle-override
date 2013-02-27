@@ -264,3 +264,22 @@ TEST_F(CodecTest, TestDataCodecOperators) {
   EXPECT_TRUE(c6 != c4);
   EXPECT_TRUE(c6 == c0);
 }
+
+TEST_F(CodecTest, TestSetParamAndGetParam) {
+  AudioCodec codec;
+  codec.SetParam("a", "1");
+  codec.SetParam("b", "x");
+
+  int int_value = 0;
+  EXPECT_TRUE(codec.GetParam("a", &int_value));
+  EXPECT_EQ(1, int_value);
+  EXPECT_FALSE(codec.GetParam("b", &int_value));
+  EXPECT_FALSE(codec.GetParam("c", &int_value));
+
+  std::string str_value;
+  EXPECT_TRUE(codec.GetParam("a", &str_value));
+  EXPECT_EQ("1", str_value);
+  EXPECT_TRUE(codec.GetParam("b", &str_value));
+  EXPECT_EQ("x", str_value);
+  EXPECT_FALSE(codec.GetParam("c", &str_value));
+}

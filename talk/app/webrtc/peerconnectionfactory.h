@@ -71,14 +71,6 @@ class PeerConnectionFactory : public PeerConnectionFactoryInterface,
   virtual talk_base::scoped_refptr<AudioTrackInterface>
       CreateAudioTrack(const std::string& id,
                        AudioSourceInterface* audio_source);
-  // Deprecated:
-  virtual talk_base::scoped_refptr<LocalVideoTrackInterface>
-      CreateLocalVideoTrack(const std::string& id,
-                            cricket::VideoCapturer* video_device);
-  // Deprecated:
-  virtual talk_base::scoped_refptr<LocalAudioTrackInterface>
-      CreateLocalAudioTrack(const std::string& id,
-                            AudioDeviceModule* audio_device);
 
   virtual cricket::ChannelManager* channel_manager();
   virtual talk_base::Thread* signaling_thread();

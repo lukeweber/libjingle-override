@@ -91,6 +91,7 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   WebRtcVideoMediaChannel* CreateChannel(VoiceMediaChannel* voice_channel);
 
   const std::vector<VideoCodec>& codecs() const;
+  const std::vector<RtpHeaderExtension>& rtp_header_extensions() const;
   void SetLogging(int min_sev, const char* filter);
 
   // If capturer is NULL, unregisters the capturer and stops capturing.
@@ -172,6 +173,7 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   int log_level_;
   talk_base::scoped_ptr<webrtc::VideoRender> render_module_;
   std::vector<VideoCodec> video_codecs_;
+  std::vector<RtpHeaderExtension> rtp_header_extensions_;
   VideoFormat default_codec_format_;
   bool initialized_;
   talk_base::CriticalSection channels_crit_;

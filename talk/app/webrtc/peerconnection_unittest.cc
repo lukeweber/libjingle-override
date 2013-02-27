@@ -200,7 +200,7 @@ class PeerConnectionTestClientBase
 
     // We should be able to create a DTMF sender from a local track.
     webrtc::AudioTrackInterface* localtrack =
-        peer_connection_->local_streams()->at(0)->audio_tracks()->at(0);
+        peer_connection_->local_streams()->at(0)->GetAudioTracks()[0];
     dtmf_sender = peer_connection_->CreateDtmfSender(localtrack);
     EXPECT_TRUE(dtmf_sender.get() != NULL);
     dtmf_sender->RegisterObserver(observer.get());
@@ -334,12 +334,12 @@ class PeerConnectionTestClientBase
     EXPECT_EQ(peer_connection_->signaling_state(), new_state);
   }
   virtual void OnAddStream(webrtc::MediaStreamInterface* media_stream) {
-    for (size_t i = 0; i < media_stream->video_tracks()->count(); ++i) {
-      const std::string id = media_stream->video_tracks()->at(i)->id();
+    for (size_t i = 0; i < media_stream->GetVideoTracks().size(); ++i) {
+      const std::string id = media_stream->GetVideoTracks()[i]->id();
       ASSERT_TRUE(fake_video_renderers_.find(id) ==
           fake_video_renderers_.end());
       fake_video_renderers_[id] = new webrtc::FakeVideoTrackRenderer(
-          media_stream->video_tracks()->at(i));
+          media_stream->GetVideoTracks()[i]);
     }
   }
   virtual void OnRemoveStream(webrtc::MediaStreamInterface* media_stream) {}
@@ -1025,9 +1025,9 @@ TEST_F(JsepPeerConnectionP2PTestClient, GetAudioOutputLevelStats) {
   StreamCollectionInterface* remote_streams =
       initializing_client()->remote_streams();
   ASSERT_GT(remote_streams->count(), 0u);
-  ASSERT_GT(remote_streams->at(0)->audio_tracks()->count(), 0u);
+  ASSERT_GT(remote_streams->at(0)->GetAudioTracks().size(), 0u);
   MediaStreamTrackInterface* remote_audio_track =
-      remote_streams->at(0)->audio_tracks()->at(0);
+      remote_streams->at(0)->GetAudioTracks()[0];
 
   // Get the audio output level stats. Note that the level is not available
   // until a RTCP packet has been received.
@@ -1055,15 +1055,15 @@ TEST_F(JsepPeerConnectionP2PTestClient, GetBytesReceivedStats) {
   StreamCollectionInterface* remote_streams =
       initializing_client()->remote_streams();
   ASSERT_GT(remote_streams->count(), 0u);
-  ASSERT_GT(remote_streams->at(0)->audio_tracks()->count(), 0u);
+  ASSERT_GT(remote_streams->at(0)->GetAudioTracks().size(), 0u);
   MediaStreamTrackInterface* remote_audio_track =
-      remote_streams->at(0)->audio_tracks()->at(0);
+      remote_streams->at(0)->GetAudioTracks()[0];
   EXPECT_TRUE_WAIT(
       initializing_client()->GetBytesReceivedStats(remote_audio_track) > 0,
       kMaxWaitForStatsMs);
 
   MediaStreamTrackInterface* remote_video_track =
-      remote_streams->at(0)->video_tracks()->at(0);
+      remote_streams->at(0)->GetVideoTracks()[0];
   EXPECT_TRUE_WAIT(
       initializing_client()->GetBytesReceivedStats(remote_video_track) > 0,
       kMaxWaitForStatsMs);
@@ -1077,15 +1077,15 @@ TEST_F(JsepPeerConnectionP2PTestClient, GetBytesSentStats) {
   StreamCollectionInterface* local_streams =
       initializing_client()->local_streams();
   ASSERT_GT(local_streams->count(), 0u);
-  ASSERT_GT(local_streams->at(0)->audio_tracks()->count(), 0u);
+  ASSERT_GT(local_streams->at(0)->GetAudioTracks().size(), 0u);
   MediaStreamTrackInterface* local_audio_track =
-      local_streams->at(0)->audio_tracks()->at(0);
+      local_streams->at(0)->GetAudioTracks()[0];
   EXPECT_TRUE_WAIT(
       initializing_client()->GetBytesSentStats(local_audio_track) > 0,
       kMaxWaitForStatsMs);
 
   MediaStreamTrackInterface* local_video_track =
-      local_streams->at(0)->video_tracks()->at(0);
+      local_streams->at(0)->GetVideoTracks()[0];
   EXPECT_TRUE_WAIT(
       initializing_client()->GetBytesSentStats(local_video_track) > 0,
       kMaxWaitForStatsMs);

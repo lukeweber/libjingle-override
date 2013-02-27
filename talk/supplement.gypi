@@ -4,7 +4,7 @@
 # capture and render.
 {
   'variables': {
-    'build_with_chromium': 1,
+    'build_with_chromium%': 1,
     'clang_use_chrome_plugins': 0,
     'enable_protobuf': 1,
     'include_internal_audio_device': 1,

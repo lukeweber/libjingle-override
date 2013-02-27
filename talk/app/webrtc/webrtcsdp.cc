@@ -272,8 +272,8 @@ static bool ParseFmtpAttributes(const std::string& line,
                                 const MediaType media_type,
                                 MediaContentDescription* media_desc,
                                 SdpParseError* error);
-static bool ParseFmtpParam(const std::string& line,
-                           std::string* parameter, std::string* value);
+static bool ParseFmtpParam(const std::string& line, std::string* parameter,
+                           std::string* value, SdpParseError* error);
 static bool ParseCandidate(const std::string& message, Candidate* candidate,
                            SdpParseError* error, bool is_raw);
 static bool ParseIceOptions(const std::string& line,
@@ -524,28 +524,28 @@ void CreateTracksFromSsrcInfos(const SsrcInfoVec& ssrc_infos,
     }
 
     std::string sync_label;
-    std::string name;
+    std::string track_id;
     if (ssrc_info->msid_identifier == kDefaultMsid &&
         !ssrc_info->mslabel.empty()) {
       // If there's no msid and there's mslabel, we consider this is a sdp from
       // a older version of client that doesn't support msid.
       // In that case, we use the mslabel and label to construct the track.
       sync_label = ssrc_info->mslabel;
-      name = ssrc_info->label;
+      track_id = ssrc_info->label;
     } else {
       sync_label = ssrc_info->msid_identifier;
       // The appdata consists of the "id" attribute of a MediaStreamTrack, which
-      // is corresponding to the "name" attribute of StreamParams.
-      name = ssrc_info->msid_appdata;
+      // is corresponding to the "id" attribute of StreamParams.
+      track_id = ssrc_info->msid_appdata;
     }
-    if (sync_label.empty() || name.empty()) {
+    if (sync_label.empty() || track_id.empty()) {
       ASSERT(false);
       continue;
     }
 
     StreamParamsVec::iterator track = tracks->begin();
     for (; track != tracks->end(); ++track) {
-      if (track->name == name) {
+      if (track->id == track_id) {
         break;
       }
     }
@@ -557,7 +557,7 @@ void CreateTracksFromSsrcInfos(const SsrcInfoVec& ssrc_infos,
     track->add_ssrc(ssrc_info->ssrc_id);
     track->cname = ssrc_info->cname;
     track->sync_label = sync_label;
-    track->name = name;
+    track->id = track_id;
   }
 }
 
@@ -1094,6 +1094,11 @@ void BuildMediaDescription(const ContentInfo* content_info,
       fmt.append(talk_base::ToString<int>(it->id));
     }
   }
+  // The fmt must never be empty. If no codecs are found, set the fmt attribute
+  // to 0.
+  if (fmt.empty()) {
+    fmt = " 0";
+  }
 
   // The port number in the m line will be updated later when associate with
   // the candidates.
@@ -1258,7 +1263,7 @@ void BuildMediaDescription(const ContentInfo* content_info,
       // a=ssrc:<ssrc-id> msid:identifier [appdata]
       // The appdata consists of the "id" attribute of a MediaStreamTrack, which
       // is corresponding to the "name" attribute of StreamParams.
-      std::string appdata = track->name;
+      std::string appdata = track->id;
       std::ostringstream os;
       InitAttrLine(kAttributeSsrc, &os);
       os << kSdpDelimiterColon << ssrc << kSdpDelimiterSpace
@@ -1272,7 +1277,7 @@ void BuildMediaDescription(const ContentInfo* content_info,
       // The label isn't yet defined.
       // a=ssrc:<ssrc-id> label:<value>
       AddSsrcLine(ssrc, kSsrcAttributeMslabel, track->sync_label, message);
-      AddSsrcLine(ssrc, kSSrcAttributeLabel, track->name, message);
+      AddSsrcLine(ssrc, kSSrcAttributeLabel, track->id, message);
     }
   }
 }
@@ -2370,8 +2375,9 @@ void PruneRight(const char delimiter, std::string* message) {
 }
 
 bool ParseFmtpParam(const std::string& line, std::string* parameter,
-                           std::string* value) {
+                    std::string* value, SdpParseError* error) {
   if (!SplitByDelimiter(line, kSdpDelimiterEqual, parameter, value)) {
+    ParseFailed(line, "Unable to parse fmtp parameter. \'=\' missing.", error);
     return false;
   }
   // a=fmtp:<payload_type> <param1>=<value1>; <param2>=<value2>; ...
@@ -2396,6 +2402,7 @@ bool ParseFmtpAttributes(const std::string& line, const MediaType media_type,
   // At least two fields, whereas the second one is any of the optional
   // parameters.
   if (fields.size() < 2) {
+    ParseFailedExpectMinFieldNum(line, 2, error);
     return false;
   }
 
@@ -2403,13 +2410,18 @@ bool ParseFmtpAttributes(const std::string& line, const MediaType media_type,
   if (!GetValue(fields[0], kAttributeFmtp, &payload_type, error)) {
     return false;
   }
-  cricket::CodecParameterMap codec_params;
 
+  cricket::CodecParameterMap codec_params;
   for (std::vector<std::string>::const_iterator iter = fields.begin() + 1;
        iter != fields.end(); ++iter) {
     std::string name;
     std::string value;
-    if (!ParseFmtpParam(*iter, &name, &value)) {
+    if (iter->find(kSdpDelimiterEqual) == std::string::npos) {
+      // Only fmtps with equals are currently supported. Other fmtp types
+      // should be ignored. Unknown fmtps do not constitute an error.
+      continue;
+    }
+    if (!ParseFmtpParam(*iter, &name, &value, error)) {
       return false;
     }
     codec_params[name] = value;

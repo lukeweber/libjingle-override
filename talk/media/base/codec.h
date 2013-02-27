@@ -59,6 +59,13 @@ struct Codec {
   bool Matches(int id, const std::string& name) const;
   bool Matches(const Codec& codec) const;
 
+  // Find the parameter for |name| and write the value to |out|.
+  bool GetParam(const std::string& name, std::string* out) const;
+  bool GetParam(const std::string& name, int* out) const;
+
+  void SetParam(const std::string& name, const std::string& value);
+  void SetParam(const std::string& name, int value);
+
   static bool Preferable(const Codec& first, const Codec& other) {
     return first.preference > other.preference;
   }

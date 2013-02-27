@@ -176,6 +176,10 @@ class CallClient: public sigslot::has_slots<> {
     return mucs_;
   }
 
+  void SetShowRosterMessages(bool show_roster_messages) {
+    show_roster_messages_ = show_roster_messages;
+  }
+
  private:
   void AddStream(uint32 audio_src_id, uint32 video_src_id);
   void RemoveStream(uint32 audio_src_id, uint32 video_src_id);
@@ -341,6 +345,8 @@ class CallClient: public sigslot::has_slots<> {
   cricket::SecurePolicy dtls_policy_;
   talk_base::scoped_ptr<talk_base::SSLIdentity> ssl_identity_;
   std::string last_sent_to_;
+
+  bool show_roster_messages_;
 };
 
 #endif  // TALK_EXAMPLES_CALL_CALLCLIENT_H_

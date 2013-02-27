@@ -42,54 +42,6 @@ static typename V::iterator FindTrack(V* vector,
   return it;
 };
 
-// TODO(perkj): Remove when there are no callers to audio_tracks()
-class AudioMediaStreamTrackList
-    : public MediaStreamTrackListInterface<AudioTrackInterface> {
- public:
-  explicit AudioMediaStreamTrackList(MediaStreamInterface* stream)
-      : media_stream_(stream) {
-  }
-  virtual size_t count() const OVERRIDE {
-    return media_stream_->GetAudioTracks().size();
-  }
-  virtual AudioTrackInterface* at(size_t index) OVERRIDE {
-    return media_stream_->GetAudioTracks().at(index);
-  }
-  virtual AudioTrackInterface* Find(const std::string& id) OVERRIDE {
-    return media_stream_->FindAudioTrack(id);
-  }
-
- protected:
-  ~AudioMediaStreamTrackList() {}
-
- private:
-  talk_base::scoped_refptr<MediaStreamInterface> media_stream_;
-};
-
-// TODO(perkj): Remove when there are no callers to video_tracks().
-class VideoMediaStreamTrackList
-    : public MediaStreamTrackListInterface<VideoTrackInterface> {
- public:
-  explicit VideoMediaStreamTrackList(MediaStreamInterface* stream)
-      : media_stream_(stream) {
-  }
-  virtual size_t count() const OVERRIDE {
-    return media_stream_->GetVideoTracks().size();
-  }
-  virtual VideoTrackInterface* at(size_t index) OVERRIDE {
-    return media_stream_->GetVideoTracks().at(index);
-  }
-  virtual VideoTrackInterface* Find(const std::string& id) OVERRIDE {
-    return media_stream_->FindVideoTrack(id);
-  }
-
- protected:
-  ~VideoMediaStreamTrackList() {}
-
- private:
-  talk_base::scoped_refptr<MediaStreamInterface> media_stream_;
-};
-
 talk_base::scoped_refptr<MediaStream> MediaStream::Create(
     const std::string& label) {
   talk_base::RefCountedObject<MediaStream>* stream =
@@ -152,22 +104,6 @@ bool MediaStream::RemoveTrack(TrackVector* tracks,
   tracks->erase(it);
   FireOnChanged();
   return true;
-}
-
-AudioTracks* MediaStream::audio_tracks() {
-  if (!audio_track_list_) {
-    audio_track_list_ =
-        new talk_base::RefCountedObject<AudioMediaStreamTrackList>(this);
-  }
-  return audio_track_list_;
-}
-
-VideoTracks* MediaStream::video_tracks() {
-  if (!video_track_list_) {
-    video_track_list_ =
-        new talk_base::RefCountedObject<VideoMediaStreamTrackList>(this);
-  }
-  return video_track_list_;
 }
 
 }  // namespace webrtc

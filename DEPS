@@ -11,7 +11,7 @@ vars = {
   "chromium_git": "https://chromium.googlesource.com",
 
   "chromium_revision": "176396",
-  "webrtc_revision": "3501",
+  "webrtc_revision": "3569",
 }
 
 # NOTE: Prefer revision numbers to tags for svn deps. Use http rather than

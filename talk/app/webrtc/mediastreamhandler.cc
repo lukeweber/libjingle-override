@@ -185,16 +185,16 @@ LocalMediaStreamHandler::LocalMediaStreamHandler(
     VideoProviderInterface* video_provider)
     : MediaStreamHandler(stream, audio_provider, video_provider) {
   // Create an AudioTrack handler for all audio tracks in the MediaStream.
-  AudioTracks* audio_tracklist(stream->audio_tracks());
-  for (size_t j = 0; j < audio_tracklist->count(); ++j) {
-    BaseTrackHandler* handler(new LocalAudioTrackHandler(audio_tracklist->at(j),
+  AudioTrackVector audio_tracklist = stream->GetAudioTracks();
+  for (size_t j = 0; j < audio_tracklist.size(); ++j) {
+    BaseTrackHandler* handler(new LocalAudioTrackHandler(audio_tracklist[j],
                                                          audio_provider));
     track_handlers_.push_back(handler);
   }
   // Create a VideoTrack handler for all video tracks in the MediaStream.
-  VideoTracks* video_tracklist(stream->video_tracks());
-  for (size_t j = 0; j < video_tracklist->count(); ++j) {
-    VideoTrackInterface* track = video_tracklist->at(j);
+  VideoTrackVector video_tracklist = stream->GetVideoTracks();
+  for (size_t j = 0; j < video_tracklist.size(); ++j) {
+    VideoTrackInterface* track = video_tracklist[j];
     BaseTrackHandler* handler(new LocalVideoTrackHandler(track,
                                                          video_provider));
     track_handlers_.push_back(handler);
@@ -210,18 +210,18 @@ RemoteMediaStreamHandler::RemoteMediaStreamHandler(
     VideoProviderInterface* video_provider)
     : MediaStreamHandler(stream, audio_provider, video_provider) {
   // Create an AudioTrack handler for all audio tracks  in the MediaStream.
-  AudioTracks* audio_tracklist(stream->audio_tracks());
-  for (size_t j = 0; j < audio_tracklist->count(); ++j) {
+  AudioTrackVector audio_tracklist = stream->GetAudioTracks();
+  for (size_t j = 0; j < audio_tracklist.size(); ++j) {
     BaseTrackHandler* handler(
-        new RemoteAudioTrackHandler(audio_tracklist->at(j), audio_provider));
+        new RemoteAudioTrackHandler(audio_tracklist[j], audio_provider));
     track_handlers_.push_back(handler);
   }
 
   // Create a VideoTrack handler for all video tracks  in the MediaStream.
-  VideoTracks* tracklist(stream->video_tracks());
-  for (size_t j = 0; j < tracklist->count(); ++j) {
+  VideoTrackVector video_tracklist = stream->GetVideoTracks();
+  for (size_t j = 0; j < video_tracklist.size(); ++j) {
     VideoTrackInterface* track =
-        static_cast<VideoTrackInterface*>(tracklist->at(j));
+        static_cast<VideoTrackInterface*>(video_tracklist[j]);
     BaseTrackHandler* handler(
         new RemoteVideoTrackHandler(track, video_provider));
     track_handlers_.push_back(handler);

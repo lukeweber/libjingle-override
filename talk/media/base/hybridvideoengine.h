@@ -137,6 +137,12 @@ class HybridVideoEngine : public HybridVideoEngineInterface {
     codecs_ = video1_.codecs();
     codecs_.insert(codecs_.end(), video2_.codecs().begin(),
                    video2_.codecs().end());
+
+    rtp_header_extensions_ = video1_.rtp_header_extensions();
+    rtp_header_extensions_.insert(rtp_header_extensions_.end(),
+                                  video2_.rtp_header_extensions().begin(),
+                                  video2_.rtp_header_extensions().end());
+
     SignalCaptureStateChange.repeat(video2_.SignalCaptureStateChange);
   }
 
@@ -201,7 +207,9 @@ class HybridVideoEngine : public HybridVideoEngineInterface {
   const std::vector<VideoCodec>& codecs() const {
     return codecs_;
   }
-
+  const std::vector<RtpHeaderExtension>& rtp_header_extensions() const {
+    return rtp_header_extensions_;
+  }
   void SetLogging(int min_sev, const char* filter) {
     video1_.SetLogging(min_sev, filter);
     video2_.SetLogging(min_sev, filter);
@@ -268,6 +276,7 @@ class HybridVideoEngine : public HybridVideoEngineInterface {
   VIDEO1 video1_;
   VIDEO2 video2_;
   std::vector<VideoCodec> codecs_;
+  std::vector<RtpHeaderExtension> rtp_header_extensions_;
 };
 
 }  // namespace cricket

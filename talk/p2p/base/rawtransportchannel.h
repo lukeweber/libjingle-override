@@ -68,8 +68,12 @@ class RawTransportChannel : public TransportChannelImpl,
   virtual int SetOption(talk_base::Socket::Option opt, int value);
   virtual int GetError();
 
-  // Returns the raw transport that created this channel.
+  // Implements TransportChannelImpl.
   virtual Transport* GetTransport() { return raw_transport_; }
+  virtual void SetIceCredentials(const std::string& ice_ufrag,
+                                 const std::string& ice_pwd) {}
+  virtual void SetRemoteIceCredentials(const std::string& ice_ufrag,
+                                       const std::string& ice_pwd) {}
 
   // Creates an allocator session to start figuring out which type of
   // port we should send to the other client.  This will send

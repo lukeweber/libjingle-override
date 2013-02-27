@@ -403,13 +403,13 @@ void TurnPort::HandleChannelData(int channel_id, const char* data,
 
   // Extract header fields from the message.
   uint16 len = talk_base::GetBE16(data + 2);
-  if (len != size - TURN_CHANNEL_HEADER_SIZE) {
+  if (len > size - TURN_CHANNEL_HEADER_SIZE) {
     LOG_J(LS_WARNING, this) << "Received TURN channel data message with "
                             << "incorrect length, len=" << len;
     return;
   }
+  // Allowing messages larger than |len|, as ChannelData can be padded.
 
-  // Ensure this is a channel we know about.
   TurnEntry* entry = FindEntry(channel_id);
   if (!entry) {
     LOG_J(LS_WARNING, this) << "Received TURN channel data message for invalid "

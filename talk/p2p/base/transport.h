@@ -301,6 +301,10 @@ class Transport : public talk_base::MessageHandler,
   virtual bool ApplyLocalTransportDescription_w(TransportChannelImpl*
                                                 channel);
 
+  // Pushes down remote ice credentials from the remote description to the
+  // transport channel.
+  virtual bool ApplyRemoteTransportDescription_w(TransportChannelImpl* ch);
+
   // Negotiates the transport parameters based on the current local and remote
   // transport description, such at the version of ICE to use, and whether DTLS
   // should be activated.

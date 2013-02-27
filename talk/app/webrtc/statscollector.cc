@@ -82,10 +82,10 @@ void AddEmptyReport(const std::string& label, ReportsMap* reports) {
       label, webrtc::StatsReport()));
 }
 
-template <class TrackList>
-void CreateTrackReports(TrackList* tracks, ReportsMap* reports) {
-  for (size_t j = 0; j < tracks->count(); ++j) {
-    webrtc::MediaStreamTrackInterface* track = tracks->at(j);
+template <class TrackVector>
+void CreateTrackReports(const TrackVector& tracks, ReportsMap* reports) {
+  for (size_t j = 0; j < tracks.size(); ++j) {
+    webrtc::MediaStreamTrackInterface* track = tracks[j];
     // If there is no previous report for this track, add one.
     if (reports->find(track->id()) == reports->end()) {
       AddEmptyReport(track->id(), reports);
@@ -212,8 +212,10 @@ StatsCollector::StatsCollector()
 void StatsCollector::AddStream(MediaStreamInterface* stream) {
   ASSERT(stream != NULL);
 
-  CreateTrackReports<AudioTracks>(stream->audio_tracks(), &track_reports_);
-  CreateTrackReports<VideoTracks>(stream->video_tracks(), &track_reports_);
+  CreateTrackReports<AudioTrackVector>(stream->GetAudioTracks(),
+                                       &track_reports_);
+  CreateTrackReports<VideoTrackVector>(stream->GetVideoTracks(),
+                                       &track_reports_);
 }
 
 bool StatsCollector::GetStats(MediaStreamTrackInterface* track,

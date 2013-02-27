@@ -247,19 +247,32 @@ class P2PTransportChannelTestBase : public testing::Test,
   }
 
   void CreateChannels(int num) {
-    ep1_.cd1_.ch_.reset(CreateChannel(
-        0, cricket::ICE_CANDIDATE_COMPONENT_DEFAULT,
+    ep1_.cd1_.ch_.reset(
+        CreateChannel(0, cricket::ICE_CANDIDATE_COMPONENT_DEFAULT,
         kIceUfrag[0], kIcePwd[0]));
     ep2_.cd1_.ch_.reset(CreateChannel(
         1, cricket::ICE_CANDIDATE_COMPONENT_DEFAULT,
         kIceUfrag[1], kIcePwd[1]));
     if (num == 2) {
+      std::string ice_ufrag_ep1_cd2_ch = kIceUfrag[2];
+      std::string ice_pwd_ep1_cd2_ch = kIcePwd[2];
+      std::string ice_ufrag_ep2_cd2_ch = kIceUfrag[3];
+      std::string ice_pwd_ep2_cd2_ch = kIcePwd[3];
+      // In BUNDLE each endpoint must share common ICE credentials.
+      if (ep1_.allocator_->flags() & cricket::PORTALLOCATOR_ENABLE_BUNDLE) {
+        ice_ufrag_ep1_cd2_ch = kIceUfrag[0];
+        ice_pwd_ep1_cd2_ch = kIcePwd[0];
+      }
+      if (ep2_.allocator_->flags() & cricket::PORTALLOCATOR_ENABLE_BUNDLE) {
+        ice_ufrag_ep2_cd2_ch = kIceUfrag[1];
+        ice_pwd_ep2_cd2_ch = kIcePwd[1];
+      }
       ep1_.cd2_.ch_.reset(CreateChannel(
           0, cricket::ICE_CANDIDATE_COMPONENT_DEFAULT,
-          kIceUfrag[2], kIcePwd[2]));
+          ice_ufrag_ep1_cd2_ch, ice_pwd_ep1_cd2_ch));
       ep2_.cd2_.ch_.reset(CreateChannel(
           1, cricket::ICE_CANDIDATE_COMPONENT_DEFAULT,
-          kIceUfrag[3], kIcePwd[3]));
+          ice_ufrag_ep2_cd2_ch, ice_pwd_ep2_cd2_ch));
     }
   }
   cricket::P2PTransportChannel* CreateChannel(int endpoint,
@@ -277,8 +290,7 @@ class P2PTransportChannelTestBase : public testing::Test,
     channel->SignalRoleConflict.connect(
         this, &P2PTransportChannelTestBase::OnRoleConflict);
     channel->SetIceProtocolType(GetEndpoint(endpoint)->protocol_type());
-    channel->SetIceUfrag(ice_ufrag);
-    channel->SetIcePwd(ice_pwd);
+    channel->SetIceCredentials(ice_ufrag, ice_pwd);
     channel->SetRole(GetEndpoint(endpoint)->role());
     channel->SetTiebreaker(GetEndpoint(endpoint)->GetTiebreaker());
     channel->Connect();
@@ -406,7 +418,7 @@ class P2PTransportChannelTestBase : public testing::Test,
             RemoteCandidate(ep2_ch1())->protocol() == expected.remote_proto2,
             converge_wait - talk_base::TimeSince(converge_start),
             converge_wait - talk_base::TimeSince(converge_start));
-      
+
         // For verbose
         EXPECT_EQ(expected.local_type2, LocalCandidate(ep2_ch1())->type());
         EXPECT_EQ(expected.local_proto2, LocalCandidate(ep2_ch1())->protocol());
@@ -447,6 +459,42 @@ class P2PTransportChannelTestBase : public testing::Test,
         EXPECT_TRUE_WAIT(CheckDataOnChannel(ep1_ch2(), data, len), 1000);
       }
     }
+  }
+
+  // This test waits for the transport to become readable and writable on both
+  // end points. Once they are, the end points set new local ice credentials to
+  // restart the ice gathering. Finally it waits for the transport to select a
+  // new connection using the newly generated ice candidates.
+  // Before calling this function the end points must be configured.
+  void TestHandleIceUfragPasswordChanged() {
+    ep1_ch1()->SetRemoteIceCredentials(kIceUfrag[1], kIceUfrag[1]);
+    ep2_ch1()->SetRemoteIceCredentials(kIceUfrag[0], kIceUfrag[0]);
+    EXPECT_TRUE_WAIT_MARGIN(ep1_ch1()->readable() && ep1_ch1()->writable() &&
+                            ep2_ch1()->readable() && ep2_ch1()->writable(),
+                            1000, 1000);
+
+    const cricket::Candidate* old_local_candidate1 = LocalCandidate(ep1_ch1());
+    const cricket::Candidate* old_local_candidate2 = LocalCandidate(ep2_ch1());
+    const cricket::Candidate* old_remote_candidate1 =
+        RemoteCandidate(ep1_ch1());
+    const cricket::Candidate* old_remote_candidate2 =
+        RemoteCandidate(ep2_ch1());
+
+    ep1_ch1()->SetIceCredentials(kIceUfrag[2], kIceUfrag[2]);
+    ep2_ch1()->SetRemoteIceCredentials(kIceUfrag[2], kIceUfrag[2]);
+    ep2_ch1()->SetIceCredentials(kIceUfrag[3], kIceUfrag[3]);
+    ep1_ch1()->SetRemoteIceCredentials(kIceUfrag[3], kIceUfrag[3]);
+
+    EXPECT_TRUE_WAIT_MARGIN(LocalCandidate(ep1_ch1()) != old_local_candidate1,
+                            1000, 1000);
+    EXPECT_TRUE_WAIT_MARGIN(LocalCandidate(ep2_ch1()) != old_local_candidate2,
+                            1000, 1000);
+    EXPECT_TRUE_WAIT_MARGIN(RemoteCandidate(ep1_ch1()) != old_remote_candidate1,
+                            1000, 1000);
+    EXPECT_TRUE_WAIT_MARGIN(RemoteCandidate(ep2_ch1()) != old_remote_candidate2,
+                            1000, 1000);
+    EXPECT_EQ(1u, RemoteCandidate(ep2_ch1())->generation());
+    EXPECT_EQ(1u, RemoteCandidate(ep1_ch1())->generation());
   }
 
   void OnChannelRequestSignaling(cricket::TransportChannelImpl* channel) {
@@ -572,9 +620,9 @@ class P2PTransportChannelTest : public P2PTransportChannelTestBase {
       cricket::IceProtocolType type) {
     ConfigureEndpoint(0, config1);
     SetIceProtocol(0, type);
+    SetAllocatorFlags(0, allocator_flags1);
     ConfigureEndpoint(1, config2);
     SetIceProtocol(1, type);
-    SetAllocatorFlags(0, allocator_flags1);
     SetAllocatorFlags(1, allocator_flags2);
   }
   void ConfigureEndpoint(int endpoint, Config config) {
@@ -882,6 +930,56 @@ P2P_TEST_SET_SHARED_UFRAG(BLOCK_UDP_AND_INCOMING_TCP)
 P2P_TEST_SET_SHARED_UFRAG(BLOCK_ALL_BUT_OUTGOING_HTTP)
 P2P_TEST_SET_SHARED_UFRAG(PROXY_HTTPS)
 P2P_TEST_SET_SHARED_UFRAG(PROXY_SOCKS)
+
+// Test that we restart candidate allocation when local ufrag&pwd changed.
+// Standard Ice protocol is used.
+TEST_F(P2PTransportChannelTest, HandleUfragPwdChangeAsIce) {
+  ConfigureEndpoints(OPEN, OPEN,
+                     PORTALLOCATOR_ENABLE_SHARED_UFRAG,
+                     PORTALLOCATOR_ENABLE_SHARED_UFRAG,
+                     cricket::ICEPROTO_RFC5245);
+  CreateChannels(1);
+  TestHandleIceUfragPasswordChanged();
+}
+
+// Test that we restart candidate allocation when local ufrag&pwd changed.
+// Standard Ice protocol is used.
+TEST_F(P2PTransportChannelTest, HandleUfragPwdChangeBundleAsIce) {
+  ConfigureEndpoints(OPEN, OPEN,
+                     PORTALLOCATOR_ENABLE_SHARED_UFRAG,
+                     PORTALLOCATOR_ENABLE_SHARED_UFRAG,
+                     cricket::ICEPROTO_RFC5245);
+  SetAllocatorFlags(0, cricket::PORTALLOCATOR_ENABLE_BUNDLE);
+  SetAllocatorFlags(1, cricket::PORTALLOCATOR_ENABLE_BUNDLE);
+
+  CreateChannels(2);
+  TestHandleIceUfragPasswordChanged();
+}
+
+// Test that we restart candidate allocation when local ufrag&pwd changed.
+// Google Ice protocol is used.
+TEST_F(P2PTransportChannelTest, HandleUfragPwdChangeAsGice) {
+  ConfigureEndpoints(OPEN, OPEN,
+                     PORTALLOCATOR_ENABLE_SHARED_UFRAG,
+                     PORTALLOCATOR_ENABLE_SHARED_UFRAG,
+                     cricket::ICEPROTO_GOOGLE);
+  CreateChannels(1);
+  TestHandleIceUfragPasswordChanged();
+}
+
+// Test that ICE restart works when bundle is enabled.
+// Google Ice protocol is used.
+TEST_F(P2PTransportChannelTest, HandleUfragPwdChangeBundleAsGice) {
+  ConfigureEndpoints(OPEN, OPEN,
+                     PORTALLOCATOR_ENABLE_SHARED_UFRAG,
+                     PORTALLOCATOR_ENABLE_SHARED_UFRAG,
+                     cricket::ICEPROTO_GOOGLE);
+  SetAllocatorFlags(0, cricket::PORTALLOCATOR_ENABLE_BUNDLE);
+  SetAllocatorFlags(1, cricket::PORTALLOCATOR_ENABLE_BUNDLE);
+
+  CreateChannels(2);
+  TestHandleIceUfragPasswordChanged();
+}
 
 // Test the operation of GetStats.
 TEST_F(P2PTransportChannelTest, GetStats) {

@@ -1117,8 +1117,8 @@ bool BaseChannel::UpdateLocalStreams_w(const std::vector<StreamParams>& streams,
     for (StreamParamsVec::const_iterator it = streams.begin();
          it != streams.end(); ++it) {
       StreamParams existing_stream;
-      bool stream_exist = GetStreamByNickAndName(local_streams_, it->nick,
-                                                 it->name, &existing_stream);
+      bool stream_exist = GetStreamByIds(local_streams_, it->groupid,
+                                         it->id, &existing_stream);
       if (!stream_exist && it->has_ssrcs()) {
         if (media_channel()->AddSendStream(*it)) {
           local_streams_.push_back(*it);
@@ -1183,8 +1183,8 @@ bool BaseChannel::UpdateRemoteStreams_w(
     for (StreamParamsVec::const_iterator it = streams.begin();
          it != streams.end(); ++it) {
       StreamParams existing_stream;
-      bool stream_exists = GetStreamByNickAndName(remote_streams_, it->nick,
-                                                  it->name, &existing_stream);
+      bool stream_exists = GetStreamByIds(remote_streams_, it->groupid,
+                                          it->id, &existing_stream);
       if (!stream_exists && it->has_ssrcs()) {
         if (AddRecvStream_w(*it)) {
           remote_streams_.push_back(*it);
@@ -1979,6 +1979,17 @@ bool VideoChannel::SetLocalContent_w(const MediaContentDescription* content,
     ret &= media_channel()->SetRecvCodecs(video->codecs());
   }
 
+  if (action != CA_UPDATE) {
+    VideoOptions video_options;
+    media_channel()->GetOptions(&video_options);
+    video_options.buffered_mode_latency.Set(video->buffered_mode_latency());
+
+    if (!media_channel()->SetOptions(video_options)) {
+      // Log an error on failure, but don't abort the call.
+      LOG(LS_ERROR) << "Failed to set video channel options";
+    }
+  }
+
   // If everything worked, see if we can start receiving.
   if (ret) {
     ChangeState();
@@ -2038,11 +2049,8 @@ bool VideoChannel::ApplyViewRequest_w(const ViewRequest& request) {
     VideoFormat format(0, 0, 0, cricket::FOURCC_I420);
     StaticVideoViews::const_iterator view;
     for (view = request.static_video_views.begin();
-        view != request.static_video_views.end(); ++view) {
-      // Sender view request from Reflector has SSRC 0 (b/5977302). Here we hack
-      // the client to apply the view request with SSRC 0. TODO(whyuan): Remove
-      // 0 == view->SSRC once Reflector uses the correct SSRC in view request.
-      if (it->has_ssrc(view->ssrc) || 0 == view->ssrc) {
+         view != request.static_video_views.end(); ++view) {
+      if (view->selector.Matches(*it)) {
         format.width = view->width;
         format.height = view->height;
         format.interval = cricket::VideoFormat::FpsToInterval(view->framerate);
@@ -2056,9 +2064,12 @@ bool VideoChannel::ApplyViewRequest_w(const ViewRequest& request) {
   // Check if the view request has invalid streams.
   for (StaticVideoViews::const_iterator it = request.static_video_views.begin();
       it != request.static_video_views.end(); ++it) {
-    if (!GetStreamBySsrc(local_streams(), it->ssrc, NULL)) {
-      LOG(LS_WARNING) << "View request's SSRC " << it->ssrc
-                      << " is not in the local streams.";
+    if (!GetStream(local_streams(), it->selector, NULL)) {
+      LOG(LS_WARNING) << "View request for ("
+                      << it->selector.ssrc << ", '"
+                      << it->selector.groupid << "', '"
+                      << it->selector.streamid << "'"
+                      << ") is not in the local streams.";
     }
   }
 

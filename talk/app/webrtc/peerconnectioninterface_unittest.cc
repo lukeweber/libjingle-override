@@ -34,8 +34,10 @@
 #include "talk/app/webrtc/peerconnectioninterface.h"
 #include "talk/app/webrtc/test/fakeconstraints.h"
 #include "talk/app/webrtc/test/mockpeerconnectionobservers.h"
+#include "talk/app/webrtc/test/testsdpstrings.h"
 #include "talk/base/gunit.h"
 #include "talk/base/scoped_ptr.h"
+#include "talk/base/sslstreamadapter.h"
 #include "talk/base/stringutils.h"
 #include "talk/base/thread.h"
 #include "talk/media/base/fakevideocapturer.h"
@@ -54,6 +56,12 @@ static const char kTurnUsername[] = "user";
 static const char kTurnPassword[] = "password";
 static const char kTurnHostname[] = "turn.example.org";
 static const uint32 kTimeout = 5000U;
+
+#define MAYBE_SKIP_TEST(feature)                    \
+  if (!(feature())) {                               \
+    LOG(LS_INFO) << "Feature disabled... skipping"; \
+    return;                                         \
+  }
 
 using talk_base::scoped_ptr;
 using talk_base::scoped_refptr;
@@ -118,7 +126,9 @@ class MockPeerConnectionObserver : public PeerConnectionObserver {
   }
   void SetPeerConnectionInterface(PeerConnectionInterface* pc) {
     pc_ = pc;
-    state_ = pc_->signaling_state();
+    if (pc) {
+      state_ = pc_->signaling_state();
+    }
   }
   virtual void OnError() {}
   virtual void OnSignalingChange(
@@ -282,6 +292,11 @@ class PeerConnectionInterfaceTest : public testing::Test {
               port_allocator_factory_->stun_configs()[0].server.hostname());
   }
 
+  void ReleasePeerConnection() {
+    pc_ = NULL;
+    observer_.SetPeerConnectionInterface(NULL);
+  }
+
   void AddStream(const std::string& label) {
     // Create a local stream.
     scoped_refptr<LocalMediaStreamInterface> stream(
@@ -386,6 +401,20 @@ class PeerConnectionInterfaceTest : public testing::Test {
     // Create a local stream with audio&video tracks.
     AddAudioVideoStream(kStreamLabel1, "audio_label", "video_label");
     CreateOfferReceiveAnswer();
+  }
+
+  // Verify that RTP Header extensions has been negotiated for audio and video.
+  void VerifyRemoteRtpHeaderExtensions() {
+    const cricket::MediaContentDescription* desc =
+        cricket::GetFirstAudioContentDescription(
+            pc_->remote_description()->description());
+    ASSERT_TRUE(desc != NULL);
+    EXPECT_GT(desc->rtp_header_extensions().size(), 0u);
+
+    desc = cricket::GetFirstVideoContentDescription(
+        pc_->remote_description()->description());
+    ASSERT_TRUE(desc != NULL);
+    EXPECT_GT(desc->rtp_header_extensions().size(), 0u);
   }
 
   void CreateOfferAsRemoteDescription() {
@@ -548,6 +577,7 @@ TEST_F(PeerConnectionInterfaceTest, RemoveStream) {
 TEST_F(PeerConnectionInterfaceTest, CreateOfferReceiveAnswer) {
   InitiateCall();
   WaitAndVerifyOnAddStream(kStreamLabel1);
+  VerifyRemoteRtpHeaderExtensions();
 }
 
 TEST_F(PeerConnectionInterfaceTest, CreateOfferReceivePrAnswerAndAnswer) {
@@ -684,9 +714,9 @@ TEST_F(PeerConnectionInterfaceTest, SsrcInOfferAnswer) {
 TEST_F(PeerConnectionInterfaceTest, GetStatsForSpecificTrack) {
   InitiateCall();
   ASSERT_LT(0u, pc_->remote_streams()->count());
-  ASSERT_LT(0u, pc_->remote_streams()->at(0)->audio_tracks()->count());
+  ASSERT_LT(0u, pc_->remote_streams()->at(0)->GetAudioTracks().size());
   scoped_refptr<MediaStreamTrackInterface> remote_audio =
-      pc_->remote_streams()->at(0)->audio_tracks()->at(0);
+      pc_->remote_streams()->at(0)->GetAudioTracks()[0];
   EXPECT_TRUE(DoGetStats(remote_audio));
 
   // Remove the stream. Since we are sending to our selves the local
@@ -706,9 +736,9 @@ TEST_F(PeerConnectionInterfaceTest, GetStatsForSpecificTrack) {
 TEST_F(PeerConnectionInterfaceTest, GetStatsForVideoTrack) {
   InitiateCall();
   ASSERT_LT(0u, pc_->remote_streams()->count());
-  ASSERT_LT(0u, pc_->remote_streams()->at(0)->video_tracks()->count());
+  ASSERT_LT(0u, pc_->remote_streams()->at(0)->GetVideoTracks().size());
   scoped_refptr<MediaStreamTrackInterface> remote_video =
-      pc_->remote_streams()->at(0)->video_tracks()->at(0);
+      pc_->remote_streams()->at(0)->GetVideoTracks()[0];
   EXPECT_TRUE(DoGetStats(remote_video));
 }
 
@@ -856,4 +886,149 @@ TEST_F(PeerConnectionInterfaceTest, CreateReliableDataChannel) {
   EXPECT_TRUE(channel == NULL);
 }
 
+// This test that a data channel closes when a PeerConnection is deleted/closed.
+#ifdef WIN32
+// TODO(perkj): Investigate why the transport channel sometimes don't become
+// writable on Windows when we try to connect in loop back.
+TEST_F(PeerConnectionInterfaceTest,
+       DISABLED_DataChannelCloseWhenPeerConnectionClose) {
+#else
+TEST_F(PeerConnectionInterfaceTest, DataChannelCloseWhenPeerConnectionClose) {
+#endif
+  FakeConstraints constraints;
+  constraints.SetAllowRtpDataChannels();
+  CreatePeerConnection(&constraints);
 
+  scoped_refptr<DataChannelInterface> data1  =
+      pc_->CreateDataChannel("test1", NULL);
+  scoped_refptr<DataChannelInterface> data2  =
+      pc_->CreateDataChannel("test2", NULL);
+  ASSERT_TRUE(data1 != NULL);
+  talk_base::scoped_ptr<MockDataChannelObserver> observer1(
+      new MockDataChannelObserver(data1));
+  talk_base::scoped_ptr<MockDataChannelObserver> observer2(
+      new MockDataChannelObserver(data2));
+
+  CreateOfferReceiveAnswer();
+  EXPECT_TRUE_WAIT(observer1->IsOpen(), kTimeout);
+  EXPECT_TRUE_WAIT(observer2->IsOpen(), kTimeout);
+
+  ReleasePeerConnection();
+  EXPECT_EQ(DataChannelInterface::kClosed, data1->state());
+  EXPECT_EQ(DataChannelInterface::kClosed, data2->state());
+}
+
+// Test that we can create a session description from an SDP string from
+// FireFox, use it as a remote session description, generate an answer and use
+// the answer as a local description.
+TEST_F(PeerConnectionInterfaceTest, ReceiveFireFoxOffer) {
+  MAYBE_SKIP_TEST(talk_base::SSLStreamAdapter::HaveDtlsSrtp);
+  FakeConstraints constraints;
+  constraints.AddMandatory(webrtc::MediaConstraintsInterface::kEnableDtlsSrtp,
+                           webrtc::MediaConstraintsInterface::kValueTrue);
+  CreatePeerConnection(&constraints);
+  AddAudioVideoStream(kStreamLabel1, "audio_label", "video_label");
+  SessionDescriptionInterface* desc =
+      webrtc::CreateSessionDescription(SessionDescriptionInterface::kOffer,
+                                       webrtc::kFireFoxSdpOffer);
+  EXPECT_TRUE(DoSetSessionDescription(desc, false));
+  CreateAnswerAsLocalDescription();
+  ASSERT_TRUE(pc_->local_description() != NULL);
+  ASSERT_TRUE(pc_->remote_description() != NULL);
+
+  const cricket::ContentInfo* content =
+      cricket::GetFirstAudioContent(pc_->local_description()->description());
+  ASSERT_TRUE(content != NULL);
+  EXPECT_FALSE(content->rejected);
+
+  content =
+      cricket::GetFirstVideoContent(pc_->local_description()->description());
+  ASSERT_TRUE(content != NULL);
+  EXPECT_FALSE(content->rejected);
+
+  content =
+      cricket::GetFirstDataContent(pc_->local_description()->description());
+  ASSERT_TRUE(content != NULL);
+  EXPECT_TRUE(content->rejected);
+}
+
+// Test that PeerConnection::Close changes the states to closed and all remote
+// tracks change state to ended.
+TEST_F(PeerConnectionInterfaceTest, CloseAndTestStreamsAndStates) {
+  // Initialize a PeerConnection and negotiate local and remote session
+  // description.
+  InitiateCall();
+  ASSERT_EQ(1u, pc_->local_streams()->count());
+  ASSERT_EQ(1u, pc_->remote_streams()->count());
+
+  pc_->Close();
+
+  EXPECT_EQ(PeerConnectionInterface::kClosed, pc_->signaling_state());
+  EXPECT_EQ(PeerConnectionInterface::kIceConnectionClosed,
+            pc_->ice_connection_state());
+  EXPECT_EQ(PeerConnectionInterface::kIceGatheringComplete,
+            pc_->ice_gathering_state());
+
+  EXPECT_EQ(1u, pc_->local_streams()->count());
+  EXPECT_EQ(1u, pc_->remote_streams()->count());
+
+  scoped_refptr<MediaStreamInterface> remote_stream =
+          pc_->remote_streams()->at(0);
+  EXPECT_EQ(MediaStreamTrackInterface::kEnded,
+            remote_stream->GetVideoTracks()[0]->state());
+  EXPECT_EQ(MediaStreamTrackInterface::kEnded,
+            remote_stream->GetAudioTracks()[0]->state());
+}
+
+// Test that PeerConnection methods fails gracefully after
+// PeerConnection::Close has been called.
+TEST_F(PeerConnectionInterfaceTest, CloseAndTestMethods) {
+  CreatePeerConnection();
+  AddAudioVideoStream(kStreamLabel1, "audio_label", "video_label");
+  CreateOfferAsRemoteDescription();
+  CreateAnswerAsLocalDescription();
+
+  ASSERT_EQ(1u, pc_->local_streams()->count());
+  scoped_refptr<MediaStreamInterface> local_stream =
+      pc_->local_streams()->at(0);
+
+  pc_->Close();
+
+  pc_->RemoveStream(local_stream);
+  EXPECT_FALSE(pc_->AddStream(local_stream, NULL));
+
+  ASSERT_FALSE(local_stream->GetAudioTracks().empty());
+  talk_base::scoped_refptr<webrtc::DtmfSenderInterface> dtmf_sender(
+      pc_->CreateDtmfSender(local_stream->GetAudioTracks()[0]));
+  EXPECT_FALSE(dtmf_sender->CanInsertDtmf());
+
+  EXPECT_TRUE(pc_->CreateDataChannel("test", NULL) == NULL);
+
+  EXPECT_TRUE(pc_->local_description() != NULL);
+  EXPECT_TRUE(pc_->remote_description() != NULL);
+
+  talk_base::scoped_ptr<SessionDescriptionInterface> offer;
+  EXPECT_TRUE(DoCreateOffer(offer.use()));
+  talk_base::scoped_ptr<SessionDescriptionInterface> answer;
+  EXPECT_TRUE(DoCreateAnswer(answer.use()));
+
+  std::string sdp;
+  ASSERT_TRUE(pc_->remote_description()->ToString(&sdp));
+  SessionDescriptionInterface* remote_offer =
+      webrtc::CreateSessionDescription(SessionDescriptionInterface::kOffer,
+                                       sdp, NULL);
+  EXPECT_FALSE(DoSetRemoteDescription(remote_offer));
+
+  ASSERT_TRUE(pc_->local_description()->ToString(&sdp));
+  SessionDescriptionInterface* local_offer =
+        webrtc::CreateSessionDescription(SessionDescriptionInterface::kOffer,
+                                         sdp, NULL);
+  EXPECT_FALSE(DoSetLocalDescription(local_offer));
+}
+
+// Test that GetStats can still be called after PeerConnection::Close.
+TEST_F(PeerConnectionInterfaceTest, CloseAndGetStats) {
+  InitiateCall();
+  pc_->Close();
+  DoGetStats(NULL);
+}

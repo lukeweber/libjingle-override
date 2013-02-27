@@ -33,10 +33,9 @@ set -e  # Exit on any error.
 # files easily.
 echo "$0: Entering directory \``pwd`'"
 
+JAVA_HOME="$1"; shift
 JAR_NAME="$1"; shift
 TMP_DIR="$1"; shift
-SOURCEPATH_DIR="$1"; shift
-SO_NAME="$1"; shift
 CLASSPATH="$1"; shift
 
 if [ -z "$1" ]; then
@@ -47,11 +46,7 @@ fi
 
 rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR"
-if [ -n "$CLASSPATH" ]; then
-  SOURCEPATH_DIR="$SOURCEPATH_DIR:$CLASSPATH"
-fi
-javac -Xlint:unchecked -d "$TMP_DIR" -classpath "$SOURCEPATH_DIR" "$@"
-if [ -n "$SO_NAME" ]; then
-  cp "$SO_NAME" "$TMP_DIR"
-fi
-jar cf "$JAR_NAME" -C "$TMP_DIR" .
+
+$JAVA_HOME/bin/javac -Xlint:deprecation -Xlint:unchecked -d "$TMP_DIR" \
+  -classpath "$CLASSPATH" "$@"
+$JAVA_HOME/bin/jar cf "$JAR_NAME" -C "$TMP_DIR" .

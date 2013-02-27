@@ -153,6 +153,8 @@ class WebRtcVoiceEngine
   bool FindCodec(const AudioCodec& codec);
   bool FindWebRtcCodec(const AudioCodec& codec, webrtc::CodecInst* gcodec);
 
+  const std::vector<RtpHeaderExtension>& rtp_header_extensions() const;
+
   void SetLogging(int min_sev, const char* filter);
 
   bool RegisterProcessor(uint32 ssrc,
@@ -257,6 +259,7 @@ class WebRtcVoiceEngine
   std::string log_filter_;
   bool is_dumping_aec_;
   std::vector<AudioCodec> codecs_;
+  std::vector<RtpHeaderExtension> rtp_header_extensions_;
   bool desired_local_monitor_enable_;
   talk_base::scoped_ptr<WebRtcMonitorStream> monitor_;
   SoundclipList soundclips_;

@@ -307,6 +307,13 @@ struct RtpHeaderExtension {
   std::string uri;
   int id;
   // TODO(juberti): SendRecv direction;
+
+  bool operator==(const RtpHeaderExtension& ext) const {
+    // id is a reserved word in objective-c. Therefore the id attribute has to
+    // be a fully qualified name in order to compile on IOS.
+    return this->id == ext.id &&
+        uri == ext.uri;
+  }
 };
 
 // Returns the named header extension if found among all extensions, NULL
@@ -740,7 +747,8 @@ class VideoMediaChannel : public MediaChannel {
   virtual bool GetOptions(VideoOptions* options) const = 0;
   virtual void UpdateAspectRatio(int ratio_w, int ratio_h) = 0;
 
-  // Signals events from the currently active window.
+  // Signal errors from MediaChannel.  Arguments are:
+  //     ssrc(uint32), and error(VideoMediaChannel::Error).
   sigslot::signal2<uint32, Error> SignalMediaError;
 
  protected:

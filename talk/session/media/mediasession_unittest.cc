@@ -79,6 +79,7 @@ using cricket::NS_JINGLE_RTP;
 using cricket::MEDIA_TYPE_AUDIO;
 using cricket::MEDIA_TYPE_VIDEO;
 using cricket::MEDIA_TYPE_DATA;
+using cricket::RtpHeaderExtension;
 using cricket::SEC_DISABLED;
 using cricket::SEC_ENABLED;
 using cricket::SEC_REQUIRED;
@@ -131,6 +132,32 @@ static const DataCodec kDataCodecs2[] = {
 static const DataCodec kDataCodecsAnswer[] = {
   DataCodec(98, "binary-data", 2),
   DataCodec(99, "utf8-text", 1)
+};
+
+static const RtpHeaderExtension kAudioRtpExtension1[] = {
+  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:ssrc-audio-level", 8),
+  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:audio_something", 10),
+};
+
+static const RtpHeaderExtension kAudioRtpExtension2[] = {
+  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:ssrc-audio-level", 2),
+};
+
+static const RtpHeaderExtension kAudioRtpExtensionAnswer[] = {
+  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:ssrc-audio-level", 2),
+};
+
+static const RtpHeaderExtension kVideoRtpExtension1[] = {
+  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:toffset", 14),
+  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:video_something", 10),
+};
+
+static const RtpHeaderExtension kVideoRtpExtension2[] = {
+  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:toffset", 2),
+};
+
+static const RtpHeaderExtension kVideoRtpExtensionAnswer[] = {
+  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:toffset", 2),
 };
 
 static const uint32 kFec1Ssrc[] = {10, 11};
@@ -669,6 +696,36 @@ TEST_F(MediaSessionDescriptionFactoryTest, AudioOfferAnswerWithCryptoDisabled) {
   EXPECT_EQ(std::string(cricket::kMediaProtocolAvpf), answer_acd->protocol());
 }
 
+
+// Create a typical video answer, and ensure it matches what we expect.
+TEST_F(MediaSessionDescriptionFactoryTest, TestOfferAnswerWithRtpExtensions) {
+  MediaSessionOptions opts;
+  opts.has_video = true;
+
+  f1_.set_audio_rtp_header_extensions(MAKE_VECTOR(kAudioRtpExtension1));
+  f1_.set_video_rtp_header_extensions(MAKE_VECTOR(kVideoRtpExtension1));
+  f2_.set_audio_rtp_header_extensions(MAKE_VECTOR(kAudioRtpExtension2));
+  f2_.set_video_rtp_header_extensions(MAKE_VECTOR(kVideoRtpExtension2));
+
+  talk_base::scoped_ptr<SessionDescription> offer(f1_.CreateOffer(opts, NULL));
+  ASSERT_TRUE(offer.get() != NULL);
+  talk_base::scoped_ptr<SessionDescription> answer(
+      f2_.CreateAnswer(offer.get(), opts, NULL));
+
+  EXPECT_EQ(MAKE_VECTOR(kAudioRtpExtension1),
+            GetFirstAudioContentDescription(
+                offer.get())->rtp_header_extensions());
+  EXPECT_EQ(MAKE_VECTOR(kVideoRtpExtension1),
+            GetFirstVideoContentDescription(
+                offer.get())->rtp_header_extensions());
+  EXPECT_EQ(MAKE_VECTOR(kAudioRtpExtensionAnswer),
+            GetFirstAudioContentDescription(
+                answer.get())->rtp_header_extensions());
+  EXPECT_EQ(MAKE_VECTOR(kVideoRtpExtensionAnswer),
+            GetFirstVideoContentDescription(
+                answer.get())->rtp_header_extensions());
+}
+
 // Create an audio, video, data answer without legacy StreamParams.
 TEST_F(MediaSessionDescriptionFactoryTest,
        TestCreateAnswerWithoutLegacyStreams) {
@@ -890,10 +947,10 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoOffer) {
   const StreamParamsVec& audio_streams = acd->streams();
   ASSERT_EQ(2U, audio_streams.size());
   EXPECT_EQ(audio_streams[0].cname , audio_streams[1].cname);
-  EXPECT_EQ(kAudioTrack1, audio_streams[0].name);
+  EXPECT_EQ(kAudioTrack1, audio_streams[0].id);
   ASSERT_EQ(1U, audio_streams[0].ssrcs.size());
   EXPECT_NE(0U, audio_streams[0].ssrcs[0]);
-  EXPECT_EQ(kAudioTrack2, audio_streams[1].name);
+  EXPECT_EQ(kAudioTrack2, audio_streams[1].id);
   ASSERT_EQ(1U, audio_streams[1].ssrcs.size());
   EXPECT_NE(0U, audio_streams[1].ssrcs[0]);
 
@@ -908,7 +965,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoOffer) {
   const StreamParamsVec& video_streams = vcd->streams();
   ASSERT_EQ(1U, video_streams.size());
   EXPECT_EQ(video_streams[0].cname, audio_streams[0].cname);
-  EXPECT_EQ(kVideoTrack1, video_streams[0].name);
+  EXPECT_EQ(kVideoTrack1, video_streams[0].id);
   EXPECT_EQ(kAutoBandwidth, vcd->bandwidth());  // default bandwidth (auto)
   EXPECT_TRUE(vcd->rtcp_mux());                 // rtcp-mux defaults on
 
@@ -919,10 +976,10 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoOffer) {
   const StreamParamsVec& data_streams = dcd->streams();
   ASSERT_EQ(2U, data_streams.size());
   EXPECT_EQ(data_streams[0].cname , data_streams[1].cname);
-  EXPECT_EQ(kDataTrack1, data_streams[0].name);
+  EXPECT_EQ(kDataTrack1, data_streams[0].id);
   ASSERT_EQ(1U, data_streams[0].ssrcs.size());
   EXPECT_NE(0U, data_streams[0].ssrcs[0]);
-  EXPECT_EQ(kDataTrack2, data_streams[1].name);
+  EXPECT_EQ(kDataTrack2, data_streams[1].id);
   ASSERT_EQ(1U, data_streams[1].ssrcs.size());
   EXPECT_NE(0U, data_streams[1].ssrcs[0]);
 
@@ -972,7 +1029,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoOffer) {
   const StreamParamsVec& updated_audio_streams = updated_acd->streams();
   ASSERT_EQ(2U, updated_audio_streams.size());
   EXPECT_EQ(audio_streams[0], updated_audio_streams[0]);
-  EXPECT_EQ(kAudioTrack3, updated_audio_streams[1].name);  // New audio track.
+  EXPECT_EQ(kAudioTrack3, updated_audio_streams[1].id);  // New audio track.
   ASSERT_EQ(1U, updated_audio_streams[1].ssrcs.size());
   EXPECT_NE(0U, updated_audio_streams[1].ssrcs[0]);
   EXPECT_EQ(updated_audio_streams[0].cname, updated_audio_streams[1].cname);
@@ -980,13 +1037,13 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoOffer) {
   const StreamParamsVec& updated_video_streams = updated_vcd->streams();
   ASSERT_EQ(2U, updated_video_streams.size());
   EXPECT_EQ(video_streams[0], updated_video_streams[0]);
-  EXPECT_EQ(kVideoTrack2, updated_video_streams[1].name);
+  EXPECT_EQ(kVideoTrack2, updated_video_streams[1].id);
   EXPECT_NE(updated_video_streams[1].cname, updated_video_streams[0].cname);
 
   const StreamParamsVec& updated_data_streams = updated_dcd->streams();
   ASSERT_EQ(2U, updated_data_streams.size());
   EXPECT_EQ(data_streams[0], updated_data_streams[0]);
-  EXPECT_EQ(kDataTrack3, updated_data_streams[1].name);  // New data track.
+  EXPECT_EQ(kDataTrack3, updated_data_streams[1].id);  // New data track.
   ASSERT_EQ(1U, updated_data_streams[1].ssrcs.size());
   EXPECT_NE(0U, updated_data_streams[1].ssrcs[0]);
   EXPECT_EQ(updated_data_streams[0].cname, updated_data_streams[1].cname);
@@ -1040,10 +1097,10 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoAnswer) {
   const StreamParamsVec& audio_streams = acd->streams();
   ASSERT_EQ(2U, audio_streams.size());
   EXPECT_TRUE(audio_streams[0].cname ==  audio_streams[1].cname);
-  EXPECT_EQ(kAudioTrack1, audio_streams[0].name);
+  EXPECT_EQ(kAudioTrack1, audio_streams[0].id);
   ASSERT_EQ(1U, audio_streams[0].ssrcs.size());
   EXPECT_NE(0U, audio_streams[0].ssrcs[0]);
-  EXPECT_EQ(kAudioTrack2, audio_streams[1].name);
+  EXPECT_EQ(kAudioTrack2, audio_streams[1].id);
   ASSERT_EQ(1U, audio_streams[1].ssrcs.size());
   EXPECT_NE(0U, audio_streams[1].ssrcs[0]);
 
@@ -1056,7 +1113,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoAnswer) {
   const StreamParamsVec& video_streams = vcd->streams();
   ASSERT_EQ(1U, video_streams.size());
   EXPECT_EQ(video_streams[0].cname, audio_streams[0].cname);
-  EXPECT_EQ(kVideoTrack1, video_streams[0].name);
+  EXPECT_EQ(kVideoTrack1, video_streams[0].id);
   EXPECT_EQ(kAutoBandwidth, vcd->bandwidth());  // default bandwidth (auto)
   EXPECT_TRUE(vcd->rtcp_mux());                 // rtcp-mux defaults on
 
@@ -1066,10 +1123,10 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoAnswer) {
   const StreamParamsVec& data_streams = dcd->streams();
   ASSERT_EQ(2U, data_streams.size());
   EXPECT_TRUE(data_streams[0].cname ==  data_streams[1].cname);
-  EXPECT_EQ(kDataTrack1, data_streams[0].name);
+  EXPECT_EQ(kDataTrack1, data_streams[0].id);
   ASSERT_EQ(1U, data_streams[0].ssrcs.size());
   EXPECT_NE(0U, data_streams[0].ssrcs[0]);
-  EXPECT_EQ(kDataTrack2, data_streams[1].name);
+  EXPECT_EQ(kDataTrack2, data_streams[1].id);
   ASSERT_EQ(1U, data_streams[1].ssrcs.size());
   EXPECT_NE(0U, data_streams[1].ssrcs[0]);
 
@@ -1120,7 +1177,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoAnswer) {
   const StreamParamsVec& updated_video_streams = updated_vcd->streams();
   ASSERT_EQ(2U, updated_video_streams.size());
   EXPECT_EQ(video_streams[0], updated_video_streams[0]);
-  EXPECT_EQ(kVideoTrack2, updated_video_streams[1].name);
+  EXPECT_EQ(kVideoTrack2, updated_video_streams[1].id);
   EXPECT_NE(updated_video_streams[1].cname, updated_video_streams[0].cname);
 
   const StreamParamsVec& updated_data_streams = updated_dcd->streams();

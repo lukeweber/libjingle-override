@@ -334,33 +334,12 @@ PeerConnectionFactory::CreateVideoTrack(
   return VideoTrackProxy::Create(track, signaling_thread_);
 }
 
-// Deprecated: Please use the version that take a source as input.
-// TODO(perkj) Remove when Chrome does not make use of this.
-scoped_refptr<LocalVideoTrackInterface>
-PeerConnectionFactory::CreateLocalVideoTrack(
-    const std::string& id,
-    cricket::VideoCapturer* video_device) {
-  talk_base::scoped_refptr<VideoSourceInterface> source(
-      CreateVideoSource(video_device, NULL));
-  return CreateVideoTrack(id, source);
-}
-
 scoped_refptr<AudioTrackInterface> PeerConnectionFactory::CreateAudioTrack(
     const std::string& id,
     AudioSourceInterface* source) {
   talk_base::scoped_refptr<AudioTrackInterface> track(
       AudioTrack::Create(id, source));
   return AudioTrackProxy::Create(track, signaling_thread_);
-}
-
-// Deprecated: Please use the version that take a source as input.
-// TODO(perkj): Remove when Chrome does not make use of this.
-scoped_refptr<LocalAudioTrackInterface>
-PeerConnectionFactory::CreateLocalAudioTrack(
-    const std::string& id,
-    AudioDeviceModule* audio_device) {
-  // |audio_device| have never been used in an audio track.
-  return CreateAudioTrack(id, NULL);
 }
 
 cricket::ChannelManager* PeerConnectionFactory::channel_manager() {

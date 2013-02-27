@@ -246,7 +246,7 @@ void CallClient::ParseLine(const std::string& line) {
       if (screencast_ssrc_ != 0) {
         console_->PrintLine("Can't screencast twice.  Unscreencast first.");
       } else {
-        std::string stream_name = "screencast";
+        std::string streamid = "screencast";
         screencast_ssrc_ = talk_base::CreateRandomId();
         int fps = GetInt(words, 1, 5);  // Default to 5 fps.
 
@@ -254,16 +254,16 @@ void CallClient::ParseLine(const std::string& line) {
         cricket::Session* session = GetFirstSession();
         if (session && SelectFirstDesktopScreencastId(&screencastid)) {
           call_->StartScreencast(
-              session, stream_name, screencast_ssrc_, screencastid, fps);
+              session, streamid, screencast_ssrc_, screencastid, fps);
         }
       }
     } else if (command == "unscreencast") {
       // TODO: Use a random ssrc
-      std::string stream_name = "screencast";
+      std::string streamid = "screencast";
 
       cricket::Session* session = GetFirstSession();
       if (session) {
-        call_->StopScreencast(session, stream_name, screencast_ssrc_);
+        call_->StopScreencast(session, streamid, screencast_ssrc_);
         screencast_ssrc_ = 0;
       }
     } else if (command == "present") {
@@ -293,7 +293,7 @@ void CallClient::ParseLine(const std::string& line) {
         hangout_pubsub_client_->BlockMedia(nick);
       }
     } else if (command == "senddata") {
-      // "" is the default stream name.
+      // "" is the default streamid.
       SendData("", words[1]);
     } else if ((command == "dtmf") && (words.size() == 2)) {
       int ev = std::string("0123456789*#").find(words[1][0]);
@@ -392,7 +392,8 @@ CallClient::CallClient(buzz::XmppClient* xmpp_client,
       transport_protocol_(cricket::ICEPROTO_HYBRID),
       sdes_policy_(cricket::SEC_DISABLED),
       dtls_policy_(cricket::SEC_DISABLED),
-      ssl_identity_(NULL) {
+      ssl_identity_(NULL),
+      show_roster_messages_(false) {
   xmpp_client_->SignalStateChange.connect(this, &CallClient::OnStateChange);
   my_status_.set_caps_node(caps_node);
   my_status_.set_version(version);
@@ -608,12 +609,12 @@ void CallClient::OnSpeakerChanged(cricket::Call* call,
   if (!speaker.has_ssrcs()) {
     console_->PrintLine("Session %s has no current speaker.",
                         session->id().c_str());
-  } else if (speaker.nick.empty()) {
+  } else if (speaker.id.empty()) {
     console_->PrintLine("Session %s speaker change to unknown (%u).",
                         session->id().c_str(), speaker.first_ssrc());
   } else {
     console_->PrintLine("Session %s speaker changed to %s (%u).",
-                        session->id().c_str(), speaker.nick.c_str(),
+                        session->id().c_str(), speaker.id.c_str(),
                         speaker.first_ssrc());
   }
 }
@@ -695,11 +696,15 @@ void CallClient::OnStatusUpdate(const buzz::PresenceStatus& status) {
   std::string key = item.jid.Str();
 
   if (status.available() && status.voice_capability()) {
-     console_->PrintLine("Adding to roster: %s", key.c_str());
+    if (show_roster_messages_) {
+      console_->PrintLine("Adding to roster: %s", key.c_str());
+    }
     (*roster_)[key] = item;
     // TODO: Make some of these constants.
   } else {
-    console_->PrintLine("Removing from roster: %s", key.c_str());
+    if (show_roster_messages_) {
+      console_->PrintLine("Removing from roster: %s", key.c_str());
+    }
     RosterMap::iterator iter = roster_->find(key);
     if (iter != roster_->end())
       roster_->erase(iter);
@@ -730,7 +735,7 @@ void CallClient::SendChat(const std::string& to, const std::string msg) {
   delete stanza;
 }
 
-void CallClient::SendData(const std::string& stream_name,
+void CallClient::SendData(const std::string& streamid,
                           const std::string& text) {
   // TODO(mylesj): Support sending data over sessions other than the first.
   cricket::Session* session = GetFirstSession();
@@ -751,10 +756,10 @@ void CallClient::SendData(const std::string& stream_name,
   }
 
   cricket::StreamParams stream;
-  if (!cricket::GetStreamByNickAndName(
-          data->streams(), "", stream_name, &stream)) {
+  if (!cricket::GetStreamByIds(
+          data->streams(), "", streamid, &stream)) {
     LOG(LS_WARNING) << "Could not send data: no such stream: "
-                    << stream_name << ".";
+                    << streamid << ".";
     return;
   }
 
@@ -838,7 +843,7 @@ void CallClient::OnDataReceived(cricket::Call*,
   if (data_streams && GetStreamBySsrc(*data_streams, params.ssrc, &stream)) {
     console_->PrintLine(
         "Received data from '%s' on stream '%s' (ssrc=%u): %s",
-        stream.nick.c_str(), stream.name.c_str(),
+        stream.groupid.c_str(), stream.id.c_str(),
         params.ssrc, data.c_str());
   } else {
     console_->PrintLine(
@@ -1470,7 +1475,8 @@ void CallClient::AddStaticRenderedView(
     uint32 ssrc, int width, int height, int framerate,
     int x_offset, int y_offset) {
   StaticRenderedView rendered_view(
-      cricket::StaticVideoView(ssrc, width, height, framerate),
+      cricket::StaticVideoView(
+          cricket::StreamSelector(ssrc), width, height, framerate),
       cricket::VideoRendererFactory::CreateGuiVideoRenderer(
           x_offset, y_offset));
   rendered_view.renderer->SetSize(width, height, 0);
@@ -1483,7 +1489,7 @@ void CallClient::AddStaticRenderedView(
 bool CallClient::RemoveStaticRenderedView(uint32 ssrc) {
   for (StaticRenderedViews::iterator it = static_rendered_views_.begin();
        it != static_rendered_views_.end(); ++it) {
-    if (it->second.view.ssrc == ssrc) {
+    if (it->second.view.selector.ssrc == ssrc) {
       delete it->second.renderer;
       static_rendered_views_.erase(it);
       console_->PrintLine("Removed renderer for ssrc %d", ssrc);

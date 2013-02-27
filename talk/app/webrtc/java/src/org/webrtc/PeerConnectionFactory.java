@@ -41,8 +41,15 @@ public class PeerConnectionFactory {
 
   private final long nativeFactory;
 
+  // |context| is an android.content.Context object, but we keep it untyped here
+  // to allow building on non-Android platforms.
+  public static native boolean initializeAndroidGlobals(Object context);
+
   public PeerConnectionFactory() {
     nativeFactory = nativeCreatePeerConnectionFactory();
+    if (nativeFactory == 0) {
+      throw new RuntimeException("Failed to initialize PeerConnectionFactory!");
+    }
   }
 
 

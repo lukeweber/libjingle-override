@@ -29,6 +29,7 @@
 
 #include <sstream>
 
+#include "talk/base/stringencode.h"
 #include "talk/base/stringutils.h"
 
 namespace cricket {
@@ -42,6 +43,29 @@ bool Codec::Matches(int payload, const std::string& nm) const {
 
 bool Codec::Matches(const Codec& codec) const {
   return Matches(codec.id, codec.name);
+}
+
+bool Codec::GetParam(const std::string& name, std::string* out) const {
+  CodecParameterMap::const_iterator iter = params.find(name);
+  if (iter == params.end())
+    return false;
+  *out = iter->second;
+  return true;
+}
+
+bool Codec::GetParam(const std::string& name, int* out) const {
+  CodecParameterMap::const_iterator iter = params.find(name);
+  if (iter == params.end())
+    return false;
+  return talk_base::FromString(iter->second, out);
+}
+
+void Codec::SetParam(const std::string& name, const std::string& value) {
+  params[name] = value;
+}
+
+void Codec::SetParam(const std::string& name, int value)  {
+  params[name] = talk_base::ToString(value);
 }
 
 bool AudioCodec::Matches(int payload, const std::string& nm) const {

@@ -101,6 +101,9 @@ class WebRtcSession : public cricket::BaseSession,
   virtual ~WebRtcSession();
 
   bool Initialize(const MediaConstraintsInterface* constraints);
+  // Deletes the voice, video and data channel and changes the session state
+  // to STATE_RECEIVEDTERMINATE.
+  void Terminate();
 
   void RegisterIceObserver(IceObserver* observer) {
     ice_observer_ = observer;
@@ -145,7 +148,7 @@ class WebRtcSession : public cricket::BaseSession,
   }
 
   // Get the id used as a media stream track's "id" field from ssrc.
-  virtual bool GetTrackIdBySsrc(uint32 ssrc, std::string* name);
+  virtual bool GetTrackIdBySsrc(uint32 ssrc, std::string* id);
 
   // AudioMediaProviderInterface implementation.
   virtual void SetAudioPlayout(const std::string& name, bool enable);
@@ -218,6 +221,8 @@ class WebRtcSession : public cricket::BaseSession,
       const SessionDescriptionInterface* remote_desc);
   // Uses |candidate| in this session.
   bool UseCandidate(const IceCandidateInterface* candidate);
+  // Deletes the corresponding channel of contents that don't exist in |desc|.
+  // |desc| can be null. This means that all channels are deleted.
   void RemoveUnusedChannelsAndTransports(
       const cricket::SessionDescription* desc);
 
@@ -241,8 +246,8 @@ class WebRtcSession : public cricket::BaseSession,
   // Called when processing the local session description.
   void UpdateSessionDescriptionSecurePolicy(cricket::SessionDescription* desc);
 
-  bool GetLocalTrackName(uint32 ssrc, std::string* name);
-  bool GetRemoteTrackName(uint32 ssrc, std::string* name);
+  bool GetLocalTrackId(uint32 ssrc, std::string* track_id);
+  bool GetRemoteTrackId(uint32 ssrc, std::string* track_id);
 
   std::string BadStateErrMsg(const std::string& type, State state);
   void SetIceConnectionState(PeerConnectionInterface::IceConnectionState state);

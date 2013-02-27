@@ -160,25 +160,26 @@ static bool VerifyCrypto(const SessionDescription* desc) {
 }
 
 static bool CompareStream(const Stream& stream1, const Stream& stream2) {
-  return (stream1.name < stream2.name);
+  return (stream1.id < stream2.id);
 }
 
-static bool SameName(const Stream& stream1, const Stream& stream2) {
-  return (stream1.name == stream2.name);
+static bool SameId(const Stream& stream1, const Stream& stream2) {
+  return (stream1.id == stream2.id);
 }
 
-// Checks if each Stream within the |streams| has unique name.
+// Checks if each Stream within the |streams| has unique id.
 static bool ValidStreams(const Streams& streams) {
   Streams sorted_streams = streams;
   std::sort(sorted_streams.begin(), sorted_streams.end(), CompareStream);
   Streams::iterator it =
       std::adjacent_find(sorted_streams.begin(), sorted_streams.end(),
-                         SameName);
+                         SameId);
   return (it == sorted_streams.end());
 }
 
-static bool GetAudioSsrcByName(const SessionDescription* session_description,
-                               const std::string& name, uint32 *ssrc) {
+static bool GetAudioSsrcByTrackId(
+    const SessionDescription* session_description,
+    const std::string& track_id, uint32 *ssrc) {
   const cricket::ContentInfo* audio_info =
       cricket::GetFirstAudioContent(session_description);
   if (!audio_info) {
@@ -190,16 +191,17 @@ static bool GetAudioSsrcByName(const SessionDescription* session_description,
       static_cast<const cricket::MediaContentDescription*>(
           audio_info->description);
   cricket::StreamParams stream;
-  if (!cricket::GetStreamByNickAndName(audio_content->streams(), "", name,
-                                       &stream)) {
+  if (!cricket::GetStreamByIds(audio_content->streams(), "", track_id,
+                               &stream)) {
     return false;
   }
   *ssrc = stream.first_ssrc();
   return true;
 }
 
-static bool GetVideoSsrcByName(const SessionDescription* session_description,
-                               const std::string& name, uint32 *ssrc) {
+static bool GetVideoSsrcByTrackId(
+    const SessionDescription* session_description,
+    const std::string& track_id, uint32 *ssrc) {
   const cricket::ContentInfo* video_info =
       cricket::GetFirstVideoContent(session_description);
   if (!video_info) {
@@ -211,17 +213,17 @@ static bool GetVideoSsrcByName(const SessionDescription* session_description,
       static_cast<const cricket::MediaContentDescription*>(
           video_info->description);
   cricket::StreamParams stream;
-  if (!cricket::GetStreamByNickAndName(video_content->streams(), "", name,
-                                      &stream)) {
+  if (!cricket::GetStreamByIds(video_content->streams(), "", track_id,
+                               &stream)) {
     return false;
   }
   *ssrc = stream.first_ssrc();
   return true;
 }
 
-static bool GetNameBySsrc(const SessionDescription* session_description,
-                          uint32 ssrc, std::string* name) {
-  ASSERT(name != NULL);
+static bool GetTrackIdBySsrc(const SessionDescription* session_description,
+                             uint32 ssrc, std::string* track_id) {
+  ASSERT(track_id != NULL);
 
   cricket::StreamParams stream_out;
   const cricket::ContentInfo* audio_info =
@@ -234,7 +236,7 @@ static bool GetNameBySsrc(const SessionDescription* session_description,
           audio_info->description);
 
   if (cricket::GetStreamBySsrc(audio_content->streams(), ssrc, &stream_out)) {
-    *name = stream_out.name;
+    *track_id = stream_out.id;
     return true;
   }
 
@@ -248,7 +250,7 @@ static bool GetNameBySsrc(const SessionDescription* session_description,
           video_info->description);
 
   if (cricket::GetStreamBySsrc(video_content->streams(), ssrc, &stream_out)) {
-    *name = stream_out.name;
+    *track_id = stream_out.id;
     return true;
   }
   return false;
@@ -486,6 +488,15 @@ bool WebRtcSession::Initialize(const MediaConstraintsInterface* constraints) {
   return true;
 }
 
+void WebRtcSession::Terminate() {
+  SetState(STATE_RECEIVEDTERMINATE);
+  mediastream_signaling_->OnSessionClose();
+  RemoveUnusedChannelsAndTransports(NULL);
+  ASSERT(voice_channel_.get() == NULL);
+  ASSERT(video_channel_.get() == NULL);
+  ASSERT(data_channel_.get() == NULL);
+}
+
 bool WebRtcSession::StartCandidatesAllocation() {
   // SpeculativelyConnectTransportChannels, will call ConnectChannels method
   // from TransportProxy to start gathering ice candidates.
@@ -640,7 +651,7 @@ bool WebRtcSession::SetLocalDescription(SessionDescriptionInterface* desc,
 
   // Update state and SSRC of local MediaStreams and DataChannels based on the
   // local session description.
-  mediastream_signaling_->UpdateLocalStreams(local_desc_.get());
+  mediastream_signaling_->OnLocalDescriptionChanged(local_desc_.get());
 
   if (error() != cricket::BaseSession::ERROR_NONE) {
     return BadLocalSdp(SessionErrorMsg(error()), err_desc);
@@ -688,7 +699,7 @@ bool WebRtcSession::SetRemoteDescription(SessionDescriptionInterface* desc,
   }
 
   // Update remote MediaStreams.
-  mediastream_signaling_->UpdateRemoteStreams(desc);
+  mediastream_signaling_->OnRemoteDescriptionChanged(desc);
   if (local_description() && !UseCandidatesInSessionDescription(desc)) {
     delete desc;
     return BadRemoteSdp(kInvalidCandidates, err_desc);
@@ -784,29 +795,31 @@ bool WebRtcSession::ProcessIceMessage(const IceCandidateInterface* candidate) {
   return UseCandidatesInSessionDescription(remote_desc_.get());
 }
 
-bool WebRtcSession::GetTrackIdBySsrc(uint32 ssrc, std::string* name) {
-  if (GetLocalTrackName(ssrc, name)) {
-    if (GetRemoteTrackName(ssrc, name)) {
+bool WebRtcSession::GetTrackIdBySsrc(uint32 ssrc, std::string* id) {
+  if (GetLocalTrackId(ssrc, id)) {
+    if (GetRemoteTrackId(ssrc, id)) {
       LOG(LS_WARNING) << "SSRC " << ssrc
                       << " exists in both local and remote descriptions";
-      return true;  // We return the remote track name.
+      return true;  // We return the remote track id.
     }
     return true;
   } else {
-    return GetRemoteTrackName(ssrc, name);
+    return GetRemoteTrackId(ssrc, id);
   }
 }
 
-bool WebRtcSession::GetLocalTrackName(uint32 ssrc, std::string* name) {
+bool WebRtcSession::GetLocalTrackId(uint32 ssrc, std::string* track_id) {
   if (!BaseSession::local_description())
     return false;
-  return GetNameBySsrc(BaseSession::local_description(), ssrc, name);
+  return webrtc::GetTrackIdBySsrc(
+    BaseSession::local_description(), ssrc, track_id);
 }
 
-bool WebRtcSession::GetRemoteTrackName(uint32 ssrc, std::string* name) {
+bool WebRtcSession::GetRemoteTrackId(uint32 ssrc, std::string* track_id) {
   if (!BaseSession::remote_description())
       return false;
-  return GetNameBySsrc(BaseSession::remote_description(), ssrc, name);
+  return webrtc::GetTrackIdBySsrc(
+    BaseSession::remote_description(), ssrc, track_id);
 }
 
 std::string WebRtcSession::BadStateErrMsg(
@@ -817,21 +830,22 @@ std::string WebRtcSession::BadStateErrMsg(
   return desc.str();
 }
 
-void WebRtcSession::SetAudioPlayout(const std::string& name, bool enable) {
+void WebRtcSession::SetAudioPlayout(const std::string& track_id, bool enable) {
   ASSERT(signaling_thread()->IsCurrent());
   if (!voice_channel_) {
     LOG(LS_ERROR) << "SetAudioPlayout: No audio channel exists.";
     return;
   }
   uint32 ssrc = 0;
-  if (!VERIFY(mediastream_signaling_->GetRemoteAudioTrackSsrc(name, &ssrc))) {
+  if (!VERIFY(mediastream_signaling_->GetRemoteAudioTrackSsrc(
+      track_id, &ssrc))) {
     LOG(LS_ERROR) << "Trying to enable/disable an unexisting audio SSRC.";
     return;
   }
   voice_channel_->SetOutputScaling(ssrc, enable ? 1 : 0, enable ? 1 : 0);
 }
 
-void WebRtcSession::SetAudioSend(const std::string& name, bool enable,
+void WebRtcSession::SetAudioSend(const std::string& track_id, bool enable,
                                  const cricket::AudioOptions& options) {
   ASSERT(signaling_thread()->IsCurrent());
   if (!voice_channel_) {
@@ -839,8 +853,8 @@ void WebRtcSession::SetAudioSend(const std::string& name, bool enable,
     return;
   }
   uint32 ssrc = 0;
-  if (!VERIFY(GetAudioSsrcByName(BaseSession::local_description(),
-                                 name, &ssrc))) {
+  if (!VERIFY(GetAudioSsrcByTrackId(BaseSession::local_description(),
+                                    track_id, &ssrc))) {
     LOG(LS_ERROR) << "SetAudioSend: SSRC does not exist.";
     return;
   }
@@ -849,7 +863,7 @@ void WebRtcSession::SetAudioSend(const std::string& name, bool enable,
     voice_channel_->SetChannelOptions(options);
 }
 
-bool WebRtcSession::SetCaptureDevice(const std::string& name,
+bool WebRtcSession::SetCaptureDevice(const std::string& track_id,
                                      cricket::VideoCapturer* camera) {
   ASSERT(signaling_thread()->IsCurrent());
 
@@ -860,8 +874,8 @@ bool WebRtcSession::SetCaptureDevice(const std::string& name,
     return false;
   }
   uint32 ssrc = 0;
-  if (!VERIFY(GetVideoSsrcByName(BaseSession::local_description(),
-                                 name, &ssrc))) {
+  if (!VERIFY(GetVideoSsrcByTrackId(BaseSession::local_description(),
+                                    track_id, &ssrc))) {
     LOG(LS_ERROR) << "Trying to set camera device on a unknown  SSRC.";
     return false;
   }
@@ -873,7 +887,7 @@ bool WebRtcSession::SetCaptureDevice(const std::string& name,
   return true;
 }
 
-void WebRtcSession::SetVideoPlayout(const std::string& name,
+void WebRtcSession::SetVideoPlayout(const std::string& track_id,
                                     bool enable,
                                     cricket::VideoRenderer* renderer) {
   ASSERT(signaling_thread()->IsCurrent());
@@ -883,16 +897,16 @@ void WebRtcSession::SetVideoPlayout(const std::string& name,
   }
 
   uint32 ssrc = 0;
-  if (mediastream_signaling_->GetRemoteVideoTrackSsrc(name, &ssrc)) {
+  if (mediastream_signaling_->GetRemoteVideoTrackSsrc(track_id, &ssrc)) {
     video_channel_->SetRenderer(ssrc, enable ? renderer : NULL);
   } else {
-    // Allow that |name| does not exist if renderer is null but assert
+    // Allow that |track_id| does not exist if renderer is null but assert
     // otherwise.
     VERIFY(renderer == NULL);
   }
 }
 
-void WebRtcSession::SetVideoSend(const std::string& name, bool enable,
+void WebRtcSession::SetVideoSend(const std::string& track_id, bool enable,
                                  const cricket::VideoOptions* options) {
   ASSERT(signaling_thread()->IsCurrent());
   if (!video_channel_) {
@@ -900,8 +914,8 @@ void WebRtcSession::SetVideoSend(const std::string& name, bool enable,
     return;
   }
   uint32 ssrc = 0;
-  if (!VERIFY(GetVideoSsrcByName(BaseSession::local_description(),
-                                 name, &ssrc))) {
+  if (!VERIFY(GetVideoSsrcByTrackId(BaseSession::local_description(),
+                                    track_id, &ssrc))) {
     LOG(LS_ERROR) << "SetVideoSend: SSRC does not exist.";
     return;
   }
@@ -919,8 +933,8 @@ bool WebRtcSession::CanInsertDtmf(const std::string& track_id) {
   uint32 send_ssrc = 0;
   // The Dtmf is negotiated per channel not ssrc, so we only check if the ssrc
   // exists.
-  if (!GetAudioSsrcByName(BaseSession::local_description(), track_id,
-                          &send_ssrc)) {
+  if (!GetAudioSsrcByTrackId(BaseSession::local_description(), track_id,
+                             &send_ssrc)) {
     LOG(LS_ERROR) << "CanInsertDtmf: Track does not exist: " << track_id;
     return false;
   }
@@ -935,8 +949,8 @@ bool WebRtcSession::InsertDtmf(const std::string& track_id,
     return false;
   }
   uint32 send_ssrc = 0;
-  if (!VERIFY(GetAudioSsrcByName(BaseSession::local_description(),
-                                 track_id, &send_ssrc))) {
+  if (!VERIFY(GetAudioSsrcByTrackId(BaseSession::local_description(),
+                                    track_id, &send_ssrc))) {
     LOG(LS_ERROR) << "InsertDtmf: Track does not exist: " << track_id;
     return false;
   }
@@ -951,6 +965,9 @@ bool WebRtcSession::InsertDtmf(const std::string& track_id,
 talk_base::scoped_refptr<DataChannel> WebRtcSession::CreateDataChannel(
       const std::string& label,
       const DataChannelInit* config) {
+  if (state() == STATE_RECEIVEDTERMINATE) {
+    return NULL;
+  }
   if (!allow_rtp_data_engine_) {
     LOG(LS_ERROR) << "CreateDataChannel: Data is not supported in this call.";
     return NULL;
@@ -1230,10 +1247,6 @@ bool WebRtcSession::UseCandidate(
 
 void WebRtcSession::RemoveUnusedChannelsAndTransports(
     const SessionDescription* desc) {
-  if (!desc) {
-    return;
-  }
-
   const cricket::ContentInfo* voice_info =
       cricket::GetFirstAudioContent(desc);
   if ((!voice_info || voice_info->rejected) && voice_channel_) {

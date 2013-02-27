@@ -144,21 +144,29 @@ class MediaStreamSignaling {
       const MediaConstraintsInterface* constraints,
       cricket::MediaSessionOptions* options);
 
-  // Updates or creates remote MediaStream objects and Tracks given a
-  // remote SessionDescription.
+  // Called when the remote session description has changed. The purpose is to
+  // update remote MediaStreams and DataChannels with the current
+  // session state.
   // If the remote SessionDescription contain information about a new remote
   // MediaStreams a new remote MediaStream is created and
   // RemoteMediaStreamObserver::OnAddStream is called.
   // If a remote MediaStream is missing from
   // the remote SessionDescription RemoteMediaStreamObserver::OnRemoveStream
   // is called.
-  //
   // If the SessionDescription contains information about a new DataChannel,
   // RemoteMediaStreamObserver::OnAddDataChannel is called with the DataChannel.
-  void UpdateRemoteStreams(const SessionDescriptionInterface* desc);
+  void OnRemoteDescriptionChanged(const SessionDescriptionInterface* desc);
 
-  // Updates local DataChannels with information about its local SSRC.
-  void UpdateLocalStreams(const SessionDescriptionInterface* desc);
+  // Called when the local session description has changed. The purpose is to
+  // update local and remote MediaStreams and DataChannels with the current
+  // session state.
+  // If |desc| indicates that the media type should be rejected, the method
+  // ends the remote MediaStreamTracks.
+  // It also updates local DataChannels with information about its local SSRC.
+  void OnLocalDescriptionChanged(const SessionDescriptionInterface* desc);
+
+  // Called when a PeerConnection closes.
+  void OnSessionClose();
 
   // Returns the SSRC for a given track.
   bool GetRemoteAudioTrackSsrc(const std::string& track_id, uint32* ssrc) const;

@@ -40,10 +40,16 @@ import java.util.concurrent.TimeUnit;
 
 /** End-to-end tests for PeerConnection.java. */
 public class PeerConnectionTest extends TestCase {
+  // Set to true to render video.
+  private static final boolean RENDER_TO_GUI = false;
 
-  private static class ObserverExpectations implements PeerConnection.Observer {
+  private static class ObserverExpectations
+      implements PeerConnection.Observer, VideoRenderer.Callbacks {
     private int expectedIceCandidates = 0;
     private int expectedErrors = 0;
+    private LinkedList<Integer> expectedSetSizeDimensions =
+        new LinkedList<Integer>();  // Alternating width/height.
+    private int expectedFramesDelivered = 0;
     private LinkedList<StateType> expectedStateChanges =
         new LinkedList<StateType>();
     private LinkedList<String> expectedAddStreamLabels =
@@ -75,6 +81,26 @@ public class PeerConnectionTest extends TestCase {
       assertTrue(--expectedErrors >= 0);
     }
 
+    public synchronized void expectSetSize(int width, int height) {
+      expectedSetSizeDimensions.add(width);
+      expectedSetSizeDimensions.add(height);
+    }
+
+    @Override
+    public synchronized void setSize(int width, int height) {
+      assertEquals(width, expectedSetSizeDimensions.removeFirst().intValue());
+      assertEquals(height, expectedSetSizeDimensions.removeFirst().intValue());
+    }
+
+    public synchronized void expectFramesDelivered(int count) {
+      expectedFramesDelivered += count;
+    }
+
+    @Override
+    public synchronized void renderFrame(VideoRenderer.I420Frame frame) {
+      --expectedFramesDelivered;
+    }
+
     public synchronized void expectStateChange(StateType stateChanged) {
       expectedStateChanges.add(stateChanged);
     }
@@ -95,7 +121,7 @@ public class PeerConnectionTest extends TestCase {
       assertTrue(stream.audioTracks.get(0).id().endsWith("LMSa0"));
       assertEquals("video", stream.videoTracks.get(0).kind());
       assertEquals("audio", stream.audioTracks.get(0).kind());
-      VideoRenderer renderer = createVideoRenderer();
+      VideoRenderer renderer = createVideoRenderer(this);
       stream.videoTracks.get(0).addRenderer(renderer);
       assertNull(renderers.put(
           stream, new WeakReference<VideoRenderer>(renderer)));
@@ -119,7 +145,9 @@ public class PeerConnectionTest extends TestCase {
           expectedErrors == 0 &&
           expectedStateChanges.size() == 0 &&
           expectedAddStreamLabels.size() == 0 &&
-          expectedRemoveStreamLabels.size() == 0;
+          expectedRemoveStreamLabels.size() == 0 &&
+          expectedSetSizeDimensions.isEmpty() &&
+          expectedFramesDelivered <= 0;
     }
 
     public void waitForAllExpectationsToBeSatisfied() {
@@ -181,12 +209,33 @@ public class PeerConnectionTest extends TestCase {
 
   static int videoWindowsMapped = -1;
 
-  private static VideoRenderer createVideoRenderer() {
+  private static class TestRenderer implements VideoRenderer.Callbacks {
+    public int width = -1;
+    public int height = -1;
+    public int numFramesDelivered = 0;
+
+    public void setSize(int width, int height) {
+      assertEquals(this.width, -1);
+      assertEquals(this.height, -1);
+      this.width = width;
+      this.height = height;
+    }
+
+    public void renderFrame(VideoRenderer.I420Frame frame) {
+      ++numFramesDelivered;
+    }
+  }
+
+  private static VideoRenderer createVideoRenderer(
+      ObserverExpectations observer) {
+    if (!RENDER_TO_GUI) {
+      return new VideoRenderer(observer);
+    }
     ++videoWindowsMapped;
     assertTrue(videoWindowsMapped < 4);
     int x = videoWindowsMapped % 2 != 0 ? 700 : 0;
     int y = videoWindowsMapped >= 2 ? 0 : 500;
-    return VideoRenderer.create(x, y);
+    return VideoRenderer.createGui(x, y);
   }
 
   // Return a weak reference to test that ownership is correctly held by
@@ -194,11 +243,12 @@ public class PeerConnectionTest extends TestCase {
   private static WeakReference<LocalMediaStream> addTracksToPC(
       PeerConnectionFactory factory, PeerConnection pc,
       VideoSource videoSource,
-      String streamLabel, String videoTrackId, String audioTrackId) {
+      String streamLabel, String videoTrackId, String audioTrackId,
+      ObserverExpectations observer) {
     LocalMediaStream lMS = factory.createLocalMediaStream(streamLabel);
     VideoTrack videoTrack =
         factory.createVideoTrack(videoTrackId, videoSource);
-    videoTrack.addRenderer(createVideoRenderer());
+    videoTrack.addRenderer(createVideoRenderer(observer));
     lMS.addTrack(videoTrack);
     lMS.addTrack(factory.createAudioTrack(audioTrackId));
     pc.addStream(lMS, new MediaConstraints());
@@ -243,7 +293,8 @@ public class PeerConnectionTest extends TestCase {
     // Drop |label| params from {Audio,Video}Track-related APIs once
     // https://code.google.com/p/webrtc/issues/detail?id=1253 is fixed.
     WeakReference<LocalMediaStream> oLMS = addTracksToPC(
-        factory, offeringPC, videoSource, "oLMS", "oLMSv0", "oLMSa0");
+        factory, offeringPC, videoSource, "oLMS", "oLMSv0", "oLMSa0",
+        offeringExpectations);
 
     SdpObserverLatch sdpLatch = new SdpObserverLatch();
     offeringPC.createOffer(sdpLatch, constraints);
@@ -264,7 +315,8 @@ public class PeerConnectionTest extends TestCase {
     assertNull(sdpLatch.getSdp());
 
     WeakReference<LocalMediaStream> aLMS = addTracksToPC(
-        factory, answeringPC, videoSource, "aLMS", "aLMSv0", "aLMSa0");
+        factory, answeringPC, videoSource, "aLMS", "aLMSv0", "aLMSa0",
+        answeringExpectations);
 
     sdpLatch = new SdpObserverLatch();
     answeringPC.createAnswer(sdpLatch, constraints);
@@ -305,6 +357,17 @@ public class PeerConnectionTest extends TestCase {
     assertEquals(answeringPC.getLocalDescription().type, answerSdp.type);
     assertEquals(answeringPC.getRemoteDescription().type, offerSdp.type);
 
+    if (!RENDER_TO_GUI) {
+      offeringExpectations.expectSetSize(640, 480);
+      offeringExpectations.expectSetSize(640, 480);
+      answeringExpectations.expectSetSize(640, 480);
+      answeringExpectations.expectSetSize(640, 480);
+      // Wait for at least some frames to be delivered at each end (number
+      // chosen arbitrarily).
+      offeringExpectations.expectFramesDelivered(10);
+      answeringExpectations.expectFramesDelivered(10);
+    }
+
     for (IceCandidate candidate : offeringExpectations.gotIceCandidates) {
       answeringPC.addIceCandidate(candidate);
     }
@@ -322,13 +385,13 @@ public class PeerConnectionTest extends TestCase {
     assertEquals(
         PeerConnection.SignalingState.STABLE, answeringPC.signalingState());
 
-    // Uncomment the next block if you'd like to marvel at the rendered video
-    // for a bit longer than the test takes to tear down.
-    // try {
-    //   Thread.sleep(20000);
-    // } catch (Throwable t) {
-    //   throw new RuntimeException(t);
-    // }
+    if (RENDER_TO_GUI) {
+      try {
+        Thread.sleep(20000);
+      } catch (Throwable t) {
+        throw new RuntimeException(t);
+      }
+    }
 
     // TODO(fischman) MOAR test ideas:
     // - Test that PC.removeStream() works; requires a second

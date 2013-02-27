@@ -78,8 +78,10 @@ class P2PTransportChannel : public TransportChannelImpl,
   virtual void SetRole(TransportRole role);
   virtual void SetTiebreaker(uint64 tiebreaker);
   virtual void SetIceProtocolType(IceProtocolType type);
-  virtual void SetIceUfrag(const std::string& ice_ufrag);
-  virtual void SetIcePwd(const std::string& ice_pwd);
+  virtual void SetIceCredentials(const std::string& ice_ufrag,
+                                 const std::string& ice_pwd);
+  virtual void SetRemoteIceCredentials(const std::string& ice_ufrag,
+                                       const std::string& ice_pwd);
   virtual void Connect();
   virtual void Reset();
   virtual void OnSignalingReady();
@@ -119,6 +121,8 @@ class P2PTransportChannel : public TransportChannelImpl,
   bool CreateConnection(PortInterface* port, const Candidate& remote_candidate,
                         PortInterface* origin_port, bool readable);
   bool FindConnection(cricket::Connection* connection) const;
+
+  uint32 GetRemoteCandidateGeneration(const Candidate& candidate);
   void RememberRemoteCandidate(const Candidate& remote_candidate,
                                PortInterface* origin_port);
   bool IsPingable(Connection* conn);
@@ -168,9 +172,12 @@ class P2PTransportChannel : public TransportChannelImpl,
   OptionMap options_;
   std::string ice_ufrag_;
   std::string ice_pwd_;
+  std::string remote_ice_ufrag_;
+  std::string remote_ice_pwd_;
   IceProtocolType protocol_type_;
   TransportRole role_;
   uint64 tiebreaker_;
+  uint32 remote_candidate_generation_;
 
   DISALLOW_EVIL_CONSTRUCTORS(P2PTransportChannel);
 };

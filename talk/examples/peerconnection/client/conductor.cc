@@ -29,6 +29,7 @@
 
 #include <utility>
 
+#include "talk/app/webrtc/videosourceinterface.h"
 #include "talk/base/common.h"
 #include "talk/base/json.h"
 #include "talk/base/logging.h"
@@ -97,8 +98,8 @@ bool Conductor::InitializePeerConnection() {
     return false;
   }
 
-  webrtc::JsepInterface::IceServers servers;
-  webrtc::JsepInterface::IceServer server;
+  webrtc::PeerConnectionInterface::IceServers servers;
+  webrtc::PeerConnectionInterface::IceServer server;
   server.uri = GetPeerConnectionString();
   servers.push_back(server);
   peer_connection_ = peer_connection_factory_->CreatePeerConnection(servers,
@@ -354,12 +355,15 @@ void Conductor::AddStreams() {
   if (active_streams_.find(kStreamLabel) != active_streams_.end())
     return;  // Already added.
 
-  talk_base::scoped_refptr<webrtc::LocalAudioTrackInterface> audio_track(
-      peer_connection_factory_->CreateLocalAudioTrack(kAudioLabel, NULL));
+  talk_base::scoped_refptr<webrtc::AudioTrackInterface> audio_track(
+      peer_connection_factory_->CreateAudioTrack(
+          kAudioLabel, peer_connection_factory_->CreateAudioSource(NULL)));
 
-  talk_base::scoped_refptr<webrtc::LocalVideoTrackInterface> video_track(
-      peer_connection_factory_->CreateLocalVideoTrack(
-          kVideoLabel, OpenVideoCaptureDevice()));
+  talk_base::scoped_refptr<webrtc::VideoTrackInterface> video_track(
+      peer_connection_factory_->CreateVideoTrack(
+          kVideoLabel,
+          peer_connection_factory_->CreateVideoSource(OpenVideoCaptureDevice(),
+                                                      NULL)));
   main_wnd_->StartLocalRenderer(video_track);
 
   talk_base::scoped_refptr<webrtc::LocalMediaStreamInterface> stream =
@@ -442,11 +446,10 @@ void Conductor::UIThreadCallback(int msg_id, void* data) {
       webrtc::MediaStreamInterface* stream =
           reinterpret_cast<webrtc::MediaStreamInterface*>(
           data);
-      talk_base::scoped_refptr<webrtc::VideoTracks> tracks =
-          stream->video_tracks();
+      webrtc::VideoTrackVector tracks = stream->GetVideoTracks();
       // Only render the first track.
-      if (tracks->count() > 0) {
-        webrtc::VideoTrackInterface* track = tracks->at(0);
+      if (!tracks.empty()) {
+        webrtc::VideoTrackInterface* track = tracks[0];
         main_wnd_->StartRemoteRenderer(track);
       }
       stream->Release();

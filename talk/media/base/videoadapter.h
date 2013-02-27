@@ -26,7 +26,9 @@
 #ifndef TALK_MEDIA_BASE_VIDEOADAPTER_H_  // NOLINT
 #define TALK_MEDIA_BASE_VIDEOADAPTER_H_
 
+#include "talk/base/common.h"  // For ASSERT
 #include "talk/base/criticalsection.h"
+#include "talk/base/logging.h"
 #include "talk/base/scoped_ptr.h"
 #include "talk/base/sigslot.h"
 #include "talk/media/base/videocommon.h"
@@ -107,20 +109,45 @@ class CoordinatedVideoAdapter
   bool view_switch() const { return view_switch_; }
   // When the video is decreased, set the waiting time for CPU adaptation to
   // decrease video again.
-  void set_cpu_downgrade_wait_time(uint32 ms) { cpu_downgrade_wait_time_ = ms; }
-  // CPU system load high threshold for reducing resolution.  e.g. 0.90f
+  void set_cpu_downgrade_wait_time(uint32 cpu_downgrade_wait_time) {
+    if (cpu_downgrade_wait_time_ != static_cast<int>(cpu_downgrade_wait_time)) {
+      LOG(LS_INFO) << "VAdapt Change Cpu Downgrade Wait Time from: "
+                   << cpu_downgrade_wait_time_ << " to "
+                   << cpu_downgrade_wait_time;
+      cpu_downgrade_wait_time_ = static_cast<int>(cpu_downgrade_wait_time);
+    }
+  }
+  // CPU system load high threshold for reducing resolution.  e.g. 0.85f
   void set_high_system_threshold(float high_system_threshold) {
-    high_system_threshold_ = high_system_threshold;
+    ASSERT(high_system_threshold <= 1.0f);
+    ASSERT(high_system_threshold >= 0.0f);
+    if (high_system_threshold_ != high_system_threshold) {
+      LOG(LS_INFO) << "VAdapt Change High System Threshold from: "
+                   << high_system_threshold_ << " to " << high_system_threshold;
+      high_system_threshold_ = high_system_threshold;
+    }
   }
   float high_system_threshold() const { return high_system_threshold_; }
   // CPU system load low threshold for increasing resolution.  e.g. 0.70f
   void set_low_system_threshold(float low_system_threshold) {
-    low_system_threshold_ = low_system_threshold;
+    ASSERT(low_system_threshold <= 1.0f);
+    ASSERT(low_system_threshold >= 0.0f);
+    if (low_system_threshold_ != low_system_threshold) {
+      LOG(LS_INFO) << "VAdapt Change Low System Threshold from: "
+                   << low_system_threshold_ << " to " << low_system_threshold;
+      low_system_threshold_ = low_system_threshold;
+    }
   }
   float low_system_threshold() const { return low_system_threshold_; }
-  // CPU process load threshold for reducing resolution.  e.g. 0.40f
+  // CPU process load threshold for reducing resolution.  e.g. 0.10f
   void set_process_threshold(float process_threshold) {
-    process_threshold_ = process_threshold;
+    ASSERT(process_threshold <= 1.0f);
+    ASSERT(process_threshold >= 0.0f);
+    if (process_threshold_ != process_threshold) {
+      LOG(LS_INFO) << "VAdapt Change High Process Threshold from: "
+                   << process_threshold_ << " to " << process_threshold;
+      process_threshold_ = process_threshold;
+    }
   }
   float process_threshold() const { return process_threshold_; }
 

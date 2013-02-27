@@ -85,6 +85,9 @@ class DataChannel : public DataChannelInterface,
   // longer part of the session negotiation.
   void SetSendSsrc(uint32 send_ssrc);
 
+  // Called if the underlying data engine is closing.
+  void OnDataEngineClose();
+
  protected:
   DataChannel(WebRtcSession* session, const std::string& label);
   virtual ~DataChannel();
@@ -101,6 +104,7 @@ class DataChannel : public DataChannelInterface,
   void OnChannelReady(bool writable);
 
  private:
+  void DoClose();
   void UpdateState();
   void SetState(DataState state);
   void ConnectToDataSession();

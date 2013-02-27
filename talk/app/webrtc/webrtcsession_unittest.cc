@@ -858,15 +858,15 @@ TEST_F(WebRtcSessionTest, TestCreateOfferReceiveAnswer) {
   voice_channel_ = media_engine_->GetVoiceChannel(0);
 
   ASSERT_EQ(1u, video_channel_->recv_streams().size());
-  EXPECT_TRUE(kVideoTrack2 == video_channel_->recv_streams()[0].name);
+  EXPECT_TRUE(kVideoTrack2 == video_channel_->recv_streams()[0].id);
 
   ASSERT_EQ(1u, voice_channel_->recv_streams().size());
-  EXPECT_TRUE(kAudioTrack2 == voice_channel_->recv_streams()[0].name);
+  EXPECT_TRUE(kAudioTrack2 == voice_channel_->recv_streams()[0].id);
 
   ASSERT_EQ(1u, video_channel_->send_streams().size());
-  EXPECT_TRUE(kVideoTrack1 == video_channel_->send_streams()[0].name);
+  EXPECT_TRUE(kVideoTrack1 == video_channel_->send_streams()[0].id);
   ASSERT_EQ(1u, voice_channel_->send_streams().size());
-  EXPECT_TRUE(kAudioTrack1 == voice_channel_->send_streams()[0].name);
+  EXPECT_TRUE(kAudioTrack1 == voice_channel_->send_streams()[0].id);
 
   // Create new offer without send streams.
   mediastream_signaling_.SendNothing();
@@ -889,9 +889,9 @@ TEST_F(WebRtcSessionTest, TestCreateOfferReceiveAnswer) {
 
   // Make sure the receive streams have not changed.
   ASSERT_EQ(1u, video_channel_->recv_streams().size());
-  EXPECT_TRUE(kVideoTrack2 == video_channel_->recv_streams()[0].name);
+  EXPECT_TRUE(kVideoTrack2 == video_channel_->recv_streams()[0].id);
   ASSERT_EQ(1u, voice_channel_->recv_streams().size());
-  EXPECT_TRUE(kAudioTrack2 == voice_channel_->recv_streams()[0].name);
+  EXPECT_TRUE(kAudioTrack2 == voice_channel_->recv_streams()[0].id);
 }
 
 // Test receiving offers and creating answers and make sure the
@@ -914,15 +914,15 @@ TEST_F(WebRtcSessionTest, TestReceiveOfferCreateAnswer) {
   voice_channel_ = media_engine_->GetVoiceChannel(0);
 
   ASSERT_EQ(1u, video_channel_->recv_streams().size());
-  EXPECT_TRUE(kVideoTrack2 == video_channel_->recv_streams()[0].name);
+  EXPECT_TRUE(kVideoTrack2 == video_channel_->recv_streams()[0].id);
 
   ASSERT_EQ(1u, voice_channel_->recv_streams().size());
-  EXPECT_TRUE(kAudioTrack2 == voice_channel_->recv_streams()[0].name);
+  EXPECT_TRUE(kAudioTrack2 == voice_channel_->recv_streams()[0].id);
 
   ASSERT_EQ(1u, video_channel_->send_streams().size());
-  EXPECT_TRUE(kVideoTrack1 == video_channel_->send_streams()[0].name);
+  EXPECT_TRUE(kVideoTrack1 == video_channel_->send_streams()[0].id);
   ASSERT_EQ(1u, voice_channel_->send_streams().size());
-  EXPECT_TRUE(kAudioTrack1 == voice_channel_->send_streams()[0].name);
+  EXPECT_TRUE(kAudioTrack1 == voice_channel_->send_streams()[0].id);
 
   mediastream_signaling_.SendAudioVideoStream1And2();
   offer = session_->CreateOffer(NULL);
@@ -940,11 +940,11 @@ TEST_F(WebRtcSessionTest, TestReceiveOfferCreateAnswer) {
   SetLocalDescriptionWithoutError(answer);
 
   ASSERT_EQ(2u, video_channel_->recv_streams().size());
-  EXPECT_TRUE(kVideoTrack1 == video_channel_->recv_streams()[0].name);
-  EXPECT_TRUE(kVideoTrack2 == video_channel_->recv_streams()[1].name);
+  EXPECT_TRUE(kVideoTrack1 == video_channel_->recv_streams()[0].id);
+  EXPECT_TRUE(kVideoTrack2 == video_channel_->recv_streams()[1].id);
   ASSERT_EQ(2u, voice_channel_->recv_streams().size());
-  EXPECT_TRUE(kAudioTrack1 == voice_channel_->recv_streams()[0].name);
-  EXPECT_TRUE(kAudioTrack2 == voice_channel_->recv_streams()[1].name);
+  EXPECT_TRUE(kAudioTrack1 == voice_channel_->recv_streams()[0].id);
+  EXPECT_TRUE(kAudioTrack2 == voice_channel_->recv_streams()[1].id);
 
   // Make sure we have no send streams.
   EXPECT_EQ(0u, video_channel_->send_streams().size());
@@ -1657,7 +1657,7 @@ TEST_F(WebRtcSessionTest, TestAVOfferWithAudioOnlyAnswer) {
 
   ASSERT_EQ(0u, voice_channel_->recv_streams().size());
   ASSERT_EQ(1u, voice_channel_->send_streams().size());
-  EXPECT_EQ(kAudioTrack1, voice_channel_->send_streams()[0].name);
+  EXPECT_EQ(kAudioTrack1, voice_channel_->send_streams()[0].id);
 
   // Update the session descriptions, with Audio and Video.
   mediastream_signaling_.SendAudioVideoStream2();
@@ -1668,8 +1668,8 @@ TEST_F(WebRtcSessionTest, TestAVOfferWithAudioOnlyAnswer) {
 
   ASSERT_EQ(1u, video_channel_->recv_streams().size());
   ASSERT_EQ(1u, video_channel_->send_streams().size());
-  EXPECT_EQ(kVideoTrack2, video_channel_->recv_streams()[0].name);
-  EXPECT_EQ(kVideoTrack2, video_channel_->send_streams()[0].name);
+  EXPECT_EQ(kVideoTrack2, video_channel_->recv_streams()[0].id);
+  EXPECT_EQ(kVideoTrack2, video_channel_->send_streams()[0].id);
 
   // Change session back to audio only.
   mediastream_signaling_.SendAudioVideoStream1();
@@ -1683,9 +1683,9 @@ TEST_F(WebRtcSessionTest, TestAVOfferWithAudioOnlyAnswer) {
 
   EXPECT_EQ(0u, video_channel_->recv_streams().size());
   ASSERT_EQ(1u, voice_channel_->recv_streams().size());
-  EXPECT_EQ(kAudioTrack2, voice_channel_->recv_streams()[0].name);
+  EXPECT_EQ(kAudioTrack2, voice_channel_->recv_streams()[0].id);
   ASSERT_EQ(1u, voice_channel_->send_streams().size());
-  EXPECT_EQ(kAudioTrack1, voice_channel_->send_streams()[0].name);
+  EXPECT_EQ(kAudioTrack1, voice_channel_->send_streams()[0].id);
 
   // Updating the session back to Audio and Video.
   mediastream_signaling_.SendAudioVideoStream2();
@@ -1693,8 +1693,8 @@ TEST_F(WebRtcSessionTest, TestAVOfferWithAudioOnlyAnswer) {
 
   ASSERT_EQ(1u, video_channel_->recv_streams().size());
   ASSERT_EQ(1u, video_channel_->send_streams().size());
-  EXPECT_EQ(kVideoTrack2, video_channel_->recv_streams()[0].name);
-  EXPECT_EQ(kVideoTrack2, video_channel_->send_streams()[0].name);
+  EXPECT_EQ(kVideoTrack2, video_channel_->recv_streams()[0].id);
+  EXPECT_EQ(kVideoTrack2, video_channel_->send_streams()[0].id);
 }
 
 // This test verifies the call setup when remote answer with video only and
@@ -1725,7 +1725,7 @@ TEST_F(WebRtcSessionTest, TestAVOfferWithVideoOnlyAnswer) {
 
   EXPECT_EQ(0u, video_channel_->recv_streams().size());
   ASSERT_EQ(1u, video_channel_->send_streams().size());
-  EXPECT_EQ(kVideoTrack1, video_channel_->send_streams()[0].name);
+  EXPECT_EQ(kVideoTrack1, video_channel_->send_streams()[0].id);
 
   // Update the session descriptions, with Audio and Video.
   mediastream_signaling_.SendAudioVideoStream2();
@@ -1736,8 +1736,8 @@ TEST_F(WebRtcSessionTest, TestAVOfferWithVideoOnlyAnswer) {
 
   ASSERT_EQ(1u, voice_channel_->recv_streams().size());
   ASSERT_EQ(1u, voice_channel_->send_streams().size());
-  EXPECT_EQ(kAudioTrack2, voice_channel_->recv_streams()[0].name);
-  EXPECT_EQ(kAudioTrack2, voice_channel_->send_streams()[0].name);
+  EXPECT_EQ(kAudioTrack2, voice_channel_->recv_streams()[0].id);
+  EXPECT_EQ(kAudioTrack2, voice_channel_->send_streams()[0].id);
 
   // Change session back to video only.
   mediastream_signaling_.SendAudioVideoStream1();
@@ -1752,10 +1752,10 @@ TEST_F(WebRtcSessionTest, TestAVOfferWithVideoOnlyAnswer) {
   voice_channel_ = media_engine_->GetVoiceChannel(0);
 
   ASSERT_EQ(1u, video_channel_->recv_streams().size());
-  EXPECT_EQ(kVideoTrack2, video_channel_->recv_streams()[0].name);
+  EXPECT_EQ(kVideoTrack2, video_channel_->recv_streams()[0].id);
 
   ASSERT_EQ(1u, video_channel_->send_streams().size());
-  EXPECT_EQ(kVideoTrack1, video_channel_->send_streams()[0].name);
+  EXPECT_EQ(kVideoTrack1, video_channel_->send_streams()[0].id);
 }
 
 TEST_F(WebRtcSessionTest, TestDefaultSetSecurePolicy) {
@@ -1838,15 +1838,15 @@ TEST_F(WebRtcSessionTest, TestDisabledBundleInAnswer) {
   voice_channel_ = media_engine_->GetVoiceChannel(0);
 
   ASSERT_EQ(1u, video_channel_->recv_streams().size());
-  EXPECT_TRUE(kVideoTrack2 == video_channel_->recv_streams()[0].name);
+  EXPECT_TRUE(kVideoTrack2 == video_channel_->recv_streams()[0].id);
 
   ASSERT_EQ(1u, voice_channel_->recv_streams().size());
-  EXPECT_TRUE(kAudioTrack2 == voice_channel_->recv_streams()[0].name);
+  EXPECT_TRUE(kAudioTrack2 == voice_channel_->recv_streams()[0].id);
 
   ASSERT_EQ(1u, video_channel_->send_streams().size());
-  EXPECT_TRUE(kVideoTrack1 == video_channel_->send_streams()[0].name);
+  EXPECT_TRUE(kVideoTrack1 == video_channel_->send_streams()[0].id);
   ASSERT_EQ(1u, voice_channel_->send_streams().size());
-  EXPECT_TRUE(kAudioTrack1 == voice_channel_->send_streams()[0].name);
+  EXPECT_TRUE(kAudioTrack1 == voice_channel_->send_streams()[0].id);
 }
 
 TEST_F(WebRtcSessionTest, SetAudioPlayout) {

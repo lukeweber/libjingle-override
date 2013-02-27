@@ -327,7 +327,6 @@
         'app/webrtc/peerconnectionfactory_unittest.cc',
         'app/webrtc/peerconnectioninterface_unittest.cc',
         # 'app/webrtc/peerconnectionproxy_unittest.cc',
-        # 'app/webrtc/statscollector_unittest.cc',
         'app/webrtc/test/fakeaudiocapturemodule.cc',
         'app/webrtc/test/fakeaudiocapturemodule_unittest.cc',
         'app/webrtc/videotrack_unittest.cc',
@@ -361,9 +360,9 @@
                 '<(PRODUCT_DIR)/libjingle_peerconnection_test.jar',
               ],
               'action': [
-                'build/build_jar.sh', '<@(_outputs)', '<(INTERMEDIATE_DIR)',
-                '<(java_src_dir)', '',
-                '<(PRODUCT_DIR)/libjingle_peerconnection.jar:<(DEPTH)/third_party/junit/junit-4.11.jar',
+                'build/build_jar.sh', '/usr', '<@(_outputs)',
+                '<(INTERMEDIATE_DIR)',
+                '<(java_src_dir):<(PRODUCT_DIR)/libjingle_peerconnection.jar:<(DEPTH)/third_party/junit/junit-4.11.jar',
                 '<@(java_files)'
               ],
             },

@@ -40,7 +40,7 @@ public class MediaConstraints {
     private final String key;
     private final String value;
 
-    KeyValuePair(String key, String value) {
+    public KeyValuePair(String key, String value) {
       this.key = key;
       this.value = value;
     }

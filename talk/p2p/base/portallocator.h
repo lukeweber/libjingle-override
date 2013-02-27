@@ -125,7 +125,7 @@ class PortAllocator : public sigslot::has_slots<> {
       const std::string& ice_ufrag,
       const std::string& ice_pwd);
 
-  PortAllocatorSessionMuxer* GetSessionMuxer(const std::string& sid) const;
+  PortAllocatorSessionMuxer* GetSessionMuxer(const std::string& key) const;
   void OnSessionMuxerDestroyed(PortAllocatorSessionMuxer* session);
 
   uint32 flags() const { return flags_; }

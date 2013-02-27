@@ -1416,7 +1416,7 @@ class VideoMediaChannelTest : public testing::Test,
     const int kWidth  = 100;
     const int kHeight = 10000;
     const int kScaledWidth = 28;
-    const int kScaledHeight = 3040;
+    const int kScaledHeight = 3072;
 
     cricket::VideoCodec codec(DefaultCodec());
     EXPECT_TRUE(SetOneCodec(codec));

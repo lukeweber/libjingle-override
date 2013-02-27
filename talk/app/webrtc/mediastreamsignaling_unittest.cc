@@ -182,18 +182,20 @@ static void VerifyMediaOptions(StreamCollectionInterface* collection,
   size_t stream_index = 0;
   for (size_t i = 0; i < collection->count(); ++i) {
     MediaStreamInterface* stream = collection->at(i);
-    ASSERT_GE(options.streams.size(), stream->audio_tracks()->count());
-    for (size_t j = 0; j < stream->audio_tracks()->count(); ++j) {
-      webrtc::AudioTrackInterface* audio = stream->audio_tracks()->at(j);
+    AudioTrackVector audio_tracks = stream->GetAudioTracks();
+    ASSERT_GE(options.streams.size(), stream_index + audio_tracks.size());
+    for (size_t j = 0; j < audio_tracks.size(); ++j) {
+      webrtc::AudioTrackInterface* audio = audio_tracks[j];
       EXPECT_EQ(options.streams[stream_index].sync_label, stream->label());
-      EXPECT_EQ(options.streams[stream_index++].name, audio->id());
+      EXPECT_EQ(options.streams[stream_index++].id, audio->id());
       EXPECT_TRUE(options.has_audio);
     }
-    ASSERT_GE(options.streams.size(), stream->audio_tracks()->count());
-    for (size_t j = 0; j < stream->video_tracks()->count(); ++j) {
-      webrtc::VideoTrackInterface* video = stream->video_tracks()->at(j);
+    VideoTrackVector video_tracks = stream->GetVideoTracks();
+    ASSERT_GE(options.streams.size(), stream_index + video_tracks.size());
+    for (size_t j = 0; j < video_tracks.size(); ++j) {
+      webrtc::VideoTrackInterface* video = video_tracks[j];
       EXPECT_EQ(options.streams[stream_index].sync_label, stream->label());
-      EXPECT_EQ(options.streams[stream_index++].name, video->id());
+      EXPECT_EQ(options.streams[stream_index++].id, video->id());
       EXPECT_TRUE(options.has_video);
     }
   }
@@ -272,7 +274,7 @@ class MediaStreamSignalingForTest : public webrtc::MediaStreamSignaling {
   using webrtc::MediaStreamSignaling::SetLocalStreams;
   using webrtc::MediaStreamSignaling::GetOptionsForOffer;
   using webrtc::MediaStreamSignaling::GetOptionsForAnswer;
-  using webrtc::MediaStreamSignaling::UpdateRemoteStreams;
+  using webrtc::MediaStreamSignaling::OnRemoteDescriptionChanged;
   using webrtc::MediaStreamSignaling::remote_streams;
 };
 
@@ -553,7 +555,7 @@ TEST_F(MediaStreamSignalingTest, UpdateRemoteStreams) {
       webrtc::CreateSessionDescription(SessionDescriptionInterface::kOffer,
                                        kSdpStringWithStream1, NULL));
   EXPECT_TRUE(desc != NULL);
-  signaling_->UpdateRemoteStreams(desc.get());
+  signaling_->OnRemoteDescriptionChanged(desc.get());
 
   talk_base::scoped_refptr<StreamCollection> reference(
       CreateStreamCollection(1));
@@ -568,7 +570,7 @@ TEST_F(MediaStreamSignalingTest, UpdateRemoteStreams) {
       webrtc::CreateSessionDescription(SessionDescriptionInterface::kOffer,
                                        kSdpStringWith2Stream, NULL));
   EXPECT_TRUE(update_desc != NULL);
-  signaling_->UpdateRemoteStreams(update_desc.get());
+  signaling_->OnRemoteDescriptionChanged(update_desc.get());
 
   talk_base::scoped_refptr<StreamCollection> reference2(
       CreateStreamCollection(2));
@@ -584,14 +586,14 @@ TEST_F(MediaStreamSignalingTest, UpdateRemoteStreams) {
 TEST_F(MediaStreamSignalingTest, AddRemoveTrackFromExistingRemoteMediaStream) {
   talk_base::scoped_ptr<SessionDescriptionInterface> desc_ms1;
   CreateSessionDescriptionAndReference(1, 1, desc_ms1.use());
-  signaling_->UpdateRemoteStreams(desc_ms1.get());
+  signaling_->OnRemoteDescriptionChanged(desc_ms1.get());
   EXPECT_TRUE(CompareStreamCollections(signaling_->remote_streams(),
                                        reference_collection_));
 
   // Add extra audio and video tracks to the same MediaStream.
   talk_base::scoped_ptr<SessionDescriptionInterface> desc_ms1_two_tracks;
   CreateSessionDescriptionAndReference(2, 2, desc_ms1_two_tracks.use());
-  signaling_->UpdateRemoteStreams(desc_ms1_two_tracks.get());
+  signaling_->OnRemoteDescriptionChanged(desc_ms1_two_tracks.get());
   EXPECT_TRUE(CompareStreamCollections(signaling_->remote_streams(),
                                        reference_collection_));
   EXPECT_TRUE(CompareStreamCollections(observer_->remote_streams(),
@@ -599,11 +601,48 @@ TEST_F(MediaStreamSignalingTest, AddRemoveTrackFromExistingRemoteMediaStream) {
 
   // Remove the extra audio and video tracks again.
   CreateSessionDescriptionAndReference(1, 1, desc_ms1.use());
-  signaling_->UpdateRemoteStreams(desc_ms1.get());
+  signaling_->OnRemoteDescriptionChanged(desc_ms1.get());
   EXPECT_TRUE(CompareStreamCollections(signaling_->remote_streams(),
                                        reference_collection_));
   EXPECT_TRUE(CompareStreamCollections(observer_->remote_streams(),
                                        reference_collection_));
+}
+
+// This test that remote tracks are ended if a
+// local session description is set that rejects the media content type.
+TEST_F(MediaStreamSignalingTest, RejectMediaContent) {
+  talk_base::scoped_ptr<SessionDescriptionInterface> desc(
+      webrtc::CreateSessionDescription(SessionDescriptionInterface::kOffer,
+                                       kSdpStringWithStream1, NULL));
+  EXPECT_TRUE(desc != NULL);
+  signaling_->OnRemoteDescriptionChanged(desc.get());
+
+  ASSERT_EQ(1u, observer_->remote_streams()->count());
+  MediaStreamInterface* remote_stream =  observer_->remote_streams()->at(0);
+  ASSERT_EQ(1u, remote_stream->GetVideoTracks().size());
+  ASSERT_EQ(1u, remote_stream->GetAudioTracks().size());
+
+  talk_base::scoped_refptr<webrtc::VideoTrackInterface> remote_video =
+      remote_stream->GetVideoTracks()[0];
+  EXPECT_EQ(webrtc::MediaStreamTrackInterface::kLive, remote_video->state());
+  talk_base::scoped_refptr<webrtc::AudioTrackInterface> remote_audio =
+      remote_stream->GetAudioTracks()[0];
+  EXPECT_EQ(webrtc::MediaStreamTrackInterface::kLive, remote_audio->state());
+
+  cricket::ContentInfo* video_info =
+      desc->description()->GetContentByName("video");
+  ASSERT_TRUE(video_info != NULL);
+  video_info->rejected = true;
+  signaling_->OnLocalDescriptionChanged(desc.get());
+  EXPECT_EQ(webrtc::MediaStreamTrackInterface::kEnded, remote_video->state());
+  EXPECT_EQ(webrtc::MediaStreamTrackInterface::kLive, remote_audio->state());
+
+  cricket::ContentInfo* audio_info =
+      desc->description()->GetContentByName("audio");
+  ASSERT_TRUE(audio_info != NULL);
+  audio_info->rejected = true;
+  signaling_->OnLocalDescriptionChanged(desc.get());
+  EXPECT_EQ(webrtc::MediaStreamTrackInterface::kEnded, remote_audio->state());
 }
 
 // This tests that a default MediaStream is created if a remote session
@@ -616,26 +655,26 @@ TEST_F(MediaStreamSignalingTest, SdpWithoutMsidCreatesDefaultStream) {
                                        kSdpStringWithoutStreamsAudioOnly,
                                        NULL));
   ASSERT_TRUE(desc_audio_only != NULL);
-  signaling_->UpdateRemoteStreams(desc_audio_only.get());
+  signaling_->OnRemoteDescriptionChanged(desc_audio_only.get());
 
   EXPECT_EQ(1u, signaling_->remote_streams()->count());
   ASSERT_EQ(1u, observer_->remote_streams()->count());
   MediaStreamInterface* remote_stream = observer_->remote_streams()->at(0);
 
-  EXPECT_EQ(1u, remote_stream->audio_tracks()->count());
-  EXPECT_EQ(0u, remote_stream->video_tracks()->count());
+  EXPECT_EQ(1u, remote_stream->GetAudioTracks().size());
+  EXPECT_EQ(0u, remote_stream->GetVideoTracks().size());
   EXPECT_EQ("default", remote_stream->label());
 
   talk_base::scoped_ptr<SessionDescriptionInterface> desc(
       webrtc::CreateSessionDescription(SessionDescriptionInterface::kOffer,
                                        kSdpStringWithoutStreams, NULL));
   ASSERT_TRUE(desc != NULL);
-  signaling_->UpdateRemoteStreams(desc.get());
+  signaling_->OnRemoteDescriptionChanged(desc.get());
   EXPECT_EQ(1u, signaling_->remote_streams()->count());
-  ASSERT_EQ(1u, remote_stream->audio_tracks()->count());
-  EXPECT_EQ("defaulta0", remote_stream->audio_tracks()->at(0)->id());
-  ASSERT_EQ(1u, remote_stream->video_tracks()->count());
-  EXPECT_EQ("defaultv0", remote_stream->video_tracks()->at(0)->id());
+  ASSERT_EQ(1u, remote_stream->GetAudioTracks().size());
+  EXPECT_EQ("defaulta0", remote_stream->GetAudioTracks()[0]->id());
+  ASSERT_EQ(1u, remote_stream->GetVideoTracks().size());
+  EXPECT_EQ("defaultv0", remote_stream->GetVideoTracks()[0]->id());
 }
 
 // This tests that a default MediaStream is created if the remote session
@@ -648,12 +687,12 @@ TEST_F(MediaStreamSignalingTest,
                                        kSdpStringWithoutStreams,
                                        NULL));
   ASSERT_TRUE(desc != NULL);
-  signaling_->UpdateRemoteStreams(desc.get());
+  signaling_->OnRemoteDescriptionChanged(desc.get());
 
   ASSERT_EQ(1u, observer_->remote_streams()->count());
   MediaStreamInterface* remote_stream = observer_->remote_streams()->at(0);
-  EXPECT_EQ(1u, remote_stream->audio_tracks()->count());
-  EXPECT_EQ(1u, remote_stream->video_tracks()->count());
+  EXPECT_EQ(1u, remote_stream->GetAudioTracks().size());
+  EXPECT_EQ(1u, remote_stream->GetVideoTracks().size());
 }
 
 // This tests that a default MediaStream is not created if the remote session
@@ -663,7 +702,7 @@ TEST_F(MediaStreamSignalingTest, SdpWitMsidDontCreatesDefaultStream) {
       webrtc::CreateSessionDescription(SessionDescriptionInterface::kOffer,
                                        kSdpStringWithMsidWithoutStreams,
                                        NULL));
-  signaling_->UpdateRemoteStreams(desc_msid_without_streams.get());
+  signaling_->OnRemoteDescriptionChanged(desc_msid_without_streams.get());
   EXPECT_EQ(0u, observer_->remote_streams()->count());
 }
 
@@ -675,7 +714,7 @@ TEST_F(MediaStreamSignalingTest, VerifyDefaultStreamIsNotCreated) {
                                        kSdpStringWithStream1,
                                        NULL));
   ASSERT_TRUE(desc != NULL);
-  signaling_->UpdateRemoteStreams(desc.get());
+  signaling_->OnRemoteDescriptionChanged(desc.get());
   talk_base::scoped_refptr<StreamCollection> reference(
       CreateStreamCollection(1));
   EXPECT_TRUE(CompareStreamCollections(observer_->remote_streams(),
@@ -685,6 +724,6 @@ TEST_F(MediaStreamSignalingTest, VerifyDefaultStreamIsNotCreated) {
       webrtc::CreateSessionDescription(SessionDescriptionInterface::kOffer,
                                        kSdpStringWithoutStreams,
                                        NULL));
-  signaling_->UpdateRemoteStreams(desc_without_streams.get());
+  signaling_->OnRemoteDescriptionChanged(desc_without_streams.get());
   EXPECT_EQ(0u, observer_->remote_streams()->count());
 }

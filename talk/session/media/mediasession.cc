@@ -205,10 +205,10 @@ static bool GenerateCname(const StreamParamsVec& params_vec,
       continue;
 
     StreamParams param;
-    // nick is empty for StreamParams generated using
+    // groupid is empty for StreamParams generated using
     // MediaSessionDescriptionFactory.
-    if (GetStreamByNickAndName(params_vec, "", stream_it->name,
-                               &param)) {
+    if (GetStreamByIds(params_vec, "", stream_it->id,
+                       &param)) {
       *cname = param.cname;
       return true;
     }
@@ -411,10 +411,10 @@ static bool AddStreamParams(
       continue;  // Wrong media type.
 
     StreamParams param;
-    // nick is empty for StreamParams generated using
+    // groupid is empty for StreamParams generated using
     // MediaSessionDescriptionFactory.
-    if (!GetStreamByNickAndName(*current_streams, "", stream_it->name,
-                                &param)) {
+    if (!GetStreamByIds(*current_streams, "", stream_it->id,
+                        &param)) {
       // This is a new stream.
       // Get a CNAME. Either new or same as one of the other synched streams.
       std::string cname;
@@ -426,7 +426,7 @@ static bool AddStreamParams(
       std::vector<uint32> ssrcs;
       GenerateSsrcs(*current_streams, include_rtx_stream, ssrcs);
       StreamParams stream_param;
-      stream_param.name = stream_it->name;
+      stream_param.id = stream_it->id;
       stream_param.ssrcs.push_back(ssrcs[0]);
       if (include_rtx_stream) {
         stream_param.AddFidSsrc(ssrcs[0], ssrcs[1]);
@@ -616,6 +616,7 @@ static bool CreateMediaContentOffer(
     const SecureMediaPolicy& secure_policy,
     const CryptoParamsVec* current_cryptos,
     const std::vector<std::string>& crypto_suites,
+    const RtpHeaderExtensions& rtp_extensions,
     bool add_legacy_stream,
     StreamParamsVec* current_streams,
     MediaContentDescriptionImpl<C>* offer) {
@@ -625,6 +626,7 @@ static bool CreateMediaContentOffer(
   offer->set_crypto_required(secure_policy == SEC_REQUIRED);
   offer->set_rtcp_mux(options.rtcp_mux_enabled);
   offer->set_multistream(options.is_muc);
+  offer->set_rtp_header_extensions(rtp_extensions);
 
   if (!AddStreamParams(
           offer->type(), options.streams, current_streams,
@@ -711,6 +713,29 @@ static void FindCodecsToOffer(
   used_pltypes->UpdateRtxCodecs(offered_codecs);
 }
 
+static void NegotiateRtpHeaderExtensions(
+    const RtpHeaderExtensions& local_extensions,
+    const RtpHeaderExtensions& offered_extensions,
+    RtpHeaderExtensions* negotiated_extenstions) {
+  RtpHeaderExtensions::const_iterator ours;
+  for (ours = local_extensions.begin();
+       ours != local_extensions.end(); ++ours) {
+    RtpHeaderExtensions::const_iterator theirs;
+    for (theirs = offered_extensions.begin();
+         theirs != offered_extensions.end(); ++theirs) {
+      if (ours->uri == theirs->uri) {
+        // We respond with our own extension id so we don't need to
+        // remember the the negotiated value if we decide to send an updated
+        // offer.
+        // TODO(perkj): This might turn out to be a problem. Refactor to use
+        // the offered ids and store the used ids similarly as codec payload
+        // types.
+        negotiated_extenstions->push_back(*ours);
+      }
+    }
+  }
+}
+
 // Create a media content to be answered in a session-accept,
 // according to the given options.rtcp_mux, options.streams, codecs,
 // crypto, and streams.  If we don't currently have crypto (in
@@ -727,6 +752,7 @@ static bool CreateMediaContentAnswer(
     const std::vector<C>& local_codecs,
     const SecureMediaPolicy& sdes_policy,
     const CryptoParamsVec* current_cryptos,
+    const RtpHeaderExtensions& local_rtp_extenstions,
     StreamParamsVec* current_streams,
     bool add_legacy_stream,
     bool bundle_enabled,
@@ -736,6 +762,11 @@ static bool CreateMediaContentAnswer(
   answer->AddCodecs(negotiated_codecs);
   answer->SortCodecs();
   answer->set_protocol(offer->protocol());
+  RtpHeaderExtensions negotiated_rtp_extensions;
+  NegotiateRtpHeaderExtensions(local_rtp_extenstions,
+                               offer->rtp_header_extensions(),
+                               &negotiated_rtp_extensions);
+  answer->set_rtp_header_extensions(negotiated_rtp_extensions);
 
   answer->set_rtcp_mux(options.rtcp_mux_enabled && offer->rtcp_mux());
 
@@ -780,9 +811,9 @@ static void SetMediaProtocol(bool secure_transport,
 }
 
 void MediaSessionOptions::AddStream(MediaType type,
-                                    const std::string& name,
+                                    const std::string& id,
                                     const std::string& sync_label) {
-  streams.push_back(Stream(type, name, sync_label));
+  streams.push_back(Stream(type, id, sync_label));
 
   if (type == MEDIA_TYPE_VIDEO)
     has_video = true;
@@ -793,10 +824,10 @@ void MediaSessionOptions::AddStream(MediaType type,
 }
 
 void MediaSessionOptions::RemoveStream(MediaType type,
-                                       const std::string& name) {
+                                       const std::string& id) {
   Streams::iterator stream_it = streams.begin();
   for (; stream_it != streams.end(); ++stream_it) {
-    if (stream_it->type == type && stream_it->name == name) {
+    if (stream_it->type == type && stream_it->id == id) {
       streams.erase(stream_it);
       return;
     }
@@ -818,7 +849,9 @@ MediaSessionDescriptionFactory::MediaSessionDescriptionFactory(
       add_legacy_(true),
       transport_desc_factory_(transport_desc_factory) {
   channel_manager->GetSupportedAudioCodecs(&audio_codecs_);
+  channel_manager->GetSupportedAudioRtpHeaderExtensions(&audio_rtp_extensions_);
   channel_manager->GetSupportedVideoCodecs(&video_codecs_);
+  channel_manager->GetSupportedVideoRtpHeaderExtensions(&video_rtp_extensions_);
   channel_manager->GetSupportedDataCodecs(&data_codecs_);
 }
 
@@ -849,6 +882,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateOffer(
             secure(),
             GetCryptos(GetFirstAudioContentDescription(current_description)),
             crypto_suites,
+            audio_rtp_extensions_,
             add_legacy_,
             &current_streams,
             audio.get())) {
@@ -875,6 +909,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateOffer(
             secure(),
             GetCryptos(GetFirstVideoContentDescription(current_description)),
             crypto_suites,
+            video_rtp_extensions_,
             add_legacy_,
             &current_streams,
             video.get())) {
@@ -901,6 +936,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateOffer(
             secure(),
             GetCryptos(GetFirstDataContentDescription(current_description)),
             crypto_suites,
+            RtpHeaderExtensions(),
             add_legacy_,
             &current_streams,
             data.get())) {
@@ -975,6 +1011,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateAnswer(
             audio_codecs_,
             sdes_policy,
             GetCryptos(GetFirstAudioContentDescription(current_description)),
+            audio_rtp_extensions_,
             &current_streams,
             add_legacy_,
             bundle_enabled,
@@ -1023,6 +1060,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateAnswer(
             video_codecs_,
             sdes_policy,
             GetCryptos(GetFirstVideoContentDescription(current_description)),
+            video_rtp_extensions_,
             &current_streams,
             add_legacy_,
             bundle_enabled,
@@ -1070,6 +1108,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateAnswer(
             data_codecs_,
             sdes_policy,
             GetCryptos(GetFirstDataContentDescription(current_description)),
+            RtpHeaderExtensions(),
             &current_streams,
             add_legacy_,
             bundle_enabled,

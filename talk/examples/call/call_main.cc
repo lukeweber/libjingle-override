@@ -254,6 +254,8 @@ int main(int argc, char **argv) {
   DEFINE_bool(help, false, "Prints this message");
   DEFINE_bool(multisession, false,
               "Enable support for multiple sessions in calls.");
+  DEFINE_bool(roster, false,
+      "Enable roster messages printed in console.");
 
   // parse options
   FlagList::SetFlagsFromCommandLine(&argc, argv, true);
@@ -283,6 +285,7 @@ int main(int argc, char **argv) {
   bool data_channel_enabled = FLAG_datachannel;
   bool multisession_enabled = FLAG_multisession;
   talk_base::SSLIdentity* ssl_identity = NULL;
+  bool show_roster_messages = FLAG_roster;
 
   // Set up debugging.
   if (debug) {
@@ -464,6 +467,7 @@ int main(int argc, char **argv) {
   client->SetRender(render);
   client->SetDataChannelEnabled(data_channel_enabled);
   client->SetMultiSessionEnabled(multisession_enabled);
+  client->SetShowRosterMessages(show_roster_messages);
   console->Start();
 
   if (debug) {

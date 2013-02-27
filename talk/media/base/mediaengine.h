@@ -145,7 +145,11 @@ class MediaEngineInterface {
   virtual bool SetVideoCapture(bool capture) = 0;
 
   virtual const std::vector<AudioCodec>& audio_codecs() = 0;
+  virtual const std::vector<RtpHeaderExtension>&
+      audio_rtp_header_extensions() = 0;
   virtual const std::vector<VideoCodec>& video_codecs() = 0;
+  virtual const std::vector<RtpHeaderExtension>&
+      video_rtp_header_extensions() = 0;
 
   // Logging control
   virtual void SetVoiceLogging(int min_sev, const char* filter) = 0;
@@ -256,8 +260,14 @@ class CompositeMediaEngine : public MediaEngineInterface {
   virtual const std::vector<AudioCodec>& audio_codecs() {
     return voice_.codecs();
   }
+  virtual const std::vector<RtpHeaderExtension>& audio_rtp_header_extensions() {
+    return voice_.rtp_header_extensions();
+  }
   virtual const std::vector<VideoCodec>& video_codecs() {
     return video_.codecs();
+  }
+  virtual const std::vector<RtpHeaderExtension>& video_rtp_header_extensions() {
+    return video_.rtp_header_extensions();
   }
 
   virtual void SetVoiceLogging(int min_sev, const char* filter) {
@@ -319,6 +329,9 @@ class NullVoiceEngine {
   int GetInputLevel() { return 0; }
   bool SetLocalMonitor(bool enable) { return true; }
   const std::vector<AudioCodec>& codecs() { return codecs_; }
+  const std::vector<RtpHeaderExtension>& rtp_header_extensions() {
+    return rtp_header_extensions_;
+  }
   void SetLogging(int min_sev, const char* filter) {}
   bool RegisterProcessor(uint32 ssrc,
                          VoiceProcessor* voice_processor,
@@ -329,6 +342,7 @@ class NullVoiceEngine {
 
  private:
   std::vector<AudioCodec> codecs_;
+  std::vector<RtpHeaderExtension> rtp_header_extensions_;
 };
 
 // NullVideoEngine can be used with CompositeMediaEngine in the case where only
@@ -350,6 +364,9 @@ class NullVideoEngine {
   bool SetLocalRenderer(VideoRenderer* renderer) { return true; }
   bool SetCapture(bool capture) { return true;  }
   const std::vector<VideoCodec>& codecs() { return codecs_; }
+  const std::vector<RtpHeaderExtension>& rtp_header_extensions() {
+    return rtp_header_extensions_;
+  }
   void SetLogging(int min_sev, const char* filter) {}
   bool RegisterProcessor(VideoProcessor* video_processor) { return true; }
   bool UnregisterProcessor(VideoProcessor* video_processor) { return true; }
@@ -360,6 +377,7 @@ class NullVideoEngine {
   sigslot::signal2<VideoCapturer*, CaptureState> SignalCaptureStateChange;
  private:
   std::vector<VideoCodec> codecs_;
+  std::vector<RtpHeaderExtension> rtp_header_extensions_;
 };
 
 typedef CompositeMediaEngine<NullVoiceEngine, NullVideoEngine> NullMediaEngine;

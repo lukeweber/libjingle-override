@@ -169,7 +169,7 @@ bool RtpDataMediaChannel::AddSendStream(const StreamParams& stream) {
 
   StreamParams found_stream;
   if (GetStreamBySsrc(send_streams_, stream.first_ssrc(), &found_stream)) {
-    LOG(LS_WARNING) << "Not adding data send stream '" << stream.name
+    LOG(LS_WARNING) << "Not adding data send stream '" << stream.id
                     << "' with ssrc=" << stream.first_ssrc()
                     << " because stream already exists.";
     return false;
@@ -182,7 +182,7 @@ bool RtpDataMediaChannel::AddSendStream(const StreamParams& stream) {
       kDataCodecClockrate,
       talk_base::CreateRandomNonZeroId(), talk_base::CreateRandomNonZeroId());
 
-  LOG(LS_INFO) << "Added data send stream '" << stream.name
+  LOG(LS_INFO) << "Added data send stream '" << stream.id
                << "' with ssrc=" << stream.first_ssrc();
   return true;
 }
@@ -206,14 +206,14 @@ bool RtpDataMediaChannel::AddRecvStream(const StreamParams& stream) {
 
   StreamParams found_stream;
   if (GetStreamBySsrc(recv_streams_, stream.first_ssrc(), &found_stream)) {
-    LOG(LS_WARNING) << "Not adding data recv stream '" << stream.name
+    LOG(LS_WARNING) << "Not adding data recv stream '" << stream.id
                     << "' with ssrc=" << stream.first_ssrc()
                     << " because stream already exists.";
     return false;
   }
 
   recv_streams_.push_back(stream);
-  LOG(LS_INFO) << "Added data recv stream '" << stream.name
+  LOG(LS_INFO) << "Added data recv stream '" << stream.id
                << "' with ssrc=" << stream.first_ssrc();
   return true;
 }
@@ -266,7 +266,8 @@ void RtpDataMediaChannel::OnPacketReceived(talk_base::Buffer* packet) {
   }
 
   // Uncomment this for easy debugging.
-  // LOG(LS_INFO) << "Received packet from " << found_stream.nick << ":"
+  // LOG(LS_INFO) << "Received packet"
+  //              << " groupid=" << found_stream.groupid
   //              << ", ssrc=" << header.ssrc
   //              << ", seqnum=" << header.seq_num
   //              << ", timestamp=" << header.timestamp
@@ -346,7 +347,7 @@ bool RtpDataMediaChannel::SendData(
 
   // Uncomment this for easy debugging.
   // LOG(LS_INFO) << "Sent packet: "
-  //              << " stream=" << found_stream.name
+  //              << " stream=" << found_stream.id
   //              << ", seqnum=" << header.seq_num
   //              << ", timestamp=" << header.timestamp
   //              << ", len=" << data_len;

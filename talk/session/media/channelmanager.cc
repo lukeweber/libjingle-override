@@ -54,6 +54,7 @@ enum {
   MSG_SETVOICELOGGING = 7,
   MSG_CREATEVIDEOCHANNEL = 11,
   MSG_DESTROYVIDEOCHANNEL = 12,
+  // TODO(sriniv): Use this in a future CL. Currently not used.
   MSG_SETVIDEOOPTIONS = 13,
   MSG_SETLOCALRENDERER = 14,
   MSG_SETDEFAULTVIDEOENCODERCONFIG = 15,
@@ -79,6 +80,7 @@ enum {
   MSG_ADDVIDEORENDERER = 31,
   MSG_REMOVEVIDEORENDERER = 32,
   MSG_GETSTARTCAPTUREFORMAT = 33,
+  MSG_SETCAPTUREDEVICE = 34,
 };
 
 static const int kNotSetOutputVolume = -1;
@@ -118,9 +120,10 @@ struct VolumeLevel : public talk_base::MessageData {
   bool result;
 };
 
-struct VideoOptionsParams : public talk_base::MessageData {
-  explicit VideoOptionsParams(const Device* d) : cam_device(d), result(false) {}
-  const Device* cam_device;
+struct CaptureDeviceParams : public talk_base::MessageData {
+  explicit CaptureDeviceParams(const Device* d)
+      : capture_device(d), result(false) {}
+  const Device* capture_device;
   bool result;
 };
 
@@ -144,7 +147,7 @@ struct LocalRenderer : public talk_base::MessageData {
 };
 
 struct Capturer : public talk_base::MessageData {
-  Capturer(VideoCapturer* c)
+  explicit Capturer(VideoCapturer* c)
       : capturer(c),
         result(false) {}
   VideoCapturer* capturer;
@@ -285,6 +288,11 @@ void ChannelManager::GetSupportedAudioCodecs(
   }
 }
 
+void ChannelManager::GetSupportedAudioRtpHeaderExtensions(
+    RtpHeaderExtensions* ext) const {
+  *ext = media_engine_->audio_rtp_header_extensions();
+}
+
 void ChannelManager::GetSupportedVideoCodecs(
     std::vector<VideoCodec>* codecs) const {
   codecs->clear();
@@ -294,6 +302,11 @@ void ChannelManager::GetSupportedVideoCodecs(
       it != media_engine_->video_codecs().end(); ++it) {
     codecs->push_back(*it);
   }
+}
+
+void ChannelManager::GetSupportedVideoRtpHeaderExtensions(
+    RtpHeaderExtensions* ext) const {
+  *ext = media_engine_->video_rtp_header_extensions();
 }
 
 void ChannelManager::GetSupportedDataCodecs(
@@ -354,8 +367,8 @@ bool ChannelManager::Init() {
         LOG(LS_WARNING) << "Failed to SetOutputVolume to "
                         << audio_output_volume_;
       }
-      if (!SetVideoOptions(camera_device_) && !camera_device_.empty()) {
-        LOG(LS_WARNING) << "Failed to SetVideoOptions with camera: "
+      if (!SetCaptureDevice(camera_device_) && !camera_device_.empty()) {
+        LOG(LS_WARNING) << "Failed to SetCaptureDevice with camera: "
                         << camera_device_;
       }
 
@@ -399,7 +412,7 @@ void ChannelManager::Terminate_w() {
   while (!soundclips_.empty()) {
     DestroySoundclip_w(soundclips_.back());
   }
-  if (!SetVideoOptions_w(NULL)) {
+  if (!SetCaptureDevice_w(NULL)) {
     LOG(LS_WARNING) << "failed to delete video capturer";
   }
 }
@@ -697,7 +710,7 @@ bool ChannelManager::IsSameCapturer(const std::string& capturer_name,
   return capturer->GetId() == device.id;
 }
 
-bool ChannelManager::GetVideoOptions(std::string* cam_name) {
+bool ChannelManager::GetCaptureDevice(std::string* cam_name) {
   if (camera_device_.empty()) {
     // Initialize camera_device_ with default.
     Device device;
@@ -713,7 +726,7 @@ bool ChannelManager::GetVideoOptions(std::string* cam_name) {
   return true;
 }
 
-bool ChannelManager::SetVideoOptions(const std::string& cam_name) {
+bool ChannelManager::SetCaptureDevice(const std::string& cam_name) {
   Device device;
   bool ret = true;
   if (!device_manager_->GetVideoCaptureDevice(cam_name, &device)) {
@@ -725,8 +738,8 @@ bool ChannelManager::SetVideoOptions(const std::string& cam_name) {
 
   // If we're running, tell the media engine about it.
   if (initialized_ && ret) {
-    VideoOptionsParams options(&device);
-    ret = (Send(MSG_SETVIDEOOPTIONS, &options) && options.result);
+    CaptureDeviceParams options(&device);
+    ret = (Send(MSG_SETCAPTUREDEVICE, &options) && options.result);
   }
 
   // If everything worked, retain the name of the selected camera.
@@ -758,7 +771,7 @@ VideoCapturer* ChannelManager::CreateVideoCapturer() {
   return device_manager_->CreateVideoCapturer(device);
 }
 
-bool ChannelManager::SetVideoOptions_w(const Device* cam_device) {
+bool ChannelManager::SetCaptureDevice_w(const Device* cam_device) {
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   ASSERT(initialized_);
 
@@ -1079,9 +1092,9 @@ void ChannelManager::OnMessage(talk_base::Message* message) {
       p->result = SetLocalMonitor_w(p->enable);
       break;
     }
-    case MSG_SETVIDEOOPTIONS: {
-      VideoOptionsParams* p = static_cast<VideoOptionsParams*>(data);
-      p->result = SetVideoOptions_w(p->cam_device);
+    case MSG_SETCAPTUREDEVICE: {
+      CaptureDeviceParams* p = static_cast<CaptureDeviceParams*>(data);
+      p->result = SetCaptureDevice_w(p->capture_device);
       break;
     }
     case MSG_SETDEFAULTVIDEOENCODERCONFIG: {

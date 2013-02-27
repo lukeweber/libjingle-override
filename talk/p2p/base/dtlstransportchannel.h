@@ -184,11 +184,13 @@ class DtlsTransportChannelWrapper : public TransportChannelImpl {
   virtual void SetIceProtocolType(IceProtocolType type) {
     channel_->SetIceProtocolType(type);
   }
-  virtual void SetIceUfrag(const std::string& ice_ufrag) {
-    channel_->SetIceUfrag(ice_ufrag);
+  virtual void SetIceCredentials(const std::string& ice_ufrag,
+                                 const std::string& ice_pwd) {
+    channel_->SetIceCredentials(ice_ufrag, ice_pwd);
   }
-  virtual void SetIcePwd(const std::string& ice_pwd) {
-    channel_->SetIcePwd(ice_pwd);
+  virtual void SetRemoteIceCredentials(const std::string& ice_ufrag,
+                                       const std::string& ice_pwd) {
+    channel_->SetRemoteIceCredentials(ice_ufrag, ice_pwd);
   }
 
   virtual void Connect();

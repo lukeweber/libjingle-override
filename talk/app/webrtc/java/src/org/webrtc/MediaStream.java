@@ -59,6 +59,11 @@ public class MediaStream {
     return nativeLabel(nativeStream);
   }
 
+  public String toString() {
+    return "[" + label() + ":A=" + audioTracks.size() +
+        ":V=" + videoTracks.size() + "]";
+  }
+
   private static native String nativeLabel(long nativeStream);
 
   private static native void free(long nativeStream);

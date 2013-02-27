@@ -27,6 +27,7 @@
 
 #include "talk/base/gunit.h"
 #include "talk/base/scoped_ptr.h"
+#include "talk/media/base/constants.h"
 #include "talk/media/base/fakemediaprocessor.h"
 #include "talk/media/base/mediachannel.h"
 #include "talk/media/base/testutils.h"
@@ -135,7 +136,8 @@ class WebRtcVideoEngineTestFake : public testing::Test {
                           unsigned int max_bitrate = kMaxBandwidthKbps,
                           unsigned int min_bitrate = kMinBandwidthKbps,
                           unsigned int start_bitrate = kStartBandwidthKbps,
-                          unsigned int fps = 30) {
+                          unsigned int fps = 30,
+                          unsigned int max_quantization = 0) {
     webrtc::VideoCodec gcodec;
     EXPECT_EQ(0, vie_.GetSendCodec(channel_num, gcodec));
 
@@ -154,7 +156,7 @@ class WebRtcVideoEngineTestFake : public testing::Test {
     EXPECT_FALSE(gcodec.codecSpecific.VP8.feedbackModeOn);
     EXPECT_EQ(webrtc::kComplexityNormal, gcodec.codecSpecific.VP8.complexity);
     EXPECT_EQ(webrtc::kResilienceOff, gcodec.codecSpecific.VP8.resilience);
-    EXPECT_EQ(0U, gcodec.qpMax);
+    EXPECT_EQ(max_quantization, gcodec.qpMax);
   }
   virtual void TearDown() {
     delete channel_;
@@ -241,6 +243,84 @@ TEST_F(WebRtcVideoEngineTestFake, SetSendCodecs) {
   EXPECT_TRUE(vie_.GetHybridNackFecStatus(channel_num));
   EXPECT_FALSE(vie_.GetNackStatus(channel_num));
   // TODO(juberti): Check RTCP, PLI, TMMBR.
+}
+
+TEST_F(WebRtcVideoEngineTestFake, SetSendCodecsWithMinMaxBitrate) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+  std::vector<cricket::VideoCodec> codecs(engine_.codecs());
+  codecs[0].params[cricket::kCodecParamMinBitrate] = "10";
+  codecs[0].params[cricket::kCodecParamMaxBitrate] = "20";
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+
+  VerifyVP8SendCodec(
+      channel_num, kVP8Codec.width, kVP8Codec.height, 0, 20, 10, 20);
+
+  cricket::VideoCodec codec;
+  EXPECT_TRUE(channel_->GetSendCodec(&codec));
+  EXPECT_EQ("10", codec.params[cricket::kCodecParamMinBitrate]);
+  EXPECT_EQ("20", codec.params[cricket::kCodecParamMaxBitrate]);
+}
+
+TEST_F(WebRtcVideoEngineTestFake, SetSendCodecsWithMinMaxBitrateInvalid) {
+  EXPECT_TRUE(SetupEngine());
+  std::vector<cricket::VideoCodec> codecs(engine_.codecs());
+  codecs[0].params[cricket::kCodecParamMinBitrate] = "30";
+  codecs[0].params[cricket::kCodecParamMaxBitrate] = "20";
+  EXPECT_FALSE(channel_->SetSendCodecs(codecs));
+}
+
+TEST_F(WebRtcVideoEngineTestFake, SetSendCodecsWithLargeMinMaxBitrate) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+  std::vector<cricket::VideoCodec> codecs(engine_.codecs());
+  codecs[0].params[cricket::kCodecParamMinBitrate] = "1000";
+  codecs[0].params[cricket::kCodecParamMaxBitrate] = "2000";
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+
+  VerifyVP8SendCodec(
+      channel_num, kVP8Codec.width, kVP8Codec.height, 0, 2000, 1000,
+      1000);
+}
+
+TEST_F(WebRtcVideoEngineTestFake, SetSendCodecsWithMaxQuantization) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+  std::vector<cricket::VideoCodec> codecs(engine_.codecs());
+  codecs[0].params[cricket::kCodecParamMaxQuantization] = "21";
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+
+  VerifyVP8SendCodec(
+      channel_num, kVP8Codec.width, kVP8Codec.height, 0, 2000, 50, 300,
+      30, 21);
+
+  cricket::VideoCodec codec;
+  EXPECT_TRUE(channel_->GetSendCodec(&codec));
+  EXPECT_EQ("21", codec.params[cricket::kCodecParamMaxQuantization]);
+}
+
+TEST_F(WebRtcVideoEngineTestFake, SetOptionsWithMaxBitrate) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+  std::vector<cricket::VideoCodec> codecs(engine_.codecs());
+  codecs[0].params[cricket::kCodecParamMinBitrate] = "10";
+  codecs[0].params[cricket::kCodecParamMaxBitrate] = "20";
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+
+  VerifyVP8SendCodec(
+      channel_num, kVP8Codec.width, kVP8Codec.height, 0, 20, 10, 20);
+
+  // Verify that max bitrate doesn't change after SetOptions().
+  cricket::VideoOptions options;
+  options.video_noise_reduction.Set(true);
+  EXPECT_TRUE(channel_->SetOptions(options));
+  VerifyVP8SendCodec(
+      channel_num, kVP8Codec.width, kVP8Codec.height, 0, 20, 10, 20);
+
+  options.video_noise_reduction.Set(false);
+  EXPECT_TRUE(channel_->SetOptions(options));
+  VerifyVP8SendCodec(
+      channel_num, kVP8Codec.width, kVP8Codec.height, 0, 20, 10, 20);
 }
 
 
@@ -515,31 +595,40 @@ TEST_F(WebRtcVideoEngineTestFake, BufferedModeLatency) {
   EXPECT_TRUE(channel_->AddSendStream(cricket::StreamParams::CreateLegacy(1)));
   int first_send_channel = vie_.GetLastChannel();
   EXPECT_EQ(0, vie_.GetSenderTargetDelay(first_send_channel));
+  EXPECT_EQ(0, vie_.GetReceiverTargetDelay(first_send_channel));
 
-  // Enable the experiment and verify.
+  // Enable the experiment and verify. The default channel will have both
+  // sender and receiver buffered mode enabled.
   cricket::VideoOptions options;
   options.conference_mode.Set(true);
   options.buffered_mode_latency.Set(100);
   EXPECT_TRUE(channel_->SetOptions(options));
   EXPECT_EQ(100, vie_.GetSenderTargetDelay(first_send_channel));
+  EXPECT_EQ(100, vie_.GetReceiverTargetDelay(first_send_channel));
 
   // Add a receive channel and verify sender buffered mode isn't enabled.
   EXPECT_TRUE(channel_->AddRecvStream(cricket::StreamParams::CreateLegacy(2)));
   int recv_channel_num = vie_.GetLastChannel();
   EXPECT_NE(first_send_channel, recv_channel_num);
   EXPECT_EQ(0, vie_.GetSenderTargetDelay(recv_channel_num));
+  EXPECT_EQ(100, vie_.GetReceiverTargetDelay(recv_channel_num));
 
   // Add a new send stream and verify sender buffered mode is enabled.
   EXPECT_TRUE(channel_->AddSendStream(cricket::StreamParams::CreateLegacy(3)));
   int second_send_channel = vie_.GetLastChannel();
   EXPECT_NE(first_send_channel, second_send_channel);
   EXPECT_EQ(100, vie_.GetSenderTargetDelay(second_send_channel));
+  EXPECT_EQ(0, vie_.GetReceiverTargetDelay(second_send_channel));
 
   // Disable sender buffered mode and verify.
   options.buffered_mode_latency.Clear();
   EXPECT_TRUE(channel_->SetOptions(options));
   EXPECT_EQ(0, vie_.GetSenderTargetDelay(first_send_channel));
+  EXPECT_EQ(0, vie_.GetReceiverTargetDelay(first_send_channel));
   EXPECT_EQ(0, vie_.GetSenderTargetDelay(second_send_channel));
+  EXPECT_EQ(0, vie_.GetReceiverTargetDelay(second_send_channel));
+  EXPECT_EQ(0, vie_.GetSenderTargetDelay(recv_channel_num));
+  EXPECT_EQ(0, vie_.GetReceiverTargetDelay(recv_channel_num));
 }
 
 // Test that AddRecvStream doesn't create new channel for 1:1 call.
