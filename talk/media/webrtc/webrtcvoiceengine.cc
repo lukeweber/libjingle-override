@@ -108,11 +108,7 @@ static const int kDefaultAudioDeviceId = 0;
 // http://tools.ietf.org/html/draft-ietf-avtext-client-to-mixer-audio-level-03
 static const char kRtpAudioLevelHeaderExtension[] =
     "urn:ietf:params:rtp-hdrext:ssrc-audio-level";
-
-// RTP Header extensions supported by WebRtcVoiceEngine and the preferred id.
-static const RtpHeaderExtension kWebRtcVoiceEngineRtpHeaderExtensions[] = {
-    RtpHeaderExtension(kRtpAudioLevelHeaderExtension, 1),
-};
+static const int kRtpAudioLevelHeaderExtensionId = 1;
 
 static const char kIsacCodecName[] = "ISAC";
 static const char kL16CodecName[] = "L16";
@@ -285,11 +281,9 @@ void WebRtcVoiceEngine::Construct() {
   ConstructCodecs();
 
   // Load our RTP Header extensions.
-  rtp_header_extensions_ =
-      std::vector<RtpHeaderExtension>(
-          kWebRtcVoiceEngineRtpHeaderExtensions,
-          kWebRtcVoiceEngineRtpHeaderExtensions +
-          ARRAY_SIZE(kWebRtcVoiceEngineRtpHeaderExtensions));
+  rtp_header_extensions_.push_back(
+      RtpHeaderExtension(kRtpAudioLevelHeaderExtension,
+                         kRtpAudioLevelHeaderExtensionId));
 }
 
 static bool IsOpus(const AudioCodec& codec) {

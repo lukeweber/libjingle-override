@@ -92,11 +92,7 @@ static const bool kRembReceiving = true;
 // http://tools.ietf.org/html/rfc5450
 static const char kRtpTimestampOffsetHeaderExtension[] =
     "urn:ietf:params:rtp-hdrext:toffset";
-
-// RTP Header extensions supported by WebRtcVideoeEngine and the preferred id.
-static const RtpHeaderExtension kWebRtcVideoEngineRtpHeaderExtensions[] = {
-    RtpHeaderExtension(kRtpTimestampOffsetHeaderExtension, 2),
-};
+static const int kRtpTimeOffsetExtensionId = 2;
 
 struct FlushBlackFrameData : public talk_base::MessageData {
   FlushBlackFrameData(uint32 s, int64 t) : ssrc(s), timestamp(t) {
@@ -586,11 +582,9 @@ void WebRtcVideoEngine::Construct(ViEWrapper* vie_wrapper,
 
 
   // Load our RTP Header extensions.
-  rtp_header_extensions_ =
-      std::vector<RtpHeaderExtension>(
-          kWebRtcVideoEngineRtpHeaderExtensions,
-          kWebRtcVideoEngineRtpHeaderExtensions +
-          ARRAY_SIZE(kWebRtcVideoEngineRtpHeaderExtensions));
+  rtp_header_extensions_.push_back(
+      RtpHeaderExtension(kRtpTimestampOffsetHeaderExtension,
+                         kRtpTimeOffsetExtensionId));
 }
 
 WebRtcVideoEngine::~WebRtcVideoEngine() {
@@ -2339,8 +2333,12 @@ bool WebRtcVideoMediaChannel::SetOptions(const VideoOptions &options) {
   bool buffer_latency_changed =
       (options_.buffered_mode_latency != options.buffered_mode_latency);
 
-  bool conference_mode_changed =
-      (options_.conference_mode != options.conference_mode);
+  bool conference_mode_turned_off = false;
+  if (options_.conference_mode.IsSet() && options.conference_mode.IsSet() &&
+      options_.conference_mode.GetWithDefaultIfUnset(false) &&
+      !options.conference_mode.GetWithDefaultIfUnset(false)) {
+    conference_mode_turned_off = true;
+  }
 
   // Save the options, to be interpreted where appropriate.
   options_ = options;
@@ -2351,7 +2349,7 @@ bool WebRtcVideoMediaChannel::SetOptions(const VideoOptions &options) {
   int expected_bitrate = send_max_bitrate_;
   if (InConferenceMode()) {
     expected_bitrate = conf_max_bitrate;
-  } else if (conference_mode_changed) {
+  } else if (conference_mode_turned_off) {
     // This is a special case for turning conference mode off.
     // Max bitrate should go back to the default maximum value instead
     // of the current maximum.

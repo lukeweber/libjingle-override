@@ -318,9 +318,31 @@ TEST_F(WebRtcVideoEngineTestFake, SetOptionsWithMaxBitrate) {
       channel_num, kVP8Codec.width, kVP8Codec.height, 0, 20, 10, 20);
 
   options.video_noise_reduction.Set(false);
+  options.conference_mode.Set(false);
   EXPECT_TRUE(channel_->SetOptions(options));
   VerifyVP8SendCodec(
       channel_num, kVP8Codec.width, kVP8Codec.height, 0, 20, 10, 20);
+}
+
+TEST_F(WebRtcVideoEngineTestFake, MaxBitrateResetWithConferenceMode) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+  std::vector<cricket::VideoCodec> codecs(engine_.codecs());
+  codecs[0].params[cricket::kCodecParamMinBitrate] = "10";
+  codecs[0].params[cricket::kCodecParamMaxBitrate] = "20";
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+
+  VerifyVP8SendCodec(
+      channel_num, kVP8Codec.width, kVP8Codec.height, 0, 20, 10, 20);
+
+  cricket::VideoOptions options;
+  options.conference_mode.Set(true);
+  EXPECT_TRUE(channel_->SetOptions(options));
+  options.conference_mode.Set(false);
+  EXPECT_TRUE(channel_->SetOptions(options));
+  VerifyVP8SendCodec(
+      channel_num, kVP8Codec.width, kVP8Codec.height, 0,
+      kMaxBandwidthKbps, 10, 20);
 }
 
 
@@ -864,6 +886,56 @@ TEST_F(WebRtcVideoEngineTestFake, SetBandwidthInConference) {
   EXPECT_NE(768U, gcodec.minBitrate);
   EXPECT_NE(768U, gcodec.startBitrate);
   EXPECT_NE(768U, gcodec.maxBitrate);
+}
+
+// Test that sending screencast frames doesn't change bitrate.
+TEST_F(WebRtcVideoEngineTestFake, SetBandwidthScreencast) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+
+  // Set send codec.
+  cricket::VideoCodec codec(kVP8Codec);
+  std::vector<cricket::VideoCodec> codec_list;
+  codec_list.push_back(codec);
+  EXPECT_TRUE(channel_->AddSendStream(
+      cricket::StreamParams::CreateLegacy(123)));
+  EXPECT_TRUE(channel_->SetSendCodecs(codec_list));
+  EXPECT_TRUE(channel_->SetSendBandwidth(false, 111000));
+  EXPECT_TRUE(channel_->SetSend(true));
+
+  SendI420ScreencastFrame(kVP8Codec.width, kVP8Codec.height);
+  VerifyVP8SendCodec(channel_num, kVP8Codec.width, kVP8Codec.height, 0,
+                     111, 111, 111);
+}
+
+// Test that sending screencast frames in conference mode changes
+// bitrate.
+TEST_F(WebRtcVideoEngineTestFake, SetBandwidthScreencastInConference) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+
+  // Set send codec.
+  cricket::VideoCodec codec(kVP8Codec);
+  std::vector<cricket::VideoCodec> codec_list;
+  codec_list.push_back(codec);
+  EXPECT_TRUE(channel_->AddSendStream(
+      cricket::StreamParams::CreateLegacy(123)));
+  EXPECT_TRUE(channel_->SetSendCodecs(codec_list));
+  EXPECT_TRUE(channel_->SetSendBandwidth(false, 111000));
+  EXPECT_EQ(2, vie_.num_set_send_codecs());
+
+  cricket::VideoOptions options;
+  options.video_noise_reduction.Set(true);
+  options.conference_mode.Set(true);
+  EXPECT_TRUE(channel_->SetOptions(options));
+  EXPECT_EQ(3, vie_.num_set_send_codecs());
+
+  EXPECT_TRUE(channel_->SetSend(true));
+  SendI420ScreencastFrame(kVP8Codec.width, kVP8Codec.height);
+  EXPECT_EQ(4, vie_.num_set_send_codecs());
+  webrtc::VideoCodec gcodec;
+  EXPECT_EQ(0, vie_.GetSendCodec(channel_num, gcodec));
+  EXPECT_EQ(100u, gcodec.maxBitrate);
 }
 
 // Test SetSendSsrc.
