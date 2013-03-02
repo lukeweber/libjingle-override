@@ -72,7 +72,6 @@ using webrtc::DataChannelInterface;
 using webrtc::FakeConstraints;
 using webrtc::FakePortAllocatorFactory;
 using webrtc::IceCandidateInterface;
-using webrtc::LocalMediaStreamInterface;
 using webrtc::MediaStreamInterface;
 using webrtc::MediaStreamTrackInterface;
 using webrtc::MockCreateSessionDescriptionObserver;
@@ -299,7 +298,7 @@ class PeerConnectionInterfaceTest : public testing::Test {
 
   void AddStream(const std::string& label) {
     // Create a local stream.
-    scoped_refptr<LocalMediaStreamInterface> stream(
+    scoped_refptr<MediaStreamInterface> stream(
         pc_factory_->CreateLocalMediaStream(label));
     scoped_refptr<VideoSourceInterface> video_source(
         pc_factory_->CreateVideoSource(new cricket::FakeVideoCapturer(), NULL));
@@ -313,7 +312,7 @@ class PeerConnectionInterfaceTest : public testing::Test {
 
   void AddVoiceStream(const std::string& label) {
     // Create a local stream.
-    scoped_refptr<LocalMediaStreamInterface> stream(
+    scoped_refptr<MediaStreamInterface> stream(
         pc_factory_->CreateLocalMediaStream(label));
     scoped_refptr<AudioTrackInterface> audio_track(
         pc_factory_->CreateAudioTrack(label + "a0", NULL));
@@ -327,7 +326,7 @@ class PeerConnectionInterfaceTest : public testing::Test {
                            const std::string& audio_track_label,
                            const std::string& video_track_label) {
     // Create a local stream.
-    scoped_refptr<LocalMediaStreamInterface> stream(
+    scoped_refptr<MediaStreamInterface> stream(
         pc_factory_->CreateLocalMediaStream(stream_label));
     scoped_refptr<AudioTrackInterface> audio_track(
         pc_factory_->CreateAudioTrack(
@@ -551,7 +550,7 @@ TEST_F(PeerConnectionInterfaceTest, AddStreams) {
   ASSERT_EQ(2u, pc_->local_streams()->count());
 
   // Fail to add another stream with audio since we already have an audio track.
-  scoped_refptr<LocalMediaStreamInterface> stream(
+  scoped_refptr<MediaStreamInterface> stream(
       pc_factory_->CreateLocalMediaStream(kStreamLabel3));
   scoped_refptr<AudioTrackInterface> audio_track(
       pc_factory_->CreateAudioTrack(

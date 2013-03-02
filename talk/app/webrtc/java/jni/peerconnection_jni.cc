@@ -76,7 +76,6 @@ using webrtc::AudioTrackInterface;
 using webrtc::AudioTrackVector;
 using webrtc::CreateSessionDescriptionObserver;
 using webrtc::IceCandidateInterface;
-using webrtc::LocalMediaStreamInterface;
 using webrtc::MediaConstraintsInterface;
 using webrtc::MediaSourceInterface;
 using webrtc::MediaStreamInterface;
@@ -842,7 +841,7 @@ JOW(jlong, PeerConnectionFactory_nativeCreateLocalMediaStream)(
     JNIEnv* jni, jclass, jlong native_factory, jstring label) {
   talk_base::scoped_refptr<PeerConnectionFactoryInterface> factory(
       reinterpret_cast<PeerConnectionFactoryInterface*>(native_factory));
-  talk_base::scoped_refptr<LocalMediaStreamInterface> stream(
+  talk_base::scoped_refptr<MediaStreamInterface> stream(
       factory->CreateLocalMediaStream(JavaToStdString(jni, label)));
   return (jlong)stream.release();
 }
@@ -1140,8 +1139,8 @@ JOW(jboolean, MediaStreamTrack_nativeSetEnabled)(
 
 JOW(jboolean, LocalMediaStream_nativeAddAudioTrack)(
     JNIEnv* jni, jclass, jlong pointer, jlong j_audio_track_pointer) {
-  talk_base::scoped_refptr<LocalMediaStreamInterface> stream(
-      reinterpret_cast<LocalMediaStreamInterface*>(pointer));
+  talk_base::scoped_refptr<MediaStreamInterface> stream(
+      reinterpret_cast<MediaStreamInterface*>(pointer));
   talk_base::scoped_refptr<AudioTrackInterface> track(
       reinterpret_cast<AudioTrackInterface*>(j_audio_track_pointer));
   return stream->AddTrack(track);
@@ -1149,8 +1148,8 @@ JOW(jboolean, LocalMediaStream_nativeAddAudioTrack)(
 
 JOW(jboolean, LocalMediaStream_nativeAddVideoTrack)(
     JNIEnv* jni, jclass, jlong pointer, jlong j_video_track_pointer) {
-  talk_base::scoped_refptr<LocalMediaStreamInterface> stream(
-      reinterpret_cast<LocalMediaStreamInterface*>(pointer));
+  talk_base::scoped_refptr<MediaStreamInterface> stream(
+      reinterpret_cast<MediaStreamInterface*>(pointer));
   talk_base::scoped_refptr<VideoTrackInterface> track(
       reinterpret_cast<VideoTrackInterface*>(j_video_track_pointer));
   return stream->AddTrack(track);

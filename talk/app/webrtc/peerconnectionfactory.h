@@ -54,7 +54,7 @@ class PeerConnectionFactory : public PeerConnectionFactoryInterface,
           PeerConnectionObserver* observer);
   bool Initialize();
 
-  virtual talk_base::scoped_refptr<LocalMediaStreamInterface>
+  virtual talk_base::scoped_refptr<MediaStreamInterface>
       CreateLocalMediaStream(const std::string& label);
 
   virtual talk_base::scoped_refptr<AudioSourceInterface> CreateAudioSource(

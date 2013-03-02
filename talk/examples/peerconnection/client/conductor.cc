@@ -366,7 +366,7 @@ void Conductor::AddStreams() {
                                                       NULL)));
   main_wnd_->StartLocalRenderer(video_track);
 
-  talk_base::scoped_refptr<webrtc::LocalMediaStreamInterface> stream =
+  talk_base::scoped_refptr<webrtc::MediaStreamInterface> stream =
       peer_connection_factory_->CreateLocalMediaStream(kStreamLabel);
 
   stream->AddTrack(audio_track);

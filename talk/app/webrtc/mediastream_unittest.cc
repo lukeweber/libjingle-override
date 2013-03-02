@@ -88,7 +88,7 @@ class MediaStreamTest: public testing::Test {
     EXPECT_EQ(MediaStreamTrackInterface::kLive, track->state());
   }
 
-  scoped_refptr<LocalMediaStreamInterface> stream_;
+  scoped_refptr<MediaStreamInterface> stream_;
   scoped_refptr<AudioTrackInterface> audio_track_;
   scoped_refptr<VideoTrackInterface> video_track_;
 };

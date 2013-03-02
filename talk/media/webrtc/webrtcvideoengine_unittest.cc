@@ -1463,3 +1463,24 @@ TEST_F(WebRtcVideoEngineTestFake, ResetCodecOnScreencast) {
   EXPECT_EQ(0, vie_.GetSendCodec(channel_num, gcodec));
   EXPECT_FALSE(gcodec.codecSpecific.VP8.denoisingOn);
 }
+
+// Test that codec is not reset for every frame sent in non-conference
+// and non-screencast mode.
+TEST_F(WebRtcVideoEngineTestFake, DontResetCodecOnSendFrame) {
+  EXPECT_TRUE(SetupEngine());
+
+  // Set send codec.
+  cricket::VideoCodec codec(kVP8Codec);
+  std::vector<cricket::VideoCodec> codec_list;
+  codec_list.push_back(codec);
+  EXPECT_TRUE(channel_->AddSendStream(
+      cricket::StreamParams::CreateLegacy(123)));
+  EXPECT_TRUE(channel_->SetSendCodecs(codec_list));
+  EXPECT_TRUE(channel_->SetSend(true));
+  EXPECT_EQ(1, vie_.num_set_send_codecs());
+
+  SendI420Frame(kVP8Codec.width, kVP8Codec.height);
+  EXPECT_EQ(1, vie_.num_set_send_codecs());
+  SendI420Frame(kVP8Codec.width, kVP8Codec.height);
+  EXPECT_EQ(1, vie_.num_set_send_codecs());
+}

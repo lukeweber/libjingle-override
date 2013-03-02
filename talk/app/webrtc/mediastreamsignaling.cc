@@ -517,8 +517,9 @@ void MediaStreamSignaling::UpdateRemoteStreamsList(
         remote_streams_->find(mediastream_label));
     if (media_stream == NULL) {
       // This is a new MediaStream. Create a new remote MediaStream.
-      media_stream =  MediaStreamProxy::Create(mediastream_label,
-                                               signaling_thread_);
+      media_stream =  MediaStreamProxy::Create(
+          signaling_thread_,
+          MediaStream::Create(mediastream_label));
       new_streams->AddStream(media_stream);
       remote_streams_->AddStream(media_stream);
     }
@@ -555,8 +556,8 @@ void MediaStreamSignaling::MaybeCreateDefaultStream() {
       remote_streams_->find(kDefaultStreamLabel);
   if (default_remote_stream == NULL) {
     default_created = true;
-    default_remote_stream = MediaStreamProxy::Create(kDefaultStreamLabel,
-                                                      signaling_thread_);
+    default_remote_stream = MediaStreamProxy::Create(
+        signaling_thread_, MediaStream::Create(kDefaultStreamLabel));
   }
   if (remote_info_.default_audio_track_needed &&
       default_remote_stream->GetAudioTracks().size() == 0) {

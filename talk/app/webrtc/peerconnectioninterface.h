@@ -350,7 +350,7 @@ class PeerConnectionFactoryInterface : public talk_base::RefCountInterface {
           const MediaConstraintsInterface* constraints,
           PortAllocatorFactoryInterface* allocator_factory,
           PeerConnectionObserver* observer) = 0;
-  virtual talk_base::scoped_refptr<LocalMediaStreamInterface>
+  virtual talk_base::scoped_refptr<MediaStreamInterface>
       CreateLocalMediaStream(const std::string& label) = 0;
 
   // Creates a AudioSourceInterface.

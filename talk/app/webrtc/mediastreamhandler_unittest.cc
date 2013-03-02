@@ -143,7 +143,7 @@ class MediaStreamHandlerTest : public testing::Test {
   MockVideoProvider video_provider_;
   MediaStreamHandlers handlers_;
   talk_base::scoped_refptr<StreamCollection> collection_;
-  talk_base::scoped_refptr<LocalMediaStreamInterface> stream_;
+  talk_base::scoped_refptr<MediaStreamInterface> stream_;
   talk_base::scoped_refptr<VideoTrackInterface> video_track_;
   talk_base::scoped_refptr<AudioTrackInterface> audio_track_;
 };

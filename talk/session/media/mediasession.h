@@ -354,7 +354,7 @@ class MediaSessionDescriptionFactory {
   void set_audio_rtp_header_extensions(const RtpHeaderExtensions& extensions) {
     audio_rtp_extensions_ = extensions;
   }
-  const RtpHeaderExtensions& audio_rtp_header_extensions() {
+  const RtpHeaderExtensions& audio_rtp_header_extensions() const {
     return audio_rtp_extensions_;
   }
   const VideoCodecs& video_codecs() const { return video_codecs_; }
@@ -362,7 +362,7 @@ class MediaSessionDescriptionFactory {
   void set_video_rtp_header_extensions(const RtpHeaderExtensions& extensions) {
     video_rtp_extensions_ = extensions;
   }
-  const RtpHeaderExtensions& video_rtp_header_extensions() {
+  const RtpHeaderExtensions& video_rtp_header_extensions() const {
     return video_rtp_extensions_;
   }
   const DataCodecs& data_codecs() const { return data_codecs_; }
@@ -388,6 +388,9 @@ class MediaSessionDescriptionFactory {
                         AudioCodecs* audio_codecs,
                         VideoCodecs* video_codecs,
                         DataCodecs* data_codecs) const;
+  void GetRtpHdrExtsToOffer(const SessionDescription* current_description,
+                            RtpHeaderExtensions* audio_extensions,
+                            RtpHeaderExtensions* video_extensions) const;
   bool AddTransportOffer(
       const std::string& content_name,
       const TransportOptions& transport_options,

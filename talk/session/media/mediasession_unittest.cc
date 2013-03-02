@@ -136,28 +136,30 @@ static const DataCodec kDataCodecsAnswer[] = {
 
 static const RtpHeaderExtension kAudioRtpExtension1[] = {
   RtpHeaderExtension("urn:ietf:params:rtp-hdrext:ssrc-audio-level", 8),
-  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:audio_something", 10),
+  RtpHeaderExtension("http://google.com/testing/audio_something", 10),
 };
 
 static const RtpHeaderExtension kAudioRtpExtension2[] = {
   RtpHeaderExtension("urn:ietf:params:rtp-hdrext:ssrc-audio-level", 2),
+  RtpHeaderExtension("http://google.com/testing/audio_something_else", 8),
 };
 
 static const RtpHeaderExtension kAudioRtpExtensionAnswer[] = {
-  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:ssrc-audio-level", 2),
+  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:ssrc-audio-level", 8),
 };
 
 static const RtpHeaderExtension kVideoRtpExtension1[] = {
   RtpHeaderExtension("urn:ietf:params:rtp-hdrext:toffset", 14),
-  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:video_something", 10),
+  RtpHeaderExtension("http://google.com/testing/video_something", 15),
 };
 
 static const RtpHeaderExtension kVideoRtpExtension2[] = {
   RtpHeaderExtension("urn:ietf:params:rtp-hdrext:toffset", 2),
+  RtpHeaderExtension("http://google.com/testing/video_something_else", 14),
 };
 
 static const RtpHeaderExtension kVideoRtpExtensionAnswer[] = {
-  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:toffset", 2),
+  RtpHeaderExtension("urn:ietf:params:rtp-hdrext:toffset", 14),
 };
 
 static const uint32 kFec1Ssrc[] = {10, 11};
@@ -696,8 +698,8 @@ TEST_F(MediaSessionDescriptionFactoryTest, AudioOfferAnswerWithCryptoDisabled) {
   EXPECT_EQ(std::string(cricket::kMediaProtocolAvpf), answer_acd->protocol());
 }
 
-
-// Create a typical video answer, and ensure it matches what we expect.
+// Create a video offer and answer and ensure the RTP header extensions
+// matches what we expect.
 TEST_F(MediaSessionDescriptionFactoryTest, TestOfferAnswerWithRtpExtensions) {
   MediaSessionOptions opts;
   opts.has_video = true;
@@ -1363,6 +1365,62 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   int pt_referenced_by_rtx = talk_base::FromString<int>(
       rtx.params[cricket::kCodecParamAssociatedPayloadType]);
   EXPECT_EQ(new_h264_pl_type, pt_referenced_by_rtx);
+}
+
+// Create an updated offer after creating an answer to the original offer and
+// verify that the RTP header extensions that were part of the original answer
+// are not changed in the updated offer.
+TEST_F(MediaSessionDescriptionFactoryTest,
+       RespondentCreatesOfferAfterCreatingAnswerWithRtpExtensions) {
+  MediaSessionOptions opts;
+  opts.has_audio = true;
+  opts.has_video = true;
+
+  f1_.set_audio_rtp_header_extensions(MAKE_VECTOR(kAudioRtpExtension1));
+  f1_.set_video_rtp_header_extensions(MAKE_VECTOR(kVideoRtpExtension1));
+  f2_.set_audio_rtp_header_extensions(MAKE_VECTOR(kAudioRtpExtension2));
+  f2_.set_video_rtp_header_extensions(MAKE_VECTOR(kVideoRtpExtension2));
+
+  talk_base::scoped_ptr<SessionDescription> offer(f1_.CreateOffer(opts, NULL));
+  talk_base::scoped_ptr<SessionDescription> answer(
+      f2_.CreateAnswer(offer.get(), opts, NULL));
+
+  EXPECT_EQ(MAKE_VECTOR(kAudioRtpExtensionAnswer),
+            GetFirstAudioContentDescription(
+                answer.get())->rtp_header_extensions());
+  EXPECT_EQ(MAKE_VECTOR(kVideoRtpExtensionAnswer),
+            GetFirstVideoContentDescription(
+                answer.get())->rtp_header_extensions());
+
+  talk_base::scoped_ptr<SessionDescription> updated_offer(
+      f2_.CreateOffer(opts, answer.get()));
+
+  // The expected RTP header extensions in the new offer are the resulting
+  // extensions from the first offer/answer exchange plus the extensions only
+  // |f2_| offer.
+  // Since the default local extension id |f2_| uses has already been used by
+  // |f1_| for another extensions, it is changed to 255.
+  const RtpHeaderExtension kUpdatedAudioRtpExtensions[] = {
+    kAudioRtpExtensionAnswer[0],
+    RtpHeaderExtension(kAudioRtpExtension2[1].uri, 255),
+  };
+
+  // Since the default local extension id |f2_| uses has already been used by
+  // |f1_| for another extensions, is is changed to 254.
+  const RtpHeaderExtension kUpdatedVideoRtpExtensions[] = {
+    kVideoRtpExtensionAnswer[0],
+    RtpHeaderExtension(kVideoRtpExtension2[1].uri, 254),
+  };
+
+  const AudioContentDescription* updated_acd =
+      GetFirstAudioContentDescription(updated_offer.get());
+  EXPECT_EQ(MAKE_VECTOR(kUpdatedAudioRtpExtensions),
+            updated_acd->rtp_header_extensions());
+
+  const VideoContentDescription* updated_vcd =
+      GetFirstVideoContentDescription(updated_offer.get());
+  EXPECT_EQ(MAKE_VECTOR(kUpdatedVideoRtpExtensions),
+            updated_vcd->rtp_header_extensions());
 }
 
 TEST(MediaSessionDescription, CopySessionDescription) {

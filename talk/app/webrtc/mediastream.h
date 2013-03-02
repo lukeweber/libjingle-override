@@ -38,7 +38,7 @@
 
 namespace webrtc {
 
-class MediaStream : public Notifier<LocalMediaStreamInterface> {
+class MediaStream : public Notifier<MediaStreamInterface> {
  public:
   static talk_base::scoped_refptr<MediaStream> Create(const std::string& label);
 

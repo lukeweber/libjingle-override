@@ -28,7 +28,9 @@
 #include "talk/session/media/mediasession.h"
 
 #include <functional>
+#include <map>
 #include <set>
+#include <utility>
 
 #include "talk/base/helpers.h"
 #include "talk/base/logging.h"
@@ -49,7 +51,7 @@ using talk_base::scoped_ptr;
 
 // RTP Profile names
 // http://www.iana.org/assignments/rtp-parameters/rtp-parameters.xml
-// RTC4585
+// RFC4585
 const char kMediaProtocolAvpf[] = "RTP/AVPF";
 // RFC5124
 const char kMediaProtocolSavpf[] = "RTP/SAVPF";
@@ -266,116 +268,99 @@ static void GetCurrentStreamParams(const SessionDescription* sdesc,
   }
 }
 
+template <typename IdStruct>
+class UsedIds {
+ public:
+  UsedIds(int min_allowed_id, int max_allowed_id)
+      : min_allowed_id_(min_allowed_id),
+        max_allowed_id_(max_allowed_id),
+        next_id_(max_allowed_id) {
+  }
+
+  // Loops through all Id in |ids| and changes its id if it is
+  // already in use by another IdStruct. Call this methods with all Id
+  // in a session description to make sure no duplicate ids exists.
+  // Note that typename Id must be a type of IdStruct.
+  template <typename Id>
+  void FindAndSetIdUsed(std::vector<Id>* ids) {
+    for (typename std::vector<Id>::iterator it = ids->begin();
+         it != ids->end(); ++it) {
+      FindAndSetIdUsed(&*it);
+    }
+  }
+
+  // Finds and sets an unused id if the |idstruct| id is already in use.
+  void FindAndSetIdUsed(IdStruct* idstruct) {
+    const int original_id = idstruct->id;
+    int new_id = idstruct->id;
+
+    if (original_id > max_allowed_id_ || original_id < min_allowed_id_) {
+      // If the original id is not in range - this is an id that can't be
+      // dynamically changed.
+      return;
+    }
+
+    if (IsIdUsed(original_id)) {
+      new_id = FindUnusedId();
+      LOG(LS_WARNING) << "Duplicate id found. Reassigning from " << original_id
+          << " to " << new_id;
+      idstruct->id = new_id;
+    }
+    SetIdUsed(new_id);
+  }
+
+ private:
+  // Returns the first unused id in reverse order.
+  // This hopefully reduce the risk of more collisions. We want to change the
+  // default ids as little as possible.
+  int FindUnusedId() {
+    while (IsIdUsed(next_id_) && next_id_ >= min_allowed_id_) {
+      --next_id_;
+    }
+    ASSERT(next_id_ >= min_allowed_id_);
+    return next_id_;
+  }
+
+  bool IsIdUsed(int new_id) {
+    return id_set_.find(new_id) != id_set_.end();
+  }
+
+  void SetIdUsed(int new_id) {
+    id_set_.insert(new_id);
+  }
+
+  const int min_allowed_id_;
+  const int max_allowed_id_;
+  int next_id_;
+  std::set<int> id_set_;
+};
+
 // Helper class used for finding duplicate RTP payload types among audio, video
 // and data codecs. When bundle is used the payload types may not collide.
-class UsedPayloadTypes {
+class UsedPayloadTypes : public UsedIds<Codec> {
  public:
-  UsedPayloadTypes() {
-    memset(&payload_types_, 0, sizeof(payload_types_));
+  UsedPayloadTypes()
+      : UsedIds<Codec>(kDynamicPayloadTypeMin, kDynamicPayloadTypeMax) {
   }
 
-  // Loops through all codecs in |codecs| and changes its payload type if it is
-  // already in use by another codec. Call this methods with all codecs in a
-  // session description to make sure no duplicate payload types exists.
-  template <typename C>
-  void FindAndSetPayloadTypesUsed(std::vector<C>* codecs) {
-    for (typename std::vector<C>::iterator it = codecs->begin();
-         it != codecs->end(); ++it) {
-      FindAndSetPayloadTypeUsed<C>(&*it);
-    }
-  }
-
-  // Finds and sets an unused payload type if the |codec| payload type is
-  // already in use.
-  template <typename C>
-  void FindAndSetPayloadTypeUsed(C* codec) {
-    int origina_pl_type = codec->id;
-    int new_pl_type = codec->id;
-
-    if (IsPayloadTypeUsed(origina_pl_type)) {
-      new_pl_type = FindUnusedPayloadType();
-      LOG(LS_WARNING) << "Duplicate pl-type found. Reassigning "
-          << codec->name << " from " << origina_pl_type << " to "
-          << new_pl_type;
-      codec->id = new_pl_type;
-    }
-    SetPayloadTypeUsed(new_pl_type, origina_pl_type);
-  }
-
-  template <typename C>
-  void UpdateRtxCodecs(std::vector<C>* codecs) {
-    for (typename std::vector<C>::iterator it = codecs->begin();
-         it != codecs->end(); ++it) {
-      if (IsRtxCodec(*it)) {
-        C& rtx_codec = *it;
-        int referenced_pl_type =
-            talk_base::FromString<int>(
-                rtx_codec.params[kCodecParamAssociatedPayloadType]);
-
-        int updated_referenced_pl_type =
-            FindNewPayloadType(referenced_pl_type);
-        if (updated_referenced_pl_type != referenced_pl_type) {
-          LOG(LS_WARNING) << "Payload type referenced by RTX has been "
-              "reassigned from pt " << referenced_pl_type << " to "
-              << updated_referenced_pl_type
-              << " Updating RTX reference accordingly.";
-
-          rtx_codec.params[kCodecParamAssociatedPayloadType] =
-              talk_base::ToString(updated_referenced_pl_type);
-        };
-      }
-    }
-  }
 
  private:
   static const int kDynamicPayloadTypeMin = 96;
   static const int kDynamicPayloadTypeMax = 127;
+};
 
-  // Return true if |payload_type| is a dynamic pay load type.
-  bool IsDynamic(int payload_type) {
-    return (payload_type >= kDynamicPayloadTypeMin &&
-        payload_type <= kDynamicPayloadTypeMax);
+// Helper class used for finding duplicate RTP Header extension ids among
+// audio and video extensions.
+class UsedRtpHeaderExtensionIds : public UsedIds<RtpHeaderExtension> {
+ public:
+  UsedRtpHeaderExtensionIds()
+      : UsedIds<RtpHeaderExtension>(kLocalIdMin, kLocalIdMax) {
   }
 
-  // Returns the first unused dynamic payload-type in reverse order.
-  // This hopefully reduce the risk of more collisions. We want to change the
-  // default pay load types as little as possible.
-  int FindUnusedPayloadType() {
-    int payload_type = kDynamicPayloadTypeMax;
-    for (; payload_type >= kDynamicPayloadTypeMin; --payload_type) {
-      if (payload_types_[payload_type-kDynamicPayloadTypeMin] == 0)
-        break;
-    }
-    ASSERT(payload_type >= kDynamicPayloadTypeMin);  // We have too many Codecs.
-    return payload_type;
-  }
-
-  bool IsPayloadTypeUsed(int payload_type) {
-    if (IsDynamic(payload_type)) {
-      return payload_types_[payload_type - kDynamicPayloadTypeMin] != 0;
-    }
-    // Otherwise this is not a dynamic pl-type and we can't change it.
-    return false;
-  }
-
-  void SetPayloadTypeUsed(int new_type, int original_type) {
-    if (IsDynamic(new_type)) {
-      payload_types_[new_type - kDynamicPayloadTypeMin] = original_type;
-    }
-  }
-
-  int FindNewPayloadType(int original_type) {
-    int payload_type = kDynamicPayloadTypeMax;
-    for (; payload_type >= kDynamicPayloadTypeMin; --payload_type) {
-      if (payload_types_[payload_type-kDynamicPayloadTypeMin] == original_type)
-        break;
-    }
-    ASSERT(payload_type >= kDynamicPayloadTypeMin);
-    return payload_type;
-  }
-
-  typedef int PayloadTypes[kDynamicPayloadTypeMax-kDynamicPayloadTypeMin+1];
-  PayloadTypes payload_types_;
+ private:
+  // Min and Max local identifier as specified by RFC5285.
+  static const int kLocalIdMin = 1;
+  static const int kLocalIdMax = 255;
 };
 
 // Adds a StreamParams for each Stream in Streams with media type
@@ -701,16 +686,82 @@ static void FindCodecsToOffer(
     const std::vector<C>& reference_codecs,
     std::vector<C>* offered_codecs,
     UsedPayloadTypes* used_pltypes) {
-  std::vector<C> new_rtx_codecs_;
+
+  typedef std::map<int, C> RtxCodecReferences;
+  RtxCodecReferences new_rtx_codecs;
+
+  // Find all new RTX codecs.
   for (typename std::vector<C>::const_iterator it = reference_codecs.begin();
        it != reference_codecs.end(); ++it) {
-    if (!FindMatchingCodec<C>(*offered_codecs, *it, NULL)) {
-      C codec = *it;
-      used_pltypes->FindAndSetPayloadTypeUsed(&codec);
-      offered_codecs->push_back(codec);
+    if (!FindMatchingCodec<C>(*offered_codecs, *it, NULL) && IsRtxCodec(*it)) {
+      C rtx_codec = *it;
+      int referenced_pl_type =
+          talk_base::FromString<int>(
+              rtx_codec.params[kCodecParamAssociatedPayloadType]);
+      new_rtx_codecs.insert(std::pair<int, C>(referenced_pl_type,
+                                              rtx_codec));
     }
   }
-  used_pltypes->UpdateRtxCodecs(offered_codecs);
+
+  // Add all new codecs that are not RTX codecs.
+  for (typename std::vector<C>::const_iterator it = reference_codecs.begin();
+       it != reference_codecs.end(); ++it) {
+    if (!FindMatchingCodec<C>(*offered_codecs, *it, NULL) && !IsRtxCodec(*it)) {
+      C codec = *it;
+      int original_payload_id = codec.id;
+      used_pltypes->FindAndSetIdUsed(&codec);
+      offered_codecs->push_back(codec);
+
+      // If this codec is referenced by a new RTX codec, update the reference
+      // in the RTX codec with the new payload type.
+      typename RtxCodecReferences::iterator rtx_it =
+          new_rtx_codecs.find(original_payload_id);
+      if (rtx_it != new_rtx_codecs.end()) {
+        C& rtx_codec = rtx_it->second;
+        rtx_codec.params[kCodecParamAssociatedPayloadType] =
+            talk_base::ToString(codec.id);
+      }
+    }
+  }
+
+  // Add all new RTX codecs.
+  for (typename RtxCodecReferences::iterator it = new_rtx_codecs.begin();
+       it != new_rtx_codecs.end(); ++it) {
+    C& rtx_codec = it->second;
+    used_pltypes->FindAndSetIdUsed(&rtx_codec);
+    offered_codecs->push_back(rtx_codec);
+  }
+}
+
+
+static bool FindByUri(const RtpHeaderExtensions& extensions,
+                      const RtpHeaderExtension& ext_to_match,
+                      RtpHeaderExtension* found_extension) {
+  for (RtpHeaderExtensions::const_iterator it = extensions.begin();
+       it  != extensions.end(); ++it) {
+    // We assume that all URIs are given in a canonical format.
+    if (it->uri == ext_to_match.uri) {
+      if (found_extension != NULL) {
+        *found_extension= *it;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+static void FindAndSetRtpHdrExtUsed(
+  const RtpHeaderExtensions& reference_extensions,
+  RtpHeaderExtensions* offered_extensions,
+  UsedRtpHeaderExtensionIds* used_extensions) {
+  for (RtpHeaderExtensions::const_iterator it = reference_extensions.begin();
+      it != reference_extensions.end(); ++it) {
+    if (!FindByUri(*offered_extensions, *it, NULL)) {
+      RtpHeaderExtension ext = *it;
+      used_extensions->FindAndSetIdUsed(&ext);
+      offered_extensions->push_back(ext);
+    }
+  }
 }
 
 static void NegotiateRtpHeaderExtensions(
@@ -720,18 +771,10 @@ static void NegotiateRtpHeaderExtensions(
   RtpHeaderExtensions::const_iterator ours;
   for (ours = local_extensions.begin();
        ours != local_extensions.end(); ++ours) {
-    RtpHeaderExtensions::const_iterator theirs;
-    for (theirs = offered_extensions.begin();
-         theirs != offered_extensions.end(); ++theirs) {
-      if (ours->uri == theirs->uri) {
-        // We respond with our own extension id so we don't need to
-        // remember the the negotiated value if we decide to send an updated
-        // offer.
-        // TODO(perkj): This might turn out to be a problem. Refactor to use
-        // the offered ids and store the used ids similarly as codec payload
-        // types.
-        negotiated_extenstions->push_back(*ours);
-      }
+    RtpHeaderExtension theirs;
+    if (FindByUri(offered_extensions, *ours, &theirs)) {
+      // We respond with their RTP header extension id.
+      negotiated_extenstions->push_back(theirs);
     }
   }
 }
@@ -871,6 +914,11 @@ SessionDescription* MediaSessionDescriptionFactory::CreateOffer(
   GetCodecsToOffer(current_description, &audio_codecs, &video_codecs,
                    &data_codecs);
 
+  RtpHeaderExtensions audio_rtp_extensions;
+  RtpHeaderExtensions video_rtp_extensions;
+  GetRtpHdrExtsToOffer(current_description, &audio_rtp_extensions,
+                       &video_rtp_extensions);
+
   // Handle m=audio.
   if (options.has_audio) {
     scoped_ptr<AudioContentDescription> audio(new AudioContentDescription());
@@ -882,7 +930,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateOffer(
             secure(),
             GetCryptos(GetFirstAudioContentDescription(current_description)),
             crypto_suites,
-            audio_rtp_extensions_,
+            audio_rtp_extensions,
             add_legacy_,
             &current_streams,
             audio.get())) {
@@ -909,7 +957,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateOffer(
             secure(),
             GetCryptos(GetFirstVideoContentDescription(current_description)),
             crypto_suites,
-            video_rtp_extensions_,
+            video_rtp_extensions,
             add_legacy_,
             &current_streams,
             video.get())) {
@@ -1201,19 +1249,19 @@ void MediaSessionDescriptionFactory::GetCodecsToOffer(
         GetFirstAudioContentDescription(current_description);
     if (audio) {
       *audio_codecs = audio->codecs();
-      used_pltypes.FindAndSetPayloadTypesUsed<AudioCodec>(audio_codecs);
+      used_pltypes.FindAndSetIdUsed<AudioCodec>(audio_codecs);
     }
     const VideoContentDescription* video =
         GetFirstVideoContentDescription(current_description);
     if (video) {
       *video_codecs = video->codecs();
-      used_pltypes.FindAndSetPayloadTypesUsed<VideoCodec>(video_codecs);
+      used_pltypes.FindAndSetIdUsed<VideoCodec>(video_codecs);
     }
     const DataContentDescription* data =
         GetFirstDataContentDescription(current_description);
     if (data) {
       *data_codecs = data->codecs();
-      used_pltypes.FindAndSetPayloadTypesUsed<DataCodec>(data_codecs);
+      used_pltypes.FindAndSetIdUsed<DataCodec>(data_codecs);
     }
   }
 
@@ -1221,6 +1269,41 @@ void MediaSessionDescriptionFactory::GetCodecsToOffer(
   FindCodecsToOffer<AudioCodec>(audio_codecs_, audio_codecs, &used_pltypes);
   FindCodecsToOffer<VideoCodec>(video_codecs_, video_codecs, &used_pltypes);
   FindCodecsToOffer<DataCodec>(data_codecs_, data_codecs, &used_pltypes);
+}
+
+void MediaSessionDescriptionFactory::GetRtpHdrExtsToOffer(
+    const SessionDescription* current_description,
+    RtpHeaderExtensions* audio_extensions,
+    RtpHeaderExtensions* video_extensions) const {
+  UsedRtpHeaderExtensionIds used_ids;
+  audio_extensions->clear();
+  video_extensions->clear();
+
+  // First - get all extensions from the current description if the media type
+  // is used.
+  // Add them to |used_ids| so the local ids are not reused if a new media
+  // type is added.
+  if (current_description) {
+    const AudioContentDescription* audio =
+        GetFirstAudioContentDescription(current_description);
+    if (audio) {
+      *audio_extensions = audio->rtp_header_extensions();
+      used_ids.FindAndSetIdUsed(audio_extensions);
+    }
+    const VideoContentDescription* video =
+        GetFirstVideoContentDescription(current_description);
+    if (video) {
+      *video_extensions = video->rtp_header_extensions();
+      used_ids.FindAndSetIdUsed(video_extensions);
+    }
+  }
+
+  // Add our default RTP header extensions that are not in
+  // |current_description|.
+  FindAndSetRtpHdrExtUsed(audio_rtp_header_extensions(), audio_extensions,
+                          &used_ids);
+  FindAndSetRtpHdrExtUsed(video_rtp_header_extensions(), video_extensions,
+                          &used_ids);
 }
 
 bool MediaSessionDescriptionFactory::AddTransportOffer(

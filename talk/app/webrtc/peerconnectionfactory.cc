@@ -213,11 +213,9 @@ void PeerConnectionFactory::OnMessage(talk_base::Message* msg) {
 bool PeerConnectionFactory::Initialize_s() {
   talk_base::InitRandom(talk_base::Time());
 
-  if (owns_ptrs_) {
-    allocator_factory_ = PortAllocatorFactory::Create(worker_thread_);
-    if (!allocator_factory_)
-      return false;
-  }
+  allocator_factory_ = PortAllocatorFactory::Create(worker_thread_);
+  if (!allocator_factory_)
+    return false;
 
   cricket::DummyDeviceManager* device_manager(
       new cricket::DummyDeviceManager());
@@ -238,9 +236,7 @@ bool PeerConnectionFactory::Initialize_s() {
 // Terminate what we created on the signaling thread.
 void PeerConnectionFactory::Terminate_s() {
   channel_manager_.reset(NULL);
-  if (owns_ptrs_) {
-    allocator_factory_ = NULL;
-  }
+  allocator_factory_ = NULL;
 }
 
 talk_base::scoped_refptr<AudioSourceInterface>
@@ -300,10 +296,10 @@ PeerConnectionFactory::CreatePeerConnection_s(
   return PeerConnectionProxy::Create(signaling_thread(), pc);
 }
 
-scoped_refptr<LocalMediaStreamInterface>
-PeerConnectionFactory::CreateLocalMediaStream(
-      const std::string& label) {
-  return MediaStreamProxy::Create(label, signaling_thread_);
+scoped_refptr<MediaStreamInterface>
+PeerConnectionFactory::CreateLocalMediaStream(const std::string& label) {
+  return MediaStreamProxy::Create(signaling_thread_,
+                                  MediaStream::Create(label));
 }
 
 talk_base::scoped_refptr<AudioSourceInterface>

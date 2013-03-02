@@ -183,15 +183,6 @@ class MediaStreamInterface : public talk_base::RefCountInterface,
   virtual ~MediaStreamInterface() {}
 };
 
-// Currently there is no difference between LocalMediaStreams and MediaStreams
-// but the class is kept since Chrome use this type to distinguish between
-// local and remote streams.
-// TODO(perkj): Decide if LocalMediaStreamInterface is needed or not once Chrome
-// don't care about the type.
-class LocalMediaStreamInterface : public MediaStreamInterface {
- public:
-};
-
 // MediaConstraintsInterface
 // Interface used for passing arguments about media constraints
 // to the MediaStream and PeerConnection implementation.
