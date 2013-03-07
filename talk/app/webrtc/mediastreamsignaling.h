@@ -165,8 +165,12 @@ class MediaStreamSignaling {
   // It also updates local DataChannels with information about its local SSRC.
   void OnLocalDescriptionChanged(const SessionDescriptionInterface* desc);
 
-  // Called when a PeerConnection closes.
-  void OnSessionClose();
+  // Called when the audio channel closes.
+  void OnAudioChannelClose();
+  // Called when the video channel closes.
+  void OnVideoChannelClose();
+  // Called when the data channel closes.
+  void OnDataChannelClose();
 
   // Returns the SSRC for a given track.
   bool GetRemoteAudioTrackSsrc(const std::string& track_id, uint32* ssrc) const;

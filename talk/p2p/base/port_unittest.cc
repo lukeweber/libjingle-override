@@ -420,14 +420,15 @@ class PortTest : public testing::Test, public sigslot::has_slots<> {
   Port* CreateRelayPort(const SocketAddress& addr, RelayType rtype,
                         ProtocolType int_proto, ProtocolType ext_proto) {
     if (rtype == RELAY_TURN) {
-      return CreateTurnPort(addr, int_proto, ext_proto);
+      return CreateTurnPort(addr, &socket_factory_, int_proto, ext_proto);
     } else {
       return CreateGturnPort(addr, int_proto, ext_proto);
     }
   }
   TurnPort* CreateTurnPort(const SocketAddress& addr,
+                           PacketSocketFactory* socket_factory,
                            ProtocolType int_proto, ProtocolType ext_proto) {
-    TurnPort* port = TurnPort::Create(main_, &socket_factory_, &network_,
+    TurnPort* port = TurnPort::Create(main_, socket_factory, &network_,
                                       addr.ipaddr(), 0, 0,
                                       username_, password_, kTurnUdpIntAddr,
                                       kRelayCredentials);
@@ -519,8 +520,11 @@ class PortTest : public testing::Test, public sigslot::has_slots<> {
   void OnRoleConflict() {
     role_conflict_ = true;
   }
-
   bool role_conflict() const { return role_conflict_; }
+
+  talk_base::BasicPacketSocketFactory* nat_socket_factory1() {
+    return &nat_socket_factory1_;
+  }
 
  private:
   talk_base::Thread* main_;
@@ -1910,58 +1914,102 @@ TEST_F(PortTest, TestFoundation) {
             testport->Candidates()[1].foundation());
 }
 
-// TODO(mallinath) - Enable below test and add related address
-// tests for STUN and TURN ports.
-TEST_F(PortTest, DISABLED_TestRelatedAddressAndFoundation) {
+// This test verifies the foundation of different types of ICE candidates.
+TEST_F(PortTest, TestCandidateFoundation) {
+  talk_base::scoped_ptr<talk_base::NATServer> nat_server(
+      CreateNatServer(kNatAddr1, NAT_OPEN_CONE));
+  talk_base::scoped_ptr<UDPPort> udpport1(CreateUdpPort(kLocalAddr1));
+  udpport1->PrepareAddress();
+  talk_base::scoped_ptr<UDPPort> udpport2(CreateUdpPort(kLocalAddr1));
+  udpport2->PrepareAddress();
+  EXPECT_EQ(udpport1->Candidates()[0].foundation(),
+            udpport2->Candidates()[0].foundation());
+  talk_base::scoped_ptr<TCPPort> tcpport1(CreateTcpPort(kLocalAddr1));
+  tcpport1->PrepareAddress();
+  talk_base::scoped_ptr<TCPPort> tcpport2(CreateTcpPort(kLocalAddr1));
+  tcpport2->PrepareAddress();
+  EXPECT_EQ(tcpport1->Candidates()[0].foundation(),
+            tcpport2->Candidates()[0].foundation());
+  talk_base::scoped_ptr<Port> stunport(
+      CreateStunPort(kLocalAddr1, nat_socket_factory1()));
+  stunport->PrepareAddress();
+  ASSERT_EQ_WAIT(1U, stunport->Candidates().size(), kTimeout);
+  EXPECT_NE(tcpport1->Candidates()[0].foundation(),
+            stunport->Candidates()[0].foundation());
+  EXPECT_NE(tcpport2->Candidates()[0].foundation(),
+            stunport->Candidates()[0].foundation());
+  EXPECT_NE(udpport1->Candidates()[0].foundation(),
+            stunport->Candidates()[0].foundation());
+  EXPECT_NE(udpport2->Candidates()[0].foundation(),
+            stunport->Candidates()[0].foundation());
+  // Verify GTURN candidate foundation.
+  talk_base::scoped_ptr<RelayPort> relayport(
+      CreateGturnPort(kLocalAddr1));
+  relayport->AddServerAddress(
+      cricket::ProtocolAddress(kRelayUdpIntAddr, cricket::PROTO_UDP));
+  relayport->PrepareAddress();
+  ASSERT_EQ_WAIT(1U, relayport->Candidates().size(), kTimeout);
+  EXPECT_NE(udpport1->Candidates()[0].foundation(),
+            relayport->Candidates()[0].foundation());
+  EXPECT_NE(udpport2->Candidates()[0].foundation(),
+            relayport->Candidates()[0].foundation());
+  // Verifying TURN candidate foundation.
+  talk_base::scoped_ptr<Port> turnport(CreateTurnPort(
+      kLocalAddr1, nat_socket_factory1(), PROTO_UDP, PROTO_UDP));
+  turnport->PrepareAddress();
+  ASSERT_EQ_WAIT(1U, turnport->Candidates().size(), kTimeout);
+  EXPECT_NE(udpport1->Candidates()[0].foundation(),
+            turnport->Candidates()[0].foundation());
+  EXPECT_NE(udpport2->Candidates()[0].foundation(),
+            turnport->Candidates()[0].foundation());
+  EXPECT_NE(stunport->Candidates()[0].foundation(),
+            turnport->Candidates()[0].foundation());
+}
+
+// This test verifies the related addresses of different types of
+// ICE candiates.
+TEST_F(PortTest, TestCandidateRelatedAddress) {
+  talk_base::scoped_ptr<talk_base::NATServer> nat_server(
+      CreateNatServer(kNatAddr1, NAT_OPEN_CONE));
   talk_base::scoped_ptr<UDPPort> udpport(CreateUdpPort(kLocalAddr1));
   udpport->PrepareAddress();
   // For UDPPort, related address will be empty.
   EXPECT_TRUE(udpport->Candidates()[0].related_address().IsNil());
-  talk_base::scoped_ptr<UDPPort> udpport1(CreateUdpPort(kLocalAddr1));
-  udpport1->PrepareAddress();
-  // Compare foundation of candidates from both ports.
-  // TODO: Update this check with a STUN port which has the same
-  // base of UDP Port. This will happen once we have a common socket for all
-  // ports.
-  EXPECT_EQ(udpport->Candidates()[0].foundation(),
-            udpport1->Candidates()[0].foundation());
-  talk_base::scoped_ptr<TestPort> testport(
-      CreateTestPort(kLocalAddr1, "name", "pass"));
-  // Test port is behaving like a stun port, where candidate address is
-  // will have a different related address.
-  testport->set_related_address(kLocalAddr2);
-  testport->PrepareAddress();
-  // Foundation of udpport and testport must be different as their types are
-  // different, even though the same base address kLocalAddr1.
-  EXPECT_NE(udpport->Candidates()[0].foundation(),
-            testport->Candidates()[0].foundation());
-  EXPECT_EQ_WAIT(testport->Candidates()[0].related_address().ipaddr(),
-                 kLocalAddr2.ipaddr(), kTimeout);
-  talk_base::scoped_ptr<RelayPort> relayport(CreateGturnPort(kLocalAddr2));
-  relayport->AddExternalAddress(ProtocolAddress(kRelayUdpIntAddr, PROTO_UDP));
-  relayport->AddExternalAddress(ProtocolAddress(kRelayTcpIntAddr, PROTO_TCP));
-  relayport->AddExternalAddress(
-      ProtocolAddress(kRelaySslTcpIntAddr, PROTO_SSLTCP));
-  relayport->AddExternalAddress(ProtocolAddress(kLocalAddr1, PROTO_UDP));
-  relayport->set_related_address(kLocalAddr1);
-  EXPECT_EQ_WAIT(kLocalAddr1.ipaddr(),
-                 relayport->Candidates()[0].related_address().ipaddr(),
-                 kTimeout);
-  EXPECT_EQ_WAIT(kLocalAddr1.ipaddr(),
-                 relayport->Candidates()[1].related_address().ipaddr(),
-                 kTimeout);
-  EXPECT_EQ_WAIT(kLocalAddr1.ipaddr(),
-                 relayport->Candidates()[2].related_address().ipaddr(),
-                 kTimeout);
-  EXPECT_EQ_WAIT(kLocalAddr1.ipaddr(),
-                 relayport->Candidates()[3].related_address().ipaddr(),
-                 kTimeout);
-  // Relay candidate base will be the candidate itself. Hence all candidates
-  // belonging to relay candidates will have different foundation.
-  EXPECT_NE(relayport->Candidates()[0].foundation(),
-            relayport->Candidates()[1].foundation());
-  EXPECT_NE(relayport->Candidates()[2].foundation(),
-            relayport->Candidates()[3].foundation());
+  // Testing related address for stun candidates.
+  // For stun candidate related address must be equal to the base
+  // socket address.
+  talk_base::scoped_ptr<StunPort> stunport(
+      CreateStunPort(kLocalAddr1, nat_socket_factory1()));
+  stunport->PrepareAddress();
+  ASSERT_EQ_WAIT(1U, stunport->Candidates().size(), kTimeout);
+  // Check STUN candidate address.
+  EXPECT_EQ(stunport->Candidates()[0].address().ipaddr(),
+            kNatAddr1.ipaddr());
+  // Check STUN candidate related address.
+  EXPECT_EQ(stunport->Candidates()[0].related_address(),
+            stunport->GetLocalAddress());
+  // Verifying the related address for the GTURN candidates.
+  // NOTE: In case of GTURN related address will be equal to the mapped
+  // address, but address(mapped) will not be XOR.
+  talk_base::scoped_ptr<RelayPort> relayport(
+      CreateGturnPort(kLocalAddr1));
+  relayport->AddServerAddress(
+      cricket::ProtocolAddress(kRelayUdpIntAddr, cricket::PROTO_UDP));
+  relayport->PrepareAddress();
+  ASSERT_EQ_WAIT(1U, relayport->Candidates().size(), kTimeout);
+  // For Gturn related address is set to "0.0.0.0:0"
+  EXPECT_EQ(talk_base::SocketAddress(),
+            relayport->Candidates()[0].related_address());
+  // Verifying the related address for TURN candidate.
+  // For TURN related address must be equal to the mapped address.
+  talk_base::scoped_ptr<Port> turnport(CreateTurnPort(
+      kLocalAddr1, nat_socket_factory1(), PROTO_UDP, PROTO_UDP));
+  turnport->PrepareAddress();
+  ASSERT_EQ_WAIT(1U, turnport->Candidates().size(), kTimeout);
+  EXPECT_EQ(kTurnUdpExtAddr.ipaddr(),
+            turnport->Candidates()[0].address().ipaddr());
+  EXPECT_EQ(kNatAddr1.ipaddr(),
+            turnport->Candidates()[0].related_address().ipaddr());
 }
 
 // Test priority value overflow handling when preference is set to 3.

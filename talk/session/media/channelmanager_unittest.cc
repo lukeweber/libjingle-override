@@ -31,8 +31,23 @@
 #include "talk/media/base/fakemediaprocessor.h"
 #include "talk/media/base/nullvideorenderer.h"
 #include "talk/media/devices/fakedevicemanager.h"
+#include "talk/media/base/testutils.h"
 #include "talk/p2p/base/fakesession.h"
 #include "talk/session/media/channelmanager.h"
+
+namespace cricket {
+
+static const AudioCodec kAudioCodecs[] = {
+  AudioCodec(97, "voice", 1, 2, 3, 0),
+  AudioCodec(110, "CELT", 32000, 48000, 2, 0),
+  AudioCodec(111, "OPUS", 48000, 32000, 2, 0),
+};
+
+static const VideoCodec kVideoCodecs[] = {
+  VideoCodec(99, "H264", 100, 200, 300, 0),
+  VideoCodec(100, "VP8", 100, 200, 300, 0),
+  VideoCodec(96, "rtx", 100, 200, 300, 0),
+};
 
 class ChannelManagerTest : public testing::Test {
  protected:
@@ -41,6 +56,8 @@ class ChannelManagerTest : public testing::Test {
 
   virtual void SetUp() {
     fme_ = new cricket::FakeMediaEngine();
+    fme_->SetAudioCodecs(MAKE_VECTOR(kAudioCodecs));
+    fme_->SetVideoCodecs(MAKE_VECTOR(kVideoCodecs));
     fdme_ = new cricket::FakeDataEngine();
     fdm_ = new cricket::FakeDeviceManager();
     fcm_ = new cricket::FakeCaptureManager();
@@ -559,3 +576,35 @@ TEST_F(ChannelManagerTest, RegisterProcessors) {
   EXPECT_FALSE(fme_->voice_processor_registered(cricket::MPD_TX));
   EXPECT_FALSE(fme_->voice_processor_registered(cricket::MPD_RX));
 }
+
+TEST_F(ChannelManagerTest, SetVideoRtxEnabled) {
+  std::vector<VideoCodec> codecs;
+  const VideoCodec rtx_codec(96, "rtx", 0, 0, 0, 0);
+
+  // By default RTX is disabled.
+  cm_->GetSupportedVideoCodecs(&codecs);
+  EXPECT_FALSE(ContainsMatchingCodec(codecs, rtx_codec));
+
+  // Enable and check.
+  EXPECT_TRUE(cm_->SetVideoRtxEnabled(true));
+  cm_->GetSupportedVideoCodecs(&codecs);
+  EXPECT_TRUE(ContainsMatchingCodec(codecs, rtx_codec));
+
+  // Disable and check.
+  EXPECT_TRUE(cm_->SetVideoRtxEnabled(false));
+  cm_->GetSupportedVideoCodecs(&codecs);
+  EXPECT_FALSE(ContainsMatchingCodec(codecs, rtx_codec));
+
+  // Cannot toggle rtx after initialization.
+  EXPECT_TRUE(cm_->Init());
+  EXPECT_FALSE(cm_->SetVideoRtxEnabled(true));
+  EXPECT_FALSE(cm_->SetVideoRtxEnabled(false));
+
+  // Can set again after terminate.
+  cm_->Terminate();
+  EXPECT_TRUE(cm_->SetVideoRtxEnabled(true));
+  cm_->GetSupportedVideoCodecs(&codecs);
+  EXPECT_TRUE(ContainsMatchingCodec(codecs, rtx_codec));
+}
+
+}  // namespace cricket

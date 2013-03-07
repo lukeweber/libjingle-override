@@ -531,7 +531,10 @@ void RelayEntry::OnConnect(const talk_base::SocketAddress& mapped_addr,
             << " @ " << mapped_addr.ToString();
   connected_ = true;
 
-  port_->set_related_address(mapped_addr);
+  // In case of Gturn related address is set to null socket address.
+  // This is due to mapped address stun attribute is used for allocated
+  // address.
+  port_->set_related_address(talk_base::SocketAddress());
   port_->AddExternalAddress(ProtocolAddress(mapped_addr, proto));
   port_->SetReady();
 }

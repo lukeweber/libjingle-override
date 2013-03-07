@@ -174,7 +174,7 @@ class RemoteTracksInterface {
   virtual ~RemoteTracksInterface() {}
 };
 
-template <typename Track, typename TrackProxy>
+template <typename TrackInterface, typename Track, typename TrackProxy>
 class RemoteTracks : public RemoteTracksInterface {
  public:
   explicit RemoteTracks(talk_base::Thread* signaling_thread);
@@ -189,7 +189,7 @@ class RemoteTracks : public RemoteTracksInterface {
 
  private:
   struct TrackInfo {
-    talk_base::scoped_refptr<TrackProxy> track;
+    talk_base::scoped_refptr<TrackInterface> track;
     // The MediaStream |track| belongs to.
     talk_base::scoped_refptr<webrtc::MediaStreamInterface> stream;
     // The SSRC the track is identified by. Note that the track can use more
@@ -200,19 +200,19 @@ class RemoteTracks : public RemoteTracksInterface {
   std::map<std::string, TrackInfo> remote_tracks_;
 };
 
-typedef RemoteTracks<webrtc::AudioTrack, webrtc::AudioTrackProxy>
-    RemoteAudioTracks;
-typedef RemoteTracks<webrtc::VideoTrack, webrtc::VideoTrackProxy>
-    RemoteVideoTracks;
+typedef RemoteTracks<webrtc::AudioTrackInterface, webrtc::AudioTrack,
+    webrtc::AudioTrackProxy> RemoteAudioTracks;
+typedef RemoteTracks<webrtc::VideoTrackInterface, webrtc::VideoTrack,
+    webrtc::VideoTrackProxy> RemoteVideoTracks;
 
-template <typename T, typename TP>
-RemoteTracks<T, TP>::RemoteTracks(
+template <typename TI, typename T, typename TP>
+RemoteTracks<TI, T, TP>::RemoteTracks(
     talk_base::Thread* signaling_thread)
     : signaling_thread_(signaling_thread) {
 }
 
-template <typename T, typename TP>
-bool RemoteTracks<T, TP>::AddRemoteTrack(
+template <typename TI, typename T, typename TP>
+bool RemoteTracks<TI, T, TP>::AddRemoteTrack(
     const std::string& track_id,
     webrtc::MediaStreamInterface* stream,
     uint32 ssrc) {
@@ -223,7 +223,7 @@ bool RemoteTracks<T, TP>::AddRemoteTrack(
   }
 
   TrackInfo info;
-  info.track = TP::Create(T::Create(track_id, NULL), signaling_thread_);
+  info.track = TP::Create(signaling_thread_, T::Create(track_id, NULL));
   info.track->set_state(webrtc::MediaStreamTrackInterface::kLive);
   info.stream = stream;
   info.stream->AddTrack(info.track);
@@ -233,8 +233,8 @@ bool RemoteTracks<T, TP>::AddRemoteTrack(
   return true;
 }
 
-template <typename T, typename TP>
-bool RemoteTracks<T, TP>::GetSsrc(
+template <typename TI, typename T, typename TP>
+bool RemoteTracks<TI, T, TP>::GetSsrc(
     const std::string& track_id,
     uint32* ssrc) const {
   typename std::map<std::string, TrackInfo>::const_iterator it =
@@ -248,8 +248,8 @@ bool RemoteTracks<T, TP>::GetSsrc(
   return true;
 }
 
-template <typename T, typename TP>
-void RemoteTracks<T, TP>::RemoveDisappearedTracks(
+template <typename TI, typename T, typename TP>
+void RemoteTracks<TI, T, TP>::RemoveDisappearedTracks(
     const cricket::StreamParamsVec& rtp_streams) {
 
   std::vector<std::string> track_ids_to_remove;
@@ -276,8 +276,8 @@ void RemoteTracks<T, TP>::RemoveDisappearedTracks(
   }
 }
 
-template <typename T, typename TP>
-void RemoteTracks<T, TP>::RejectAllTracks() {
+template <typename TI, typename T, typename TP>
+void RemoteTracks<TI, T, TP>::RejectAllTracks() {
   // End all tracks in |remote_tracks_| but don't remove them from the
   // MediaStream.
   while (!remote_tracks_.empty()) {
@@ -301,7 +301,9 @@ MediaStreamSignaling::MediaStreamSignaling(
 }
 
 MediaStreamSignaling::~MediaStreamSignaling() {
-  OnSessionClose();
+  OnAudioChannelClose();
+  OnVideoChannelClose();
+  OnDataChannelClose();
 }
 
 void MediaStreamSignaling::SetLocalStreams(
@@ -432,14 +434,20 @@ void MediaStreamSignaling::OnLocalDescriptionChanged(
   }
 }
 
-void MediaStreamSignaling::OnSessionClose() {
+void MediaStreamSignaling::OnAudioChannelClose() {
+  remote_audio_tracks_->RejectAllTracks();
+}
+
+void MediaStreamSignaling::OnVideoChannelClose() {
+  remote_video_tracks_->RejectAllTracks();
+}
+
+void MediaStreamSignaling::OnDataChannelClose() {
   DataChannels::iterator it = data_channels_.begin();
   for (; it != data_channels_.end(); ++it) {
     DataChannel* data_channel = it->second;
     data_channel->OnDataEngineClose();
   }
-  remote_audio_tracks_->RejectAllTracks();
-  remote_video_tracks_->RejectAllTracks();
 }
 
 bool MediaStreamSignaling::GetRemoteAudioTrackSsrc(
@@ -517,7 +525,7 @@ void MediaStreamSignaling::UpdateRemoteStreamsList(
         remote_streams_->find(mediastream_label));
     if (media_stream == NULL) {
       // This is a new MediaStream. Create a new remote MediaStream.
-      media_stream =  MediaStreamProxy::Create(
+      media_stream = MediaStreamProxy::Create(
           signaling_thread_,
           MediaStream::Create(mediastream_label));
       new_streams->AddStream(media_stream);

@@ -145,6 +145,9 @@ class ChannelManager : public talk_base::MessageHandler,
   VideoCapturer* CreateVideoCapturer();
   bool SetCaptureDevice(const std::string& cam_device);
   bool SetDefaultVideoEncoderConfig(const VideoEncoderConfig& config);
+  // RTX will be enabled/disabled in engines that support it. The supporting
+  // engines will start offering an RTX codec. Must be called before Init().
+  bool SetVideoRtxEnabled(bool enable);
 
   // Starts/stops the local microphone and enables polling of the input level.
   bool SetLocalMonitor(bool enable);
@@ -298,6 +301,7 @@ class ChannelManager : public talk_base::MessageHandler,
   std::string camera_device_;
   VideoEncoderConfig default_video_encoder_config_;
   VideoRenderer* local_renderer_;
+  bool enable_rtx_;
 
   bool capturing_;
   bool monitoring_;

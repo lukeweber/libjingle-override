@@ -37,6 +37,7 @@
 #include "talk/base/logging.h"
 #include "talk/base/sigslotrepeater.h"
 #include "talk/base/stringencode.h"
+#include "talk/base/stringutils.h"
 #include "talk/media/base/capturemanager.h"
 #include "talk/media/base/rtpdataengine.h"
 #include "talk/media/base/videocapturer.h"
@@ -255,6 +256,7 @@ void ChannelManager::Construct(MediaEngineInterface* me,
   local_renderer_ = NULL;
   capturing_ = false;
   monitoring_ = false;
+  enable_rtx_ = false;
 
   // Init the device manager immediately, and set up our default video device.
   SignalDevicesChange.repeat(device_manager_->SignalDevicesChange);
@@ -271,6 +273,21 @@ void ChannelManager::Construct(MediaEngineInterface* me,
 ChannelManager::~ChannelManager() {
   if (initialized_)
     Terminate();
+}
+
+bool ChannelManager::SetVideoRtxEnabled(bool enable) {
+  // To be safe, this call is only allowed before initialization. Apps like
+  // Flute only have a singleton ChannelManager and we don't want this flag to
+  // be toggled between calls or when there's concurrent calls. We expect apps
+  // to enable this at startup and retain that setting for the lifetime of the
+  // app.
+  if (!initialized_) {
+    enable_rtx_ = enable;
+    return true;
+  } else {
+    LOG(LS_WARNING) << "Cannot toggle rtx after initialization!";
+    return false;
+  }
 }
 
 int ChannelManager::GetCapabilities() {
@@ -300,6 +317,9 @@ void ChannelManager::GetSupportedVideoCodecs(
   std::vector<VideoCodec>::const_iterator it;
   for (it = media_engine_->video_codecs().begin();
       it != media_engine_->video_codecs().end(); ++it) {
+    if (!enable_rtx_ && _stricmp(kRtxCodecName, it->name.c_str()) == 0) {
+      continue;
+    }
     codecs->push_back(*it);
   }
 }

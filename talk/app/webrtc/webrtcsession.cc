@@ -490,7 +490,6 @@ bool WebRtcSession::Initialize(const MediaConstraintsInterface* constraints) {
 
 void WebRtcSession::Terminate() {
   SetState(STATE_RECEIVEDTERMINATE);
-  mediastream_signaling_->OnSessionClose();
   RemoveUnusedChannelsAndTransports(NULL);
   ASSERT(voice_channel_.get() == NULL);
   ASSERT(video_channel_.get() == NULL);
@@ -1250,8 +1249,8 @@ void WebRtcSession::RemoveUnusedChannelsAndTransports(
   const cricket::ContentInfo* voice_info =
       cricket::GetFirstAudioContent(desc);
   if ((!voice_info || voice_info->rejected) && voice_channel_) {
+    mediastream_signaling_->OnAudioChannelClose();
     const std::string content_name = voice_channel_->content_name();
-    voice_channel_->SignalFirstPacketReceived.disconnect(this);
     channel_manager_->DestroyVoiceChannel(voice_channel_.release());
     DestroyTransportProxy(content_name);
   }
@@ -1259,8 +1258,8 @@ void WebRtcSession::RemoveUnusedChannelsAndTransports(
   const cricket::ContentInfo* video_info =
       cricket::GetFirstVideoContent(desc);
   if ((!video_info || video_info->rejected) && video_channel_) {
+    mediastream_signaling_->OnVideoChannelClose();
     const std::string content_name = video_channel_->content_name();
-    video_channel_->SignalFirstPacketReceived.disconnect(this);
     channel_manager_->DestroyVideoChannel(video_channel_.release());
     DestroyTransportProxy(content_name);
   }
@@ -1268,6 +1267,7 @@ void WebRtcSession::RemoveUnusedChannelsAndTransports(
   const cricket::ContentInfo* data_info =
       cricket::GetFirstDataContent(desc);
   if ((!data_info || data_info->rejected) && data_channel_.get()) {
+    mediastream_signaling_->OnDataChannelClose();
     const std::string content_name = data_channel_->content_name();
     channel_manager_->DestroyDataChannel(data_channel_.release());
     DestroyTransportProxy(content_name);

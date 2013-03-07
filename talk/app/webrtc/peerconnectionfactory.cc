@@ -327,7 +327,7 @@ PeerConnectionFactory::CreateVideoTrack(
     VideoSourceInterface* source) {
   talk_base::scoped_refptr<VideoTrackInterface> track(
       VideoTrack::Create(id, source));
-  return VideoTrackProxy::Create(track, signaling_thread_);
+  return VideoTrackProxy::Create(signaling_thread_, track);
 }
 
 scoped_refptr<AudioTrackInterface> PeerConnectionFactory::CreateAudioTrack(
@@ -335,7 +335,7 @@ scoped_refptr<AudioTrackInterface> PeerConnectionFactory::CreateAudioTrack(
     AudioSourceInterface* source) {
   talk_base::scoped_refptr<AudioTrackInterface> track(
       AudioTrack::Create(id, source));
-  return AudioTrackProxy::Create(track, signaling_thread_);
+  return AudioTrackProxy::Create(signaling_thread_, track);
 }
 
 cricket::ChannelManager* PeerConnectionFactory::channel_manager() {

@@ -91,6 +91,8 @@ class Settable {
   }
 
   void SetFrom(const Settable<T>& o) {
+    // Set this value based on the value of o, iff o is set.  If this value is
+    // set and o is unset, the current value will be unchanged.
     T val;
     if (o.Get(&val)) {
       Set(val);
@@ -102,7 +104,8 @@ class Settable {
   }
 
   bool operator==(const Settable<T>& o) const {
-    return (set_ == o.set_) && (val_ == o.val_);
+    // Equal if both are unset with any value or both set with the same value.
+    return (set_ == o.set_) && (!set_ || (val_ == o.val_));
   }
 
   bool operator!=(const Settable<T>& o) const {
@@ -117,8 +120,6 @@ class Settable {
  private:
   bool set_;
   T val_;
-  // TODO(hughv): Fix unit tests so we can disallow copy.
-  // DISALLOW_COPY_AND_ASSIGN(Settable<T>);
 };
 
 class SettablePercent : public Settable<float> {

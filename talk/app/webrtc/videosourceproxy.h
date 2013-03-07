@@ -28,51 +28,23 @@
 #ifndef TALK_APP_WEBRTC_VIDEOSOURCEPROXY_H_
 #define TALK_APP_WEBRTC_VIDEOSOURCEPROXY_H_
 
-#include "talk/app/webrtc/mediastreaminterface.h"
+#include "talk/app/webrtc/proxy.h"
 #include "talk/app/webrtc/videosourceinterface.h"
-#include "talk/base/messagehandler.h"
-
-namespace talk_base {
-
-class Thread;
-
-}
 
 namespace webrtc {
 
 // VideoSourceProxy makes sure the real VideoSourceInterface implementation is
 // destroyed on the signaling thread and marshals all method calls to the
 // signaling thread.
-class VideoSourceProxy : public VideoSourceInterface,
-                         public talk_base::MessageHandler {
- public:
-  static VideoSourceInterface* Create(talk_base::Thread* signaling_thread,
-                                      VideoSourceInterface* source);
-  // Notifier implementation
-  void RegisterObserver(ObserverInterface* observer);
-  void UnregisterObserver(ObserverInterface* observer);
-
-  // MediaStreamSource implementation
-  virtual SourceState state() const;
-
-  // VideoSourceInterface implementation
-  virtual cricket::VideoCapturer* GetVideoCapturer();
-  virtual void AddSink(cricket::VideoRenderer* output);
-  virtual void RemoveSink(cricket::VideoRenderer* output);
-  virtual const cricket::VideoOptions* options() const;
-
- protected:
-  VideoSourceProxy(talk_base::Thread* signaling_thread,
-                   VideoSourceInterface* source);
-  virtual ~VideoSourceProxy();
-
- private:
-  // Implements talk_base::MessageHandler.
-  void OnMessage(talk_base::Message* msg);
-
-  mutable talk_base::Thread* signaling_thread_;
-  talk_base::scoped_refptr<VideoSourceInterface> source_;
-};
+BEGIN_PROXY_MAP(VideoSource)
+  PROXY_CONSTMETHOD0(SourceState, state)
+  PROXY_METHOD0(cricket::VideoCapturer*, GetVideoCapturer)
+  PROXY_METHOD1(void, AddSink, cricket::VideoRenderer*)
+  PROXY_METHOD1(void, RemoveSink, cricket::VideoRenderer*)
+  PROXY_CONSTMETHOD0(const cricket::VideoOptions*, options)
+  PROXY_METHOD1(void, RegisterObserver, ObserverInterface*)
+  PROXY_METHOD1(void, UnregisterObserver, ObserverInterface*)
+END_PROXY()
 
 }  // namespace webrtc
 

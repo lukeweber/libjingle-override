@@ -917,6 +917,31 @@ TEST_F(PeerConnectionInterfaceTest, DataChannelCloseWhenPeerConnectionClose) {
   EXPECT_EQ(DataChannelInterface::kClosed, data2->state());
 }
 
+// This test that data channels can be rejected in an answer.
+TEST_F(PeerConnectionInterfaceTest, TestRejectDataChannelInAnswer) {
+  FakeConstraints constraints;
+  constraints.SetAllowRtpDataChannels();
+  CreatePeerConnection(&constraints);
+
+  scoped_refptr<DataChannelInterface> offer_channel(
+      pc_->CreateDataChannel("offer_channel", NULL));
+
+  CreateOfferAsLocalDescription();
+
+  // Create an answer where the m-line for data channels are rejected.
+  std::string sdp;
+  EXPECT_TRUE(pc_->local_description()->ToString(&sdp));
+  webrtc::JsepSessionDescription* answer = new webrtc::JsepSessionDescription(
+      SessionDescriptionInterface::kAnswer);
+  EXPECT_TRUE(answer->Initialize(sdp, NULL));
+  cricket::ContentInfo* data_info =
+      answer->description()->GetContentByName("data");
+  data_info->rejected = true;
+
+  DoSetRemoteDescription(answer);
+  EXPECT_EQ(DataChannelInterface::kClosed, offer_channel->state());
+}
+
 // Test that we can create a session description from an SDP string from
 // FireFox, use it as a remote session description, generate an answer and use
 // the answer as a local description.

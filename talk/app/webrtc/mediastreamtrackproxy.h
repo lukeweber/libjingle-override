@@ -31,77 +31,41 @@
 #ifndef TALK_APP_WEBRTC_MEDIASTREAMTRACKPROXY_H_
 #define TALK_APP_WEBRTC_MEDIASTREAMTRACKPROXY_H_
 
-#include <string>
-#include <vector>
-
 #include "talk/app/webrtc/mediastreaminterface.h"
-#include "talk/base/thread.h"
+#include "talk/app/webrtc/proxy.h"
 
 namespace webrtc {
 
-template <class T>
-class MediaStreamTrackProxy : public T,
-                              talk_base::MessageHandler {
- public:
-  // Implement MediaStreamTrack.
-  virtual std::string kind() const;
-  virtual std::string id() const;
-  virtual bool enabled() const;
-  virtual MediaStreamTrackInterface::TrackState state() const;
-  virtual bool set_enabled(bool enable);
-  virtual bool set_state(MediaStreamTrackInterface::TrackState new_state);
+BEGIN_PROXY_MAP(AudioTrack)
+  PROXY_CONSTMETHOD0(std::string, kind)
+  PROXY_CONSTMETHOD0(std::string, id)
+  PROXY_CONSTMETHOD0(TrackState, state)
+  PROXY_CONSTMETHOD0(bool, enabled)
+  PROXY_CONSTMETHOD0(AudioSourceInterface*, GetSource)
 
-  // Implement Notifier
-  virtual void RegisterObserver(ObserverInterface* observer);
-  virtual void UnregisterObserver(ObserverInterface* observer);
+  PROXY_METHOD1(bool, set_enabled, bool)
+  PROXY_METHOD1(bool, set_state, TrackState)
 
- protected:
-  MediaStreamTrackProxy(T* track, talk_base::Thread* signaling_thread);
+  PROXY_METHOD1(void, RegisterObserver, ObserverInterface*)
+  PROXY_METHOD1(void, UnregisterObserver, ObserverInterface*)
+END_PROXY()
 
-  void Send(uint32 id, talk_base::MessageData* data) const;
-  // Returns true if the message is handled.
-  bool HandleMessage(talk_base::Message* msg);
+BEGIN_PROXY_MAP(VideoTrack)
+  PROXY_CONSTMETHOD0(std::string, kind)
+  PROXY_CONSTMETHOD0(std::string, id)
+  PROXY_CONSTMETHOD0(TrackState, state)
+  PROXY_CONSTMETHOD0(bool, enabled)
+  PROXY_METHOD1(bool, set_enabled, bool)
+  PROXY_METHOD1(bool, set_state, TrackState)
 
-  mutable talk_base::Thread* signaling_thread_;
-  talk_base::scoped_refptr<T> track_;
-};
+  PROXY_METHOD1(void, AddRenderer, VideoRendererInterface*)
+  PROXY_METHOD1(void, RemoveRenderer, VideoRendererInterface*)
+  PROXY_METHOD0(cricket::VideoRenderer*, FrameInput)
+  PROXY_CONSTMETHOD0(VideoSourceInterface*, GetSource)
 
-// AudioTrackProxy is a proxy for the AudioTrackInterface. The purpose is
-// to make sure AudioTrack is only accessed from the signaling thread.
-// It can be used as a proxy for both local and remote audio tracks.
-class AudioTrackProxy : public MediaStreamTrackProxy<AudioTrackInterface> {
- public:
-  static talk_base::scoped_refptr<AudioTrackProxy> Create(
-      AudioTrackInterface* track, talk_base::Thread* signaling_thread);
-  virtual AudioSourceInterface* GetSource() const;
-
- protected:
-  AudioTrackProxy(AudioTrackInterface* track,
-                  talk_base::Thread* signaling_thread);
-  // Implement MessageHandler
-  virtual void OnMessage(talk_base::Message* msg);
-};
-
-// VideoTrackProxy is a proxy for the VideoTrackInterface. The purpose is
-// to make sure VideoTrack is only accessed from the signaling thread.
-// It can be used as a proxy for both local and remote video tracks.
-class VideoTrackProxy : public MediaStreamTrackProxy<VideoTrackInterface> {
- public:
-  static talk_base::scoped_refptr<VideoTrackProxy> Create(
-      VideoTrackInterface* track, talk_base::Thread* signaling_thread);
-
-  virtual void AddRenderer(VideoRendererInterface* renderer);
-  virtual void RemoveRenderer(VideoRendererInterface* renderer);
-  virtual cricket::VideoRenderer* FrameInput();
-  virtual VideoSourceInterface* GetSource() const;
-
- protected:
-  VideoTrackProxy(VideoTrackInterface* video_track,
-                  talk_base::Thread* signaling_thread);
-
-  // Implement MessageHandler
-  virtual void OnMessage(talk_base::Message* msg);
-};
+  PROXY_METHOD1(void, RegisterObserver, ObserverInterface*)
+  PROXY_METHOD1(void, UnregisterObserver, ObserverInterface*)
+END_PROXY()
 
 }  // namespace webrtc
 
