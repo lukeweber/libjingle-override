@@ -120,62 +120,6 @@ struct CodecParams {
   int useinband;
 };
 
-static void AddNonDefaultOpusCodecParams(
-    const CodecParams& defaults,
-    cricket::CodecParameterMap* parameters) {
-  if (defaults.max_ptime != cricket::kOpusDefaultMaxPTime) {
-    (*parameters)[cricket::kCodecParamMaxPTime] =
-        talk_base::ToString(defaults.max_ptime);
-  }
-  if (defaults.ptime != cricket::kOpusDefaultPTime) {
-    (*parameters)[cricket::kCodecParamPTime] =
-        talk_base::ToString(defaults.ptime);
-  }
-}
-
-static void AddNonDefaultOpusCodecParam(
-    const CodecParams& defaults,
-    cricket::CodecParameterMap* parameters) {
-  if (defaults.min_ptime != cricket::kOpusDefaultMinPTime) {
-    (*parameters)[cricket::kCodecParamMinPTime] =
-        talk_base::ToString(defaults.min_ptime);
-  }
-  if (defaults.sprop_stereo != cricket::kOpusDefaultSPropStereo) {
-    (*parameters)[cricket::kCodecParamSPropStereo] =
-        talk_base::ToString(defaults.sprop_stereo);
-  }
-  if (defaults.stereo != cricket::kOpusDefaultStereo) {
-    (*parameters)[cricket::kCodecParamStereo] =
-        talk_base::ToString(defaults.stereo);
-  }
-  if (defaults.useinband != cricket::kOpusDefaultUseInbandFec) {
-    (*parameters)[cricket::kCodecParamUseInbandFec] =
-        talk_base::ToString(defaults.useinband);
-  }
-}
-
-static std::string ParameterAsLine(std::string name, std::string value,
-                                   const char* delimiter) {
-  std::string ret_val;
-  ret_val.append(name);
-  ret_val.append(delimiter);
-  ret_val.append(value);
-  return ret_val;
-}
-
-static void TestCodecParamLine(std::string line,
-                               const CodecParams& defaults) {
-  cricket::CodecParameterMap parameters;
-  AddNonDefaultOpusCodecParam(defaults, &parameters);
-  for (cricket::CodecParameterMap::iterator iter = parameters.begin();
-       iter != parameters.end(); ++iter) {
-    const char* delimiter = "=";
-    std::string fmpt_paramater = ParameterAsLine(iter->first, iter->second,
-                                                 delimiter);
-    EXPECT_NE(std::string::npos, line.find(fmpt_paramater));
-  }
-}
-
 // Reference sdp string
 static const char kSdpFullString[] =
     "v=0\r\n"
@@ -695,6 +639,8 @@ class WebRtcSdpTest : public testing::Test {
       const CryptoParams c1 = cd1->cryptos().at(i);
       const CryptoParams c2 = cd2->cryptos().at(i);
       EXPECT_TRUE(c1.Matches(c2));
+      EXPECT_EQ(c1.key_params, c2.key_params);
+      EXPECT_EQ(c1.session_params, c2.session_params);
     }
     // protocol
     EXPECT_EQ(cd1->protocol(), cd2->protocol());
@@ -1004,19 +950,6 @@ class WebRtcSdpTest : public testing::Test {
     return true;
   }
 
-  void SetOpusCodecParams(const CodecParams& defaults) {
-    // Replace the current audio content with one where opus' codec parameter
-    // has been set to no default values.
-    desc_.RemoveContentByName(kAudioContentName);
-    AudioCodec opus(111, "opus", 48000, 0, 2, 1);
-    AddNonDefaultOpusCodecParam(defaults, &opus.params);
-    AddNonDefaultOpusCodecParams(defaults, &opus.params);
-    audio_desc_ = CreateAudioContentDescription();
-    audio_desc_->AddCodec(opus);
-    desc_.AddContent(kAudioContentName, NS_JINGLE_RTP, audio_desc_);
-    jdesc_.Initialize(desc_.Copy(), kSessionId, kSessionVersion);
-  }
-
   void AddDataChannel() {
     talk_base::scoped_ptr<DataContentDescription> data(
         new DataContentDescription());
@@ -1116,6 +1049,77 @@ class WebRtcSdpTest : public testing::Test {
       EXPECT_TRUE(SdpDeserialize(sdp_with_extmap, &jdesc_with_extmap));
       EXPECT_TRUE(CompareSessionDescription(jdesc_with_extmap, new_jdesc));
     }
+  }
+
+  void VerifyCodecParameter(const cricket::CodecParameterMap& params,
+      const std::string& name, int expected_value) {
+    cricket::CodecParameterMap::const_iterator found = params.find(name);
+    ASSERT_TRUE(found != params.end());
+    EXPECT_EQ(found->second, talk_base::ToString<int>(expected_value));
+  }
+
+  void TestDeserializeCodecParams(const CodecParams& params,
+                                  JsepSessionDescription* jdesc_output) {
+    std::string sdp =
+        "v=0\r\n"
+        "o=- 18446744069414584320 18446462598732840960 IN IP4 127.0.0.1\r\n"
+        "s=-\r\n"
+        "t=0 0\r\n"
+        // Include semantics for WebRTC Media Streams since it is supported by
+        // this parser, and will be added to the SDP when serializing a session
+        // description.
+        "a=msid-semantic: WMS\r\n"
+        // Pl type 111 preferred.
+        "m=audio 1 RTP/SAVPF 111 104 103\r\n"
+        // Pltype 111 listed before 103 and 104 in the map.
+        "a=rtpmap:111 opus/48000/2\r\n"
+        // Pltype 103 listed before 104.
+        "a=rtpmap:103 ISAC/16000\r\n"
+        "a=rtpmap:104 CELT/32000/2\r\n"
+        "a=fmtp:111 0-15,66,70 ";
+    std::ostringstream os;
+    os << "minptime=" << params.min_ptime << " stereo=" << params.stereo
+       << " sprop-stereo=" << params.sprop_stereo
+       << " useinbandfec=" << params.useinband << "\r\n"
+       << "a=ptime:" << params.ptime << "\r\n"
+       << "a=maxptime:" << params.max_ptime << "\r\n";
+    sdp += os.str();
+
+    // Deserialize
+    SdpParseError error;
+    EXPECT_TRUE(webrtc::SdpDeserialize(sdp, jdesc_output, &error));
+
+    const ContentInfo* ac = GetFirstAudioContent(jdesc_output->description());
+    ASSERT_TRUE(ac != NULL);
+    const AudioContentDescription* acd =
+        static_cast<const AudioContentDescription*>(ac->description);
+    ASSERT_FALSE(acd->codecs().empty());
+    cricket::AudioCodec opus = acd->codecs()[0];
+    EXPECT_EQ("opus", opus.name);
+    EXPECT_EQ(111, opus.id);
+    VerifyCodecParameter(opus.params, "minptime", params.min_ptime);
+    VerifyCodecParameter(opus.params, "stereo", params.stereo);
+    VerifyCodecParameter(opus.params, "sprop-stereo", params.sprop_stereo);
+    VerifyCodecParameter(opus.params, "useinbandfec", params.useinband);
+    for (size_t i = 0; i < acd->codecs().size(); ++i) {
+      cricket::AudioCodec codec = acd->codecs()[i];
+      VerifyCodecParameter(codec.params, "ptime", params.ptime);
+      VerifyCodecParameter(codec.params, "maxptime", params.max_ptime);
+    }
+  }
+
+  // Two SDP messages can mean the same thing but be different strings, e.g.
+  // some of the lines can be serialized in different order.
+  // However, a deserialized description can be compared field by field and has
+  // no order. If deserializer has already been tested, serializing then
+  // deserializing and comparing JsepSessionDescription will test
+  // the serializer sufficiently.
+  void TestSerializeCodecParams(const JsepSessionDescription& jdesc) {
+    std::string message = webrtc::SdpSerialize(jdesc);
+    JsepSessionDescription jdesc_output_des(kDummyString);
+    SdpParseError error;
+    EXPECT_TRUE(webrtc::SdpDeserialize(message, &jdesc_output_des, &error));
+    EXPECT_TRUE(CompareSessionDescription(jdesc, jdesc_output_des));
   }
 
  protected:
@@ -1676,76 +1680,17 @@ TEST_F(WebRtcSdpTest, DeserializeSdpWithReorderedPltypes) {
   EXPECT_EQ(104, acd->codecs()[0].id);
 }
 
-TEST_F(WebRtcSdpTest, SerializeCodecParam) {
-  CodecParams defaults =
-      {cricket::kPreferredMaxPTime, cricket::kOpusDefaultPTime,
-       cricket::kPreferredMinPTime,
-       talk_base::FromString<int>(cricket::kParamTrue),
-       talk_base::FromString<int>(cricket::kParamTrue),
-       talk_base::FromString<int>(cricket::kParamTrue)};
-  SetOpusCodecParams(defaults);
-  std::string message = webrtc::SdpSerialize(jdesc_);
-  std::string line = GetLine(message, "a=fmtp:");
-  ASSERT_FALSE(line.empty());
-  TestCodecParamLine(line, defaults);
-
-  cricket::CodecParameterMap attributes;
-  AddNonDefaultOpusCodecParams(defaults, &attributes);
-  for (cricket::CodecParameterMap::iterator iter = attributes.begin();
-       iter != attributes.end(); ++iter) {
-    std::string attribute_head = "a=";
-    attribute_head.append(iter->first);
-    std::string attribute_line = GetLine(message, attribute_head);
-    if (attribute_line.empty()) {
-      FAIL();
-      continue;
-    }
-    const char* delimiter = ":";
-    std::string attribute = ParameterAsLine(iter->first, iter->second,
-                                            delimiter);
-    if (attribute.empty()) {
-      FAIL();
-      continue;
-    }
-    EXPECT_NE(std::string::npos, attribute_line.find(attribute));
-  }
-}
-
-TEST_F(WebRtcSdpTest, DeserializeCodecParam) {
+TEST_F(WebRtcSdpTest, DeserializeSerializeCodecParams) {
   JsepSessionDescription jdesc_output(kDummyString);
-
-  const char kSdpWithCodecParamString[] =
-      "v=0\r\n"
-      "o=- 18446744069414584320 18446462598732840960 IN IP4 127.0.0.1\r\n"
-      "s=-\r\n"
-      "t=0 0\r\n"
-      "m=audio 1 RTP/SAVPF 111 104 103\r\n"  // Pl type 111 preferred.
-      "a=rtpmap:111 opus/48000/2\r\n"  // Pltype 111 listed before 103 and 104
-                                       // in the map.
-      "a=rtpmap:103 ISAC/16000\r\n"  // Pltype 103 listed before 104 in the map.
-      "a=rtpmap:104 CELT/32000/2\r\n"
-      "a=fmtp:111 0-15,66,70 minptime=10\r\n"
-      "a=maxptime:40\r\n";
-
-  // Deserialize
-  SdpParseError error;
-  EXPECT_TRUE(webrtc::SdpDeserialize(kSdpWithCodecParamString, &jdesc_output,
-                                     &error));
-
-  const ContentInfo* ac = GetFirstAudioContent(jdesc_output.description());
-  ASSERT_TRUE(ac != NULL);
-  const AudioContentDescription* acd =
-      static_cast<const AudioContentDescription*>(ac->description);
-  ASSERT_FALSE(acd->codecs().empty());
-  cricket::AudioCodec opus = acd->codecs()[0];
-  EXPECT_EQ("opus", opus.name);
-  EXPECT_EQ(111, opus.id);
-  cricket::CodecParameterMap::iterator found = opus.params.find("minptime");
-  ASSERT_TRUE(found != opus.params.end());
-  EXPECT_EQ(found->second, "10");
-  found = opus.params.find("maxptime");
-  ASSERT_TRUE(found != opus.params.end());
-  EXPECT_EQ(found->second, "40");
+  CodecParams params;
+  params.max_ptime = 40;
+  params.ptime = 30;
+  params.min_ptime = 10;
+  params.sprop_stereo = 1;
+  params.stereo = 1;
+  params.useinband = 1;
+  TestDeserializeCodecParams(params, &jdesc_output);
+  TestSerializeCodecParams(jdesc_output);
 }
 
 TEST_F(WebRtcSdpTest, DeserializeVideoFmtp) {

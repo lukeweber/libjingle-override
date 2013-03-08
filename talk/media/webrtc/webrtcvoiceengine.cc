@@ -616,8 +616,8 @@ bool WebRtcVoiceEngine::ApplyOptions(const AudioOptions& options_in) {
     }
 #endif
     if (options.ec_mode == webrtc::kEcAecm) {
-      if (voep->SetAecmMode(options.aecm_mode, true) != 0) {
-        LOG_RTCERR2(SetAecmMode, options.aecm_mode, true);
+      if (voep->SetAecmMode(options.aecm_mode, false) != 0) {
+        LOG_RTCERR2(SetAecmMode, options.aecm_mode, false);
         return false;
       }
     }

@@ -76,6 +76,7 @@ class P2PTransportChannel : public TransportChannelImpl,
   // From TransportChannelImpl:
   virtual Transport* GetTransport() { return transport_; }
   virtual void SetRole(TransportRole role);
+  virtual TransportRole GetRole() const { return role_; }
   virtual void SetTiebreaker(uint64 tiebreaker);
   virtual void SetIceProtocolType(IceProtocolType type);
   virtual void SetIceCredentials(const std::string& ice_ufrag,

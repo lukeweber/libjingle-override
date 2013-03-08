@@ -122,6 +122,10 @@ class DtlsTransportChannelWrapper : public TransportChannelImpl {
   virtual ~DtlsTransportChannelWrapper();
 
   virtual void SetRole(TransportRole role);
+  // Returns current transport role of the channel.
+  virtual TransportRole GetRole() const {
+    return channel_->GetRole();
+  }
   virtual bool SetLocalIdentity(talk_base::SSLIdentity *identity);
 
   virtual bool SetRemoteFingerprint(const std::string& digest_alg,

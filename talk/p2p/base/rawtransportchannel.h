@@ -74,6 +74,7 @@ class RawTransportChannel : public TransportChannelImpl,
                                  const std::string& ice_pwd) {}
   virtual void SetRemoteIceCredentials(const std::string& ice_ufrag,
                                        const std::string& ice_pwd) {}
+  virtual TransportRole GetRole() const { return ROLE_UNKNOWN; }
 
   // Creates an allocator session to start figuring out which type of
   // port we should send to the other client.  This will send

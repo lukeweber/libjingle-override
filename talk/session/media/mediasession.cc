@@ -1067,7 +1067,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateAnswer(
       return NULL;  // Fails the session setup.
     }
 
-    bool rejected = !options.has_audio ||
+    bool rejected = !options.has_audio || audio_content->rejected ||
           !IsMediaProtocolSupported(MEDIA_TYPE_AUDIO,
                                     audio_answer->protocol());
     if (!rejected) {
@@ -1115,7 +1115,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateAnswer(
             video_answer.get())) {
       return NULL;
     }
-    bool rejected = !options.has_video ||
+    bool rejected = !options.has_video || video_content->rejected ||
         !IsMediaProtocolSupported(MEDIA_TYPE_VIDEO, video_answer->protocol());
     if (!rejected) {
       if (!AddTransportAnswer(video_content->name, *(video_transport.get()),
@@ -1163,7 +1163,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateAnswer(
             data_answer.get())) {
       return NULL;  // Fails the session setup.
     }
-    bool rejected = !options.has_data ||
+    bool rejected = !options.has_data || data_content->rejected ||
         !IsMediaProtocolSupported(MEDIA_TYPE_DATA, data_answer->protocol());
     if (!rejected) {
       data_answer->set_bandwidth(options.data_bandwidth);

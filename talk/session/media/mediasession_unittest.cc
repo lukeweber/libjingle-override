@@ -913,6 +913,37 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateNoDataAnswerToDataOffer) {
   EXPECT_TRUE(dc->rejected);
 }
 
+// Create an answer that rejects the contents which are rejected in the offer.
+TEST_F(MediaSessionDescriptionFactoryTest,
+       CreateAnswerToOfferWithRejectedMedia) {
+  MediaSessionOptions opts;
+  opts.has_video = true;
+  opts.has_data = true;
+  talk_base::scoped_ptr<SessionDescription>
+      offer(f1_.CreateOffer(opts, NULL));
+  ASSERT_TRUE(offer.get() != NULL);
+  ContentInfo* ac = offer->GetContentByName("audio");
+  ContentInfo* vc = offer->GetContentByName("video");
+  ContentInfo* dc = offer->GetContentByName("data");
+  ASSERT_TRUE(ac != NULL);
+  ASSERT_TRUE(vc != NULL);
+  ASSERT_TRUE(dc != NULL);
+  ac->rejected = true;
+  vc->rejected = true;
+  dc->rejected = true;
+  talk_base::scoped_ptr<SessionDescription> answer(
+      f2_.CreateAnswer(offer.get(), opts, NULL));
+  ac = answer->GetContentByName("audio");
+  vc = answer->GetContentByName("video");
+  dc = answer->GetContentByName("data");
+  ASSERT_TRUE(ac != NULL);
+  ASSERT_TRUE(vc != NULL);
+  ASSERT_TRUE(dc != NULL);
+  EXPECT_TRUE(ac->rejected);
+  EXPECT_TRUE(vc->rejected);
+  EXPECT_TRUE(dc->rejected);
+}
+
 // Create an audio and video offer with:
 // - one video track
 // - two audio tracks

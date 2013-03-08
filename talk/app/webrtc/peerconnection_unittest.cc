@@ -34,7 +34,9 @@
 
 #include "talk/app/webrtc/dtmfsender.h"
 #include "talk/app/webrtc/fakeportallocatorfactory.h"
+#include "talk/app/webrtc/localaudiosource.h"
 #include "talk/app/webrtc/mediastreaminterface.h"
+#include "talk/app/webrtc/peerconnectionfactory.h"
 #include "talk/app/webrtc/peerconnectioninterface.h"
 #include "talk/app/webrtc/test/fakeaudiocapturemodule.h"
 #include "talk/app/webrtc/test/fakeconstraints.h"
@@ -132,6 +134,8 @@ class PeerConnectionTestClientBase
 
   virtual void Negotiate()  = 0;
 
+  virtual void Negotiate(bool audio, bool video)  = 0;
+
   virtual void SetVideoConstraints(
       const webrtc::FakeConstraints& video_constraint) {
     video_constraints_ = video_constraint;
@@ -144,11 +148,18 @@ class PeerConnectionTestClientBase
         peer_connection_factory_->CreateLocalMediaStream(label);
 
     if (audio && can_receive_audio()) {
+      FakeConstraints constraints;
+      // Disable highpass filter so that we can get all the test audio frames.
+      constraints.AddMandatory(
+          MediaConstraintsInterface::kHighpassFilter,
+          MediaConstraintsInterface::kValueFalse);
+      talk_base::scoped_refptr<webrtc::LocalAudioSource> source =
+          webrtc::LocalAudioSource::Create(&constraints);
       // TODO(perkj): Test audio source when it is implemented. Currently audio
       // always use the default input.
       talk_base::scoped_refptr<webrtc::AudioTrackInterface> audio_track(
           peer_connection_factory_->CreateAudioTrack(kAudioTrackLabelBase,
-                                                     NULL));
+                                                     source));
       stream->AddTrack(audio_track);
     }
     if (video && can_receive_video()) {
@@ -378,7 +389,6 @@ class PeerConnectionTestClientBase
     if (!peer_connection_factory_) {
       return false;
     }
-
     peer_connection_ = CreatePeerConnection(allocator_factory_.get(),
                                             constraints);
     return peer_connection_.get() != NULL;
@@ -483,8 +493,18 @@ class JsepTestClient
   ~JsepTestClient() {}
 
   virtual void Negotiate() {
+    Negotiate(true, true);
+  }
+  virtual void Negotiate(bool audio, bool video) {
     talk_base::scoped_ptr<SessionDescriptionInterface> offer;
     EXPECT_TRUE(DoCreateOffer(offer.use()));
+
+    if (offer->description()->GetContentByName("audio")) {
+      offer->description()->GetContentByName("audio")->rejected = !audio;
+    }
+    if (offer->description()->GetContentByName("video")) {
+      offer->description()->GetContentByName("video")->rejected = !video;
+    }
 
     std::string sdp;
     EXPECT_TRUE(offer->ToString(&sdp));
@@ -745,6 +765,16 @@ class P2PTestConductor : public testing::Test {
     receiving_client_->VerifyDtmf();
   }
 
+  void TestUpdateOfferWithRejectedContent() {
+    initiating_client_->Negotiate(true, false);
+    EXPECT_TRUE_WAIT(
+        FramesNotPending(kEndAudioFrameCount * 2, kEndVideoFrameCount),
+        kMaxWaitForFramesMs);
+    // There shouldn't be any more video frame after the new offer is
+    // negotiated.
+    EXPECT_FALSE(VideoFramesReceivedCheck(kEndVideoFrameCount + 1));
+  }
+
   void VerifyRenderedSize(int width, int height) {
     EXPECT_EQ(width, receiving_client()->rendered_width());
     EXPECT_EQ(height, receiving_client()->rendered_height());
@@ -989,6 +1019,16 @@ TEST_F(JsepPeerConnectionP2PTestClient, LocalP2PTestAnswerNone) {
   ASSERT_TRUE(CreateTestClients());
   receiving_client()->SetReceiveAudioVideo(false, false);
   LocalP2PTest();
+}
+
+// This test sets up an audio and video call between two parties. After the call
+// runs for a while (10 frames), the caller sends an update offer with video
+// being rejected. Once the re-negotiation is done, the video flow should stop
+// and the audio flow should continue.
+TEST_F(JsepPeerConnectionP2PTestClient, UpdateOfferWithRejectedContent) {
+  ASSERT_TRUE(CreateTestClients());
+  LocalP2PTest();
+  TestUpdateOfferWithRejectedContent();
 }
 
 // This test sets up a Jsep call between two parties. The MSID is removed from

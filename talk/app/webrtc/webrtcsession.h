@@ -229,8 +229,7 @@ class WebRtcSession : public cricket::BaseSession,
   // Allocates media channels based on the |desc|. If |desc| doesn't have
   // the BUNDLE option, this method will disable BUNDLE in PortAllocator.
   // This method will also delete any existing media channels before creating.
-  bool CreateChannels(Action action,
-                      const cricket::SessionDescription* desc);
+  bool CreateChannels(const cricket::SessionDescription* desc);
 
   // Helper methods to create media channels.
   bool CreateVoiceChannel(const cricket::SessionDescription* desc);

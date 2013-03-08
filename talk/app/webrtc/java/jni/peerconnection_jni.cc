@@ -781,11 +781,13 @@ extern "C" jint JNIEXPORT JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
     return -1;
   g_class_reference_holder = new ClassReferenceHolder(jni);
 
+#ifdef ANDROID
   webrtc::Trace::CreateTrace();
   CHECK(!webrtc::Trace::SetTraceFile("/sdcard/trace.txt", false),
         "SetTraceFile failed");
   CHECK(!webrtc::Trace::SetLevelFilter(webrtc::kTraceAll),
         "SetLevelFilter failed");
+#endif  // ANDROID
 
   return JNI_VERSION_1_6;
 }

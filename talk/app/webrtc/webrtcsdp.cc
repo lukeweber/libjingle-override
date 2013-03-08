@@ -514,6 +514,14 @@ static bool GetValue(const std::string& message, const std::string& attribute,
   return true;
 }
 
+static bool CaseInsensitiveFind(std::string str1, std::string str2) {
+  std::transform(str1.begin(), str1.end(), str1.begin(),
+                 ::tolower);
+  std::transform(str2.begin(), str2.end(), str2.begin(),
+                 ::tolower);
+  return str1.find(str2) != std::string::npos;
+}
+
 void CreateTracksFromSsrcInfos(const SsrcInfoVec& ssrc_infos,
                                StreamParamsVec* tracks) {
   ASSERT(tracks != NULL);
@@ -1653,7 +1661,7 @@ bool ParseSessionDescription(const std::string& message, size_t* pos,
       if (!GetValue(line, kAttributeMsidSemantics, &semantics, error)) {
         return false;
       }
-      *supports_msid = (semantics == kMediaStreamSematic);
+      *supports_msid = CaseInsensitiveFind(semantics, kMediaStreamSematic);
     } else if (HasAttribute(line, kAttributeExtmap)) {
       RtpHeaderExtension extmap;
       if (!ParseExtmap(line, &extmap, error)) {
@@ -2217,7 +2225,12 @@ bool ParseCryptoAttribute(const std::string& line,
   int tag = talk_base::FromString<int>(tag_value);
   const std::string crypto_suite = fields[1];
   const std::string key_params = fields[2];
-  media_desc->AddCrypto(CryptoParams(tag, crypto_suite, key_params, ""));
+  std::string session_params;
+  if (fields.size() > 3) {
+    session_params = fields[3];
+  }
+  media_desc->AddCrypto(CryptoParams(tag, crypto_suite, key_params,
+                                     session_params));
   return true;
 }
 

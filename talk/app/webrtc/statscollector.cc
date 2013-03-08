@@ -200,6 +200,10 @@ void ExtractStats(const cricket::BandwidthEstimationInfo& info,
     report->local.values.clear();
     report->local.timestamp = stats_gathering_started;
   }
+  if (report->remote.timestamp != stats_gathering_started) {
+    report->remote.values.clear();
+    report->remote.timestamp = stats_gathering_started;
+  }
 
   report->local.AddValue(StatsElement::kStatsValueNameAvailableSendBandwidth,
                          info.available_send_bandwidth);
@@ -332,6 +336,10 @@ StatsReport* StatsCollector::PrepareReport(const std::string& label,
   if (report->local.timestamp != stats_gathering_started_) {
     report->local.values.clear();
     report->local.timestamp = stats_gathering_started_;
+  }
+  if (report->remote.timestamp != stats_gathering_started_) {
+    report->remote.values.clear();
+    report->remote.timestamp = stats_gathering_started_;
   }
   return report;
 }

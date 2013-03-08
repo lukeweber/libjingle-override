@@ -76,7 +76,6 @@ class FakeTransportChannel : public TransportChannelImpl,
     Reset();
   }
 
-  TransportRole role() const { return role_; }
   uint64 tiebreaker() const { return tiebreaker_; }
   TransportProtocol protocol() const { return ice_proto_; }
   const std::string& ice_ufrag() const { return ice_ufrag_; }
@@ -96,6 +95,7 @@ class FakeTransportChannel : public TransportChannelImpl,
   }
 
   virtual void SetRole(TransportRole role) { role_ = role; }
+  virtual TransportRole GetRole() const { return role_; }
   virtual void SetTiebreaker(uint64 tiebreaker) { tiebreaker_ = tiebreaker; }
   virtual void SetIceProtocolType(IceProtocolType type) { ice_proto_ = type; }
   virtual void SetIceCredentials(const std::string& ice_ufrag,

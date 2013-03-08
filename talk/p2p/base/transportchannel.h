@@ -37,6 +37,7 @@
 #include "talk/base/sslidentity.h"
 #include "talk/base/sslstreamadapter.h"
 #include "talk/p2p/base/candidate.h"
+#include "talk/p2p/base/transport.h"
 #include "talk/p2p/base/transportdescription.h"
 
 namespace cricket {
@@ -106,6 +107,9 @@ class TransportChannel : public sigslot::has_slots<> {
 
   // Returns the most recent error that occurred on this channel.
   virtual int GetError() = 0;
+
+  // Returns current transportchannel ICE role.
+  virtual TransportRole GetRole() const = 0;
 
   // Returns the current stats for this connection.
   virtual bool GetStats(ConnectionInfos* infos) {

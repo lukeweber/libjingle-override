@@ -236,8 +236,12 @@ class FakeWebRtcVoiceEngine
     return 0;
   }
   WEBRTC_STUB(DeRegisterVoiceEngineObserver, ());
-
+#ifdef USE_WEBRTC_DEV_BRANCH
+  WEBRTC_FUNC(Init, (webrtc::AudioDeviceModule* adm,
+                     webrtc::AudioProcessing* audioproc)) {
+#else
   WEBRTC_FUNC(Init, (webrtc::AudioDeviceModule* adm)) {
+#endif
     inited_ = true;
     return 0;
   }
@@ -245,6 +249,11 @@ class FakeWebRtcVoiceEngine
     inited_ = false;
     return 0;
   }
+#ifdef USE_WEBRTC_DEV_BRANCH
+  virtual webrtc::AudioProcessing* audio_processing() OVERRIDE {
+    return NULL;
+  }
+#endif
   WEBRTC_STUB(MaxNumOfChannels, ());
   WEBRTC_FUNC(CreateChannel, ()) {
     if (fail_create_channel_) {
@@ -315,8 +324,10 @@ class FakeWebRtcVoiceEngine
   WEBRTC_STUB(GetOnHoldStatus, (int, bool&, webrtc::OnHoldModes&));
   WEBRTC_STUB(SetNetEQPlayoutMode, (int, webrtc::NetEqModes));
   WEBRTC_STUB(GetNetEQPlayoutMode, (int, webrtc::NetEqModes&));
+#ifndef USE_WEBRTC_DEV_BRANCH
   WEBRTC_STUB(SetNetEQBGNMode, (int, webrtc::NetEqBgnModes));
   WEBRTC_STUB(GetNetEQBGNMode, (int, webrtc::NetEqBgnModes&));
+#endif
 
   // webrtc::VoECodec
   WEBRTC_FUNC(NumOfCodecs, ()) {

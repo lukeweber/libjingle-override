@@ -634,13 +634,16 @@ bool WebRtcSession::SetLocalDescription(SessionDescriptionInterface* desc,
   set_local_description(desc->description()->Copy());
   local_desc_.reset(desc);
 
-  // Transport and Media channels will be created only when local description is
-  // set.
-  if (!CreateChannels(action, desc->description())) {
+  // Transport and Media channels will be created only when offer is set.
+  if (action == kOffer && !CreateChannels(desc->description())) {
     // TODO(mallinath) - Handle CreateChannel failure, as new local description
     // is applied. Restore back to old description.
     return BadLocalSdp(kCreateChannelFailed, err_desc);
   }
+
+  // Remove channel and transport proxies, if MediaContentDescription is
+  // rejected.
+  RemoveUnusedChannelsAndTransports(desc->description());
 
   if (!UpdateSessionState(action, cricket::CS_LOCAL, desc->description())) {
     return BadLocalSdp(kUpdateStateFailed, err_desc);
@@ -682,13 +685,16 @@ bool WebRtcSession::SetRemoteDescription(SessionDescriptionInterface* desc,
     return BadRemoteSdp(kSdpWithoutCrypto, err_desc);
   }
 
-  // Transport and Media channels will be created only when local description is
-  // set.
-  if (!CreateChannels(action, desc->description())) {
+  // Transport and Media channels will be created only when offer is set.
+  if (action == kOffer && !CreateChannels(desc->description())) {
     // TODO(mallinath) - Handle CreateChannel failure, as new local description
     // is applied. Restore back to old description.
     return BadRemoteSdp(kCreateChannelFailed, err_desc);
   }
+
+  // Remove channel and transport proxies, if MediaContentDescription is
+  // rejected.
+  RemoveUnusedChannelsAndTransports(desc->description());
 
   // NOTE: Candidates allocation will be initiated only when SetLocalDescription
   // is called.
@@ -737,9 +743,6 @@ bool WebRtcSession::UpdateSessionState(
       ret = (error() == cricket::BaseSession::ERROR_NONE);
     }
   } else if (action == kAnswer) {
-    // Remove channel and transport proxies, if MediaContentDescription is
-    // rejected in local session description.
-    RemoveUnusedChannelsAndTransports(desc);
     if (PushdownTransportDescription(source, cricket::CA_ANSWER)) {
       MaybeEnableMuxingSupport();
       EnableChannels();
@@ -1266,7 +1269,7 @@ void WebRtcSession::RemoveUnusedChannelsAndTransports(
 
   const cricket::ContentInfo* data_info =
       cricket::GetFirstDataContent(desc);
-  if ((!data_info || data_info->rejected) && data_channel_.get()) {
+  if ((!data_info || data_info->rejected) && data_channel_) {
     mediastream_signaling_->OnDataChannelClose();
     const std::string content_name = data_channel_->content_name();
     channel_manager_->DestroyDataChannel(data_channel_.release());
@@ -1274,11 +1277,9 @@ void WebRtcSession::RemoveUnusedChannelsAndTransports(
   }
 }
 
-bool WebRtcSession::CreateChannels(Action action,
-                                   const SessionDescription* desc) {
+bool WebRtcSession::CreateChannels(const SessionDescription* desc) {
   // Disabling the BUNDLE flag in PortAllocator if offer disabled it.
-  if (state() == STATE_INIT && action == kOffer &&
-      !desc->HasGroup(cricket::GROUP_TYPE_BUNDLE)) {
+  if (state() == STATE_INIT && !desc->HasGroup(cricket::GROUP_TYPE_BUNDLE)) {
     port_allocator()->set_flags(port_allocator()->flags() &
                                 ~cricket::PORTALLOCATOR_ENABLE_BUNDLE);
   }

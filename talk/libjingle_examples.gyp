@@ -134,44 +134,45 @@
         },  # target call
       ], # targets
     }],  # OS!="android"
+    # TODO(ronghuawu): Enable chat example app.
     # TODO(sergeyu): Make this example compile on Windows and Mac.
-    ['OS=="linux"', {
-      'targets': [
-        {
-          'target_name': 'chat',
-          'type': 'executable',
-          'dependencies': [
-            'libjingle.gyp:libjingle_p2p',
-            'libjingle_xmpphelp',
-          ],
-          'sources': [
-            'examples/chat/chatapp.cc',
-            'examples/chat/chat_main.cc',
-            'examples/chat/consoletask.cc',
-            'examples/chat/textchatreceivetask.cc',
-            'examples/chat/textchatsendtask.cc',
-          ],
-          'conditions': [
-            ['OS=="linux"', {
-              'link_settings': {
-                'libraries': [
-                  '<!@(pkg-config --libs-only-l gtk+-2.0 gthread-2.0)',
-                ],
-              },
-            }],
-            ['OS=="win"', {
-              'msvs_settings': {
-                'VCLinkerTool': {
-                  'AdditionalDependencies': [
-                    'strmiids.lib',
-                  ],
-                },
-              },
-            }],
-          ],  # conditions
-        },  # target chat
-      ], # targets
-    }],  # OS=="linux"
+    # ['OS=="linux"', {
+    #  'targets': [
+    #    {
+    #      'target_name': 'chat',
+    #      'type': 'executable',
+    #      'dependencies': [
+    #        'libjingle.gyp:libjingle_p2p',
+    #        'libjingle_xmpphelp',
+    #      ],
+    #      'sources': [
+    #        'examples/chat/chatapp.cc',
+    #        'examples/chat/chat_main.cc',
+    #        'examples/chat/consoletask.cc',
+    #        'examples/chat/textchatreceivetask.cc',
+    #        'examples/chat/textchatsendtask.cc',
+    #      ],
+    #      'conditions': [
+    #        ['OS=="linux"', {
+    #          'link_settings': {
+    #            'libraries': [
+    #              '<!@(pkg-config --libs-only-l gtk+-2.0 gthread-2.0)',
+    #            ],
+    #          },
+    #        }],
+    #        ['OS=="win"', {
+    #          'msvs_settings': {
+    #            'VCLinkerTool': {
+    #              'AdditionalDependencies': [
+    #                'strmiids.lib',
+    #              ],
+    #            },
+    #          },
+    #        }],
+    #      ],  # conditions
+    #    },  # target chat
+    #  ], # targets
+    # }],  # OS=="linux"
     ['OS=="linux" or OS=="win"', {
       'targets': [
         {

@@ -136,10 +136,10 @@ TEST_F(TransportTest, TestSetRoleAndTiebreaker) {
   transport_->SetRole(cricket::ROLE_CONTROLLED);
   transport_->SetTiebreaker(99U);
   EXPECT_TRUE(SetupChannel());
-  EXPECT_EQ(cricket::ROLE_CONTROLLED, channel_->role());
+  EXPECT_EQ(cricket::ROLE_CONTROLLED, channel_->GetRole());
   EXPECT_EQ(99U, channel_->tiebreaker());
   transport_->SetRole(cricket::ROLE_CONTROLLING);
-  EXPECT_EQ(cricket::ROLE_CONTROLLING, channel_->role());
+  EXPECT_EQ(cricket::ROLE_CONTROLLING, channel_->GetRole());
 }
 
 // Tests that we can properly serialize/deserialize candidates.
