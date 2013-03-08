@@ -56,16 +56,18 @@ public class VideoStreamsView
     implements GLSurfaceView.Renderer {
 
   /** Identify which of the two video streams is being addressed. */
-  public static enum Which { LOCAL, REMOTE };
+  public static enum Endpoint { LOCAL, REMOTE };
 
   private final static String TAG = "VideoStreamsView";
-  private EnumMap<Which, Rect> rects = new EnumMap<Which, Rect>(Which.class);
+  private EnumMap<Endpoint, Rect> rects =
+      new EnumMap<Endpoint, Rect>(Endpoint.class);
   private Point screenDimensions;
   // [0] are local Y,U,V, [1] are remote Y,U,V.
   private int[][] yuvTextures = { { -1, -1, -1}, {-1, -1, -1 }};
   private int posLocation = -1;
   private long lastFPSLogTime = System.nanoTime();
   private long numFramesSinceLastLog = 0;
+  private FramePool framePool = new FramePool();
 
   public VideoStreamsView(Context c, Point screenDimensions) {
     super(c);
@@ -76,21 +78,32 @@ public class VideoStreamsView
     setRenderMode(RENDERMODE_WHEN_DIRTY);
   }
 
-  /** Upload the planes from |frame| to the textures owned by this View. */
-  public void updateFrame(Which stream, I420Frame frame) {
-    int[] textures = yuvTextures[stream == Which.LOCAL ? 0 : 1];
+  /** Queue |frame| to be uploaded. */
+  public void queueFrame(final Endpoint stream, I420Frame frame) {
+    // Paying for the copy of the YUV data here allows CSC and painting time
+    // to get spent on the render thread instead of the UI thread.
+    abortUnless(framePool.validateDimensions(frame), "Frame too large!");
+    final I420Frame frameCopy = framePool.takeFrame(frame).copyFrom(frame);
+    queueEvent(new Runnable() {
+        public void run() {
+          updateFrame(stream, frameCopy);
+        }
+      });
+  }
+
+  // Upload the planes from |frame| to the textures owned by this View.
+  private void updateFrame(Endpoint stream, I420Frame frame) {
+    int[] textures = yuvTextures[stream == Endpoint.LOCAL ? 0 : 1];
     texImage2D(frame, textures);
-    // Only render on each local frame to avoid double-drawing when local &
-    // remote frames arrive interleaved.
-    if (stream == Which.REMOTE)
-      requestRender();
+    framePool.returnFrame(frame);
+    requestRender();
   }
 
   /** Inform this View of the dimensions of frames coming from |stream|. */
-  public void setSize(Which stream, int width, int height) {
+  public void setSize(Endpoint stream, int width, int height) {
     // Generate 3 texture ids for Y/U/V and place them into |textures|,
     // allocating enough storage for |width|x|height| pixels.
-    int[] textures = yuvTextures[stream == Which.LOCAL ? 0 : 1];
+    int[] textures = yuvTextures[stream == Endpoint.LOCAL ? 0 : 1];
     GLES20.glGenTextures(3, textures, 0);
     for (int i = 0; i < 3; ++i) {
       int w = i == 0 ? width : width / 2;

@@ -102,6 +102,7 @@ public class AppRTCClient {
   public void disconnect() {
     if (channelClient != null) {
       channelClient.close();
+      channelClient = null;
     }
   }
 
@@ -113,8 +114,8 @@ public class AppRTCClient {
   public synchronized void sendMessage(String msg) {
     synchronized (sendQueue) {
       sendQueue.add(msg);
-      maybeDrainQueueLocked();
     }
+    requestQueueDrainInBackground();
   }
 
   // Struct holding the signaling parameters of an AppRTC room.
@@ -199,8 +200,8 @@ public class AppRTCClient {
           new GAEChannelClient(activity, channelUrl, gaeHandler);
       synchronized (sendQueue) {
         appRTCSignalingParameters = params;
-        maybeDrainQueueLocked();
       }
+      requestQueueDrainInBackground();
       iceServersObserver.onIceServers(appRTCSignalingParameters.iceServers);
     }
 
@@ -287,31 +288,40 @@ public class AppRTCClient {
     }
   }
 
-  // Send all queued messages if connected to the room.
-  private void maybeDrainQueueLocked() {
-    if (!Thread.holdsLock(sendQueue)) {
-      throw new RuntimeException("maybeDrainQueueLocked called unlocked!");
-    }
-    if (appRTCSignalingParameters == null) {
-      return;
-    }
-    try {
-      for (String msg : sendQueue) {
-        URLConnection connection = new URL(
-            appRTCSignalingParameters.gaeBaseHref +
-            appRTCSignalingParameters.postMessageUrl).openConnection();
-        connection.setDoOutput(true);
-        connection.getOutputStream().write(msg.getBytes("UTF-8"));
-        if (!connection.getHeaderField(null).startsWith("HTTP/1.1 200 ")) {
-          throw new IOException(
-              "Non-200 response to POST: " + connection.getHeaderField(null) +
-              " for msg: " + msg);
-        }
+  // Request an attempt to drain the send queue, on a background thread.
+  private void requestQueueDrainInBackground() {
+    (new AsyncTask<Void, Void, Void>() {
+      public Void doInBackground(Void... unused) {
+        maybeDrainQueue();
+        return null;
       }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+    }).execute();
+  }
+
+  // Send all queued messages if connected to the room.
+  private void maybeDrainQueue() {
+    synchronized (sendQueue) {
+      if (appRTCSignalingParameters == null) {
+        return;
+      }
+      try {
+        for (String msg : sendQueue) {
+          URLConnection connection = new URL(
+              appRTCSignalingParameters.gaeBaseHref +
+              appRTCSignalingParameters.postMessageUrl).openConnection();
+          connection.setDoOutput(true);
+          connection.getOutputStream().write(msg.getBytes("UTF-8"));
+          if (!connection.getHeaderField(null).startsWith("HTTP/1.1 200 ")) {
+            throw new IOException(
+                "Non-200 response to POST: " + connection.getHeaderField(null) +
+                " for msg: " + msg);
+          }
+        }
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+      sendQueue.clear();
     }
-    sendQueue.clear();
   }
 
   // Return the contents of an InputStream as a String.

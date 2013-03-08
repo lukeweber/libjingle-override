@@ -32,6 +32,7 @@
 #if defined(HAVE_YUV)
 #include "libyuv/scale_argb.h"
 #endif
+#include "talk/base/common.h"
 #include "talk/base/logging.h"
 #include "talk/media/base/videoprocessor.h"
 
@@ -41,6 +42,8 @@
 
 
 namespace cricket {
+
+const uint32 kStateChange = 0;
 
 static const int64 kMaxDistance = ~(static_cast<int64>(1) << 63);
 static const int64 kMinDesirableFps = static_cast<int64>(14);
@@ -60,8 +63,7 @@ CapturedFrame::CapturedFrame()
       time_stamp(0),
       data_size(0),
       rotation(0),
-      data(NULL) {
-}
+      data(NULL) {}
 
 // TODO(fbarchard): Remove this function once lmimediaengine stops using it.
 bool CapturedFrame::GetDataSize(uint32* size) const {
@@ -79,8 +81,7 @@ VideoCapturer::VideoCapturer() : thread_(talk_base::Thread::Current()) {
   Construct();
 }
 
-VideoCapturer::VideoCapturer(talk_base::Thread* thread)
-    : thread_(thread) {
+VideoCapturer::VideoCapturer(talk_base::Thread* thread) : thread_(thread) {
   Construct();
 }
 
@@ -140,8 +141,7 @@ bool VideoCapturer::GetBestCaptureFormat(const VideoFormat& format,
     int64 distance = GetFormatDistance(format, *i);
     // TODO(fbarchard): Reduce to LS_VERBOSE if/when camera capture is
     // relatively bug free.
-    LOG(LS_INFO) << " Supported " << i->ToString()
-                 << " distance " << distance;
+    LOG(LS_INFO) << " Supported " << i->ToString() << " distance " << distance;
     if (distance < best_distance) {
       best_distance = distance;
       best = i;
@@ -157,9 +157,8 @@ bool VideoCapturer::GetBestCaptureFormat(const VideoFormat& format,
     best_format->height = best->height;
     best_format->fourcc = best->fourcc;
     best_format->interval = talk_base::_max(format.interval, best->interval);
-    LOG(LS_INFO) << " Best " << best_format->ToString()
-                 << " Interval " << best_format->interval
-                 << " distance " << best_distance;
+    LOG(LS_INFO) << " Best " << best_format->ToString() << " Interval "
+                 << best_format->interval << " distance " << best_distance;
   }
   return true;
 }
@@ -173,9 +172,8 @@ void VideoCapturer::AddVideoProcessor(VideoProcessor* video_processor) {
 
 bool VideoCapturer::RemoveVideoProcessor(VideoProcessor* video_processor) {
   talk_base::CritScope cs(&crit_);
-  VideoProcessors::iterator found = std::find(video_processors_.begin(),
-                                              video_processors_.end(),
-                                              video_processor);
+  VideoProcessors::iterator found = std::find(
+      video_processors_.begin(), video_processors_.end(), video_processor);
   if (found == video_processors_.end()) {
     return false;
   }
@@ -191,7 +189,7 @@ void VideoCapturer::ConstrainSupportedFormats(const VideoFormat& max_format) {
 std::string VideoCapturer::ToString(const CapturedFrame* captured_frame) const {
   std::string fourcc_name = GetFourccName(captured_frame->fourcc) + " ";
   for (std::string::const_iterator i = fourcc_name.begin();
-      i < fourcc_name.end(); ++i) {
+       i < fourcc_name.end(); ++i) {
     // Test character is printable; Avoid isprint() which asserts on negatives.
     if (*i < 32 || *i >= 127) {
       fourcc_name = "";
@@ -217,8 +215,8 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
 #if defined(HAVE_YUV)
   if (IsScreencast()) {
     int scaled_width, scaled_height;
-    ComputeScale(captured_frame->width, captured_frame->height,
-                 &scaled_width, &scaled_height);
+    ComputeScale(captured_frame->width, captured_frame->height, &scaled_width,
+                 &scaled_height);
     if (FOURCC_ARGB == captured_frame->fourcc &&
         (scaled_width != captured_frame->height ||
          scaled_height != captured_frame->height)) {
@@ -232,8 +230,7 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
                         captured_frame->width * 4, captured_frame->width,
                         captured_frame->height,
                         reinterpret_cast<uint8*>(scaled_frame->data),
-                        scaled_width * 4,
-                        scaled_width, scaled_height,
+                        scaled_width * 4, scaled_width, scaled_height,
                         libyuv::kFilterBilinear);
       scaled_frame->width = scaled_width;
       scaled_frame->height = scaled_height;
@@ -241,8 +238,8 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
     }
   }
 #endif  // HAVE_YUV
-  // Size to crop captured frame to.  This adjusts the captured frames
-  // aspect ratio to match the final view aspect ratio, considering pixel
+        // Size to crop captured frame to.  This adjusts the captured frames
+        // aspect ratio to match the final view aspect ratio, considering pixel
   // aspect ratio and rotation.  The final size may be scaled down by video
   // adapter to better match ratio_w_ x ratio_h_.
   // Note that abs() of frame height is passed in, because source may be
@@ -250,18 +247,18 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
   int desired_width = captured_frame->width;
   int desired_height = captured_frame->height;
   if (!IsScreencast()) {
-    ComputeCrop(ratio_w_, ratio_h_,
-                captured_frame->width, abs(captured_frame->height),
-                captured_frame->pixel_width, captured_frame->pixel_height,
-                captured_frame->rotation, &desired_width, &desired_height);
+    ComputeCrop(ratio_w_, ratio_h_, captured_frame->width,
+                abs(captured_frame->height), captured_frame->pixel_width,
+                captured_frame->pixel_height, captured_frame->rotation,
+                &desired_width, &desired_height);
   }
 
   VIDEO_FRAME_NAME i420_frame;
   if (!i420_frame.Init(captured_frame, desired_width, desired_height)) {
     // TODO(fbarchard): LOG more information about captured frame attributes.
     LOG(LS_ERROR) << "Couldn't convert to I420! "
-                  << "From " << ToString(captured_frame)
-                  << " To " << desired_width << " x " << desired_height;
+                  << "From " << ToString(captured_frame) << " To "
+                  << desired_width << " x " << desired_height;
     return;
   }
   if (!ApplyProcessors(&i420_frame)) {
@@ -279,12 +276,13 @@ void VideoCapturer::SetCaptureState(CaptureState state) {
   }
   StateChangeParams* state_params = new StateChangeParams(state);
   capture_state_ = state;
-  thread_->Post(this, 0, state_params);
+  thread_->Post(this, kStateChange, state_params);
 }
 
 void VideoCapturer::OnMessage(talk_base::Message* message) {
+  ASSERT(message->message_id == kStateChange);
   talk_base::scoped_ptr<StateChangeParams> p(
-      static_cast<StateChangeParams*> (message->pdata));
+      static_cast<StateChangeParams*>(message->pdata));
   SignalStateChange(this, p->data());
 }
 
@@ -316,7 +314,7 @@ int64 VideoCapturer::GetFormatDistance(const VideoFormat& desired,
         // For HD avoid YU12 which is a software conversion and has 2 bugs
         // b/7326348 b/6960899.  Reenable when fixed.
         if (supported.height >= 720 && (supported_fourcc == FOURCC_YU12 ||
-            supported_fourcc == FOURCC_YV12)) {
+                                        supported_fourcc == FOURCC_YV12)) {
           delta_fourcc += kYU12Penalty;
         }
 #endif
@@ -337,11 +335,12 @@ int64 VideoCapturer::GetFormatDistance(const VideoFormat& desired,
   int desired_height = desired.height;
   int64 delta_w = supported.width - desired_width;
   int64 supported_fps = VideoFormat::IntervalToFps(supported.interval);
-  int64 delta_fps = supported_fps -
-      VideoFormat::IntervalToFps(desired.interval);
+  int64 delta_fps =
+      supported_fps - VideoFormat::IntervalToFps(desired.interval);
   // Check height of supported height compared to height we would like it to be.
-  int64 aspect_h = desired_width ?
-      supported.width * desired_height / desired_width : desired_height;
+  int64 aspect_h =
+      desired_width ? supported.width * desired_height / desired_width
+                    : desired_height;
   int64 delta_h = supported.height - aspect_h;
 
   distance = 0;
@@ -371,8 +370,8 @@ int64 VideoCapturer::GetFormatDistance(const VideoFormat& desired,
   }
 
   // 12 bits for width and height and 8 bits for fps and fourcc.
-  distance |= (delta_w << 28) | (delta_h << 16) |
-      (delta_fps << 8) | delta_fourcc;
+  distance |=
+      (delta_w << 28) | (delta_h << 16) | (delta_fps << 8) | delta_fourcc;
 
   return distance;
 }
@@ -381,8 +380,7 @@ bool VideoCapturer::ApplyProcessors(VideoFrame* video_frame) {
   bool drop_frame = false;
   talk_base::CritScope cs(&crit_);
   for (VideoProcessors::iterator iter = video_processors_.begin();
-       iter != video_processors_.end();
-       ++iter) {
+       iter != video_processors_.end(); ++iter) {
     (*iter)->OnFrame(kDummyVideoSsrc, video_frame, &drop_frame);
     if (drop_frame) {
       return false;
@@ -397,8 +395,7 @@ void VideoCapturer::UpdateFilteredSupportedFormats() {
   if (!max_format_) {
     return;
   }
-  std::vector<VideoFormat>::iterator iter =
-      filtered_supported_formats_.begin();
+  std::vector<VideoFormat>::iterator iter = filtered_supported_formats_.begin();
   while (iter != filtered_supported_formats_.end()) {
     if (ShouldFilterFormat(*iter)) {
       iter = filtered_supported_formats_.erase(iter);

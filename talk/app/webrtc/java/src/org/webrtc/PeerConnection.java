@@ -42,21 +42,37 @@ public class PeerConnection {
     System.loadLibrary("jingle_peerconnection_so");
   }
 
+  /** Tracks PeerConnectionInterface::IceGatheringState */
+  public enum IceGatheringState { NEW, GATHERING, COMPLETE };
+
+
+  /** Tracks PeerConnectionInterface::IceConnectionState */
+  public enum IceConnectionState {
+    NEW, CHECKING, CONNECTED, COMPLETED, FAILED, DISCONNECTED, CLOSED
+  };
+
+  /** Tracks PeerConnectionInterface::SignalingState */
+  public enum SignalingState {
+    STABLE, HAVE_LOCAL_OFFER, HAVE_LOCAL_PRANSWER, HAVE_REMOTE_OFFER,
+    HAVE_REMOTE_PRANSWER, CLOSED
+  };
+
   /** Java version of PeerConnectionObserver. */
   public static interface Observer {
-    /** Tracks PeerConnectionObserver.StateType */
-    enum StateType {
-      SIGNALING, ICE
-    }
+    /** Triggered when the SignalingState changes. */
+    public void onSignalingChange(SignalingState newState);
+
+    /** Triggered when the IceConnectionState changes. */
+    public void onIceConnectionChange(IceConnectionState newState);
+
+    /** Triggered when the IceGatheringState changes. */
+    public void onIceGatheringChange(IceGatheringState newState);
 
     /** Triggered when a new ICE candidate has been found. */
     public void onIceCandidate(IceCandidate candidate);
 
     /** Triggered on any error. */
     public void onError();
-
-    /** Triggered when SignalingState or IceState have changed. */
-    public void onStateChange(StateType stateChanged);
 
     /** Triggered when media is received on a new stream from remote peer. */
     public void onAddStream(MediaStream stream);
@@ -111,21 +127,8 @@ public class PeerConnection {
         candidate.sdpMid, candidate.sdpMLineIndex, candidate.sdp);
   }
 
-  // PeerConnectionInterface.
-  /** Tracks PeerConnectionInterface.SignalingState */
-  public enum SignalingState {
-    STABLE, HAVE_LOCAL_OFFER, HAVE_LOCAL_PRANSWER, HAVE_REMOTE_OFFER,
-    HAVE_REMOTE_PRANSWER, CLOSED,
-  }
-
-  /** Tracks PeerConnectionInterface.IceState */
-  public enum IceState {
-    ICE_NEW, ICE_GATHERING, ICE_WAITING, ICE_CHECKING, ICE_CONNECTED,
-    ICE_COMPLETED, ICE_FAILED, ICE_CLOSED,
-  }
-
   public boolean addStream(
-      LocalMediaStream stream, MediaConstraints constraints) {
+      MediaStream stream, MediaConstraints constraints) {
     boolean ret = nativeAddLocalStream(stream.nativeStream, constraints);
     if (!ret) {
       return false;
@@ -134,7 +137,7 @@ public class PeerConnection {
     return true;
   }
 
-  public void removeStream(LocalMediaStream stream) {
+  public void removeStream(MediaStream stream) {
     nativeRemoveLocalStream(stream.nativeStream);
     localStreams.remove(stream);
   }
@@ -143,9 +146,14 @@ public class PeerConnection {
   // stabilizes.
   public native SignalingState signalingState();
 
-  public native IceState iceState();
+  public native IceConnectionState iceConnectionState();
+
+  public native IceGatheringState iceGatheringState();
+
+  public native void close();
 
   public void dispose() {
+    close();
     for (MediaStream stream : localStreams) {
       stream.dispose();
     }

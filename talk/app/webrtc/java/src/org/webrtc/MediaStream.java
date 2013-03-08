@@ -43,6 +43,38 @@ public class MediaStream {
     this.nativeStream = nativeStream;
   }
 
+  public boolean addTrack(AudioTrack track) {
+    if (nativeAddAudioTrack(nativeStream, track.nativeTrack)) {
+      audioTracks.add(track);
+      return true;
+    }
+    return false;
+  }
+
+  public boolean addTrack(VideoTrack track) {
+    if (nativeAddVideoTrack(nativeStream, track.nativeTrack)) {
+      videoTracks.add(track);
+      return true;
+    }
+    return false;
+  }
+
+  public boolean removeTrack(AudioTrack track) {
+    if (nativeRemoveAudioTrack(nativeStream, track.nativeTrack)) {
+      audioTracks.remove(track);
+      return true;
+    }
+    return false;
+  }
+
+  public boolean removeTrack(VideoTrack track) {
+    if (nativeRemoveVideoTrack(nativeStream, track.nativeTrack)) {
+      videoTracks.remove(track);
+      return true;
+    }
+    return false;
+  }
+
   public void dispose() {
     for (AudioTrack track : audioTracks) {
       track.dispose();
@@ -63,6 +95,18 @@ public class MediaStream {
     return "[" + label() + ":A=" + audioTracks.size() +
         ":V=" + videoTracks.size() + "]";
   }
+
+  private static native boolean nativeAddAudioTrack(
+      long nativeStream, long nativeAudioTrack);
+
+  private static native boolean nativeAddVideoTrack(
+      long nativeStream, long nativeVideoTrack);
+
+  private static native boolean nativeRemoveAudioTrack(
+      long nativeStream, long nativeAudioTrack);
+
+  private static native boolean nativeRemoveVideoTrack(
+      long nativeStream, long nativeVideoTrack);
 
   private static native String nativeLabel(long nativeStream);
 

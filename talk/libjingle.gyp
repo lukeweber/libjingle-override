@@ -81,7 +81,6 @@
                   'app/webrtc/java/src/org/webrtc/AudioSource.java',
                   'app/webrtc/java/src/org/webrtc/AudioTrack.java',
                   'app/webrtc/java/src/org/webrtc/IceCandidate.java',
-                  'app/webrtc/java/src/org/webrtc/LocalMediaStream.java',
                   'app/webrtc/java/src/org/webrtc/MediaConstraints.java',
                   'app/webrtc/java/src/org/webrtc/MediaSource.java',
                   'app/webrtc/java/src/org/webrtc/MediaStream.java',
@@ -120,7 +119,7 @@
                 ['OS=="android"', {
                   'variables': {
                     'java_files': ['<@(peerconnection_java_files)', '<@(android_java_files)'],
-                    'build_classpath': '<(java_src_dir):<(DEPTH)/third_party/android_tools/sdk/platforms/android-16/android.jar',
+                    'build_classpath': '<(java_src_dir):<(DEPTH)/third_party/android_tools/sdk/platforms/android-<(android_sdk_version)/android.jar',
                   },
                 }, {
                   'variables': {
@@ -457,6 +456,7 @@
         'media/base/streamparams.cc',
         'media/base/videoadapter.cc',
         'media/base/videocapturer.cc',
+        'media/base/mutedvideocapturer.cc',
         'media/base/videocommon.cc',
         'media/base/videoframe.cc',
         'media/devices/devicemanager.cc',

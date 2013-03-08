@@ -80,6 +80,7 @@ class StatsCollector {
   // The reason for this is so that GetStats can return statistics about a track
   // even if it no longer is active.
   std::map<std::string, webrtc::StatsReport> track_reports_;
+  webrtc::StatsReport bandwidth_estimation_report_;
   // Raw pointer to the session the statistics are gathered from.
   WebRtcSession* session_;
   double stats_gathering_started_;

@@ -283,6 +283,7 @@ talk.Library(env, name = "jingle",
                "media/base/streamparams.cc",
                "media/base/videoadapter.cc",
                "media/base/videocapturer.cc",
+               "media/base/mutevideocapturer.cc",
                "media/base/videocommon.cc",
                "media/base/videoframe.cc",
                "media/devices/devicemanager.cc",
@@ -434,6 +435,21 @@ talk.App(env, name = "login",
          lin_libs = [
            "videorenderer",
          ],
+)
+talk.App(env, name = "chat",
+         libs = [
+           "jingle",
+           "expat",
+           "xmpphelp",
+         ],
+         srcs = [
+           "examples/chat/chatapp.cc",
+           "examples/chat/chat_main.cc",
+           "examples/chat/consoletask.cc",
+           "examples/chat/textchatreceivetask.cc",
+           "examples/chat/textchatsendtask.cc",
+         ],
+         posix_libs = SSL_LIBS,
 )
 talk.App(env, name = "call",
          mac_frameworks = [

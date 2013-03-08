@@ -42,8 +42,7 @@ static const int kWatermarkOffsetFromLeft = 8;
 static const int kWatermarkOffsetFromBottom = 8;
 static const unsigned char kWatermarkMaxYValue = 64;
 
-FrameBuffer::FrameBuffer() : length_(0) {
-}
+FrameBuffer::FrameBuffer() : length_(0) {}
 
 FrameBuffer::FrameBuffer(size_t length) : length_(0) {
   char* buffer = new char[length];
@@ -62,7 +61,7 @@ FrameBuffer::~FrameBuffer() {
 void FrameBuffer::SetData(char* data, size_t length) {
   data_.reset(data);
   length_ = length;
-  WebRtc_UWord8* new_memory = reinterpret_cast<WebRtc_UWord8*> (data);
+  WebRtc_UWord8* new_memory = reinterpret_cast<WebRtc_UWord8*>(data);
   WebRtc_UWord32 new_length = length;
   WebRtc_UWord32 new_size = length;
   video_frame_.Swap(new_memory, new_length, new_size);
@@ -76,76 +75,64 @@ void FrameBuffer::ReturnData(char** data, size_t* length) {
   data_.release();
   length_ = 0;
   *length = old_length;
-  *data = reinterpret_cast<char*> (old_memory);
+  *data = reinterpret_cast<char*>(old_memory);
 }
 
-char* FrameBuffer::data() {
-  return data_.get();
-}
+char* FrameBuffer::data() { return data_.get(); }
 
-size_t FrameBuffer::length() const {
-  return length_;
-}
+size_t FrameBuffer::length() const { return length_; }
 
-webrtc::VideoFrame* FrameBuffer::frame() {
-  return &video_frame_;
-}
+webrtc::VideoFrame* FrameBuffer::frame() { return &video_frame_; }
 
-const webrtc::VideoFrame* FrameBuffer::frame() const {
-  return &video_frame_;
-}
+const webrtc::VideoFrame* FrameBuffer::frame() const { return &video_frame_; }
 
-WebRtcVideoFrame::WebRtcVideoFrame() : video_buffer_(new RefCountedBuffer()) {
-}
+WebRtcVideoFrame::WebRtcVideoFrame()
+    : video_buffer_(new RefCountedBuffer()), is_black_(false) {}
 
-WebRtcVideoFrame::~WebRtcVideoFrame() {
-}
+WebRtcVideoFrame::~WebRtcVideoFrame() {}
 
-bool WebRtcVideoFrame::Init(uint32 format, int w, int h, int dw, int dh,
-                            uint8* sample, size_t sample_size,
-                            size_t pixel_width, size_t pixel_height,
-                            int64 elapsed_time, int64 time_stamp,
-                            int rotation) {
-  return Reset(format, w, h, dw, dh, sample, sample_size,
-               pixel_width, pixel_height, elapsed_time, time_stamp, rotation);
+bool WebRtcVideoFrame::Init(
+    uint32 format, int w, int h, int dw, int dh, uint8* sample,
+    size_t sample_size, size_t pixel_width, size_t pixel_height,
+    int64 elapsed_time, int64 time_stamp, int rotation) {
+  return Reset(format, w, h, dw, dh, sample, sample_size, pixel_width,
+               pixel_height, elapsed_time, time_stamp, rotation);
 }
 
 bool WebRtcVideoFrame::Init(const CapturedFrame* frame, int dw, int dh) {
   return Reset(frame->fourcc, frame->width, frame->height, dw, dh,
                static_cast<uint8*>(frame->data), frame->data_size,
-               frame->pixel_width, frame->pixel_height,
-               frame->elapsed_time, frame->time_stamp, frame->rotation);
+               frame->pixel_width, frame->pixel_height, frame->elapsed_time,
+               frame->time_stamp, frame->rotation);
 }
 
-bool WebRtcVideoFrame::InitToBlack(int w, int h,
-                                   size_t pixel_width, size_t pixel_height,
-                                   int64 elapsed_time, int64 time_stamp) {
+bool WebRtcVideoFrame::InitToBlack(int w, int h, size_t pixel_width,
+                                   size_t pixel_height, int64 elapsed_time,
+                                   int64 time_stamp) {
   InitToEmptyBuffer(w, h, pixel_width, pixel_height, elapsed_time, time_stamp);
-  return SetToBlack();
+  if (!is_black_) {
+    return SetToBlack();
+  }
+  return true;
 }
 
-void WebRtcVideoFrame::Attach(uint8* buffer, size_t buffer_size, int w, int h,
-                              size_t pixel_width, size_t pixel_height,
-                              int64 elapsed_time, int64 time_stamp,
-                              int rotation) {
+void WebRtcVideoFrame::Attach(
+    uint8* buffer, size_t buffer_size, int w, int h, size_t pixel_width,
+    size_t pixel_height, int64 elapsed_time, int64 time_stamp, int rotation) {
   talk_base::scoped_refptr<RefCountedBuffer> video_buffer(
       new RefCountedBuffer());
-  video_buffer->SetData(reinterpret_cast<char*> (buffer), buffer_size);
-  Attach(video_buffer.get(), buffer_size, w,  h, pixel_width, pixel_height,
+  video_buffer->SetData(reinterpret_cast<char*>(buffer), buffer_size);
+  Attach(video_buffer.get(), buffer_size, w, h, pixel_width, pixel_height,
          elapsed_time, time_stamp, rotation);
 }
 
 void WebRtcVideoFrame::Detach(uint8** data, size_t* length) {
-  video_buffer_->ReturnData(reinterpret_cast<char**> (data), length);
+  video_buffer_->ReturnData(reinterpret_cast<char**>(data), length);
 }
 
-size_t WebRtcVideoFrame::GetWidth() const {
-  return frame()->Width();
-}
+size_t WebRtcVideoFrame::GetWidth() const { return frame()->Width(); }
 
-size_t WebRtcVideoFrame::GetHeight() const {
-  return frame()->Height();
-}
+size_t WebRtcVideoFrame::GetHeight() const { return frame()->Height(); }
 
 const uint8* WebRtcVideoFrame::GetYPlane() const {
   WebRtc_UWord8* buffer = frame()->Buffer();
@@ -198,10 +185,9 @@ VideoFrame* WebRtcVideoFrame::Copy() const {
   size_t new_buffer_size = video_buffer_->length();
 
   WebRtcVideoFrame* ret_val = new WebRtcVideoFrame();
-  ret_val->Attach(video_buffer_.get(), new_buffer_size,
-                  frame()->Width(), frame()->Height(),
-                  pixel_width_, pixel_height_,
-                  elapsed_time_, time_stamp_, rotation_);
+  ret_val->Attach(video_buffer_.get(), new_buffer_size, frame()->Width(),
+                  frame()->Height(), pixel_width_, pixel_height_, elapsed_time_,
+                  time_stamp_, rotation_);
   return ret_val;
 }
 
@@ -227,10 +213,8 @@ size_t WebRtcVideoFrame::CopyToBuffer(uint8* buffer, size_t size) const {
 }
 
 // TODO(fbarchard): Refactor into base class and share with lmi
-size_t WebRtcVideoFrame::ConvertToRgbBuffer(uint32 to_fourcc,
-                                            uint8* buffer,
-                                            size_t size,
-                                            int stride_rgb) const {
+size_t WebRtcVideoFrame::ConvertToRgbBuffer(uint32 to_fourcc, uint8* buffer,
+                                            size_t size, int stride_rgb) const {
   if (!frame()->Buffer()) {
     return 0;
   }
@@ -242,23 +226,23 @@ size_t WebRtcVideoFrame::ConvertToRgbBuffer(uint32 to_fourcc,
     return needed;
   }
 
-  if (libyuv::ConvertFromI420(GetYPlane(), GetYPitch(),
-                              GetUPlane(), GetUPitch(),
-                              GetVPlane(), GetVPitch(),
-                              buffer, stride_rgb,
-                              width, height,
-                              to_fourcc)) {
+  if (libyuv::ConvertFromI420(GetYPlane(), GetYPitch(), GetUPlane(),
+                              GetUPitch(), GetVPlane(), GetVPitch(), buffer,
+                              stride_rgb, width, height, to_fourcc)) {
     LOG(LS_WARNING) << "RGB type not supported: " << to_fourcc;
     return 0;  // 0 indicates error
   }
   return needed;
 }
 
-void WebRtcVideoFrame::Attach(RefCountedBuffer* video_buffer,
-                              size_t buffer_size, int w, int h,
-                              size_t pixel_width, size_t pixel_height,
-                              int64 elapsed_time, int64 time_stamp,
-                              int rotation) {
+void WebRtcVideoFrame::Attach(
+    RefCountedBuffer* video_buffer, size_t buffer_size, int w, int h,
+    size_t pixel_width, size_t pixel_height, int64 elapsed_time,
+    int64 time_stamp, int rotation) {
+  if (video_buffer_.get() == video_buffer) {
+    return;
+  }
+  is_black_ = false;
   video_buffer_ = video_buffer;
   frame()->SetWidth(w);
   frame()->SetHeight(h);
@@ -285,18 +269,17 @@ bool WebRtcVideoFrame::AddWatermark() {
        x < kWatermarkOffsetFromLeft + kWatermarkWidth; ++x) {
     for (size_t y = h - kWatermarkOffsetFromBottom - kWatermarkHeight;
          y < h - kWatermarkOffsetFromBottom; ++y) {
-      buffer[y * w + x] = talk_base::_min(buffer[y * w + x],
-                                          kWatermarkMaxYValue);
+      buffer[y * w + x] =
+          talk_base::_min(buffer[y * w + x], kWatermarkMaxYValue);
     }
   }
   return true;
 }
 
-bool WebRtcVideoFrame::Reset(uint32 format, int w, int h, int dw, int dh,
-                             uint8* sample, size_t sample_size,
-                             size_t pixel_width, size_t pixel_height,
-                             int64 elapsed_time, int64 time_stamp,
-                             int rotation) {
+bool WebRtcVideoFrame::Reset(
+    uint32 format, int w, int h, int dw, int dh, uint8* sample,
+    size_t sample_size, size_t pixel_width, size_t pixel_height,
+    int64 elapsed_time, int64 time_stamp, int rotation) {
   if (!Validate(format, w, h, sample, sample_size)) {
     return false;
   }
@@ -323,8 +306,8 @@ bool WebRtcVideoFrame::Reset(uint32 format, int w, int h, int dw, int dh,
       new RefCountedBuffer(desired_size));
   // Since the libyuv::ConvertToI420 will handle the rotation, so the
   // new frame's rotation should always be 0.
-  Attach(video_buffer.get(), desired_size, new_width, new_height,
-         pixel_width, pixel_height, elapsed_time, time_stamp, 0);
+  Attach(video_buffer.get(), desired_size, new_width, new_height, pixel_width,
+         pixel_height, elapsed_time, time_stamp, 0);
 
   int horiz_crop = ((w - dw) / 2) & ~1;
   // ARGB on Windows has negative height.
@@ -338,15 +321,10 @@ bool WebRtcVideoFrame::Reset(uint32 format, int w, int h, int dw, int dh,
   int u_stride = GetUPitch();
   uint8* v = GetVPlane();
   int v_stride = GetVPitch();
-  int r = libyuv::ConvertToI420(sample, sample_size,
-                                y, y_stride,
-                                u, u_stride,
-                                v, v_stride,
-                                horiz_crop, vert_crop,
-                                w, h,
-                                dw, idh,
-                                static_cast<libyuv::RotationMode>(rotation),
-                                format);
+  int r = libyuv::ConvertToI420(
+      sample, sample_size, y, y_stride, u, u_stride, v, v_stride, horiz_crop,
+      vert_crop, w, h, dw, idh, static_cast<libyuv::RotationMode>(rotation),
+      format);
   if (r) {
     LOG(LS_ERROR) << "Error parsing format: " << GetFourccName(format)
                   << " return code : " << r;
@@ -355,22 +333,18 @@ bool WebRtcVideoFrame::Reset(uint32 format, int w, int h, int dw, int dh,
   return true;
 }
 
-VideoFrame* WebRtcVideoFrame::CreateEmptyFrame(int w, int h,
-                                               size_t pixel_width,
-                                               size_t pixel_height,
-                                               int64 elapsed_time,
-                                               int64 time_stamp) const {
+VideoFrame* WebRtcVideoFrame::CreateEmptyFrame(
+    int w, int h, size_t pixel_width, size_t pixel_height, int64 elapsed_time,
+    int64 time_stamp) const {
   WebRtcVideoFrame* frame = new WebRtcVideoFrame();
-  frame->InitToEmptyBuffer(w, h, pixel_width, pixel_height,
-                           elapsed_time, time_stamp);
+  frame->InitToEmptyBuffer(w, h, pixel_width, pixel_height, elapsed_time,
+                           time_stamp);
   return frame;
 }
 
-void WebRtcVideoFrame::InitToEmptyBuffer(int w, int h,
-                                         size_t pixel_width,
+void WebRtcVideoFrame::InitToEmptyBuffer(int w, int h, size_t pixel_width,
                                          size_t pixel_height,
-                                         int64 elapsed_time,
-                                         int64 time_stamp) {
+                                         int64 elapsed_time, int64 time_stamp) {
   size_t buffer_size = VideoFrame::SizeOf(w, h);
   talk_base::scoped_refptr<RefCountedBuffer> video_buffer(
       new RefCountedBuffer(buffer_size));

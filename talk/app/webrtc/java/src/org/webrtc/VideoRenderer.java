@@ -28,6 +28,7 @@
 package org.webrtc;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
  * Java version of VideoRendererInterface.  In addition to allowing clients to
@@ -44,26 +45,56 @@ public class VideoRenderer {
     public final int[] yuvStrides;
     public final ByteBuffer[] yuvPlanes;
 
+    /**
+     * Construct a frame of the given dimensions with the specified planar
+     * data.  If |yuvPlanes| is null, new planes of the appropriate sizes are
+     * allocated.
+     */
     public I420Frame(
         int width, int height, int[] yuvStrides, ByteBuffer[] yuvPlanes) {
       this.width = width;
       this.height = height;
       this.yuvStrides = yuvStrides;
+      if (yuvPlanes == null) {
+        yuvPlanes = new ByteBuffer[3];
+        yuvPlanes[0] = ByteBuffer.allocateDirect(yuvStrides[0] * height);
+        yuvPlanes[1] = ByteBuffer.allocateDirect(yuvStrides[1] * height);
+        yuvPlanes[2] = ByteBuffer.allocateDirect(yuvStrides[2] * height);
+      }
       this.yuvPlanes = yuvPlanes;
     }
 
-    public I420Frame deepCopy() {
-      int[] strides = new int[] { yuvStrides[0], yuvStrides[1], yuvStrides[2] };
-      ByteBuffer[] planes = new ByteBuffer[3];
-      for (int i = 0; i < 3; ++i) {
-        planes[i] = ByteBuffer.allocate(yuvPlanes[i].capacity());
-        yuvPlanes[i].position(0).limit(yuvPlanes[i].capacity());
-        planes[i].put(yuvPlanes[i]);
-        planes[i].flip();
+    /**
+     * Copy the planes out of |source| into |this| and return |this|.  Calling
+     * this with mismatched frame dimensions is a programming error and will
+     * likely crash.
+     */
+    public I420Frame copyFrom(I420Frame source) {
+      if (!Arrays.equals(yuvStrides, source.yuvStrides) ||
+          width != source.width || height != source.height) {
+        throw new RuntimeException("Mismatched dimensions!  Source: " +
+            source.toString() + ", destination: " + toString());
       }
-      return new I420Frame(width, height, strides, planes);
+      copyPlane(source.yuvPlanes[0], yuvPlanes[0]);
+      copyPlane(source.yuvPlanes[1], yuvPlanes[1]);
+      copyPlane(source.yuvPlanes[2], yuvPlanes[2]);
+      return this;
     }
-  }
+
+    @Override
+    public String toString() {
+      return width + "x" + height + ":" + yuvStrides[0] + ":" + yuvStrides[1] +
+          ":" + yuvStrides[2];
+    }
+
+    // Copy the bytes out of |src| and into |dst|, ignoring and overwriting
+    // positon & limit in both buffers.
+    private void copyPlane(ByteBuffer src, ByteBuffer dst) {
+      src.position(0).limit(src.capacity());
+      dst.put(src);
+      dst.position(0).limit(dst.capacity());
+    }
+}
 
   /** The real meat of VideoRendererInterface. */
   public static interface Callbacks {

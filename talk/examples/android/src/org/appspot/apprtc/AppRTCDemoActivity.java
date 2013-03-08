@@ -32,15 +32,12 @@ import android.content.Intent;
 import android.graphics.Point;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.SurfaceView;
-import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
 import android.widget.Toast;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.webrtc.IceCandidate;
-import org.webrtc.LocalMediaStream;
 import org.webrtc.MediaConstraints;
 import org.webrtc.MediaStream;
 import org.webrtc.PeerConnection;
@@ -68,8 +65,7 @@ public class AppRTCDemoActivity extends Activity
   private final PCObserver pcObserver = new PCObserver();
   private final SDPObserver sdpObserver = new SDPObserver();
   private final GAEChannelClient.MessageHandler gaeHandler = new GAEHandler();
-  private final AppRTCClient appRtcClient =
-      new AppRTCClient(this, gaeHandler, this);
+  private AppRTCClient appRtcClient = new AppRTCClient(this, gaeHandler, this);
   private VideoStreamsView vsv;
   private Toast logToast;
   private LinkedList<IceCandidate> queuedRemoteCandidates =
@@ -86,14 +82,6 @@ public class AppRTCDemoActivity extends Activity
 
     abortUnless(PeerConnectionFactory.initializeAndroidGlobals(this),
         "Failed to initializeAndroidGlobals");
-    // Sadly, the following dance is required because Android's Camera interface
-    // won't hand over captured byte buffers without *also* rendering to a
-    // surface.  Crazy!
-    SurfaceView previewSurfaceView =
-        org.webrtc.videoengine.ViERenderer.CreateLocalRenderer(this);
-    abortUnless(previewSurfaceView != null,
-        "Failed to create a (dummy) local renderer");
-    addContentView(previewSurfaceView, new ViewGroup.LayoutParams(16, 16));
 
     // TODO(fischman): allow this client to act as a room-creator, handing out
     // the new room URL and acting as a JSEP "answerer".  ATM this only acts as
@@ -133,22 +121,24 @@ public class AppRTCDemoActivity extends Activity
   public void onIceServers(List<PeerConnection.IceServer> iceServers) {
     PeerConnectionFactory factory = new PeerConnectionFactory();
 
-    MediaConstraints constraints = new MediaConstraints();
-    constraints.mandatory.add(new MediaConstraints.KeyValuePair(
-        "OfferToReceiveAudio", "true"));
-    constraints.mandatory.add(new MediaConstraints.KeyValuePair(
-        "OfferToReceiveVideo", "true"));
-    pc = factory.createPeerConnection(iceServers, constraints, pcObserver);
+    pc = factory.createPeerConnection(
+        iceServers, new MediaConstraints(), pcObserver);
 
     {
       logAndToast("Creating local video source...");
+      VideoCapturer capturer =
+          VideoCapturer.create("Camera 1, Facing front, Orientation 270");
+      if (capturer == null) {
+        capturer =
+            VideoCapturer.create("Camera 0, Facing front, Orientation 270");
+      }
+      abortUnless(capturer != null, "Failed to open capturer");
       VideoSource videoSource = factory.createVideoSource(
-          VideoCapturer.create("Camera 1, Facing front, Orientation 270"),
-          new MediaConstraints());
-      LocalMediaStream lMS = factory.createLocalMediaStream("ARDAMS");
+          capturer, new MediaConstraints());
+      MediaStream lMS = factory.createLocalMediaStream("ARDAMS");
       VideoTrack videoTrack = factory.createVideoTrack("ARDAMSv0", videoSource);
       videoTrack.addRenderer(new VideoRenderer(new VideoCallbacks(
-          vsv, VideoStreamsView.Which.LOCAL)));
+          vsv, VideoStreamsView.Endpoint.LOCAL)));
       lMS.addTrack(videoTrack);
       lMS.addTrack(factory.createAudioTrack("ARDAMSa0"));
       pc.addStream(lMS, new MediaConstraints());
@@ -170,7 +160,7 @@ public class AppRTCDemoActivity extends Activity
 
   // Log |msg| and Toast about it.
   private void logAndToast(String msg) {
-    Log.e(TAG, msg);
+    Log.d(TAG, msg);
     if (logToast != null) {
       logToast.cancel();
     }
@@ -215,13 +205,16 @@ public class AppRTCDemoActivity extends Activity
         });
     }
 
-    @Override public void onStateChange(final StateType stateChanged){
-      runOnUiThread(new Runnable() {
-          public void run() {
-            // Since we trigger offering on GAE channel open, there's nothing
-            // for us to do here.
-          }
-        });
+    @Override public void onSignalingChange(
+        PeerConnection.SignalingState newState) {
+    }
+
+    @Override public void onIceConnectionChange(
+        PeerConnection.IceConnectionState newState) {
+    }
+
+    @Override public void onIceGatheringChange(
+        PeerConnection.IceGatheringState newState) {
     }
 
     @Override public void onAddStream(final MediaStream stream){
@@ -231,7 +224,7 @@ public class AppRTCDemoActivity extends Activity
                 stream.videoTracks.size() == 1,
                 "Weird-looking stream: " + stream);
             stream.videoTracks.get(0).addRenderer(new VideoRenderer(
-                new VideoCallbacks(vsv, VideoStreamsView.Which.REMOTE)));
+                new VideoCallbacks(vsv, VideoStreamsView.Endpoint.REMOTE)));
           }
         });
     }
@@ -288,7 +281,12 @@ public class AppRTCDemoActivity extends Activity
   private class GAEHandler implements GAEChannelClient.MessageHandler {
     @JavascriptInterface public void onOpen() {
       logAndToast("Creating offer...");
-      pc.createOffer(sdpObserver, new MediaConstraints());
+      MediaConstraints constraints = new MediaConstraints();
+      constraints.mandatory.add(new MediaConstraints.KeyValuePair(
+          "OfferToReceiveAudio", "true"));
+      constraints.mandatory.add(new MediaConstraints.KeyValuePair(
+          "OfferToReceiveVideo", "true"));
+      pc.createOffer(sdpObserver, constraints);
     }
 
     @JavascriptInterface public void onMessage(String data) {
@@ -336,8 +334,11 @@ public class AppRTCDemoActivity extends Activity
       pc.dispose();
       pc = null;
     }
-    appRtcClient.sendMessage("{'type': 'bye' }");
-    appRtcClient.disconnect();
+    if (appRtcClient != null) {
+      appRtcClient.sendMessage("{\"type\": \"bye\"}");
+      appRtcClient.disconnect();
+      appRtcClient = null;
+    }
     finish();
   }
 
@@ -345,10 +346,10 @@ public class AppRTCDemoActivity extends Activity
   // VideoStreamsView implementation.
   private class VideoCallbacks implements VideoRenderer.Callbacks {
     private final VideoStreamsView view;
-    private final VideoStreamsView.Which stream;
+    private final VideoStreamsView.Endpoint stream;
 
     public VideoCallbacks(
-        VideoStreamsView view, VideoStreamsView.Which stream) {
+        VideoStreamsView view, VideoStreamsView.Endpoint stream) {
       this.view = view;
       this.stream = stream;
     }
@@ -364,14 +365,7 @@ public class AppRTCDemoActivity extends Activity
 
     @Override
     public void renderFrame(I420Frame frame) {
-      // Paying for the copy of the YUV data here allows CSC and painting time
-      // to get spent on the render thread instead of the UI thread.
-      final I420Frame frameCopy = frame.deepCopy();
-      view.queueEvent(new Runnable() {
-          public void run() {
-            view.updateFrame(stream, frameCopy);
-          }
-        });
+      view.queueFrame(stream, frame);
     }
   }
 }

@@ -109,16 +109,38 @@ using webrtc::VideoRendererInterface;
 
 namespace {
 
+static JavaVM* g_jvm = NULL;  // Set in JNI_OnLoad().
+
+static pthread_once_t g_jni_ptr_once = PTHREAD_ONCE_INIT;
+static pthread_key_t g_jni_ptr;  // Key for per-thread JNIEnv* data.
+
+static void ThreadDestructor(void* unused) {
+  jint status = g_jvm->DetachCurrentThread();
+  CHECK(status == JNI_OK, "Failed to detach thread: " << status);
+}
+
+static void CreateJNIPtrKey() {
+  CHECK(!pthread_key_create(&g_jni_ptr, &ThreadDestructor),
+        "pthread_key_create");
+}
+
 // Deal with difference in signatures between Oracle's jni.h and Android's.
-static JNIEnv* AttachCurrentThread(JavaVM* jvm) {
+static JNIEnv* AttachCurrentThreadIfNeeded() {
+  CHECK(!pthread_once(&g_jni_ptr_once, &CreateJNIPtrKey),
+        "pthread_once");
+  JNIEnv* jni = reinterpret_cast<JNIEnv*>(pthread_getspecific(g_jni_ptr));
+  if (jni == NULL) {
 #ifdef _JAVASOFT_JNI_H_  // Oracle's jni.h violates the JNI spec!
-  void* env;
+    void* env;
 #else
-  JNIEnv* env;
+    JNIEnv* env;
 #endif
-  CHECK(!jvm->AttachCurrentThread(&env, NULL), "Failed to attach thread");
-  CHECK(env, "AttachCurrentThread handed back NULL!");
-  return reinterpret_cast<JNIEnv*>(env);
+    CHECK(!g_jvm->AttachCurrentThread(&env, NULL), "Failed to attach thread");
+    CHECK(env, "AttachCurrentThread handed back NULL!");
+    jni = reinterpret_cast<JNIEnv*>(env);
+    CHECK(!pthread_setspecific(g_jni_ptr, jni), "pthread_setspecific");
+  }
+  return jni;
 }
 
 // Android's FindClass() is trickier than usual because the app-specific
@@ -134,9 +156,9 @@ class ClassReferenceHolder {
     LoadClass(jni, "org/webrtc/MediaSource$State");
     LoadClass(jni, "org/webrtc/MediaStream");
     LoadClass(jni, "org/webrtc/MediaStreamTrack$State");
-    LoadClass(jni, "org/webrtc/PeerConnection$IceState");
-    LoadClass(jni, "org/webrtc/PeerConnection$Observer$StateType");
     LoadClass(jni, "org/webrtc/PeerConnection$SignalingState");
+    LoadClass(jni, "org/webrtc/PeerConnection$IceConnectionState");
+    LoadClass(jni, "org/webrtc/PeerConnection$IceGatheringState");
     LoadClass(jni, "org/webrtc/SessionDescription");
     LoadClass(jni, "org/webrtc/SessionDescription$Type");
     LoadClass(jni, "org/webrtc/VideoRenderer$I420Frame");
@@ -289,17 +311,14 @@ class ScopedLocalRef {
 class ScopedGlobalRef {
  public:
   explicit ScopedGlobalRef(JNIEnv* jni, jobject obj)
-      : obj_(jni->NewGlobalRef(obj)) {
-    CHECK(!jni->GetJavaVM(&jvm_), "Failed to GetJavaVM");
-  }
+      : obj_(jni->NewGlobalRef(obj)) {}
   ~ScopedGlobalRef() {
-    DeleteGlobalRef(AttachCurrentThread(jvm_), obj_);
+    DeleteGlobalRef(AttachCurrentThreadIfNeeded(), obj_);
   }
   jobject operator*() const {
     return obj_;
   }
  private:
-  JavaVM* jvm_;
   jobject obj_;
 };
 
@@ -363,7 +382,6 @@ class PCOJava : public PeerConnectionObserver {
             jni, FindClass(jni, "org/webrtc/VideoTrack"))),
         j_video_track_ctor_(GetMethodID(jni,
             j_video_track_class_, "<init>", "(J)V")) {
-    CHECK(!jni->GetJavaVM(&jvm_), "Failed to GetJavaVM");
   }
 
   virtual ~PCOJava() {}
@@ -394,27 +412,35 @@ class PCOJava : public PeerConnectionObserver {
 
   virtual void OnSignalingChange(
       PeerConnectionInterface::SignalingState new_state) {
-    // TODO(bemasc): Update JNI to use this new signaling state callback.
-  }
-
-  virtual void OnStateChange(StateType stateChanged) {
     jmethodID m = GetMethodID(
-        jni(), j_observer_class_, "onStateChange",
-        "(Lorg/webrtc/PeerConnection$Observer$StateType;)V");
-    ScopedLocalRef<jobject> state_changed(jni(), JavaEnumFromIndex(
-        jni(), "PeerConnection$Observer$StateType", stateChanged));
-    jni()->CallVoidMethod(*j_observer_global_, m, *state_changed);
+        jni(), j_observer_class_, "onSignalingChange",
+        "(Lorg/webrtc/PeerConnection$SignalingState;)V");
+    ScopedLocalRef<jobject> new_state_enum(jni(), JavaEnumFromIndex(
+        jni(), "PeerConnection$SignalingState", new_state));
+    jni()->CallVoidMethod(*j_observer_global_, m, *new_state_enum);
     CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
   virtual void OnIceConnectionChange(
       PeerConnectionInterface::IceConnectionState new_state) {
-    // TODO(bemasc): Update JNI to match ice state changes.
+    jmethodID m = GetMethodID(
+        jni(), j_observer_class_, "onIceConnectionChange",
+        "(Lorg/webrtc/PeerConnection$IceConnectionState;)V");
+    ScopedLocalRef<jobject> new_state_enum(jni(), JavaEnumFromIndex(
+        jni(), "PeerConnection$IceConnectionState", new_state));
+    jni()->CallVoidMethod(*j_observer_global_, m, *new_state_enum);
+    CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
   virtual void OnIceGatheringChange(
       PeerConnectionInterface::IceGatheringState new_state) {
-    // TODO(bemasc): Update JNI to match ice state changes.
+    jmethodID m = GetMethodID(
+        jni(), j_observer_class_, "onIceGatheringChange",
+        "(Lorg/webrtc/PeerConnection$IceGatheringState;)V");
+    ScopedLocalRef<jobject> new_state_enum(jni(), JavaEnumFromIndex(
+        jni(), "PeerConnection$IceGatheringState", new_state));
+    jni()->CallVoidMethod(*j_observer_global_, m, *new_state_enum);
+    CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
   virtual void OnAddStream(MediaStreamInterface* stream) {
@@ -490,10 +516,9 @@ class PCOJava : public PeerConnectionObserver {
 
  private:
   JNIEnv* jni() {
-    return AttachCurrentThread(jvm_);
+    return AttachCurrentThreadIfNeeded();
   }
 
-  JavaVM* jvm_;
   const ScopedGlobalRef j_observer_global_;
   const jclass j_observer_class_;
   const jclass j_media_stream_class_;
@@ -599,7 +624,6 @@ class SdpObserverWrapper : public T {
         j_observer_global_(NewGlobalRef(jni, j_observer)),
         j_observer_class_((jclass)NewGlobalRef(
             jni, GetObjectClass(jni, j_observer))) {
-    CHECK(!jni->GetJavaVM(&jvm_), "Failed to GetJavaVM");
   }
 
   virtual ~SdpObserverWrapper() {
@@ -632,11 +656,10 @@ class SdpObserverWrapper : public T {
 
  private:
   JNIEnv* jni() {
-    return AttachCurrentThread(jvm_);
+    return AttachCurrentThreadIfNeeded();
   }
 
   talk_base::scoped_ptr<ConstraintsWrapper> constraints_;
-  JavaVM* jvm_;
   const jobject j_observer_global_;
   const jclass j_observer_class_;
 };
@@ -679,7 +702,6 @@ class JavaVideoRendererWrapper : public VideoRendererInterface {
  public:
   JavaVideoRendererWrapper(JNIEnv* jni, jobject j_callbacks)
       : j_callbacks_(jni, j_callbacks) {
-    CHECK(!jni->GetJavaVM(&jvm_), "Failed to GetJavaVM");
     j_set_size_id_ = GetMethodID(
         jni, GetObjectClass(jni, j_callbacks), "setSize", "(II)V");
     j_render_frame_id_ = GetMethodID(
@@ -730,10 +752,9 @@ class JavaVideoRendererWrapper : public VideoRendererInterface {
   }
 
   JNIEnv* jni() {
-    return AttachCurrentThread(jvm_);
+    return AttachCurrentThreadIfNeeded();
   }
 
-  JavaVM* jvm_;
   ScopedGlobalRef j_callbacks_;
   jmethodID j_set_size_id_;
   jmethodID j_render_frame_id_;
@@ -750,7 +771,6 @@ class JavaVideoRendererWrapper : public VideoRendererInterface {
 #define JOW(rettype, name) extern "C" rettype JNIEXPORT JNICALL \
   Java_org_webrtc_##name
 
-static JavaVM* g_jvm = NULL;
 extern "C" jint JNIEXPORT JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
   CHECK(!g_jvm, "JNI_OnLoad called more than once!");
   g_jvm = jvm;
@@ -799,6 +819,42 @@ JOW(void, VideoRenderer_free)(JNIEnv*, jclass, jlong j_p) {
 
 JOW(void, MediaStreamTrack_free)(JNIEnv*, jclass, jlong j_p) {
   reinterpret_cast<MediaStreamTrackInterface*>(j_p)->Release();
+}
+
+JOW(jboolean, MediaStream_nativeAddAudioTrack)(
+    JNIEnv* jni, jclass, jlong pointer, jlong j_audio_track_pointer) {
+  talk_base::scoped_refptr<MediaStreamInterface> stream(
+      reinterpret_cast<MediaStreamInterface*>(pointer));
+  talk_base::scoped_refptr<AudioTrackInterface> track(
+      reinterpret_cast<AudioTrackInterface*>(j_audio_track_pointer));
+  return stream->AddTrack(track);
+}
+
+JOW(jboolean, MediaStream_nativeAddVideoTrack)(
+    JNIEnv* jni, jclass, jlong pointer, jlong j_video_track_pointer) {
+  talk_base::scoped_refptr<MediaStreamInterface> stream(
+      reinterpret_cast<MediaStreamInterface*>(pointer));
+  talk_base::scoped_refptr<VideoTrackInterface> track(
+      reinterpret_cast<VideoTrackInterface*>(j_video_track_pointer));
+  return stream->AddTrack(track);
+}
+
+JOW(jboolean, MediaStream_nativeRemoveAudioTrack)(
+    JNIEnv* jni, jclass, jlong pointer, jlong j_audio_track_pointer) {
+  talk_base::scoped_refptr<MediaStreamInterface> stream(
+      reinterpret_cast<MediaStreamInterface*>(pointer));
+  talk_base::scoped_refptr<AudioTrackInterface> track(
+      reinterpret_cast<AudioTrackInterface*>(j_audio_track_pointer));
+  return stream->RemoveTrack(track);
+}
+
+JOW(jboolean, MediaStream_nativeRemoveVideoTrack)(
+    JNIEnv* jni, jclass, jlong pointer, jlong j_video_track_pointer) {
+  talk_base::scoped_refptr<MediaStreamInterface> stream(
+      reinterpret_cast<MediaStreamInterface*>(pointer));
+  talk_base::scoped_refptr<VideoTrackInterface> track(
+      reinterpret_cast<VideoTrackInterface*>(j_video_track_pointer));
+  return stream->RemoveTrack(track);
 }
 
 JOW(jstring, MediaStream_nativeLabel)(JNIEnv* jni, jclass, jlong j_p) {
@@ -1054,10 +1110,21 @@ JOW(jobject, PeerConnection_signalingState)(JNIEnv* jni, jobject j_pc) {
   return JavaEnumFromIndex(jni, "PeerConnection$SignalingState", state);
 }
 
-JOW(jobject, PeerConnection_iceState)(JNIEnv* jni, jobject j_pc) {
-  PeerConnectionInterface::IceState state =
-      ExtractNativePC(jni, j_pc)->ice_state();
-  return JavaEnumFromIndex(jni, "PeerConnection$IceState", state);
+JOW(jobject, PeerConnection_iceConnectionState)(JNIEnv* jni, jobject j_pc) {
+  PeerConnectionInterface::IceConnectionState state =
+      ExtractNativePC(jni, j_pc)->ice_connection_state();
+  return JavaEnumFromIndex(jni, "PeerConnection$IceConnectionState", state);
+}
+
+JOW(jobject, PeerGathering_iceGatheringState)(JNIEnv* jni, jobject j_pc) {
+  PeerConnectionInterface::IceGatheringState state =
+      ExtractNativePC(jni, j_pc)->ice_gathering_state();
+  return JavaEnumFromIndex(jni, "PeerGathering$IceGatheringState", state);
+}
+
+JOW(void, PeerConnection_close)(JNIEnv* jni, jobject j_pc) {
+  ExtractNativePC(jni, j_pc)->Close();
+  return;
 }
 
 JOW(jobject, MediaSource_nativeState)(JNIEnv* jni, jclass, jlong j_p) {
@@ -1135,24 +1202,6 @@ JOW(jboolean, MediaStreamTrack_nativeSetEnabled)(
   talk_base::scoped_refptr<MediaStreamTrackInterface> p(
       reinterpret_cast<MediaStreamTrackInterface*>(j_p));
   return p->set_enabled(enabled);
-}
-
-JOW(jboolean, LocalMediaStream_nativeAddAudioTrack)(
-    JNIEnv* jni, jclass, jlong pointer, jlong j_audio_track_pointer) {
-  talk_base::scoped_refptr<MediaStreamInterface> stream(
-      reinterpret_cast<MediaStreamInterface*>(pointer));
-  talk_base::scoped_refptr<AudioTrackInterface> track(
-      reinterpret_cast<AudioTrackInterface*>(j_audio_track_pointer));
-  return stream->AddTrack(track);
-}
-
-JOW(jboolean, LocalMediaStream_nativeAddVideoTrack)(
-    JNIEnv* jni, jclass, jlong pointer, jlong j_video_track_pointer) {
-  talk_base::scoped_refptr<MediaStreamInterface> stream(
-      reinterpret_cast<MediaStreamInterface*>(pointer));
-  talk_base::scoped_refptr<VideoTrackInterface> track(
-      reinterpret_cast<VideoTrackInterface*>(j_video_track_pointer));
-  return stream->AddTrack(track);
 }
 
 JOW(void, VideoTrack_nativeAddRenderer)(

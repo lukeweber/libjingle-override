@@ -30,6 +30,9 @@ package org.webrtc;
 import junit.framework.TestCase;
 
 import org.junit.Test;
+import org.webrtc.PeerConnection.IceConnectionState;
+import org.webrtc.PeerConnection.IceGatheringState;
+import org.webrtc.PeerConnection.SignalingState;
 
 import java.lang.ref.WeakReference;
 import java.util.IdentityHashMap;
@@ -41,7 +44,7 @@ import java.util.concurrent.TimeUnit;
 /** End-to-end tests for PeerConnection.java. */
 public class PeerConnectionTest extends TestCase {
   // Set to true to render video.
-  private static final boolean RENDER_TO_GUI = false;
+  private static final boolean RENDER_TO_GUI = true;
 
   private static class ObserverExpectations
       implements PeerConnection.Observer, VideoRenderer.Callbacks {
@@ -50,8 +53,12 @@ public class PeerConnectionTest extends TestCase {
     private LinkedList<Integer> expectedSetSizeDimensions =
         new LinkedList<Integer>();  // Alternating width/height.
     private int expectedFramesDelivered = 0;
-    private LinkedList<StateType> expectedStateChanges =
-        new LinkedList<StateType>();
+    private LinkedList<SignalingState> expectedSignalingChanges =
+        new LinkedList<SignalingState>();
+    private LinkedList<IceConnectionState> expectedIceConnectionChanges =
+        new LinkedList<IceConnectionState>();
+    private LinkedList<IceGatheringState> expectedIceGatheringChanges =
+        new LinkedList<IceGatheringState>();
     private LinkedList<String> expectedAddStreamLabels =
         new LinkedList<String>();
     private LinkedList<String> expectedRemoveStreamLabels =
@@ -101,12 +108,39 @@ public class PeerConnectionTest extends TestCase {
       --expectedFramesDelivered;
     }
 
-    public synchronized void expectStateChange(StateType stateChanged) {
-      expectedStateChanges.add(stateChanged);
+    public synchronized void expectSignalingChange(SignalingState newState) {
+      expectedSignalingChanges.add(newState);
     }
 
-    public synchronized void onStateChange(StateType stateChanged) {
-      assertEquals(expectedStateChanges.removeFirst(), stateChanged);
+    @Override
+    public synchronized void onSignalingChange(SignalingState newState) {
+      assertEquals(expectedSignalingChanges.removeFirst(), newState);
+    }
+
+    public synchronized void expectIceConnectionChange(
+        IceConnectionState newState) {
+      expectedIceConnectionChanges.add(newState);
+    }
+
+    @Override
+    public void onIceConnectionChange(IceConnectionState newState) {
+      assertEquals(expectedIceConnectionChanges.removeFirst(), newState);
+    }
+
+    public synchronized void expectIceGatheringChange(
+        IceGatheringState newState) {
+      expectedIceGatheringChanges.add(newState);
+    }
+
+    @Override
+    public void onIceGatheringChange(IceGatheringState newState) {
+      // It's fine to get a variable number of GATHERING messages before
+      // COMPLETE fires (depending on how long the test runs) so we don't assert
+      // any particular count.
+      if (newState == IceGatheringState.GATHERING) {
+        return;
+      }
+      assertEquals(expectedIceGatheringChanges.removeFirst(), newState);
     }
 
     public synchronized void expectAddStream(String label) {
@@ -143,7 +177,9 @@ public class PeerConnectionTest extends TestCase {
     public synchronized boolean areAllExpectationsSatisfied() {
       return expectedIceCandidates <= 0 &&  // See comment in onIceCandidate.
           expectedErrors == 0 &&
-          expectedStateChanges.size() == 0 &&
+          expectedSignalingChanges.size() == 0 &&
+          expectedIceConnectionChanges.size() == 0 &&
+          expectedIceGatheringChanges.size() == 0 &&
           expectedAddStreamLabels.size() == 0 &&
           expectedRemoveStreamLabels.size() == 0 &&
           expectedSetSizeDimensions.isEmpty() &&
@@ -151,7 +187,15 @@ public class PeerConnectionTest extends TestCase {
     }
 
     public void waitForAllExpectationsToBeSatisfied() {
-      // TODO(fischman): come up with something better than a poll loop...
+      // TODO(fischman): problems with this approach:
+      // - come up with something better than a poll loop
+      // - avoid serializing expectations explicitly; the test is not as robust
+      //   as it could be because it must place expectations between wait
+      //   statements very precisely (e.g. frame must not arrive before its
+      //   expectation, and expectation must not be registered so early as to
+      //   stall a wait).  Use callbacks to fire off dependent steps instead of
+      //   explicitly waiting, so there can be just a single wait at the end of
+      //   the test.
       while (!areAllExpectationsSatisfied()) {
         try {
           Thread.sleep(10);
@@ -240,19 +284,22 @@ public class PeerConnectionTest extends TestCase {
 
   // Return a weak reference to test that ownership is correctly held by
   // PeerConnection, not by test code.
-  private static WeakReference<LocalMediaStream> addTracksToPC(
+  private static WeakReference<MediaStream> addTracksToPC(
       PeerConnectionFactory factory, PeerConnection pc,
       VideoSource videoSource,
       String streamLabel, String videoTrackId, String audioTrackId,
       ObserverExpectations observer) {
-    LocalMediaStream lMS = factory.createLocalMediaStream(streamLabel);
+    MediaStream lMS = factory.createLocalMediaStream(streamLabel);
     VideoTrack videoTrack =
         factory.createVideoTrack(videoTrackId, videoSource);
     videoTrack.addRenderer(createVideoRenderer(observer));
     lMS.addTrack(videoTrack);
+    // Just for fun, let's remove and re-add the track.
+    lMS.removeTrack(videoTrack);
+    lMS.addTrack(videoTrack);
     lMS.addTrack(factory.createAudioTrack(audioTrackId));
     pc.addStream(lMS, new MediaConstraints());
-    return new WeakReference<LocalMediaStream>(lMS);
+    return new WeakReference<MediaStream>(lMS);
   }
 
   private static void assertEquals(
@@ -292,7 +339,7 @@ public class PeerConnectionTest extends TestCase {
     // serialized SDP, because the C++ API doesn't auto-translate.
     // Drop |label| params from {Audio,Video}Track-related APIs once
     // https://code.google.com/p/webrtc/issues/detail?id=1253 is fixed.
-    WeakReference<LocalMediaStream> oLMS = addTracksToPC(
+    WeakReference<MediaStream> oLMS = addTracksToPC(
         factory, offeringPC, videoSource, "oLMS", "oLMSv0", "oLMSa0",
         offeringExpectations);
 
@@ -304,8 +351,8 @@ public class PeerConnectionTest extends TestCase {
     assertFalse(offerSdp.description.isEmpty());
 
     sdpLatch = new SdpObserverLatch();
-    answeringExpectations.expectStateChange(
-        PeerConnection.Observer.StateType.SIGNALING);
+    answeringExpectations.expectSignalingChange(
+        SignalingState.HAVE_REMOTE_OFFER);
     answeringExpectations.expectAddStream("oLMS");
     answeringPC.setRemoteDescription(sdpLatch, offerSdp);
     answeringExpectations.waitForAllExpectationsToBeSatisfied();
@@ -314,7 +361,7 @@ public class PeerConnectionTest extends TestCase {
     assertTrue(sdpLatch.await());
     assertNull(sdpLatch.getSdp());
 
-    WeakReference<LocalMediaStream> aLMS = addTracksToPC(
+    WeakReference<MediaStream> aLMS = addTracksToPC(
         factory, answeringPC, videoSource, "aLMS", "aLMSv0", "aLMSa0",
         answeringExpectations);
 
@@ -329,21 +376,18 @@ public class PeerConnectionTest extends TestCase {
     answeringExpectations.expectIceCandidates(2);
 
     sdpLatch = new SdpObserverLatch();
-    answeringExpectations.expectStateChange(
-        PeerConnection.Observer.StateType.SIGNALING);
+    answeringExpectations.expectSignalingChange(SignalingState.STABLE);
     answeringPC.setLocalDescription(sdpLatch, answerSdp);
     assertTrue(sdpLatch.await());
     assertNull(sdpLatch.getSdp());
 
     sdpLatch = new SdpObserverLatch();
-    offeringExpectations.expectStateChange(
-        PeerConnection.Observer.StateType.SIGNALING);
+    offeringExpectations.expectSignalingChange(SignalingState.HAVE_LOCAL_OFFER);
     offeringPC.setLocalDescription(sdpLatch, offerSdp);
     assertTrue(sdpLatch.await());
     assertNull(sdpLatch.getSdp());
     sdpLatch = new SdpObserverLatch();
-    offeringExpectations.expectStateChange(
-        PeerConnection.Observer.StateType.SIGNALING);
+    offeringExpectations.expectSignalingChange(SignalingState.STABLE);
     offeringExpectations.expectAddStream("aLMS");
     offeringPC.setRemoteDescription(sdpLatch, answerSdp);
     assertTrue(sdpLatch.await());
@@ -368,6 +412,18 @@ public class PeerConnectionTest extends TestCase {
       answeringExpectations.expectFramesDelivered(10);
     }
 
+    offeringExpectations.expectIceConnectionChange(
+        IceConnectionState.CHECKING);
+    offeringExpectations.expectIceConnectionChange(
+        IceConnectionState.CONNECTED);
+    answeringExpectations.expectIceConnectionChange(
+        IceConnectionState.CHECKING);
+    answeringExpectations.expectIceConnectionChange(
+        IceConnectionState.CONNECTED);
+
+    offeringExpectations.expectIceGatheringChange(IceGatheringState.COMPLETE);
+    answeringExpectations.expectIceGatheringChange(IceGatheringState.COMPLETE);
+
     for (IceCandidate candidate : offeringExpectations.gotIceCandidates) {
       answeringPC.addIceCandidate(candidate);
     }
@@ -387,7 +443,7 @@ public class PeerConnectionTest extends TestCase {
 
     if (RENDER_TO_GUI) {
       try {
-        Thread.sleep(20000);
+        Thread.sleep(3000);
       } catch (Throwable t) {
         throw new RuntimeException(t);
       }
@@ -407,8 +463,16 @@ public class PeerConnectionTest extends TestCase {
     // Free the Java-land objects, collect them, and sleep a bit to make sure we
     // don't get late-arrival crashes after the Java-land objects have been
     // freed.
+    offeringExpectations.expectIceConnectionChange(IceConnectionState.CLOSED);
+    offeringExpectations.expectSignalingChange(SignalingState.CLOSED);
+    offeringPC.close();
+    offeringExpectations.waitForAllExpectationsToBeSatisfied();
     offeringPC.dispose();
     offeringPC = null;
+    answeringExpectations.expectIceConnectionChange(IceConnectionState.CLOSED);
+    answeringExpectations.expectSignalingChange(SignalingState.CLOSED);
+    answeringPC.close();
+    answeringExpectations.waitForAllExpectationsToBeSatisfied();
     answeringPC.dispose();
     answeringPC = null;
     System.gc();

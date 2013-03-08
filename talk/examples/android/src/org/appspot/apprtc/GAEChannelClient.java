@@ -27,6 +27,7 @@
 
 package org.appspot.apprtc;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.util.Log;
 import android.webkit.ConsoleMessage;
@@ -62,6 +63,7 @@ public class GAEChannelClient {
   }
 
   /** Asynchronously open an AppEngine channel. */
+  @SuppressLint("SetJavaScriptEnabled")
   public GAEChannelClient(
       Activity activity, String gaeUrl, MessageHandler handler) {
     webView = new WebView(activity);
@@ -89,6 +91,9 @@ public class GAEChannelClient {
 
   /** Close the connection to the AppEngine channel. */
   public void close() {
+    if (webView == null) {
+      return;
+    }
     proxyingMessageHandler.disconnect();
     webView.removeJavascriptInterface("androidMessageHandler");
     webView.loadUrl("about:blank");

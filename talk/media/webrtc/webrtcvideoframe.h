@@ -71,9 +71,8 @@ class WebRtcVideoFrame : public VideoFrame {
   // "h" can be negative indicating a vertically flipped image.
   // "dh" is destination height if cropping is desired and is always positive.
   // Returns "true" if successful.
-  bool Init(uint32 format, int w, int h, int dw, int dh,
-            uint8* sample, size_t sample_size,
-            size_t pixel_width, size_t pixel_height,
+  bool Init(uint32 format, int w, int h, int dw, int dh, uint8* sample,
+            size_t sample_size, size_t pixel_width, size_t pixel_height,
             int64 elapsed_time, int64 time_stamp, int rotation);
 
   bool Init(const CapturedFrame* frame, int dw, int dh);
@@ -82,8 +81,8 @@ class WebRtcVideoFrame : public VideoFrame {
                    int64 elapsed_time, int64 time_stamp);
 
   void Attach(uint8* buffer, size_t buffer_size, int w, int h,
-              size_t pixel_width, size_t pixel_height,
-              int64 elapsed_time, int64 time_stamp, int rotation);
+              size_t pixel_width, size_t pixel_height, int64 elapsed_time,
+              int64 time_stamp, int rotation);
 
   void Detach(uint8** data, size_t* length);
   bool AddWatermark();
@@ -91,10 +90,10 @@ class WebRtcVideoFrame : public VideoFrame {
   webrtc::VideoFrame* frame() const { return video_buffer_->frame(); }
 
   // From base class VideoFrame.
-  virtual bool Reset(uint32 format, int w, int h, int dw, int dh,
-                   uint8* sample, size_t sample_size,
-                   size_t pixel_width, size_t pixel_height,
-                   int64 elapsed_time, int64 time_stamp, int rotation);
+  virtual bool Reset(uint32 format, int w, int h, int dw, int dh, uint8* sample,
+                     size_t sample_size, size_t pixel_width,
+                     size_t pixel_height, int64 elapsed_time, int64 time_stamp,
+                     int rotation);
 
   virtual size_t GetWidth() const;
   virtual size_t GetHeight() const;
@@ -115,9 +114,7 @@ class WebRtcVideoFrame : public VideoFrame {
   virtual void SetElapsedTime(int64 elapsed_time) {
     elapsed_time_ = elapsed_time;
   }
-  virtual void SetTimeStamp(int64 time_stamp) {
-    time_stamp_ = time_stamp;
-  }
+  virtual void SetTimeStamp(int64 time_stamp) { time_stamp_ = time_stamp; }
 
   virtual int GetRotation() const { return rotation_; }
 
@@ -128,20 +125,18 @@ class WebRtcVideoFrame : public VideoFrame {
                                     size_t size, int stride_rgb) const;
 
  private:
-  void Attach(RefCountedBuffer* video_buffer,
-              size_t buffer_size, int w, int h,
-              size_t pixel_width, size_t pixel_height,
-              int64 elapsed_time, int64 time_stamp, int rotation);
+  void Attach(RefCountedBuffer* video_buffer, size_t buffer_size, int w, int h,
+              size_t pixel_width, size_t pixel_height, int64 elapsed_time,
+              int64 time_stamp, int rotation);
 
-  virtual VideoFrame* CreateEmptyFrame(int w, int h,
-                                       size_t pixel_width, size_t pixel_height,
-                                       int64 elapsed_time,
+  virtual VideoFrame* CreateEmptyFrame(int w, int h, size_t pixel_width,
+                                       size_t pixel_height, int64 elapsed_time,
                                        int64 time_stamp) const;
-  void InitToEmptyBuffer(int w, int h,
-                         size_t pixel_width, size_t pixel_height,
+  void InitToEmptyBuffer(int w, int h, size_t pixel_width, size_t pixel_height,
                          int64 elapsed_time, int64 time_stamp);
 
   talk_base::scoped_refptr<RefCountedBuffer> video_buffer_;
+  bool is_black_;
   size_t pixel_width_;
   size_t pixel_height_;
   int64 elapsed_time_;

@@ -69,8 +69,8 @@ public class PeerConnectionFactory {
     return new PeerConnection(nativePeerConnection, nativeObserver);
   }
 
-  public LocalMediaStream createLocalMediaStream(String label) {
-    return new LocalMediaStream(
+  public MediaStream createLocalMediaStream(String label) {
+    return new MediaStream(
         nativeCreateLocalMediaStream(nativeFactory, label));
   }
 

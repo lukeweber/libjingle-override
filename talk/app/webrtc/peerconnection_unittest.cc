@@ -78,8 +78,8 @@ using webrtc::StreamCollectionInterface;
 static const int kMaxWaitMs = 1000;
 static const int kMaxWaitForStatsMs = 3000;
 static const int kMaxWaitForFramesMs = 5000;
-static const int kEndAudioFrameCount = 10;
-static const int kEndVideoFrameCount = 10;
+static const int kEndAudioFrameCount = 3;
+static const int kEndVideoFrameCount = 3;
 
 static const char kStreamLabelBase[] = "stream_label";
 static const char kVideoTrackLabelBase[] = "video_track";
@@ -437,10 +437,14 @@ class PeerConnectionTestClientBase
 
   talk_base::scoped_refptr<webrtc::VideoTrackInterface>
   CreateLocalVideoTrack(const std::string stream_label) {
+    // Set max frame rate to 10fps to reduce the risk of the tests to be flaky.
+    FakeConstraints source_constraints = video_constraints_;
+    source_constraints.SetMandatoryMaxFrameRate(10);
+
     talk_base::scoped_refptr<webrtc::VideoSourceInterface> source =
         peer_connection_factory_->CreateVideoSource(
             new webrtc::FakePeriodicVideoCapturer(),
-            &video_constraints_);
+            &source_constraints);
     std::string label = stream_label + kVideoTrackLabelBase;
     return peer_connection_factory_->CreateVideoTrack(label, source);
   }
