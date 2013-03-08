@@ -132,6 +132,11 @@
             }],
           ],  # conditions
         },  # target call
+      ], # targets
+    }],  # OS!="android"
+    # TODO(sergeyu): Make this example compile on Windows and Mac.
+    ['OS=="linux"', {
+      'targets': [
         {
           'target_name': 'chat',
           'type': 'executable',
@@ -166,7 +171,7 @@
           ],  # conditions
         },  # target chat
       ], # targets
-    }],  # OS!="android"
+    }],  # OS=="linux"
     ['OS=="linux" or OS=="win"', {
       'targets': [
         {
