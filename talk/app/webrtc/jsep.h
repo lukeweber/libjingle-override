@@ -33,6 +33,7 @@
 #include <string>
 #include <vector>
 
+#include "talk/app/webrtc/webrtcexport.h"
 #include "talk/base/basictypes.h"
 #include "talk/base/refcount.h"
 
@@ -72,10 +73,13 @@ class IceCandidateInterface {
 // Creates a IceCandidateInterface based on SDP string.
 // Returns NULL if the sdp string can't be parsed.
 // TODO(ronghuawu): Deprecated.
+PEERCONNECTION_EXPORT
 IceCandidateInterface* CreateIceCandidate(const std::string& sdp_mid,
                                           int sdp_mline_index,
                                           const std::string& sdp);
+
 // |error| can be NULL if doesn't care about the failure reason.
+PEERCONNECTION_EXPORT
 IceCandidateInterface* CreateIceCandidate(const std::string& sdp_mid,
                                           int sdp_mline_index,
                                           const std::string& sdp,
@@ -130,7 +134,9 @@ class SessionDescriptionInterface {
 // TODO(ronghuawu): Deprecated.
 SessionDescriptionInterface* CreateSessionDescription(const std::string& type,
                                                       const std::string& sdp);
+
 // |error| can be NULL if doesn't care about the failure reason.
+PEERCONNECTION_EXPORT
 SessionDescriptionInterface* CreateSessionDescription(const std::string& type,
                                                       const std::string& sdp,
                                                       SdpParseError* error);

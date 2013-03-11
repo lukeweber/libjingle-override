@@ -85,6 +85,9 @@ using webrtc::PeerConnectionInterface;
 using webrtc::PeerConnectionObserver;
 using webrtc::SessionDescriptionInterface;
 using webrtc::SetSessionDescriptionObserver;
+using webrtc::StatsElement;
+using webrtc::StatsObserver;
+using webrtc::StatsReport;
 using webrtc::VideoRendererInterface;
 using webrtc::VideoSourceInterface;
 using webrtc::VideoTrackInterface;
@@ -161,6 +164,10 @@ class ClassReferenceHolder {
     LoadClass(jni, "org/webrtc/PeerConnection$IceGatheringState");
     LoadClass(jni, "org/webrtc/SessionDescription");
     LoadClass(jni, "org/webrtc/SessionDescription$Type");
+    LoadClass(jni, "org/webrtc/StatsReport");
+    LoadClass(jni, "org/webrtc/StatsReport$Type");
+    LoadClass(jni, "org/webrtc/StatsReport$Element");
+    LoadClass(jni, "org/webrtc/StatsReport$Element$Value");
     LoadClass(jni, "org/webrtc/VideoRenderer$I420Frame");
     LoadClass(jni, "org/webrtc/VideoTrack");
   }
@@ -392,11 +399,11 @@ class PCOJava : public PeerConnectionObserver {
     jclass candidate_class = FindClass(jni(), "org/webrtc/IceCandidate");
     jmethodID ctor = GetMethodID(jni(), candidate_class,
         "<init>", "(Ljava/lang/String;ILjava/lang/String;)V");
+    ScopedLocalRef<jstring> j_mid(
+        jni(), JavaStringFromStdString(jni(), candidate->sdp_mid()));
+    ScopedLocalRef<jstring> j_sdp(jni(), JavaStringFromStdString(jni(), sdp));
     ScopedLocalRef<jobject> j_candidate(jni(), jni()->NewObject(
-        candidate_class, ctor,
-        JavaStringFromStdString(jni(), candidate->sdp_mid()),
-        candidate->sdp_mline_index(),
-        JavaStringFromStdString(jni(), sdp)));
+        candidate_class, ctor, *j_mid, candidate->sdp_mline_index(), *j_sdp));
     CHECK_EXCEPTION(jni(), "error during NewObject");
     jmethodID m = GetMethodID(jni(), j_observer_class_,
                               "onIceCandidate", "(Lorg/webrtc/IceCandidate;)V");
@@ -451,9 +458,10 @@ class PCOJava : public PeerConnectionObserver {
     AudioTrackVector audio_tracks = stream->GetAudioTracks();
     for (size_t i = 0; i < audio_tracks.size(); ++i) {
       AudioTrackInterface* track = audio_tracks[i];
-      jstring id = JavaStringFromStdString(jni(), track->id());
+      ScopedLocalRef<jstring> id(
+          jni(), JavaStringFromStdString(jni(), track->id()));
       ScopedLocalRef<jobject> j_track(jni(), jni()->NewObject(
-          j_audio_track_class_, j_audio_track_ctor_, (jlong)track, id));
+          j_audio_track_class_, j_audio_track_ctor_, (jlong)track, *id));
       CHECK_EXCEPTION(jni(), "error during NewObject");
       jfieldID audio_tracks_id = GetFieldID(jni(),
           j_media_stream_class_, "audioTracks", "Ljava/util/List;");
@@ -469,9 +477,10 @@ class PCOJava : public PeerConnectionObserver {
     VideoTrackVector video_tracks = stream->GetVideoTracks();
     for (size_t i = 0; i < video_tracks.size(); ++i) {
       VideoTrackInterface* track = video_tracks[i];
-      jstring id = JavaStringFromStdString(jni(), track->id());
+      ScopedLocalRef<jstring> id(
+          jni(), JavaStringFromStdString(jni(), track->id()));
       ScopedLocalRef<jobject> j_track(jni(), jni()->NewObject(
-          j_video_track_class_, j_video_track_ctor_, (jlong)track, id));
+          j_video_track_class_, j_video_track_ctor_, (jlong)track, *id));
       CHECK_EXCEPTION(jni(), "error during NewObject");
       jfieldID video_tracks_id = GetFieldID(jni(),
           j_media_stream_class_, "videoTracks", "Ljava/util/List;");
@@ -593,16 +602,17 @@ static jobject JavaSdpFromNativeSdp(
     JNIEnv* jni, const SessionDescriptionInterface* desc) {
   std::string sdp;
   CHECK(desc->ToString(&sdp), "got so far: " << sdp);
-  jstring j_description = JavaStringFromStdString(jni, sdp);
+  ScopedLocalRef<jstring> j_description(jni, JavaStringFromStdString(jni, sdp));
 
   jclass j_type_class = FindClass(
       jni, "org/webrtc/SessionDescription$Type");
   jmethodID j_type_from_canonical = GetStaticMethodID(
       jni, j_type_class, "fromCanonicalForm",
       "(Ljava/lang/String;)Lorg/webrtc/SessionDescription$Type;");
+  ScopedLocalRef<jstring> j_type_string(
+      jni, JavaStringFromStdString(jni, desc->type()));
   jobject j_type = jni->CallStaticObjectMethod(
-      j_type_class, j_type_from_canonical,
-      JavaStringFromStdString(jni, desc->type()));
+      j_type_class, j_type_from_canonical, *j_type_string);
   CHECK_EXCEPTION(jni, "error during CallObjectMethod");
 
   jclass j_sdp_class = FindClass(jni, "org/webrtc/SessionDescription");
@@ -610,7 +620,7 @@ static jobject JavaSdpFromNativeSdp(
       jni, j_sdp_class, "<init>",
       "(Lorg/webrtc/SessionDescription$Type;Ljava/lang/String;)V");
   jobject j_sdp = jni->NewObject(
-      j_sdp_class, j_sdp_ctor, j_type, j_description);
+      j_sdp_class, j_sdp_ctor, j_type, *j_description);
   CHECK_EXCEPTION(jni, "error during NewObject");
   return j_sdp;
 }
@@ -649,8 +659,9 @@ class SdpObserverWrapper : public T {
   virtual void OnFailure(const std::string& error) {
     jmethodID m = GetMethodID(jni(),
         j_observer_class_, "onFailure", "(Ljava/lang/String;)V");
-    jni()->CallVoidMethod(j_observer_global_, m,
-                          JavaStringFromStdString(jni(), error));
+    ScopedLocalRef<jstring> j_error_string(
+        jni(), JavaStringFromStdString(jni(), error));
+    jni()->CallVoidMethod(j_observer_global_, m, *j_error_string);
     CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
@@ -667,6 +678,101 @@ class SdpObserverWrapper : public T {
 typedef SdpObserverWrapper<CreateSessionDescriptionObserver>
     CreateSdpObserverWrapper;
 typedef SdpObserverWrapper<SetSessionDescriptionObserver> SetSdpObserverWrapper;
+
+// Adapter for a Java StatsObserver presenting a C++ StatsObserver and
+// dispatching the callback from C++ back to Java.
+class StatsObserverWrapper : public StatsObserver {
+ public:
+  StatsObserverWrapper(JNIEnv* jni, jobject j_observer)
+      : j_observer_global_(NewGlobalRef(jni, j_observer)),
+        j_observer_class_((jclass)NewGlobalRef(
+            jni, GetObjectClass(jni, j_observer))),
+        j_stats_report_class_(FindClass(jni, "org/webrtc/StatsReport")),
+        j_stats_report_ctor_(GetMethodID(
+            jni, j_stats_report_class_, "<init>",
+            "(Ljava/lang/String;Lorg/webrtc/StatsReport$Type;"
+            "Lorg/webrtc/StatsReport$Element;"
+            "Lorg/webrtc/StatsReport$Element;)V")),
+        j_element_class_(FindClass(
+            jni, "org/webrtc/StatsReport$Element")),
+        j_element_ctor_(GetMethodID(
+            jni, j_element_class_, "<init>",
+            "(D[Lorg/webrtc/StatsReport$Element$Value;)V")),
+        j_value_class_(FindClass(
+            jni, "org/webrtc/StatsReport$Element$Value")),
+        j_value_ctor_(GetMethodID(
+            jni, j_value_class_, "<init>",
+            "(Ljava/lang/String;Ljava/lang/String;)V")) {
+  }
+
+  virtual ~StatsObserverWrapper() {
+    DeleteGlobalRef(jni(), j_observer_global_);
+    DeleteGlobalRef(jni(), j_observer_class_);
+  }
+
+  virtual void OnComplete(const std::vector<StatsReport>& reports) {
+    ScopedLocalRef<jobjectArray> j_reports(jni(),
+                                           ReportsToJava(jni(), reports));
+    jmethodID m = GetMethodID(
+        jni(), j_observer_class_, "onComplete", "([Lorg/webrtc/StatsReport;)V");
+    jni()->CallVoidMethod(j_observer_global_, m, *j_reports);
+    CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
+  }
+
+ private:
+  jobjectArray ReportsToJava(
+      JNIEnv* jni, const std::vector<StatsReport>& reports) {
+    jobjectArray reports_array = jni->NewObjectArray(
+        reports.size(), j_stats_report_class_, NULL);
+    for (int i = 0; i < reports.size(); ++i) {
+      const StatsReport& report = reports[i];
+      ScopedLocalRef<jstring> j_id(
+          jni, JavaStringFromStdString(jni, report.id));
+      int type_index = report.type == StatsReport::kStatsReportTypeSsrc ? 0 :
+          report.type == StatsReport::kStatsReportTypeBwe ? 1 : -1;
+      CHECK(type_index >= 0, "Unexpected report type: " << report.type);
+      ScopedLocalRef<jobject> j_type(jni, JavaEnumFromIndex(
+          jni, "StatsReport$Type", type_index));
+      ScopedLocalRef<jobject> j_local(jni, ElementToJava(jni, report.local));
+      ScopedLocalRef<jobject> j_remote(jni, ElementToJava(jni, report.remote));
+      ScopedLocalRef<jobject> j_report(jni, jni->NewObject(
+          j_stats_report_class_, j_stats_report_ctor_, *j_id, *j_type,
+          *j_local, *j_remote));
+      jni->SetObjectArrayElement(reports_array, i, *j_report);
+    }
+    return reports_array;
+  }
+
+  jobject ElementToJava(JNIEnv* jni, const StatsElement& element) {
+    ScopedLocalRef<jobjectArray> j_values(jni, jni->NewObjectArray(
+        element.values.size(), j_value_class_, NULL));
+    for (int i = 0; i < element.values.size(); ++i) {
+      const StatsElement::Value& value = element.values[i];
+      ScopedLocalRef<jstring> j_name(
+          jni, JavaStringFromStdString(jni, value.name));
+      ScopedLocalRef<jstring> j_value(
+          jni, JavaStringFromStdString(jni, value.value));
+      ScopedLocalRef<jobject> j_element_value(jni, jni->NewObject(
+          j_value_class_, j_value_ctor_, *j_name, *j_value));
+      jni->SetObjectArrayElement(*j_values, i, *j_element_value);
+    }
+    return jni->NewObject(
+        j_element_class_, j_element_ctor_, element.timestamp, *j_values);
+  }
+
+  JNIEnv* jni() {
+    return AttachCurrentThreadIfNeeded();
+  }
+
+  const jobject j_observer_global_;
+  const jclass j_observer_class_;
+  const jclass j_stats_report_class_;
+  const jmethodID j_stats_report_ctor_;
+  const jclass j_element_class_;
+  const jmethodID j_element_ctor_;
+  const jclass j_value_class_;
+  const jmethodID j_value_ctor_;
+};
 
 // Adapter presenting a cricket::VideoRenderer as a
 // webrtc::VideoRendererInterface.
@@ -1104,6 +1210,14 @@ JOW(void, PeerConnection_nativeRemoveLocalStream)(
     JNIEnv* jni, jobject j_pc, jlong native_stream) {
   ExtractNativePC(jni, j_pc)->RemoveStream(
       reinterpret_cast<MediaStreamInterface*>(native_stream));
+}
+
+JOW(bool, PeerConnection_nativeGetStats)(
+    JNIEnv* jni, jobject j_pc, jobject j_observer, jlong native_track) {
+  talk_base::scoped_refptr<StatsObserverWrapper> observer(
+      new talk_base::RefCountedObject<StatsObserverWrapper>(jni, j_observer));
+  return ExtractNativePC(jni, j_pc)->GetStats(
+      observer, reinterpret_cast<MediaStreamTrackInterface*>(native_track));
 }
 
 JOW(jobject, PeerConnection_signalingState)(JNIEnv* jni, jobject j_pc) {

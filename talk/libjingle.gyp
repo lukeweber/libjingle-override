@@ -88,6 +88,8 @@
                   'app/webrtc/java/src/org/webrtc/PeerConnectionFactory.java',
                   'app/webrtc/java/src/org/webrtc/PeerConnection.java',
                   'app/webrtc/java/src/org/webrtc/SdpObserver.java',
+                  'app/webrtc/java/src/org/webrtc/StatsObserver.java',
+                  'app/webrtc/java/src/org/webrtc/StatsReport.java',
                   'app/webrtc/java/src/org/webrtc/SessionDescription.java',
                   'app/webrtc/java/src/org/webrtc/VideoCapturer.java',
                   'app/webrtc/java/src/org/webrtc/VideoRenderer.java',

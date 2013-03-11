@@ -37,6 +37,7 @@
 #include <string>
 #include <vector>
 
+#include "talk/app/webrtc/webrtcexport.h"
 #include "talk/base/basictypes.h"
 #include "talk/base/refcount.h"
 #include "talk/base/scoped_ref_ptr.h"
@@ -186,7 +187,7 @@ class MediaStreamInterface : public talk_base::RefCountInterface,
 // MediaConstraintsInterface
 // Interface used for passing arguments about media constraints
 // to the MediaStream and PeerConnection implementation.
-class MediaConstraintsInterface {
+class PEERCONNECTION_EXPORT MediaConstraintsInterface {
  public:
   struct Constraint {
     Constraint() {}

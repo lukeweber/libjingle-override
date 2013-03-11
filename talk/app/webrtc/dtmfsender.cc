@@ -79,7 +79,7 @@ talk_base::scoped_refptr<DtmfSender> DtmfSender::Create(
     AudioTrackInterface* track,
     talk_base::Thread* signaling_thread,
     DtmfProviderInterface* provider) {
-  if (!track || !signaling_thread || !provider) {
+  if (!track || !signaling_thread) {
     return NULL;
   }
   talk_base::scoped_refptr<DtmfSender> dtmf_sender(
@@ -99,10 +99,19 @@ DtmfSender::DtmfSender(AudioTrackInterface* track,
       inter_tone_gap_(kDtmfDefaultGapMs) {
   ASSERT(track_ != NULL);
   ASSERT(signaling_thread_ != NULL);
-  ASSERT(provider_ != NULL);
+  if (provider_) {
+    ASSERT(provider_->GetOnDestroyedSignal() != NULL);
+    provider_->GetOnDestroyedSignal()->connect(
+        this, &DtmfSender::OnProviderDestroyed);
+  }
 }
 
 DtmfSender::~DtmfSender() {
+  if (provider_) {
+    ASSERT(provider_->GetOnDestroyedSignal() != NULL);
+    provider_->GetOnDestroyedSignal()->disconnect(this);
+  }
+  StopSending();
 }
 
 void DtmfSender::RegisterObserver(DtmfSenderObserverInterface* observer) {
@@ -115,7 +124,9 @@ void DtmfSender::UnregisterObserver() {
 
 bool DtmfSender::CanInsertDtmf() {
   ASSERT(signaling_thread_->IsCurrent());
-
+  if (!provider_) {
+    return false;
+  }
   return provider_->CanInsertDtmf(track_->id());
 }
 
@@ -207,9 +218,16 @@ void DtmfSender::DoInsertDtmf() {
     // seconds before processing the next character in the tones parameter.
     tone_gap = kDtmfTwoSecondInMs;
   } else {
+    if (!provider_) {
+      LOG(LS_ERROR) << "The DtmfProvider has been destroyed.";
+      return;
+    }
     // The provider starts playout of the given tone on the
     // associated RTP media stream, using the appropriate codec.
-    provider_->InsertDtmf(track_->id(), code, duration_);
+    if (!provider_->InsertDtmf(track_->id(), code, duration_)) {
+      LOG(LS_ERROR) << "The DtmfProvider can no longer send DTMF.";
+      return;
+    }
     // Wait for the number of milliseconds specified by |duration_|.
     tone_gap += duration_;
   }
@@ -224,6 +242,16 @@ void DtmfSender::DoInsertDtmf() {
 
   // Continue with the next tone.
   signaling_thread_->PostDelayed(tone_gap, this, MSG_DO_INSERT_DTMF);
+}
+
+void DtmfSender::OnProviderDestroyed() {
+  LOG(LS_INFO) << "The Dtmf provider is deleted. Clear the sending queue.";
+  StopSending();
+  provider_ = NULL;
+}
+
+void DtmfSender::StopSending() {
+  signaling_thread_->Clear(this);
 }
 
 }  // namespace webrtc

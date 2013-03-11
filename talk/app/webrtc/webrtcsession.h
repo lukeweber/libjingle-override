@@ -168,6 +168,7 @@ class WebRtcSession : public cricket::BaseSession,
   virtual bool CanInsertDtmf(const std::string& track_id);
   virtual bool InsertDtmf(const std::string& track_id,
                           int code, int duration);
+  virtual sigslot::signal0<>* GetOnDestroyedSignal();
 
   talk_base::scoped_refptr<DataChannel> CreateDataChannel(
       const std::string& label,
@@ -272,6 +273,9 @@ class WebRtcSession : public cricket::BaseSession,
   // by the constraint kEnableRtpDataChannels.
   bool allow_rtp_data_engine_;
   talk_base::scoped_ptr<IceRestartAnswerLatch> ice_restart_latch_;
+  sigslot::signal0<> SignalVoiceChannelDestroyed;
+  sigslot::signal0<> SignalVideoChannelDestroyed;
+  sigslot::signal0<> SignalDataChannelDestroyed;
 };
 
 }  // namespace webrtc

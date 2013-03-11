@@ -142,6 +142,10 @@ public class PeerConnection {
     localStreams.remove(stream);
   }
 
+  public boolean getStats(StatsObserver observer, MediaStreamTrack track) {
+    return nativeGetStats(observer, (track == null) ? 0 : track.nativeTrack);
+  }
+
   // TODO(fischman): add support for DTMF-related methods once that API
   // stabilizes.
   public native SignalingState signalingState();
@@ -173,4 +177,7 @@ public class PeerConnection {
       long nativeStream, MediaConstraints constraints);
 
   private native void nativeRemoveLocalStream(long nativeStream);
+
+  private native boolean nativeGetStats(
+      StatsObserver observer, long nativeTrack);
 }

@@ -74,8 +74,9 @@
 #include "talk/app/webrtc/datachannelinterface.h"
 #include "talk/app/webrtc/dtmfsenderinterface.h"
 #include "talk/app/webrtc/jsep.h"
-#include "talk/app/webrtc/statstypes.h"
 #include "talk/app/webrtc/mediastreaminterface.h"
+#include "talk/app/webrtc/statstypes.h"
+#include "talk/app/webrtc/webrtcexport.h"
 #include "talk/base/socketaddress.h"
 
 namespace talk_base {
@@ -384,12 +385,14 @@ class PeerConnectionFactoryInterface : public talk_base::RefCountInterface {
 };
 
 // Create a new instance of PeerConnectionFactoryInterface.
+PEERCONNECTION_EXPORT
 talk_base::scoped_refptr<PeerConnectionFactoryInterface>
 CreatePeerConnectionFactory();
 
 // Create a new instance of PeerConnectionFactoryInterface.
 // Ownership of |factory| and |default_adm| is transferred to the returned
 // factory.
+PEERCONNECTION_EXPORT
 talk_base::scoped_refptr<PeerConnectionFactoryInterface>
 CreatePeerConnectionFactory(talk_base::Thread* worker_thread,
                             talk_base::Thread* signaling_thread,

@@ -429,12 +429,15 @@ WebRtcSession::WebRtcSession(cricket::ChannelManager* channel_manager,
 
 WebRtcSession::~WebRtcSession() {
   if (voice_channel_.get()) {
+    SignalVoiceChannelDestroyed();
     channel_manager_->DestroyVoiceChannel(voice_channel_.release());
   }
   if (video_channel_.get()) {
+    SignalVideoChannelDestroyed();
     channel_manager_->DestroyVideoChannel(video_channel_.release());
   }
   if (data_channel_.get()) {
+    SignalDataChannelDestroyed();
     channel_manager_->DestroyDataChannel(data_channel_.release());
   }
   for (size_t i = 0; i < saved_candidates_.size(); ++i) {
@@ -964,6 +967,10 @@ bool WebRtcSession::InsertDtmf(const std::string& track_id,
   return true;
 }
 
+sigslot::signal0<>* WebRtcSession::GetOnDestroyedSignal() {
+  return &SignalVoiceChannelDestroyed;
+}
+
 talk_base::scoped_refptr<DataChannel> WebRtcSession::CreateDataChannel(
       const std::string& label,
       const DataChannelInit* config) {
@@ -1253,6 +1260,7 @@ void WebRtcSession::RemoveUnusedChannelsAndTransports(
       cricket::GetFirstAudioContent(desc);
   if ((!voice_info || voice_info->rejected) && voice_channel_) {
     mediastream_signaling_->OnAudioChannelClose();
+    SignalVoiceChannelDestroyed();
     const std::string content_name = voice_channel_->content_name();
     channel_manager_->DestroyVoiceChannel(voice_channel_.release());
     DestroyTransportProxy(content_name);
@@ -1262,6 +1270,7 @@ void WebRtcSession::RemoveUnusedChannelsAndTransports(
       cricket::GetFirstVideoContent(desc);
   if ((!video_info || video_info->rejected) && video_channel_) {
     mediastream_signaling_->OnVideoChannelClose();
+    SignalVideoChannelDestroyed();
     const std::string content_name = video_channel_->content_name();
     channel_manager_->DestroyVideoChannel(video_channel_.release());
     DestroyTransportProxy(content_name);
@@ -1271,6 +1280,7 @@ void WebRtcSession::RemoveUnusedChannelsAndTransports(
       cricket::GetFirstDataContent(desc);
   if ((!data_info || data_info->rejected) && data_channel_) {
     mediastream_signaling_->OnDataChannelClose();
+    SignalDataChannelDestroyed();
     const std::string content_name = data_channel_->content_name();
     channel_manager_->DestroyDataChannel(data_channel_.release());
     DestroyTransportProxy(content_name);

@@ -47,6 +47,7 @@
 #include "talk/media/base/mediaengine.h"
 #include "talk/media/base/rtpdataengine.h"
 #include "talk/media/base/screencastid.h"
+#include "talk/media/base/videorenderer.h"
 #include "talk/media/devices/devicemanager.h"
 #include "talk/media/devices/videorendererfactory.h"
 #include "talk/p2p/base/sessionmanager.h"

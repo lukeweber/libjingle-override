@@ -46,8 +46,9 @@ public class PeerConnectionTest extends TestCase {
   // Set to true to render video.
   private static final boolean RENDER_TO_GUI = true;
 
-  private static class ObserverExpectations
-      implements PeerConnection.Observer, VideoRenderer.Callbacks {
+  private static class ObserverExpectations implements PeerConnection.Observer,
+                                            VideoRenderer.Callbacks,
+                                            StatsObserver {
     private int expectedIceCandidates = 0;
     private int expectedErrors = 0;
     private LinkedList<Integer> expectedSetSizeDimensions =
@@ -67,6 +68,9 @@ public class PeerConnectionTest extends TestCase {
         new LinkedList<IceCandidate>();
     private Map<MediaStream, WeakReference<VideoRenderer>> renderers =
         new IdentityHashMap<MediaStream, WeakReference<VideoRenderer>>();
+    private int expectedStatsCallbacks = 0;
+    private LinkedList<StatsReport[]> gotStatsReports =
+        new LinkedList<StatsReport[]>();
 
     public synchronized void expectIceCandidates(int count) {
       expectedIceCandidates += count;
@@ -174,6 +178,24 @@ public class PeerConnectionTest extends TestCase {
       stream.videoTracks.get(0).removeRenderer(renderer.get());
     }
 
+    @Override
+    public synchronized void onComplete(StatsReport[] reports) {
+      if (--expectedStatsCallbacks < 0) {
+        throw new RuntimeException("Unexpected stats report: " + reports);
+      }
+      gotStatsReports.add(reports);
+    }
+
+    public synchronized void expectStatsCallback() {
+      ++expectedStatsCallbacks;
+    }
+
+    public synchronized LinkedList<StatsReport[]> takeStatsReports() {
+      LinkedList<StatsReport[]> got = gotStatsReports;
+      gotStatsReports = new LinkedList<StatsReport[]>();
+      return got;
+    }
+
     public synchronized boolean areAllExpectationsSatisfied() {
       return expectedIceCandidates <= 0 &&  // See comment in onIceCandidate.
           expectedErrors == 0 &&
@@ -183,7 +205,8 @@ public class PeerConnectionTest extends TestCase {
           expectedAddStreamLabels.size() == 0 &&
           expectedRemoveStreamLabels.size() == 0 &&
           expectedSetSizeDimensions.isEmpty() &&
-          expectedFramesDelivered <= 0;
+          expectedFramesDelivered <= 0 &&
+          expectedStatsCallbacks == 0;
     }
 
     public void waitForAllExpectationsToBeSatisfied() {
@@ -463,19 +486,38 @@ public class PeerConnectionTest extends TestCase {
     // Free the Java-land objects, collect them, and sleep a bit to make sure we
     // don't get late-arrival crashes after the Java-land objects have been
     // freed.
-    offeringExpectations.expectIceConnectionChange(IceConnectionState.CLOSED);
-    offeringExpectations.expectSignalingChange(SignalingState.CLOSED);
-    offeringPC.close();
-    offeringExpectations.waitForAllExpectationsToBeSatisfied();
-    offeringPC.dispose();
+    shutdownPC(offeringPC, offeringExpectations);
     offeringPC = null;
-    answeringExpectations.expectIceConnectionChange(IceConnectionState.CLOSED);
-    answeringExpectations.expectSignalingChange(SignalingState.CLOSED);
-    answeringPC.close();
-    answeringExpectations.waitForAllExpectationsToBeSatisfied();
-    answeringPC.dispose();
+    shutdownPC(answeringPC, answeringExpectations);
     answeringPC = null;
     System.gc();
     Thread.sleep(100);
+  }
+
+  private static void shutdownPC(
+      PeerConnection pc, ObserverExpectations expectations) {
+    expectations.expectStatsCallback();
+    assertTrue(pc.getStats(expectations, null));
+    expectations.waitForAllExpectationsToBeSatisfied();
+    expectations.expectIceConnectionChange(IceConnectionState.CLOSED);
+    expectations.expectSignalingChange(SignalingState.CLOSED);
+    pc.close();
+    expectations.waitForAllExpectationsToBeSatisfied();
+    expectations.expectStatsCallback();
+    assertTrue(pc.getStats(expectations, null));
+    expectations.waitForAllExpectationsToBeSatisfied();
+
+    System.out.println("FYI stats: ");
+    int reportIndex = -1;
+    for (StatsReport[] reports : expectations.takeStatsReports()) {
+      System.out.println(" Report #" + (++reportIndex));
+      for (int i = 0; i < reports.length; ++i) {
+        System.out.println("  " + reports[i].toString());
+      }
+    }
+    assertEquals(1, reportIndex);
+    System.out.println("End stats.");
+
+    pc.dispose();
   }
 }

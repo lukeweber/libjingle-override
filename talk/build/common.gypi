@@ -36,6 +36,7 @@
     'clang_use_chrome_plugins%': 0,
     # Whether or not to build the Java PeerConnection API & tests.
     'libjingle_java%': 0,
+    'libpeer_target_type%': 'static_library',
   },
   'target_defaults': {
     'include_dirs': [
@@ -66,6 +67,10 @@
       'USE_WEBRTC_DEV_BRANCH',
     ],
     'conditions': [
+      # TODO(ronghuawu): Support dynamic library build.
+      ['"<(libpeer_target_type)"=="static_library"', {
+        'defines': [ 'LIBPEERCONNECTION_LIB=1' ],
+      }],
       ['OS=="linux"', {
         'defines': [
           'LINUX',

@@ -59,6 +59,9 @@ class DtmfProviderInterface {
   // Returns true on success and false on failure.
   virtual bool InsertDtmf(const std::string& track_id,
                           int code, int duration) = 0;
+  // Returns a |sigslot::signal0<>| signal. The signal should fire before
+  // the provider is destroyed.
+  virtual sigslot::signal0<>* GetOnDestroyedSignal() = 0;
 
  protected:
   virtual ~DtmfProviderInterface() {}
@@ -66,6 +69,7 @@ class DtmfProviderInterface {
 
 class DtmfSender
     : public DtmfSenderInterface,
+      public sigslot::has_slots<>,
       public talk_base::MessageHandler {
  public:
   static talk_base::scoped_refptr<DtmfSender> Create(
@@ -98,6 +102,10 @@ class DtmfSender
 
   // The DTMF sending task.
   void DoInsertDtmf();
+
+  void OnProviderDestroyed();
+
+  void StopSending();
 
   talk_base::scoped_refptr<AudioTrackInterface> track_;
   DtmfSenderObserverInterface* observer_;

@@ -44,6 +44,8 @@ import org.webrtc.PeerConnection;
 import org.webrtc.PeerConnectionFactory;
 import org.webrtc.SdpObserver;
 import org.webrtc.SessionDescription;
+import org.webrtc.StatsObserver;
+import org.webrtc.StatsReport;
 import org.webrtc.VideoCapturer;
 import org.webrtc.VideoRenderer;
 import org.webrtc.VideoRenderer.I420Frame;
@@ -70,10 +72,23 @@ public class AppRTCDemoActivity extends Activity
   private Toast logToast;
   private LinkedList<IceCandidate> queuedRemoteCandidates =
       new LinkedList<IceCandidate>();
+  // Synchronize on quit[0] to avoid teardown-related crashes.
+  private final Boolean[] quit = new Boolean[] { false };
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+
+    // Since the error-handling of this demo consists of throwing
+    // RuntimeExceptions and we assume that'll terminate the app, we install
+    // this default handler so it's applied to background threads as well.
+    Thread.setDefaultUncaughtExceptionHandler(
+        new Thread.UncaughtExceptionHandler() {
+          public void uncaughtException(Thread t, Throwable e) {
+            e.printStackTrace();
+            System.exit(-1);
+          }
+        });
 
     Point displaySize = new Point();
     getWindowManager().getDefaultDisplay().getSize(displaySize);
@@ -123,6 +138,32 @@ public class AppRTCDemoActivity extends Activity
 
     pc = factory.createPeerConnection(
         iceServers, new MediaConstraints(), pcObserver);
+
+    {
+      final PeerConnection finalPC = pc;
+      final Runnable repeatedStatsLogger = new Runnable() {
+          public void run() {
+            synchronized (quit[0]) {
+              if (quit[0]) {
+                return;
+              }
+              final Runnable runnableThis = this;
+              boolean success = finalPC.getStats(new StatsObserver() {
+                  public void onComplete(StatsReport[] reports) {
+                    for (StatsReport report : reports) {
+                      Log.d(TAG, "Stats: " + report.toString());
+                    }
+                    vsv.postDelayed(runnableThis, 10000);
+                  }
+                }, null);
+              if (!success) {
+                throw new RuntimeException("getStats() return false!");
+              }
+            }
+          }
+        };
+      vsv.postDelayed(repeatedStatsLogger, 10000);
+    }
 
     {
       logAndToast("Creating local video source...");
@@ -330,16 +371,22 @@ public class AppRTCDemoActivity extends Activity
 
   // Disconnect from remote resources, dispose of local resources, and exit.
   private void disconnectAndExit() {
-    if (pc != null) {
-      pc.dispose();
-      pc = null;
+    synchronized (quit[0]) {
+      if (quit[0]) {
+        return;
+      }
+      quit[0] = true;
+      if (pc != null) {
+        pc.dispose();
+        pc = null;
+      }
+      if (appRtcClient != null) {
+        appRtcClient.sendMessage("{\"type\": \"bye\"}");
+        appRtcClient.disconnect();
+        appRtcClient = null;
+      }
+      finish();
     }
-    if (appRtcClient != null) {
-      appRtcClient.sendMessage("{\"type\": \"bye\"}");
-      appRtcClient.disconnect();
-      appRtcClient = null;
-    }
-    finish();
   }
 
   // Implementation detail: bridge the VideoRenderer.Callbacks interface to the

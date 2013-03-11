@@ -10,8 +10,8 @@ vars = {
   "chromium_trunk" : "http://src.chromium.org/svn/trunk",
   "chromium_git": "https://chromium.googlesource.com",
 
-  "chromium_revision": "176396",
-  "webrtc_revision": "3569",
+  "chromium_revision": "187216",
+  "webrtc_revision": "3561",
 }
 
 # NOTE: Prefer revision numbers to tags for svn deps. Use http rather than

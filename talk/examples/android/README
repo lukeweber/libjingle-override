@@ -1,5 +1,19 @@
 This directory contains an example Android client for http://apprtc.appspot.com 
 
+Prerequisites:
+- Make sure gclient is checking out tools necessary to target Android: your
+  .gclient file should contain a line like:
+  target_os = ['android', 'unix']
+  Make sure to re-run gclient sync after adding this to download the tools.
+- Env vars need to be set up to target Android; easiest way to do this is to run
+  (from the libjingle trunk directory):
+  . ./build/android/envsetup.sh
+- When targeting both desktop & android, make sure to use a different output_dir
+  value in $GYP_GENERATOR_FLAGS or you'll likely end up with mismatched ARM &
+  x86 output artifacts.  If you use an output_dir other than out/ make sure to
+  modify the command-lines below appropriately.
+- Finally, run "gclient runhooks" to generate Android-targeting .ninja files.
+
 Example of building & using the app:
 
 cd <path/to/libjingle>/trunk
