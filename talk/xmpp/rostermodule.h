@@ -28,7 +28,9 @@
 #ifndef _rostermodule_h_
 #define _rostermodule_h_
 
+#include "talk/xmpp/xmppengine.h"
 #include "talk/xmpp/module.h"
+#include "talk/xmpp/jid.h"
 
 namespace buzz {
 
