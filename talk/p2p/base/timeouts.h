@@ -36,7 +36,7 @@ enum SessionTimeout {
     //The ammount of time allowed for a session to become writeable
     kSessionTimeoutWritable = 50000,
     //This is the connection timeout to initiate a connected call
-    kSessionTimeoutInitAck = 8000,
+    kSessionTimeoutInitAck = 15000,
 };
 
 enum PortTimeout {
