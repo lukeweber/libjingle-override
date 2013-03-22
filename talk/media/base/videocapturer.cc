@@ -246,7 +246,20 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
   // inverted, but output will be positive.
   int desired_width = captured_frame->width;
   int desired_height = captured_frame->height;
-  if (!IsScreencast()) {
+
+  // TODO(fbarchard): Improve logic to pad or crop.
+  // MJPG can crop vertically, but not horizontally.  This logic disables crop.
+  // Alternatively we could pad the image with black, or implement a 2 step
+  // crop.
+  bool can_crop = true;
+  if (captured_frame->fourcc == FOURCC_MJPG) {
+    float cam_aspect = static_cast<float>(captured_frame->width) /
+        static_cast<float>(captured_frame->height);
+    float view_aspect = static_cast<float>(ratio_w_) /
+        static_cast<float>(ratio_h_);
+    can_crop = cam_aspect <= view_aspect;
+  }
+  if (can_crop && !IsScreencast()) {
     ComputeCrop(ratio_w_, ratio_h_, captured_frame->width,
                 abs(captured_frame->height), captured_frame->pixel_width,
                 captured_frame->pixel_height, captured_frame->rotation,

@@ -275,6 +275,17 @@ class MediaContentDescriptionImpl : public MediaContentDescription {
   const std::vector<C>& codecs() const { return codecs_; }
   void set_codecs(const std::vector<C>& codecs) { codecs_ = codecs; }
   virtual bool has_codecs() const { return !codecs_.empty(); }
+  bool HasCodec(int id) {
+    bool found = false;
+    for (typename std::vector<C>::iterator iter = codecs_.begin();
+         iter != codecs_.end(); ++iter) {
+      if (iter->id == id) {
+        found = true;
+        break;
+      }
+    }
+    return found;
+  }
   void AddCodec(const C& codec) {
     codecs_.push_back(codec);
   }

@@ -445,6 +445,13 @@ class Connection : public talk_base::MessageHandler,
   bool pruned() const { return pruned_; }
   void Prune();
 
+  bool use_candidate_attr() const { return use_candidate_attr_; }
+  void set_use_candidate_attr(bool enable);
+
+  void set_remote_ice_mode(IceMode mode) {
+    remote_ice_mode_ = mode;
+  }
+
   // Makes the connection go away.
   void Destroy();
 
@@ -471,12 +478,12 @@ class Connection : public talk_base::MessageHandler,
   // transmission. This connection will send STUN ping with USE-CANDIDATE
   // attribute.
   sigslot::signal1<Connection*> SignalUseCandidate;
-  void set_nominated(bool nominated) { nominated_ = nominated; }
-  bool nominated() const { return nominated_; }
   // Invoked when Connection receives STUN error response with 487 code.
   void HandleRoleConflictFromPeer();
 
   State state() const { return state_; }
+
+  IceMode remote_ice_mode() const { return remote_ice_mode_; }
 
  protected:
   // Constructs a new connection to the given remote port.
@@ -510,6 +517,12 @@ class Connection : public talk_base::MessageHandler,
   WriteState write_state_;
   bool connected_;
   bool pruned_;
+  // By default |use_candidate_attr_| flag will be true,
+  // as we will be using agrressive nomination.
+  // But when peer is ice-lite, this flag "must" be initialized to false and
+  // turn on when connection becomes "best connection".
+  bool use_candidate_attr_;
+  IceMode remote_ice_mode_;
   StunRequestManager requests_;
   uint32 rtt_;
   uint32 last_ping_sent_;      // last time we sent a ping to the other side
@@ -524,7 +537,6 @@ class Connection : public talk_base::MessageHandler,
 
  private:
   bool reported_;
-  bool nominated_;
   State state_;
 
   friend class Port;

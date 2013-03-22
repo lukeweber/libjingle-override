@@ -46,6 +46,7 @@ extern const float kProcessCpuThreshold;
 extern const char* kRtxCodecName;
 
 // Codec parameters
+extern const int kWildcardPayloadType;
 extern const char* kCodecParamAssociatedPayloadType;
 
 extern const char* kOpusCodecName;
@@ -59,7 +60,10 @@ extern const char* kCodecParamSPropStereo;
 extern const char* kCodecParamStereo;
 extern const char* kCodecParamUseInbandFec;
 
-extern const char* kParamTrue;
+extern const char* kParamValueTrue;
+// Parameters are stored as parameter/value pairs. For parameters who do not
+// have a value, |kParamValueEmpty| should be used as value.
+extern const char* kParamValueEmpty;
 
 // opus parameters.
 // Default value for maxptime according to
@@ -80,6 +84,11 @@ extern const int kPreferredSPropStereo;
 extern const int kPreferredStereo;
 extern const int kPreferredUseInbandFec;
 
+// rtcp-fb messages according to RFC 4585
+extern const char* kRtcpFbParamNack;
+// ccm submessages according to RFC 5104
+extern const char* kRtcpFbParamCcm;
+extern const char* kRtcpFbCcmParamFir;
 // Google specific parameters
 extern const char* kCodecParamMaxBitrate;
 extern const char* kCodecParamMinBitrate;

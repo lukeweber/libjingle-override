@@ -207,7 +207,7 @@ class TestChannel : public sigslot::has_slots<> {
  public:
   TestChannel(Port* p1, Port* p2)
       : src_(p1), dst_(p2), address_count_(0), conn_(NULL),
-        remote_request_(NULL) {
+        remote_request_(NULL), nominated_(false) {
     src_->SignalAddressReady.connect(this, &TestChannel::OnPortReady);
     src_->SignalUnknownAddress.connect(this, &TestChannel::OnUnknownAddress);
   }
@@ -222,6 +222,18 @@ class TestChannel : public sigslot::has_slots<> {
   }
   void CreateConnection() {
     conn_ = src_->CreateConnection(GetCandidate(dst_), Port::ORIGIN_MESSAGE);
+    IceMode remote_ice_mode =
+        (ice_mode_ == ICEMODE_FULL) ? ICEMODE_LITE : ICEMODE_FULL;
+    conn_->set_remote_ice_mode(remote_ice_mode);
+    conn_->set_use_candidate_attr(remote_ice_mode == ICEMODE_FULL);
+    conn_->SignalStateChange.connect(
+        this, &TestChannel::OnConnectionStateChange);
+  }
+  void OnConnectionStateChange(Connection* conn) {
+    if (conn->write_state() == Connection::STATE_WRITABLE) {
+      conn->set_use_candidate_attr(true);
+      nominated_ = true;
+    }
   }
   void AcceptConnection() {
     ASSERT_TRUE(remote_request_.get() != NULL);
@@ -244,6 +256,9 @@ class TestChannel : public sigslot::has_slots<> {
 
   void OnPortReady(Port* port) {
     address_count_++;
+  }
+  void SetIceMode(IceMode ice_mode) {
+    ice_mode_ = ice_mode;
   }
 
   void OnUnknownAddress(PortInterface* port, const SocketAddress& addr,
@@ -281,8 +296,11 @@ class TestChannel : public sigslot::has_slots<> {
     conn_ = NULL;
   }
 
+  bool nominated() const { return nominated_; }
+
  private:
   talk_base::Thread* thread_;
+  IceMode ice_mode_;
   talk_base::scoped_ptr<Port> src_;
   Port* dst_;
 
@@ -291,6 +309,7 @@ class TestChannel : public sigslot::has_slots<> {
   SocketAddress remote_address_;
   talk_base::scoped_ptr<StunMessage> remote_request_;
   std::string remote_frag_;
+  bool nominated_;
 };
 
 class PortTest : public testing::Test, public sigslot::has_slots<> {
@@ -514,6 +533,18 @@ class PortTest : public testing::Test, public sigslot::has_slots<> {
     TestPort* port =  new TestPort(main_, "test", &socket_factory_, &network_,
                                    addr.ipaddr(), 0, 0, username, password);
     port->SignalRoleConflict.connect(this, &PortTest::OnRoleConflict);
+    return port;
+  }
+  TestPort* CreateTestPort(const talk_base::SocketAddress& addr,
+                           const std::string& username,
+                           const std::string& password,
+                           cricket::IceProtocolType type,
+                           cricket::TransportRole role,
+                           int tiebreaker) {
+    TestPort* port = CreateTestPort(addr, username, password);
+    port->SetIceProtocolType(type);
+    port->SetRole(role);
+    port->SetTiebreaker(tiebreaker);
     return port;
   }
 
@@ -1420,8 +1451,6 @@ TEST_F(PortTest, TestUseCandidateAttribute) {
   ASSERT_FALSE(rport->Candidates().empty());
   Connection* lconn = lport->CreateConnection(
       rport->Candidates()[0], Port::ORIGIN_MESSAGE);
-  // Set nominated flag in controlling connection.
-  lconn->set_nominated(true);
   lconn->Ping(0);
   ASSERT_TRUE_WAIT(lport->last_stun_msg() != NULL, 1000);
   IceMessage* msg = lport->last_stun_msg();
@@ -2152,4 +2181,69 @@ TEST_F(PortTest, TestTimeoutForNeverWritable) {
   EXPECT_EQ(Connection::STATE_WRITE_TIMEOUT, ch1.conn()->write_state());
 }
 
-// TODO(ronghuawu): Add unit tests to verify the RelayEntry::OnConnect.
+// This test verifies the connection setup between ICEMODE_FULL
+// and ICEMODE_LITE.
+// In this test |ch1| behaves like FULL mode client and we have created
+// port which responds to the ping message just like LITE client.
+TEST_F(PortTest, TestIceLiteConnectivity) {
+  TestPort* ice_full_port = CreateTestPort(
+      kLocalAddr1, "lfrag", "lpass", cricket::ICEPROTO_RFC5245,
+      cricket::ROLE_CONTROLLING, kTiebreaker1);
+
+  talk_base::scoped_ptr<TestPort> ice_lite_port(CreateTestPort(
+      kLocalAddr2, "rfrag", "rpass", cricket::ICEPROTO_RFC5245,
+      cricket::ROLE_CONTROLLED, kTiebreaker2));
+  // Setup TestChannel. This behaves like FULL mode client.
+  TestChannel ch1(ice_full_port, ice_lite_port.get());
+  ch1.SetIceMode(ICEMODE_FULL);
+
+  // Start gathering candidates.
+  ch1.Start();
+  ice_lite_port->PrepareAddress();
+
+  ASSERT_EQ_WAIT(1, ch1.address_count(), kTimeout);
+  ASSERT_FALSE(ice_lite_port->Candidates().empty());
+
+  ch1.CreateConnection();
+  ASSERT_TRUE(ch1.conn() != NULL);
+  EXPECT_EQ(Connection::STATE_WRITE_INIT, ch1.conn()->write_state());
+
+  // Send ping from full mode client.
+  // This ping must not have USE_CANDIDATE_ATTR.
+  ch1.Ping();
+
+  // Verify stun ping is without USE_CANDIDATE_ATTR. Getting message directly
+  // from port.
+  ASSERT_TRUE_WAIT(ice_full_port->last_stun_msg() != NULL, 1000);
+  IceMessage* msg = ice_full_port->last_stun_msg();
+  EXPECT_TRUE(msg->GetByteString(STUN_ATTR_USE_CANDIDATE) == NULL);
+
+  // Respond with a BINDING-RESPONSE from litemode client.
+  // NOTE: Ideally we should't create connection at this stage from lite
+  // port, as it should be done only after receiving ping with USE_CANDIDATE.
+  // But we need a connection to send a response message.
+  ice_lite_port->CreateConnection(
+      ice_full_port->Candidates()[0], cricket::Port::ORIGIN_MESSAGE);
+  talk_base::scoped_ptr<IceMessage> request(CopyStunMessage(msg));
+  ice_lite_port->SendBindingResponse(
+      request.get(), ice_full_port->Candidates()[0].address());
+
+  // Feeding the respone message from litemode to the full mode connection.
+  ch1.conn()->OnReadPacket(ice_lite_port->last_stun_buf()->Data(),
+                           ice_lite_port->last_stun_buf()->Length());
+  // Verifying full mode connection becomes writable from the response.
+  EXPECT_EQ_WAIT(Connection::STATE_WRITABLE, ch1.conn()->write_state(),
+                 kTimeout);
+  EXPECT_TRUE_WAIT(ch1.nominated(), kTimeout);
+
+  // Clear existing stun messsages. Otherwise we will process old stun
+  // message right after we send ping.
+  ice_full_port->Reset();
+  // Send ping. This must have USE_CANDIDATE_ATTR.
+  ch1.Ping();
+  ASSERT_TRUE_WAIT(ice_full_port->last_stun_msg() != NULL, 1000);
+  msg = ice_full_port->last_stun_msg();
+  EXPECT_TRUE(msg->GetByteString(STUN_ATTR_USE_CANDIDATE) != NULL);
+  ch1.Stop();
+}
+

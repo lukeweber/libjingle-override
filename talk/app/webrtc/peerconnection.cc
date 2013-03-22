@@ -632,7 +632,7 @@ void PeerConnection::OnMessage(talk_base::Message* msg) {
       break;
     }
     default:
-      ASSERT(!"Not implemented");
+      ASSERT(false && "Not implemented");
       break;
   }
 }

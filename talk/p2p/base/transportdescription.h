@@ -62,6 +62,12 @@ enum TransportProtocol {
 // TODO(juberti): remove this.
 typedef TransportProtocol IceProtocolType;
 
+// ICE RFC 5245 implementation type.
+enum IceMode {
+  ICEMODE_FULL,  // As defined in http://tools.ietf.org/html/rfc5245#section-4.1
+  ICEMODE_LITE   // As defined in http://tools.ietf.org/html/rfc5245#section-4.2
+};
+
 typedef std::vector<Candidate> Candidates;
 
 struct TransportDescription {
@@ -71,23 +77,27 @@ struct TransportDescription {
                        const std::vector<std::string>& transport_options,
                        const std::string& ice_ufrag,
                        const std::string& ice_pwd,
+                       IceMode ice_mode,
                        const talk_base::SSLFingerprint* identity_fingerprint,
                        const Candidates& candidates)
       : transport_type(transport_type),
         transport_options(transport_options),
         ice_ufrag(ice_ufrag),
         ice_pwd(ice_pwd),
+        ice_mode(ice_mode),
         identity_fingerprint(CopyFingerprint(identity_fingerprint)),
         candidates(candidates) {}
   TransportDescription(const std::string& transport_type,
                        const Candidates& candidates)
       : transport_type(transport_type),
+        ice_mode(ICEMODE_FULL),
         candidates(candidates) {}
   TransportDescription(const TransportDescription& from)
       : transport_type(from.transport_type),
         transport_options(from.transport_options),
         ice_ufrag(from.ice_ufrag),
         ice_pwd(from.ice_pwd),
+        ice_mode(from.ice_mode),
         identity_fingerprint(CopyFingerprint(from.identity_fingerprint.get())),
         candidates(from.candidates) {}
 
@@ -128,6 +138,7 @@ struct TransportDescription {
   std::vector<std::string> transport_options;
   std::string ice_ufrag;
   std::string ice_pwd;
+  IceMode ice_mode;
 
   talk_base::scoped_ptr<talk_base::SSLFingerprint> identity_fingerprint;
   Candidates candidates;

@@ -57,8 +57,11 @@ class VoiceProcessor;
 class ChannelManager : public talk_base::MessageHandler,
                        public sigslot::has_slots<> {
  public:
+#if !defined(DISABLE_MEDIA_ENGINE_FACTORY)
   // Creates the channel manager, and specifies the worker thread to use.
   explicit ChannelManager(talk_base::Thread* worker);
+#endif
+
   // For testing purposes. Allows the media engine and data media
   // engine and dev manager to be mocks.  The ChannelManager takes
   // ownership of these objects.

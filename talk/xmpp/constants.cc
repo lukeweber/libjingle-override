@@ -585,6 +585,7 @@ const StaticQName QN_GOOGLE_MUC_USER_TYPE = { NS_GOOGLE_MUC_USER, "type" };
 const StaticQName QN_GOOGLE_MUC_USER_SRC_ID = { NS_GOOGLE_MUC_USER, "src-id" };
 const StaticQName QN_GOOGLE_MUC_USER_STATUS = { NS_GOOGLE_MUC_USER, "status" };
 const StaticQName QN_CLIENT_VERSION = { NS_GOOGLE_MUC_USER, "client-version" };
+const StaticQName QN_LOCALE = { NS_GOOGLE_MUC_USER, "locale" };
 const StaticQName QN_LABEL = { STR_EMPTY, "label" };
 
 const char NS_GOOGLE_MUC_MEDIA[] = "google:muc#media";

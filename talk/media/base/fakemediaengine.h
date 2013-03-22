@@ -665,7 +665,7 @@ class FakeVoiceEngine : public FakeBaseEngine {
         tx_processor_(NULL) {
     // Add a fake audio codec. Note that the name must not be "" as there are
     // sanity checks against that.
-    codecs_.push_back(AudioCodec(101, "fakecodec", 0, 0, 1, 0));
+    codecs_.push_back(AudioCodec(101, "fake_audio_codec", 0, 0, 1, 0));
   }
 
   int GetCapabilities() { return AUDIO_SEND | AUDIO_RECV; }
@@ -759,8 +759,9 @@ class FakeVoiceEngine : public FakeBaseEngine {
 class FakeVideoEngine : public FakeBaseEngine {
  public:
   FakeVideoEngine() : renderer_(NULL), capture_(false), processor_(NULL) {
-    // Add a fake video codec
-    codecs_.push_back(VideoCodec());
+    // Add a fake video codec. Note that the name must not be "" as there are
+    // sanity checks against that.
+    codecs_.push_back(VideoCodec(0, "fake_video_codec", 0, 0, 0, 0));
   }
 
   int GetCapabilities() { return VIDEO_SEND | VIDEO_RECV; }

@@ -29,7 +29,9 @@
 #include "talk/media/base/codec.h"
 
 using cricket::AudioCodec;
+using cricket::Codec;
 using cricket::DataCodec;
+using cricket::FeedbackParam;
 using cricket::VideoCodec;
 using cricket::VideoEncoderConfig;
 
@@ -282,4 +284,23 @@ TEST_F(CodecTest, TestSetParamAndGetParam) {
   EXPECT_TRUE(codec.GetParam("b", &str_value));
   EXPECT_EQ("x", str_value);
   EXPECT_FALSE(codec.GetParam("c", &str_value));
+}
+
+TEST_F(CodecTest, TestIntersectFeedbackParams) {
+  const FeedbackParam a1("a", "1");
+  const FeedbackParam b2("b", "2");
+  const FeedbackParam b3("b", "3");
+  const FeedbackParam c3("c", "3");
+  Codec c1;
+  c1.AddFeedbackParam(a1); // Only match with c2.
+  c1.AddFeedbackParam(b2); // Same param different values.
+  c1.AddFeedbackParam(c3); // Not in c2.
+  Codec c2;
+  c2.AddFeedbackParam(a1);
+  c2.AddFeedbackParam(b3);
+
+  c1.IntersectFeedbackParams(c2);
+  EXPECT_TRUE(c1.HasFeedbackParam(a1));
+  EXPECT_FALSE(c1.HasFeedbackParam(b2));
+  EXPECT_FALSE(c1.HasFeedbackParam(c3));
 }

@@ -221,18 +221,21 @@ class MediaSessionDescriptionFactoryTest : public testing::Test {
                         TransportDescription("", std::vector<std::string>(),
                                              current_audio_ufrag,
                                              current_audio_pwd,
+                                             cricket::ICEMODE_FULL,
                                              NULL, Candidates()))));
       EXPECT_TRUE(current_desc->AddTransportInfo(
           TransportInfo("video",
                         TransportDescription("", std::vector<std::string>(),
                                              current_video_ufrag,
                                              current_video_pwd,
+                                             cricket::ICEMODE_FULL,
                                              NULL, Candidates()))));
       EXPECT_TRUE(current_desc->AddTransportInfo(
           TransportInfo("data",
                         TransportDescription("", std::vector<std::string>(),
                                              current_data_ufrag,
                                              current_data_pwd,
+                                             cricket::ICEMODE_FULL,
                                              NULL, Candidates()))));
     }
     if (offer) {

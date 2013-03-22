@@ -45,6 +45,7 @@
 
 namespace cricket {
 
+#if !defined(DISABLE_MEDIA_ENGINE_FACTORY)
 MediaSessionClient::MediaSessionClient(
     const buzz::Jid& jid, SessionManager *manager)
     : jid_(jid),
@@ -55,6 +56,7 @@ MediaSessionClient::MediaSessionClient(
           session_manager_->transport_desc_factory()) {
   Construct();
 }
+#endif
 
 MediaSessionClient::MediaSessionClient(
     const buzz::Jid& jid, SessionManager *manager,

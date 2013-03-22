@@ -79,16 +79,15 @@ const char MediaConstraintsInterface::kValueTrue[] = "true";
 const char MediaConstraintsInterface::kValueFalse[] = "false";
 
 // Error messages
-const char kInvalidSdp[] = "Invalid session description.";
-const char kSdpWithoutCrypto[] =
-    "Called with a SDP without crypto enabled.";
 const char kCreateChannelFailed[] = "Failed to create channels.";
-const char kUpdateStateFailed[] = "Failed to update session state.";
+const char kInvalidCandidates[] = "Description contains invalid candidates.";
+const char kInvalidSdp[] = "Invalid session description.";
 const char kMlineMismatch[] =
     "Offer and answer descriptions m-lines are not matching. "
     "Rejecting answer.";
-const char kInvalidCandidates[] =
-    "Description contains invalid candidates.";
+const char kSdpWithoutCrypto[] = "Called with a SDP without crypto enabled.";
+const char kSessionError[] = "Session error code";
+const char kUpdateStateFailed[] = "Failed to update session state.";
 
 // Compares |answer| against |offer|. Comparision is done
 // for number of m-lines in answer against offer. If matches true will be
@@ -551,8 +550,11 @@ SessionDescriptionInterface* WebRtcSession::CreateOffer(
     delete offer;
     return NULL;
   }
-  if (local_description())
+  if (local_description() && !options.transport_options.ice_restart) {
+    // Include all local ice candidates in the SessionDescription unless
+    // the an ice restart has been requested.
     CopyCandidatesFromSessionDescription(local_description(), offer);
+  }
   return offer;
 }
 
@@ -597,13 +599,21 @@ SessionDescriptionInterface* WebRtcSession::CreateAnswer(
     delete answer;
     return NULL;
   }
-  if (local_description())
+  if (local_description() && !options.transport_options.ice_restart) {
+    // Include all local ice candidates in the SessionDescription unless
+    // the remote peer has requested an ice restart.
     CopyCandidatesFromSessionDescription(local_description(), answer);
+  }
   return answer;
 }
 
 bool WebRtcSession::SetLocalDescription(SessionDescriptionInterface* desc,
                                         std::string* err_desc) {
+  if (error() != cricket::BaseSession::ERROR_NONE) {
+    delete desc;
+    return BadLocalSdp(SessionErrorMsg(error()), err_desc);
+  }
+
   if (!desc || !desc->description()) {
     delete desc;
     return BadLocalSdp(kInvalidSdp, err_desc);
@@ -622,7 +632,7 @@ bool WebRtcSession::SetLocalDescription(SessionDescriptionInterface* desc,
   }
 
   if (action == kAnswer && !VerifyMediaDescriptions(
-      desc->description(), remote_description()->description())) {
+          desc->description(), remote_description()->description())) {
     return BadLocalSdp(kMlineMismatch, err_desc);
   }
 
@@ -666,6 +676,11 @@ bool WebRtcSession::SetLocalDescription(SessionDescriptionInterface* desc,
 
 bool WebRtcSession::SetRemoteDescription(SessionDescriptionInterface* desc,
                                          std::string* err_desc) {
+  if (error() != cricket::BaseSession::ERROR_NONE) {
+    delete desc;
+    return BadRemoteSdp(SessionErrorMsg(error()), err_desc);
+  }
+
   if (!desc || !desc->description()) {
     delete desc;
     return BadRemoteSdp(kInvalidSdp, err_desc);
@@ -678,7 +693,7 @@ bool WebRtcSession::SetRemoteDescription(SessionDescriptionInterface* desc,
   }
 
   if (action == kAnswer && !VerifyMediaDescriptions(
-      desc->description(), local_description()->description())) {
+          desc->description(), local_description()->description())) {
     return BadRemoteSdp(kMlineMismatch, err_desc);
   }
 
@@ -731,11 +746,14 @@ bool WebRtcSession::SetRemoteDescription(SessionDescriptionInterface* desc,
 bool WebRtcSession::UpdateSessionState(
     Action action, cricket::ContentSource source,
     const cricket::SessionDescription* desc) {
+  // If there's already a pending error then no state transition should happen.
+  // But all call-sites should be verifying this before calling us!
+  ASSERT(error() == cricket::BaseSession::ERROR_NONE);
   bool ret = false;
   if (action == kOffer) {
     if (PushdownTransportDescription(source, cricket::CA_OFFER)) {
       SetState(source == cricket::CS_LOCAL ?
-        STATE_SENTINITIATE : STATE_RECEIVEDINITIATE);
+          STATE_SENTINITIATE : STATE_RECEIVEDINITIATE);
       ret = (error() == cricket::BaseSession::ERROR_NONE);
     }
   } else if (action == kPrAnswer) {
@@ -765,7 +783,7 @@ WebRtcSession::Action WebRtcSession::GetAction(const std::string& type) {
   } else if (type == SessionDescriptionInterface::kAnswer) {
     return WebRtcSession::kAnswer;
   }
-  ASSERT(!"unknown action type");
+  ASSERT(false && "unknown action type");
   return WebRtcSession::kOffer;
 }
 

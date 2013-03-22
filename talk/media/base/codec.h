@@ -29,7 +29,9 @@
 #define TALK_MEDIA_BASE_CODEC_H_
 
 #include <map>
+#include <set>
 #include <string>
+#include <vector>
 
 #include "talk/media/base/constants.h"
 
@@ -37,12 +39,45 @@ namespace cricket {
 
 typedef std::map<std::string, std::string> CodecParameterMap;
 
+class FeedbackParam {
+ public:
+  FeedbackParam(const std::string& id, const std::string& param)
+      : id_(id),
+        param_(param) {
+  }
+  bool operator==(const FeedbackParam& other) const;
+
+  const std::string& id() const { return id_; }
+  const std::string& param() const { return param_; }
+
+ private:
+  std::string id_;  // e.g. "nack", "ccm"
+  std::string param_;  // e.g. "", "rpsi", "fir"
+};
+
+class FeedbackParams {
+ public:
+  bool operator==(const FeedbackParams& other) const;
+
+  bool Has(const FeedbackParam& param) const;
+  void Add(const FeedbackParam& param);
+
+  void Intersect(const FeedbackParams& from);
+
+  const std::vector<FeedbackParam>& params() const { return params_; }
+ private:
+  bool HasDuplicateEntries() const;
+
+  std::vector<FeedbackParam> params_;
+};
+
 struct Codec {
   int id;
   std::string name;
   int clockrate;
   int preference;
   CodecParameterMap params;
+  FeedbackParams feedback_params;
 
   // Creates a codec with the given parameters.
   Codec(int id, const std::string& name, int clockrate, int preference)
@@ -66,9 +101,16 @@ struct Codec {
   void SetParam(const std::string& name, const std::string& value);
   void SetParam(const std::string& name, int value);
 
+  bool HasFeedbackParam(const FeedbackParam& param) const;
+  void AddFeedbackParam(const FeedbackParam& param);
+
   static bool Preferable(const Codec& first, const Codec& other) {
     return first.preference > other.preference;
   }
+
+  // Filter |this| feedbacks params such that only those shared by both |this|
+  // and |other| are kept.
+  void IntersectFeedbackParams(const Codec& other);
 
   Codec& operator=(const Codec& c) {
     this->id = c.id;  // id is reserved in objective-c
@@ -122,6 +164,7 @@ struct AudioCodec : public Codec {
     channels = c.channels;
     preference =  c.preference;
     params = c.params;
+    feedback_params = c.feedback_params;
     return *this;
   }
 
@@ -132,7 +175,8 @@ struct AudioCodec : public Codec {
            bitrate == c.bitrate &&
            channels == c.channels &&
            preference == c.preference &&
-           params == c.params;
+           params == c.params &&
+           feedback_params == c.feedback_params;
   }
 
   bool operator!=(const AudioCodec& c) const {
@@ -177,6 +221,7 @@ struct VideoCodec : public Codec {
     framerate = c.framerate;
     preference =  c.preference;
     params = c.params;
+    feedback_params = c.feedback_params;
     return *this;
   }
 
@@ -188,7 +233,8 @@ struct VideoCodec : public Codec {
            height == c.height &&
            framerate == c.framerate &&
            preference == c.preference &&
-           params == c.params;
+           params == c.params &&
+           feedback_params == c.feedback_params;
   }
 
   bool operator!=(const VideoCodec& c) const {

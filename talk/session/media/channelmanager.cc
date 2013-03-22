@@ -214,6 +214,7 @@ struct StartCaptureParams  : public talk_base::MessageData {
   VideoFormat video_format;
 };
 
+#if !defined(DISABLE_MEDIA_ENGINE_FACTORY)
 ChannelManager::ChannelManager(talk_base::Thread* worker_thread) {
   Construct(MediaEngineFactory::Create(),
             new RtpDataEngine(),
@@ -221,6 +222,7 @@ ChannelManager::ChannelManager(talk_base::Thread* worker_thread) {
             new CaptureManager(),
             worker_thread);
 }
+#endif
 
 ChannelManager::ChannelManager(MediaEngineInterface* me,
                                DataEngineInterface* dme,
@@ -264,7 +266,7 @@ void ChannelManager::Construct(MediaEngineInterface* me,
 
   // Camera is started asynchronously, request callbacks when startup
   // completes to be able to forward them to the rendering manager.
-  media_engine_->SignalVideoCaptureStateChange.connect(
+  media_engine_->SignalVideoCaptureStateChange().connect(
       this, &ChannelManager::OnVideoCaptureStateChange);
   capture_manager_->SignalCapturerStateChange.connect(
       this, &ChannelManager::OnVideoCaptureStateChange);

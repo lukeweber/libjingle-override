@@ -39,10 +39,6 @@
 
 #include <string>
 
-namespace cricket {
-class SessionDescription;
-}
-
 namespace webrtc {
 
 class IceCandidateInterface;

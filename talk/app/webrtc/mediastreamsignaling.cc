@@ -591,7 +591,7 @@ MediaStreamSignaling::GetRemoteTracks(cricket::MediaType type) {
     return remote_audio_tracks_.get();
   else if (type == cricket::MEDIA_TYPE_VIDEO)
     return remote_video_tracks_.get();
-  ASSERT(!"Unknown MediaType");
+  ASSERT(false && "Unknown MediaType");
   return NULL;
 }
 

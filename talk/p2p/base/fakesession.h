@@ -70,6 +70,7 @@ class FakeTransportChannel : public TransportChannelImpl,
         role_(ROLE_UNKNOWN),
         tiebreaker_(0),
         ice_proto_(ICEPROTO_HYBRID),
+        remote_ice_mode_(ICEMODE_FULL),
         dtls_fingerprint_("", NULL, 0) {
   }
   ~FakeTransportChannel() {
@@ -78,6 +79,7 @@ class FakeTransportChannel : public TransportChannelImpl,
 
   uint64 tiebreaker() const { return tiebreaker_; }
   TransportProtocol protocol() const { return ice_proto_; }
+  IceMode remote_ice_mode() const { return remote_ice_mode_; }
   const std::string& ice_ufrag() const { return ice_ufrag_; }
   const std::string& ice_pwd() const { return ice_pwd_; }
   const std::string& remote_ice_ufrag() const { return remote_ice_ufrag_; }
@@ -109,6 +111,7 @@ class FakeTransportChannel : public TransportChannelImpl,
     remote_ice_pwd_ = ice_pwd;
   }
 
+  virtual void SetRemoteIceMode(IceMode mode) { remote_ice_mode_ = mode; }
   virtual bool SetRemoteFingerprint(const std::string& alg, const uint8* digest,
                                     size_t digest_len) {
     dtls_fingerprint_ = talk_base::SSLFingerprint(alg, digest, digest_len);
@@ -263,6 +266,7 @@ class FakeTransportChannel : public TransportChannelImpl,
   std::string ice_pwd_;
   std::string remote_ice_ufrag_;
   std::string remote_ice_pwd_;
+  IceMode remote_ice_mode_;
   talk_base::SSLFingerprint dtls_fingerprint_;
 };
 

@@ -42,6 +42,8 @@ const char MediaConstraintsInterface::kEchoCancellation[] =
     "googEchoCancellation";
 const char MediaConstraintsInterface::kAutoGainControl[] =
     "googAutoGainControl";
+const char MediaConstraintsInterface::kExperimentalAutoGainControl[] =
+    "googAutoGainControl2";
 const char MediaConstraintsInterface::kNoiseSuppression[] =
     "googNoiseSuppression";
 const char MediaConstraintsInterface::kHighpassFilter[] =
@@ -80,6 +82,9 @@ bool FromConstraints(const MediaConstraintsInterface::Constraints& constraints,
       options->echo_cancellation.Set(value);
     else if (iter->key == MediaConstraintsInterface::kAutoGainControl)
       options->auto_gain_control.Set(value);
+    else if (iter->key ==
+        MediaConstraintsInterface::kExperimentalAutoGainControl)
+      options->experimental_agc.Set(value);
     else if (iter->key == MediaConstraintsInterface::kNoiseSuppression)
       options->noise_suppression.Set(value);
     else if (iter->key == MediaConstraintsInterface::kHighpassFilter)

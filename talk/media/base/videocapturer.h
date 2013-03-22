@@ -31,14 +31,6 @@
 #include <string>
 #include <vector>
 
-
-#if defined(GOOGLE_CHROME_BUILD) || defined(CHROMIUM_BUILD)
-#include "talk/app/webrtc/webrtcexport.h"
-#else
-#define PEERCONNECTION_EXPORT
-#define NON_EXPORTED_BASE(code) code
-#endif
-
 #include "talk/base/basictypes.h"
 #include "talk/base/criticalsection.h"
 #include "talk/base/messagehandler.h"
@@ -48,10 +40,6 @@
 #include "talk/media/base/videocommon.h"
 #include "talk/media/devices/devicemanager.h"
 
-#if defined(WIN32)
-#pragma warning(push)
-#pragma warning(disable: 4251 4275)
-#endif
 
 namespace cricket {
 
@@ -73,7 +61,7 @@ enum CaptureState {
 
 class VideoFrame;
 
-struct PEERCONNECTION_EXPORT CapturedFrame {
+struct CapturedFrame {
   static const uint32 kFrameHeaderSize = 40;  // Size from width to data_size.
   static const uint32 kUnknownDataSize = 0xFFFFFFFF;
 
@@ -132,9 +120,9 @@ struct PEERCONNECTION_EXPORT CapturedFrame {
 //   media engine thread). Hence, the VideoCapture subclasses dont need to be
 //   thread safe.
 //
-class PEERCONNECTION_EXPORT VideoCapturer
-    : public NON_EXPORTED_BASE(sigslot::has_slots<>),
-      public NON_EXPORTED_BASE(talk_base::MessageHandler) {
+class VideoCapturer
+    : public sigslot::has_slots<>,
+      public talk_base::MessageHandler {
  public:
   // All signals are marshalled to |thread| or the creating thread if
   // none is provided.
@@ -312,10 +300,6 @@ class PEERCONNECTION_EXPORT VideoCapturer
 
   DISALLOW_COPY_AND_ASSIGN(VideoCapturer);
 };
-
-#if defined(WIN32)
-#pragma warning(pop)
-#endif
 
 }  // namespace cricket
 

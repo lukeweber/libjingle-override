@@ -27,6 +27,8 @@
 
 #include "talk/media/devices/gtkvideorenderer.h"
 
+#include <glib.h>
+#include <gdk/gdk.h>
 #include <gtk/gtk.h>
 
 #include "talk/media/base/videocommon.h"
@@ -50,6 +52,7 @@ GtkVideoRenderer::GtkVideoRenderer(int x, int y)
       draw_area_(NULL),
       initial_x_(x),
       initial_y_(y) {
+  g_type_init();
   g_thread_init(NULL);
   gdk_threads_init();
 }

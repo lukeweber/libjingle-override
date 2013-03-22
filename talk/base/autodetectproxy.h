@@ -32,6 +32,7 @@
 
 #include "talk/base/constructormagic.h"
 #include "talk/base/cryptstring.h"
+#include "talk/base/proxydetect.h"
 #include "talk/base/proxyinfo.h"
 #include "talk/base/signalthread.h"
 
@@ -64,6 +65,14 @@ class AutoDetectProxy : public SignalThread {
       proxy_.password = password;
     }
   }
+  // Default implementation of GetProxySettingsForUrl. Override for special
+  // implementation.
+  virtual bool GetProxyForUrl(const char* agent, const char* url,
+                              talk_base::ProxyInfo* proxy) {
+    return GetProxySettingsForUrl(agent, url, proxy, true);
+  }
+  enum { MSG_TIMEOUT = SignalThread::ST_MSG_FIRST_AVAILABLE,
+         ADP_MSG_FIRST_AVAILABLE};
 
  protected:
   virtual ~AutoDetectProxy();

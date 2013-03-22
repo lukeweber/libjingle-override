@@ -247,9 +247,10 @@ TEST_F(WebRtcVoiceEngineTestFake, CreateChannelFail) {
 TEST_F(WebRtcVoiceEngineTestFake, CodecPreference) {
   const std::vector<cricket::AudioCodec>& codecs = engine_.codecs();
   ASSERT_FALSE(codecs.empty());
-  EXPECT_EQ("ISAC", codecs[0].name);
-  EXPECT_EQ(16000, codecs[0].clockrate);
-  EXPECT_EQ(0, codecs[0].bitrate);
+  EXPECT_STRCASEEQ("opus", codecs[0].name.c_str());
+  EXPECT_EQ(48000, codecs[0].clockrate);
+  EXPECT_EQ(2, codecs[0].channels);
+  EXPECT_EQ(64000, codecs[0].bitrate);
   int pref = codecs[0].preference;
   for (size_t i = 1; i < codecs.size(); ++i) {
     EXPECT_GT(pref, codecs[i].preference);
@@ -462,6 +463,7 @@ TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsAfterAddingStreams) {
 // Test that we can apply the same set of codecs again while playing.
 TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsWhilePlaying) {
   EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
   std::vector<cricket::AudioCodec> codecs;
   codecs.push_back(kIsacCodec);
   codecs.push_back(kCn16000Codec);
@@ -469,8 +471,28 @@ TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsWhilePlaying) {
   EXPECT_TRUE(channel_->SetPlayout(true));
   EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
 
-  codecs[0].bitrate = 100;  // Change codec.
+  // Changing the payload type of a codec should fail.
+  codecs[0].id = 127;
   EXPECT_FALSE(channel_->SetRecvCodecs(codecs));
+  EXPECT_TRUE(voe_.GetPlayout(channel_num));
+}
+
+// Test that we can add a codec while playing.
+TEST_F(WebRtcVoiceEngineTestFake, AddRecvCodecsWhilePlaying) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kIsacCodec);
+  codecs.push_back(kCn16000Codec);
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+  EXPECT_TRUE(channel_->SetPlayout(true));
+
+  codecs.push_back(kOpusCodec);
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+  EXPECT_TRUE(voe_.GetPlayout(channel_num));
+  webrtc::CodecInst gcodec;
+  EXPECT_TRUE(engine_.FindWebRtcCodec(kOpusCodec, &gcodec));
+  EXPECT_EQ(kOpusCodec.id, gcodec.pltype);
 }
 
 TEST_F(WebRtcVoiceEngineTestFake, SetSendBandwidthAuto) {

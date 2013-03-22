@@ -149,12 +149,14 @@ class DtlsTestClient : public sigslot::has_slots<> {
         cricket::NS_GINGLE_P2P : cricket::NS_JINGLE_ICE_UDP;
     cricket::TransportDescription local_desc(
         transport_type, std::vector<std::string>(), kIceUfrag1, kIcePwd1,
-        local_fingerprint.release(), cricket::Candidates());
+        cricket::ICEMODE_FULL, local_fingerprint.release(),
+        cricket::Candidates());
     ASSERT_TRUE(transport_->SetLocalTransportDescription(local_desc,
                                                          cricket::CA_OFFER));
     cricket::TransportDescription remote_desc(
         transport_type, std::vector<std::string>(), kIceUfrag1, kIcePwd1,
-        remote_fingerprint.release(), cricket::Candidates());
+        cricket::ICEMODE_FULL, remote_fingerprint.release(),
+        cricket::Candidates());
     ASSERT_TRUE(transport_->SetRemoteTransportDescription(remote_desc,
                                                           cricket::CA_ANSWER));
 
@@ -430,7 +432,7 @@ TEST_F(DtlsTransportChannelTest, TestChannelSetupIce) {
   EXPECT_EQ(cricket::ICEPROTO_RFC5245, channel1->protocol());
   EXPECT_EQ(kIceUfrag1, channel1->ice_ufrag());
   EXPECT_EQ(kIcePwd1, channel1->ice_pwd());
-  ASSERT_EQ(cricket::ROLE_CONTROLLED, channel2->GetRole());
+  EXPECT_EQ(cricket::ROLE_CONTROLLED, channel2->GetRole());
   EXPECT_EQ(2U, channel2->tiebreaker());
   EXPECT_EQ(cricket::ICEPROTO_RFC5245, channel2->protocol());
 }
@@ -449,7 +451,7 @@ TEST_F(DtlsTransportChannelTest, TestChannelSetupGice) {
   EXPECT_EQ(cricket::ICEPROTO_GOOGLE, channel1->protocol());
   EXPECT_EQ(kIceUfrag1, channel1->ice_ufrag());
   EXPECT_EQ(kIcePwd1, channel1->ice_pwd());
-  ASSERT_EQ(cricket::ROLE_CONTROLLED, channel2->GetRole());
+  EXPECT_EQ(cricket::ROLE_CONTROLLED, channel2->GetRole());
   EXPECT_EQ(2U, channel2->tiebreaker());
   EXPECT_EQ(cricket::ICEPROTO_GOOGLE, channel2->protocol());
 }

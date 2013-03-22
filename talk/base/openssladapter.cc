@@ -661,7 +661,8 @@ bool OpenSSLAdapter::VerifyServerName(SSL* ssl, const char* host,
   if (!certificate)
     return false;
 
-#ifdef _DEBUG
+  // Logging certificates is extremely verbose. So it is disabled by default.
+#ifdef LOG_CERTIFICATES
   {
     LOG(LS_INFO) << "Certificate from server:";
     BIO* mem = BIO_new(BIO_s_mem());

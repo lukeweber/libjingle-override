@@ -72,6 +72,7 @@ using webrtc::JsepSessionDescription;
 using webrtc::SdpParseError;
 using webrtc::SessionDescriptionInterface;
 
+typedef std::vector<AudioCodec> AudioCodecs;
 typedef std::vector<Candidate> Candidates;
 
 static const char kSessionTime[] = "t=0 0\r\n";
@@ -462,16 +463,16 @@ class WebRtcSdpTest : public testing::Test {
                                            std::vector<std::string>(),
                                            kCandidateUfragVoice,
                                            kCandidatePwdVoice,
-                                           NULL,
-                                           Candidates()))));
+                                           cricket::ICEMODE_FULL,
+                                           NULL, Candidates()))));
     EXPECT_TRUE(desc_.AddTransportInfo(
         TransportInfo(kVideoContentName,
                       TransportDescription(NS_JINGLE_ICE_UDP,
                                            std::vector<std::string>(),
                                            kCandidateUfragVideo,
                                            kCandidatePwdVideo,
-                                           NULL,
-                                           Candidates()))));
+                                           cricket::ICEMODE_FULL,
+                                           NULL, Candidates()))));
 
     // v4 host
     int port = 1234;
@@ -835,9 +836,8 @@ class WebRtcSdpTest : public testing::Test {
     TransportInfo transport_info(
         content_name, TransportDescription(NS_JINGLE_ICE_UDP,
                                            std::vector<std::string>(),
-                                           ufrag, pwd,
-                                           NULL,
-                                           Candidates()));
+                                           ufrag, pwd, cricket::ICEMODE_FULL,
+                                           NULL, Candidates()));
     SessionDescription* desc =
         const_cast<SessionDescription*>(jdesc->description());
     desc->RemoveTransportInfoByName(content_name);
@@ -878,7 +878,7 @@ class WebRtcSdpTest : public testing::Test {
                                            std::vector<std::string>(),
                                            kCandidateUfragVoice,
                                            kCandidatePwdVoice,
-                                           &fingerprint,
+                                           cricket::ICEMODE_FULL, &fingerprint,
                                            Candidates()))));
     EXPECT_TRUE(desc_.AddTransportInfo(
         TransportInfo(kVideoContentName,
@@ -886,7 +886,7 @@ class WebRtcSdpTest : public testing::Test {
                                            std::vector<std::string>(),
                                            kCandidateUfragVideo,
                                            kCandidatePwdVideo,
-                                           &fingerprint,
+                                           cricket::ICEMODE_FULL, &fingerprint,
                                            Candidates()))));
   }
 
@@ -973,8 +973,8 @@ class WebRtcSdpTest : public testing::Test {
                                               std::vector<std::string>(),
                                               kCandidateUfragData,
                                               kCandidatePwdData,
-                                              NULL,
-                                              Candidates()))));
+                                              cricket::ICEMODE_FULL,
+                                              NULL, Candidates()))));
   }
 
   bool TestDeserializeDirection(cricket::MediaContentDirection direction) {
@@ -1108,13 +1108,51 @@ class WebRtcSdpTest : public testing::Test {
     }
   }
 
+  void TestDeserializeRtcpFb(JsepSessionDescription* jdesc_output,
+                             bool use_wildcard) {
+    std::string sdp =
+        "v=0\r\n"
+        "o=- 18446744069414584320 18446462598732840960 IN IP4 127.0.0.1\r\n"
+        "s=-\r\n"
+        "t=0 0\r\n"
+        // Include semantics for WebRTC Media Streams since it is supported by
+        // this parser, and will be added to the SDP when serializing a session
+        // description.
+        "a=msid-semantic: WMS\r\n"
+        "m=video 3457 RTP/SAVPF 101\r\n"
+        "a=rtpmap:101 VP8/90000\r\n"
+        "a=rtcp-fb:101 nack\r\n"
+        "a=rtcp-fb:101 ccm fir\r\n";
+    std::ostringstream os;
+    os << "a=rtcp-fb:" << (use_wildcard ? "*" : "101") <<  " ccm fir\r\n";
+    sdp += os.str();
+    // Deserialize
+    SdpParseError error;
+    EXPECT_TRUE(webrtc::SdpDeserialize(sdp, jdesc_output, &error));
+    const ContentInfo* vc = GetFirstVideoContent(jdesc_output->description());
+    ASSERT_TRUE(vc != NULL);
+    const VideoContentDescription* vcd =
+        static_cast<const VideoContentDescription*>(vc->description);
+    ASSERT_FALSE(vcd->codecs().empty());
+    cricket::VideoCodec vp8 = vcd->codecs()[0];
+    EXPECT_STREQ(webrtc::JsepSessionDescription::kDefaultVideoCodecName,
+                 vp8.name.c_str());
+    EXPECT_EQ(101, vp8.id);
+    EXPECT_TRUE(vp8.HasFeedbackParam(
+        cricket::FeedbackParam(cricket::kRtcpFbParamNack,
+                               cricket::kParamValueEmpty)));
+    EXPECT_TRUE(vp8.HasFeedbackParam(
+        cricket::FeedbackParam(cricket::kRtcpFbParamCcm,
+                               cricket::kRtcpFbCcmParamFir)));
+  }
+
   // Two SDP messages can mean the same thing but be different strings, e.g.
   // some of the lines can be serialized in different order.
   // However, a deserialized description can be compared field by field and has
   // no order. If deserializer has already been tested, serializing then
   // deserializing and comparing JsepSessionDescription will test
   // the serializer sufficiently.
-  void TestSerializeCodecParams(const JsepSessionDescription& jdesc) {
+  void TestSerialize(const JsepSessionDescription& jdesc) {
     std::string message = webrtc::SdpSerialize(jdesc);
     JsepSessionDescription jdesc_output_des(kDummyString);
     SdpParseError error;
@@ -1355,6 +1393,32 @@ TEST_F(WebRtcSdpTest, DeserializeSessionDescriptionWithoutCandidates) {
   JsepSessionDescription new_jdesc(kDummyString);
   EXPECT_TRUE(SdpDeserialize(kSdpString, &new_jdesc));
   EXPECT_TRUE(CompareSessionDescription(jdesc_no_candidates, new_jdesc));
+}
+
+TEST_F(WebRtcSdpTest, DeserializeSessionDescriptionWithoutRtpmap) {
+  static const char kSdpNoRtpmapString[] =
+      "v=0\r\n"
+      "o=- 11 22 IN IP4 127.0.0.1\r\n"
+      "s=-\r\n"
+      "t=0 0\r\n"
+      "m=audio 49232 RTP/AVP 0 18 103\r\n"
+      // Codec that doesn't appear in the m= line will be ignored.
+      "a=rtpmap:104 CELT/32000/2\r\n"
+      // The rtpmap line for static payload codec is optional.
+      "a=rtpmap:18 G729/16000\r\n"
+      "a=rtpmap:103 ISAC/16000\r\n";
+
+  JsepSessionDescription jdesc(kDummyString);
+  EXPECT_TRUE(SdpDeserialize(kSdpNoRtpmapString, &jdesc));
+  cricket::AudioContentDescription* audio =
+    static_cast<AudioContentDescription*>(
+        jdesc.description()->GetContentDescriptionByName(cricket::CN_AUDIO));
+  AudioCodecs ref_codecs;
+  // The codecs in the AudioContentDescription will be sorted by preference.
+  ref_codecs.push_back(AudioCodec(0, "PCMU", 8000, 0, 1, 3));
+  ref_codecs.push_back(AudioCodec(18, "G729", 16000, 0, 1, 2));
+  ref_codecs.push_back(AudioCodec(103, "ISAC", 16000, 0, 1, 1));
+  EXPECT_EQ(ref_codecs, audio->codecs());
 }
 
 // Ensure that we can deserialize SDP with a=fingerprint properly.
@@ -1690,7 +1754,21 @@ TEST_F(WebRtcSdpTest, DeserializeSerializeCodecParams) {
   params.stereo = 1;
   params.useinband = 1;
   TestDeserializeCodecParams(params, &jdesc_output);
-  TestSerializeCodecParams(jdesc_output);
+  TestSerialize(jdesc_output);
+}
+
+TEST_F(WebRtcSdpTest, DeserializeSerializeRtcpFb) {
+  const bool kUseWildcard = false;
+  JsepSessionDescription jdesc_output(kDummyString);
+  TestDeserializeRtcpFb(&jdesc_output, kUseWildcard);
+  TestSerialize(jdesc_output);
+}
+
+TEST_F(WebRtcSdpTest, DeserializeSerializeRtcpFbWildcard) {
+  const bool kUseWildcard = true;
+  JsepSessionDescription jdesc_output(kDummyString);
+  TestDeserializeRtcpFb(&jdesc_output, kUseWildcard);
+  TestSerialize(jdesc_output);
 }
 
 TEST_F(WebRtcSdpTest, DeserializeVideoFmtp) {
@@ -1744,4 +1822,28 @@ TEST_F(WebRtcSdpTest, SerializeVideoFmtp) {
               "a=fmtp:120 x-google-min-bitrate=10\r\n",
               &sdp_with_fmtp);
   EXPECT_EQ(sdp_with_fmtp, message);
+}
+
+TEST_F(WebRtcSdpTest, DeserializeSdpWithIceLite) {
+  JsepSessionDescription jdesc_with_icelite(kDummyString);
+  std::string sdp_with_icelite = kSdpFullString;
+  EXPECT_TRUE(SdpDeserialize(sdp_with_icelite, &jdesc_with_icelite));
+  cricket::SessionDescription* desc = jdesc_with_icelite.description();
+  const cricket::TransportInfo* tinfo1 =
+      desc->GetTransportInfoByName("audio_content_name");
+  EXPECT_EQ(cricket::ICEMODE_FULL, tinfo1->description.ice_mode);
+  const cricket::TransportInfo* tinfo2 =
+      desc->GetTransportInfoByName("video_content_name");
+  EXPECT_EQ(cricket::ICEMODE_FULL, tinfo2->description.ice_mode);
+  InjectAfter(kSessionTime,
+              "a=ice-lite\r\n",
+              &sdp_with_icelite);
+  EXPECT_TRUE(SdpDeserialize(sdp_with_icelite, &jdesc_with_icelite));
+  desc = jdesc_with_icelite.description();
+  const cricket::TransportInfo* atinfo =
+      desc->GetTransportInfoByName("audio_content_name");
+  EXPECT_EQ(cricket::ICEMODE_LITE, atinfo->description.ice_mode);
+  const cricket::TransportInfo* vtinfo =
+        desc->GetTransportInfoByName("video_content_name");
+  EXPECT_EQ(cricket::ICEMODE_LITE, vtinfo->description.ice_mode);
 }

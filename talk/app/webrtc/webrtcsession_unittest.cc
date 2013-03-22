@@ -59,27 +59,28 @@
     return;                                         \
   }
 
-using cricket::kDtmfDelay;
-using cricket::kDtmfReset;
 using cricket::BaseSession;
 using cricket::DF_PLAY;
 using cricket::DF_SEND;
 using cricket::FakeVoiceMediaChannel;
-using cricket::NS_JINGLE_ICE_UDP;
 using cricket::NS_GINGLE_P2P;
+using cricket::NS_JINGLE_ICE_UDP;
 using cricket::TransportInfo;
-using talk_base::scoped_ptr;
+using cricket::kDtmfDelay;
+using cricket::kDtmfReset;
 using talk_base::SocketAddress;
+using talk_base::scoped_ptr;
 using webrtc::CreateSessionDescription;
-using webrtc::IceCandidateCollection;
 using webrtc::FakeConstraints;
-using webrtc::JsepSessionDescription;
+using webrtc::IceCandidateCollection;
 using webrtc::JsepIceCandidate;
+using webrtc::JsepSessionDescription;
+using webrtc::PeerConnectionInterface;
+using webrtc::SessionDescriptionInterface;
 using webrtc::kMlineMismatch;
 using webrtc::kSdpWithoutCrypto;
+using webrtc::kSessionError;
 using webrtc::kUpdateStateFailed;
-using webrtc::SessionDescriptionInterface;
-using webrtc::PeerConnectionInterface;
 
 static const SocketAddress kClientAddr1("11.11.11.11", 0);
 static const SocketAddress kClientAddr2("22.22.22.22", 0);
@@ -2275,6 +2276,22 @@ TEST_F(WebRtcSessionTest, TestIceStatesBasic) {
                        cricket::PORTALLOCATOR_DISABLE_STUN |
                        cricket::PORTALLOCATOR_DISABLE_RELAY);
   TestLoopbackCall();
+}
+
+// Regression-test for a crash which should have been an error.
+TEST_F(WebRtcSessionTest, TestNoStateTransitionPendingError) {
+  WebRtcSessionTest::Init();
+  cricket::MediaSessionOptions options;
+  options.has_audio = true;
+  options.has_video = true;
+
+  session_->SetError(cricket::BaseSession::ERROR_CONTENT);
+  SessionDescriptionInterface* offer = CreateOfferSessionDescription(options);
+  SessionDescriptionInterface* answer =
+      CreateAnswerSessionDescription(offer, options);
+  SetRemoteDescriptionExpectError(kSessionError, offer);
+  SetLocalDescriptionExpectError(kSessionError, answer);
+  // Not crashing is our success.
 }
 
 // TODO(bemasc): Add a TestIceStatesBundle with BUNDLE enabled.  That test

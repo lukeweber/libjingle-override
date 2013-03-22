@@ -60,12 +60,13 @@ namespace webrtc {
 class IceRestartAnswerLatch;
 class MediaStreamSignaling;
 
-extern const char kInvalidSdp[];
-extern const char kSdpWithoutCrypto[];
 extern const char kCreateChannelFailed[];
-extern const char kUpdateStateFailed[];
-extern const char kMlineMismatch[];
 extern const char kInvalidCandidates[];
+extern const char kInvalidSdp[];
+extern const char kMlineMismatch[];
+extern const char kSdpWithoutCrypto[];
+extern const char kSessionError[];
+extern const char kUpdateStateFailed[];
 
 // ICE state callback interface.
 class IceObserver {

@@ -24,12 +24,15 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef TALK_APP_WEBRTC_WEBRTCEXPORT_H_
-#define TALK_APP_WEBRTC_WEBRTCEXPORT_H_
+#ifndef TALK_MEDIA_WEBRTC_WEBRTCEXPORT_H_
+#define TALK_MEDIA_WEBRTC_WEBRTCEXPORT_H_
 
+#if !defined(GOOGLE_CHROME_BUILD) && !defined(CHROMIUM_BUILD)
+#define LIBPEERCONNECTION_LIB 1
+#endif
 
 #ifndef NON_EXPORTED_BASE
-#ifdef COMPILER_MSVC
+#ifdef WIN32
 
 // MSVC_SUPPRESS_WARNING disables warning |n| for the remainder of the line and
 // for the next line of the source file.
@@ -50,27 +53,27 @@
 #define NON_EXPORTED_BASE(code) MSVC_SUPPRESS_WARNING(4275) \
                                 code
 
-#else  // Not MSVC
+#else  // Not WIN32
 #define NON_EXPORTED_BASE(code) code
-#endif  // COMPILER_MSVC
+#endif  // WIN32
 #endif  // NON_EXPORTED_BASE
 
 #if defined (LIBPEERCONNECTION_LIB)
-  #define PEERCONNECTION_EXPORT
+  #define WRME_EXPORT
 #else
   #if defined(WIN32)
     #if defined(LIBPEERCONNECTION_IMPLEMENTATION)
-      #define PEERCONNECTION_EXPORT __declspec(dllexport)
+      #define WRME_EXPORT __declspec(dllexport)
     #else
-      #define PEERCONNECTION_EXPORT __declspec(dllimport)
+      #define WRME_EXPORT __declspec(dllimport)
     #endif
   #else // defined(WIN32)
     #if defined(LIBPEERCONNECTION_IMPLEMENTATION)
-      #define PEERCONNECTION_EXPORT __attribute__((visibility("default")))
+      #define WRME_EXPORT __attribute__((visibility("default")))
     #else
-      #define PEERCONNECTION_EXPORT
+      #define WRME_EXPORT
     #endif
   #endif
 #endif  // LIBPEERCONNECTION_LIB
 
-#endif  // TALK_APP_WEBRTC_WEBRTCEXPORT_H_
+#endif  // TALK_MEDIA_WEBRTC_WEBRTCEXPORT_H_

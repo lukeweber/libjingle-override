@@ -161,6 +161,7 @@ struct AudioOptions {
     typing_detection.SetFrom(change.typing_detection);
     conference_mode.SetFrom(change.conference_mode);
     adjust_agc_delta.SetFrom(change.adjust_agc_delta);
+    experimental_agc.SetFrom(change.experimental_agc);
   }
 
   bool operator==(const AudioOptions& o) const {
@@ -171,10 +172,11 @@ struct AudioOptions {
         stereo_swapping == o.stereo_swapping &&
         typing_detection == o.typing_detection &&
         conference_mode == o.conference_mode &&
+        experimental_agc == o.experimental_agc &&
         adjust_agc_delta == o.adjust_agc_delta;
   }
 
-  virtual std::string ToString() const {
+  std::string ToString() const {
     std::ostringstream ost;
     ost << "AudioOptions {";
     ost << ToStringIfSet("aec", echo_cancellation);
@@ -185,6 +187,7 @@ struct AudioOptions {
     ost << ToStringIfSet("typing", typing_detection);
     ost << ToStringIfSet("conference", conference_mode);
     ost << ToStringIfSet("agc_delta", adjust_agc_delta);
+    ost << ToStringIfSet("experimental_agc", experimental_agc);
     ost << "}";
     return ost.str();
   }
@@ -204,6 +207,7 @@ struct AudioOptions {
   Settable<bool> typing_detection;
   Settable<bool> conference_mode;
   Settable<int> adjust_agc_delta;
+  Settable<bool> experimental_agc;
 };
 
 // Options that can be applied to a VideoMediaChannel or a VideoMediaEngine.
@@ -222,6 +226,13 @@ struct VideoOptions {
     adapt_input_to_cpu_usage.SetFrom(change.adapt_input_to_cpu_usage);
     adapt_view_switch.SetFrom(change.adapt_view_switch);
     video_noise_reduction.SetFrom(change.video_noise_reduction);
+    video_three_layers.SetFrom(change.video_three_layers);
+    video_enable_camera_list.SetFrom(change.video_enable_camera_list);
+    video_one_layer_screencast.SetFrom(change.video_one_layer_screencast);
+    video_high_bitrate.SetFrom(change.video_high_bitrate);
+    video_watermark.SetFrom(change.video_watermark);
+    video_temporal_layer_screencast.SetFrom(
+        change.video_temporal_layer_screencast);
     video_leaky_bucket.SetFrom(change.video_leaky_bucket);
     conference_mode.SetFrom(change.conference_mode);
     process_adaptation_threshhold.SetFrom(change.process_adaptation_threshhold);
@@ -237,6 +248,12 @@ struct VideoOptions {
         adapt_input_to_cpu_usage == o.adapt_input_to_cpu_usage &&
         adapt_view_switch == o.adapt_view_switch &&
         video_noise_reduction == o.video_noise_reduction &&
+        video_three_layers == o.video_three_layers &&
+        video_enable_camera_list == o.video_enable_camera_list &&
+        video_one_layer_screencast == o.video_one_layer_screencast &&
+        video_high_bitrate == o.video_high_bitrate &&
+        video_watermark == o.video_watermark &&
+        video_temporal_layer_screencast == o.video_temporal_layer_screencast &&
         video_leaky_bucket == o.video_leaky_bucket &&
         conference_mode == o.conference_mode &&
         process_adaptation_threshhold == o.process_adaptation_threshhold &&
@@ -247,13 +264,21 @@ struct VideoOptions {
         buffered_mode_latency == o.buffered_mode_latency;
   }
 
-  virtual std::string ToString() const {
+  std::string ToString() const {
     std::ostringstream ost;
     ost << "VideoOptions {";
     ost << ToStringIfSet("encoder adaption", adapt_input_to_encoder);
     ost << ToStringIfSet("cpu adaption", adapt_input_to_cpu_usage);
     ost << ToStringIfSet("adapt view switch", adapt_view_switch);
     ost << ToStringIfSet("noise reduction", video_noise_reduction);
+    ost << ToStringIfSet("3 layers", video_three_layers);
+    ost << ToStringIfSet("camera list", video_enable_camera_list);
+    ost << ToStringIfSet("1 layer screencast",
+                        video_one_layer_screencast);
+    ost << ToStringIfSet("high bitrate", video_high_bitrate);
+    ost << ToStringIfSet("watermark", video_watermark);
+    ost << ToStringIfSet("video temporal layer screencast",
+                         video_temporal_layer_screencast);
     ost << ToStringIfSet("leaky bucket", video_leaky_bucket);
     ost << ToStringIfSet("conference mode", conference_mode);
     ost << ToStringIfSet("process", process_adaptation_threshhold);
@@ -272,6 +297,18 @@ struct VideoOptions {
   Settable<bool> adapt_view_switch;
   // Enable denoising?
   Settable<bool> video_noise_reduction;
+  // Experimental: Enable multi layer?
+  Settable<bool> video_three_layers;
+  // Experimental: Enable camera list?
+  Settable<bool> video_enable_camera_list;
+  // Experimental: Enable one layer screencast?
+  Settable<bool> video_one_layer_screencast;
+  // Experimental: Enable WebRtc higher bitrate?
+  Settable<bool> video_high_bitrate;
+  // Experimental: Add watermark to the rendered video image.
+  Settable<bool> video_watermark;
+  // Experimental: Enable WebRTC layered screencast.
+  Settable<bool> video_temporal_layer_screencast;
   // Enable WebRTC leaky bucket when sending media packets.
   Settable<bool> video_leaky_bucket;
   // Use conference mode?

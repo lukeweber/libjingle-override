@@ -93,7 +93,7 @@ GetReadyState(cricket::CaptureState state) {
     case cricket::CS_PAUSED:
       return MediaSourceInterface::kMuted;
     default:
-      ASSERT(!"GetReadyState unknown state");
+      ASSERT(false && "GetReadyState unknown state");
   }
   return MediaSourceInterface::kEnded;
 }

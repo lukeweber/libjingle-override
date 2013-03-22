@@ -88,7 +88,8 @@ public:
   //! There will be different methods for creating/configuring a "Reserved Room"
   //! Async callback for this method is ChatroomEnteredStatus
   virtual XmppReturnStatus RequestEnterChatroom(const std::string& password,
-      const std::string& client_version) = 0;
+      const std::string& client_version,
+      const std::string& locale) = 0;
 
   //! Requests that the user exit a chatroom
   //! Async callback for this method is ChatroomExitedStatus

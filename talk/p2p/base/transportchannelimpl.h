@@ -50,10 +50,10 @@ class TransportChannelImpl : public TransportChannel {
   virtual Transport* GetTransport() = 0;
 
   // For ICE channels.
-  virtual void SetRole(TransportRole role) {}
-  virtual void SetTiebreaker(uint64 tiebreaker) {}
+  virtual void SetRole(TransportRole role) = 0;
+  virtual void SetTiebreaker(uint64 tiebreaker) = 0;
   // To toggle G-ICE/ICE.
-  virtual void SetIceProtocolType(IceProtocolType type) {}
+  virtual void SetIceProtocolType(IceProtocolType type) = 0;
   // SetIceCredentials only need to be implemented by the ICE
   // transport channels. Non-ICE transport channels can just ignore.
   // The ufrag and pwd should be set before the Connect() is called.
@@ -63,6 +63,9 @@ class TransportChannelImpl : public TransportChannel {
   // transport channels. Non-ICE transport channels can just ignore.
   virtual void SetRemoteIceCredentials(const std::string& ice_ufrag,
                                        const std::string& ice_pwd) = 0;
+
+  // SetRemoteIceMode must be implemented only by the ICE transport channels.
+  virtual void SetRemoteIceMode(IceMode mode) = 0;
 
   // Begins the process of attempting to make a connection to the other client.
   virtual void Connect() = 0;

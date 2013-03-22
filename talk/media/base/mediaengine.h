@@ -46,6 +46,10 @@
 #include "talk/media/base/voiceprocessor.h"
 #include "talk/media/devices/devicemanager.h"
 
+#if defined(GOOGLE_CHROME_BUILD) || defined(CHROMIUM_BUILD)
+#define DISABLE_MEDIA_ENGINE_FACTORY
+#endif
+
 namespace cricket {
 
 class VideoCapturer;
@@ -168,15 +172,17 @@ class MediaEngineInterface {
 
   virtual VideoFormat GetStartCaptureFormat() const = 0;
 
-  sigslot::repeater2<VideoCapturer*, CaptureState>
-      SignalVideoCaptureStateChange;
+  virtual sigslot::repeater2<VideoCapturer*, CaptureState>&
+      SignalVideoCaptureStateChange() = 0;
 };
 
 
+#if !defined(DISABLE_MEDIA_ENGINE_FACTORY)
 class MediaEngineFactory {
  public:
   static MediaEngineInterface* Create();
 };
+#endif
 
 // CompositeMediaEngine constructs a MediaEngine from separate
 // voice and video engine classes.
@@ -192,7 +198,7 @@ class CompositeMediaEngine : public MediaEngineInterface {
       voice_.Terminate();
       return false;
     }
-    SignalVideoCaptureStateChange.repeat(video_.SignalCaptureStateChange);
+    SignalVideoCaptureStateChange().repeat(video_.SignalCaptureStateChange);
     return true;
   }
   virtual void Terminate() {
@@ -296,10 +302,15 @@ class CompositeMediaEngine : public MediaEngineInterface {
   virtual VideoFormat GetStartCaptureFormat() const {
     return video_.GetStartCaptureFormat();
   }
+  virtual sigslot::repeater2<VideoCapturer*, CaptureState>&
+      SignalVideoCaptureStateChange() {
+    return signal_state_change_;
+  }
 
  protected:
   VOICE voice_;
   VIDEO video_;
+  sigslot::repeater2<VideoCapturer*, CaptureState> signal_state_change_;
 };
 
 // NullVoiceEngine can be used with CompositeMediaEngine in the case where only

@@ -25,17 +25,18 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_SESSION_PHONE_FAKEWEBRTCVIDEOENGINE_H_
-#define TALK_SESSION_PHONE_FAKEWEBRTCVIDEOENGINE_H_
+#ifndef TALK_MEDIA_WEBRTC_FAKEWEBRTCVIDEOENGINE_H_
+#define TALK_MEDIA_WEBRTC_FAKEWEBRTCVIDEOENGINE_H_
 
-#include <list>
 #include <map>
+#include <set>
 #include <vector>
 
 #include "talk/base/basictypes.h"
 #include "talk/base/stringutils.h"
 #include "talk/media/base/codec.h"
 #include "talk/media/webrtc/fakewebrtccommon.h"
+#include "talk/media/webrtc/webrtcvideodecoderfactory.h"
 #include "talk/media/webrtc/webrtcvie.h"
 
 namespace webrtc {
@@ -66,6 +67,88 @@ static const int kViEChannelIdMax = 1000;
 static const int kViECaptureIdBase = 10000;  // Make sure there is a gap.
 static const int kViECaptureIdMax = 11000;
 
+// Fake class for mocking out webrtc::VideoDecoder
+class FakeWebRtcVideoDecoder : public webrtc::VideoDecoder {
+ public:
+  FakeWebRtcVideoDecoder()
+      : num_frames_received_(0) {
+  }
+
+  virtual WebRtc_Word32 InitDecode(const webrtc::VideoCodec*, WebRtc_Word32) {
+    return WEBRTC_VIDEO_CODEC_OK;
+  }
+
+  virtual WebRtc_Word32 Decode(
+      const webrtc::EncodedImage&, bool, const webrtc::RTPFragmentationHeader*,
+      const webrtc::CodecSpecificInfo*, WebRtc_Word64) {
+    num_frames_received_++;
+    return WEBRTC_VIDEO_CODEC_OK;
+  }
+
+  virtual WebRtc_Word32 RegisterDecodeCompleteCallback(
+      webrtc::DecodedImageCallback*) {
+    return WEBRTC_VIDEO_CODEC_OK;
+  }
+
+  virtual WebRtc_Word32 Release() {
+    return WEBRTC_VIDEO_CODEC_OK;
+  }
+
+  virtual WebRtc_Word32 Reset() {
+    return WEBRTC_VIDEO_CODEC_OK;
+  }
+
+  int GetNumFramesReceived() const {
+    return num_frames_received_;
+  }
+
+ private:
+  int num_frames_received_;
+};
+
+// Fake class for mocking out WebRtcVideoDecoderFactory.
+class FakeWebRtcVideoDecoderFactory : public WebRtcVideoDecoderFactory {
+ public:
+  FakeWebRtcVideoDecoderFactory()
+      : num_created_decoders_(0) {
+  }
+
+  virtual webrtc::VideoDecoder* CreateVideoDecoder(
+      webrtc::VideoCodecType type) {
+    if (supported_codec_types_.count(type) == 0) {
+      return NULL;
+    }
+    FakeWebRtcVideoDecoder* decoder = new FakeWebRtcVideoDecoder();
+    decoders_.push_back(decoder);
+    num_created_decoders_++;
+    return decoder;
+  }
+
+  virtual void DestroyVideoDecoder(webrtc::VideoDecoder* decoder) {
+    decoders_.erase(
+        std::remove(decoders_.begin(), decoders_.end(), decoder),
+        decoders_.end());
+    delete decoder;
+  }
+
+  void AddSupportedVideoCodecType(webrtc::VideoCodecType type) {
+    supported_codec_types_.insert(type);
+  }
+
+  int GetNumCreatedDecoders() {
+    return num_created_decoders_;
+  }
+
+  const std::vector<FakeWebRtcVideoDecoder*>& decoders() {
+    return decoders_;
+  }
+
+ private:
+  std::set<webrtc::VideoCodecType> supported_codec_types_;
+  std::vector<FakeWebRtcVideoDecoder*> decoders_;
+  int num_created_decoders_;
+};
+
 class FakeWebRtcVideoEngine
     : public webrtc::ViEBase,
       public webrtc::ViECodec,
@@ -73,7 +156,8 @@ class FakeWebRtcVideoEngine
       public webrtc::ViENetwork,
       public webrtc::ViERender,
       public webrtc::ViERTP_RTCP,
-      public webrtc::ViEImageProcess {
+      public webrtc::ViEImageProcess,
+      public webrtc::ViEExternalCodec {
  public:
   struct Channel {
     Channel()
@@ -124,6 +208,7 @@ class FakeWebRtcVideoEngine
     bool nack_;
     bool hybrid_nack_fec_;
     std::vector<webrtc::VideoCodec> recv_codecs;
+    std::set<unsigned int> ext_decoder_pl_types_;
     webrtc::VideoCodec send_codec;
     unsigned int send_video_bitrate_;
     unsigned int send_fec_bitrate_;
@@ -291,6 +376,16 @@ class FakeWebRtcVideoEngine
       channels_.find(channel)->second->recv_codecs;
     return std::find(codecs.begin(), codecs.end(), codec) != codecs.end();
   };
+  bool ExternalDecoderRegistered(int channel,
+                                 unsigned int pl_type) const {
+    WEBRTC_ASSERT_CHANNEL(channel);
+    return channels_.find(channel)->second->
+        ext_decoder_pl_types_.count(pl_type) != 0;
+  };
+  int GetNumExternalDecoderRegistered(int channel) const {
+    WEBRTC_ASSERT_CHANNEL(channel);
+    return channels_.find(channel)->second->ext_decoder_pl_types_.size();
+  };
   void SetSendBitrates(int channel, unsigned int video_bitrate,
                        unsigned int fec_bitrate, unsigned int nack_bitrate) {
     WEBRTC_ASSERT_CHANNEL(channel);
@@ -341,6 +436,8 @@ class FakeWebRtcVideoEngine
   }
   WEBRTC_FUNC(DeleteChannel, (const int channel)) {
     WEBRTC_CHECK_CHANNEL(channel);
+    // Make sure we deregister all the decoders before deleting a channel.
+    EXPECT_EQ(0, GetNumExternalDecoderRegistered(channel));
     delete channels_[channel];
     channels_.erase(channel);
     return 0;
@@ -671,7 +768,7 @@ class FakeWebRtcVideoEngine
       return -1;
     }
     channels_[channel]->nack_ = false;
-    channels_[channel]->hybrid_nack_fec_ = true;
+    channels_[channel]->hybrid_nack_fec_ = enable;
     return 0;
   }
   WEBRTC_FUNC(SetKeyFrameRequestMethod,
@@ -797,6 +894,24 @@ class FakeWebRtcVideoEngine
   }
   WEBRTC_STUB(EnableColorEnhancement, (const int, const bool));
 
+  // webrtc::ViEExternalCodec
+  WEBRTC_STUB(RegisterExternalSendCodec,
+      (const int, const unsigned char, webrtc::VideoEncoder*, bool));
+  WEBRTC_STUB(DeRegisterExternalSendCodec, (const int, const unsigned char));
+  WEBRTC_FUNC(RegisterExternalReceiveCodec,
+      (const int channel, const unsigned int pl_type, webrtc::VideoDecoder*,
+       bool, int)) {
+    WEBRTC_CHECK_CHANNEL(channel);
+    channels_[channel]->ext_decoder_pl_types_.insert(pl_type);
+    return 0;
+  }
+  WEBRTC_FUNC(DeRegisterExternalReceiveCodec,
+      (const int channel, const unsigned char pl_type)) {
+    WEBRTC_CHECK_CHANNEL(channel);
+    channels_[channel]->ext_decoder_pl_types_.erase(pl_type);
+    return 0;
+  }
+
  private:
   bool IsChannelId(int id) const {
     return (id >= kViEChannelIdBase && id <= kViEChannelIdMax);
@@ -819,4 +934,4 @@ class FakeWebRtcVideoEngine
 
 }  // namespace cricket
 
-#endif  // TALK_SESSION_PHONE_FAKEWEBRTCVIDEOENGINE_H_
+#endif  // TALK_MEDIA_WEBRTC_FAKEWEBRTCVIDEOENGINE_H_

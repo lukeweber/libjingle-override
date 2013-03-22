@@ -40,8 +40,14 @@
 #include "talk/base/stream.h"
 #include "talk/media/base/rtputils.h"
 #include "talk/media/webrtc/webrtccommon.h"
+#include "talk/media/webrtc/webrtcexport.h"
 #include "talk/media/webrtc/webrtcvoe.h"
 #include "talk/session/media/channel.h"
+
+#if !defined(LIBPEERCONNECTION_LIB) && \
+    !defined(LIBPEERCONNECTION_IMPLEMENTATION)
+#error "Bogus include."
+#endif
 
 
 namespace cricket {

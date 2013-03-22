@@ -164,7 +164,6 @@ bool DeviceManager::GetVideoCaptureDevice(const std::string& name,
                                           Device* out) {
   // If the name is empty, return the default device.
   if (name.empty() || name == kDefaultDeviceName) {
-    LOG(LS_INFO) << "Creating default VideoCapturer";
     return GetDefaultVideoCaptureDevice(out);
   }
 
@@ -176,7 +175,6 @@ bool DeviceManager::GetVideoCaptureDevice(const std::string& name,
   for (std::vector<Device>::const_iterator it = devices.begin();
       it != devices.end(); ++it) {
     if (name == it->name) {
-      LOG(LS_INFO) << "Creating VideoCapturer for " << name;
       *out = *it;
       return true;
     }
@@ -184,7 +182,6 @@ bool DeviceManager::GetVideoCaptureDevice(const std::string& name,
 
   // If |name| is a valid name for a file, return a file video capturer device.
   if (talk_base::Filesystem::IsFile(name)) {
-    LOG(LS_INFO) << "Creating FileVideoCapturer";
     *out = FileVideoCapturer::CreateFileVideoCapturerDevice(name);
     return true;
   }
@@ -216,6 +213,7 @@ VideoCapturer* DeviceManager::CreateVideoCapturer(const Device& device) const {
       delete capturer;
       return NULL;
     }
+    LOG(LS_INFO) << "Created file video capturer " << device.name;
     capturer->set_repeat(talk_base::kForever);
     return capturer;
   }
@@ -223,6 +221,7 @@ VideoCapturer* DeviceManager::CreateVideoCapturer(const Device& device) const {
   if (!capturer) {
     return NULL;
   }
+  LOG(LS_INFO) << "Created VideoCapturer for " << device.name;
   VideoFormat video_format;
   GetMaxFormat(device, &video_format);
   capturer->ConstrainSupportedFormats(video_format);

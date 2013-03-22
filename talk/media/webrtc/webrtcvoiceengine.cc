@@ -65,9 +65,9 @@ struct CodecPref {
 };
 
 static const CodecPref kCodecPrefs[] = {
+  { "OPUS",   48000,  2, 111, true },
   { "ISAC",   16000,  1, 103, true },
   { "ISAC",   32000,  1, 104, true },
-  { "OPUS",   48000,  2, 111, true },
   { "CELT",   32000,  1, 109, true },
   { "CELT",   32000,  2, 110, true },
   { "G722",   16000,  1, 9,   false },
@@ -142,6 +142,21 @@ static bool IsCodecMultiRate(const webrtc::CodecInst& codec) {
     if (_stricmp(kCodecPrefs[i].name, codec.plname) == 0 &&
         kCodecPrefs[i].clockrate == codec.plfreq) {
       return kCodecPrefs[i].is_multi_rate;
+    }
+  }
+  return false;
+}
+
+static bool FindCodec(const std::vector<AudioCodec>& codecs,
+                      const AudioCodec& codec,
+                      AudioCodec* found_codec) {
+  for (std::vector<AudioCodec>::const_iterator it = codecs.begin();
+       it != codecs.end(); ++it) {
+    if (it->Matches(codec)) {
+      if (found_codec != NULL) {
+        *found_codec = *it;
+      }
+      return true;
     }
   }
   return false;
@@ -301,7 +316,7 @@ static bool IsOpusStereoEnabled(const AudioCodec& codec) {
   if (param == codec.params.end()) {
     return false;
   }
-  return param->second == kParamTrue;
+  return param->second == kParamValueTrue;
 }
 
 void WebRtcVoiceEngine::ConstructCodecs() {
@@ -1525,17 +1540,40 @@ bool WebRtcVoiceMediaChannel::SetRecvCodecs(
   bool ret = true;
   LOG(LS_INFO) << "Setting receive voice codecs:";
 
-  if (recv_codecs_ == codecs) {
+  std::vector<AudioCodec> new_codecs;
+  // Find all new codecs. We allow adding new codecs but don't allow changing
+  // the payload type of codecs that is already configured since we might
+  // already be receiving packets with that payload type.
+  for (std::vector<AudioCodec>::const_iterator it = codecs.begin();
+       it != codecs.end() && ret; ++it) {
+    AudioCodec old_codec;
+    if (FindCodec(recv_codecs_, *it, &old_codec)) {
+      if (old_codec.id != it->id) {
+        LOG(LS_ERROR) << it->name << " payload type changed.";
+        return false;
+      }
+    } else {
+      new_codecs.push_back(*it);
+    }
+  }
+  if (new_codecs.empty()) {
+    // There are no new codecs to configure. Already configured codecs are
+    // never removed.
     return true;
   }
 
-  for (std::vector<AudioCodec>::const_iterator it = codecs.begin();
-       it != codecs.end() && ret; ++it) {
+  if (playout_) {
+    // Receive codecs can not be changed while playing. So we temporarily
+    // pause playout.
+    PausePlayout();
+  }
+
+  for (std::vector<AudioCodec>::const_iterator it = new_codecs.begin();
+       it != new_codecs.end() && ret; ++it) {
     webrtc::CodecInst voe_codec;
     if (engine()->FindWebRtcCodec(*it, &voe_codec)) {
       LOG(LS_INFO) << ToString(*it);
       voe_codec.pltype = it->id;
-
       if (engine()->voe()->codec()->SetRecPayloadType(
           voe_channel(), voe_codec) == -1) {
         LOG_RTCERR2(SetRecPayloadType, voe_channel(), ToString(voe_codec));
@@ -1558,6 +1596,10 @@ bool WebRtcVoiceMediaChannel::SetRecvCodecs(
   }
   if (ret) {
     recv_codecs_ = codecs;
+  }
+
+  if (desired_playout_ && !playout_) {
+    ResumePlayout();
   }
   return ret;
 }

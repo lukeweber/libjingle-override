@@ -148,6 +148,11 @@ class FileMediaEngine : public MediaEngineInterface {
     return VideoFormat();
   }
 
+  virtual sigslot::repeater2<VideoCapturer*, CaptureState>&
+      SignalVideoCaptureStateChange() {
+    return signal_state_change_;
+  }
+
  private:
   std::string voice_input_filename_;
   std::string voice_output_filename_;
@@ -157,6 +162,8 @@ class FileMediaEngine : public MediaEngineInterface {
   std::vector<VideoCodec> video_codecs_;
   std::vector<RtpHeaderExtension> audio_rtp_header_extensions_;
   std::vector<RtpHeaderExtension> video_rtp_header_extensions_;
+  sigslot::repeater2<VideoCapturer*, CaptureState>
+     signal_state_change_;
 
   DISALLOW_COPY_AND_ASSIGN(FileMediaEngine);
 };

@@ -73,7 +73,8 @@ class FakeViEWrapper : public cricket::ViEWrapper {
                             engine,  // network
                             engine,  // render
                             engine,  // rtp
-                            engine) {  // image
+                            engine,  // image
+                            engine) {  // external decoder
   }
 };
 
@@ -168,6 +169,7 @@ class WebRtcVideoEngineTestFake : public testing::Test {
   cricket::WebRtcVideoEngine engine_;
   cricket::WebRtcVideoMediaChannel* channel_;
   cricket::WebRtcVoiceMediaChannel* voice_channel_;
+  cricket::FakeWebRtcVideoDecoderFactory decoder_factory_;
 };
 
 // Test fixtures to test WebRtcVideoEngine with a real webrtc::VideoEngine.
@@ -1483,4 +1485,62 @@ TEST_F(WebRtcVideoEngineTestFake, DontResetCodecOnSendFrame) {
   EXPECT_EQ(1, vie_.num_set_send_codecs());
   SendI420Frame(kVP8Codec.width, kVP8Codec.height);
   EXPECT_EQ(1, vie_.num_set_send_codecs());
+}
+
+TEST_F(WebRtcVideoEngineTestFake, DontRegisterDecoderIfFactoryIsNotGiven) {
+  engine_.SetExternalDecoderFactory(NULL);
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+
+  std::vector<cricket::VideoCodec> codecs;
+  codecs.push_back(kVP8Codec);
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+
+  EXPECT_EQ(0, vie_.GetNumExternalDecoderRegistered(channel_num));
+}
+
+TEST_F(WebRtcVideoEngineTestFake, RegisterDecoderIfFactoryIsGiven) {
+  decoder_factory_.AddSupportedVideoCodecType(webrtc::kVideoCodecVP8);
+  engine_.SetExternalDecoderFactory(&decoder_factory_);
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+
+  std::vector<cricket::VideoCodec> codecs;
+  codecs.push_back(kVP8Codec);
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+
+  EXPECT_TRUE(vie_.ExternalDecoderRegistered(channel_num, 100));
+  EXPECT_EQ(1, vie_.GetNumExternalDecoderRegistered(channel_num));
+}
+
+TEST_F(WebRtcVideoEngineTestFake, DontRegisterDecoderMultipleTimes) {
+  decoder_factory_.AddSupportedVideoCodecType(webrtc::kVideoCodecVP8);
+  engine_.SetExternalDecoderFactory(&decoder_factory_);
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+
+  std::vector<cricket::VideoCodec> codecs;
+  codecs.push_back(kVP8Codec);
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+
+  EXPECT_TRUE(vie_.ExternalDecoderRegistered(channel_num, 100));
+  EXPECT_EQ(1, vie_.GetNumExternalDecoderRegistered(channel_num));
+  EXPECT_EQ(1, decoder_factory_.GetNumCreatedDecoders());
+
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+  EXPECT_EQ(1, vie_.GetNumExternalDecoderRegistered(channel_num));
+  EXPECT_EQ(1, decoder_factory_.GetNumCreatedDecoders());
+}
+
+TEST_F(WebRtcVideoEngineTestFake, DontRegisterDecoderForNonVP8) {
+  decoder_factory_.AddSupportedVideoCodecType(webrtc::kVideoCodecVP8);
+  engine_.SetExternalDecoderFactory(&decoder_factory_);
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+
+  std::vector<cricket::VideoCodec> codecs;
+  codecs.push_back(kRedCodec);
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+
+  EXPECT_EQ(0, vie_.GetNumExternalDecoderRegistered(channel_num));
 }

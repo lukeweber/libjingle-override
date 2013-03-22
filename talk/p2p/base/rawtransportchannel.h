@@ -93,6 +93,13 @@ class RawTransportChannel : public TransportChannelImpl,
 
   void OnRemoteAddress(const talk_base::SocketAddress& remote_address);
 
+  // Below ICE specific virtual methods not implemented.
+  virtual void SetRole(TransportRole role) {}
+  virtual void SetTiebreaker(uint64 tiebreaker) {}
+  virtual void SetIceProtocolType(IceProtocolType type) {}
+  virtual void SetIceUfrag(const std::string& ice_ufrag) {}
+  virtual void SetIcePwd(const std::string& ice_pwd) {}
+  virtual void SetRemoteIceMode(IceMode mode) {}
 
  private:
   RawTransport* raw_transport_;

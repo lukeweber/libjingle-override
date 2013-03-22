@@ -39,6 +39,8 @@
 #include "talk/app/webrtc/videotrack.h"
 #include "talk/media/devices/dummydevicemanager.h"
 #include "talk/media/webrtc/webrtcmediaengine.h"
+#include "talk/media/webrtc/webrtcvideodecoderfactory.h"
+#include "webrtc/modules/audio_device/include/audio_device.h"
 
 using talk_base::scoped_refptr;
 
@@ -123,12 +125,14 @@ CreatePeerConnectionFactory() {
 }
 
 scoped_refptr<PeerConnectionFactoryInterface>
-CreatePeerConnectionFactory(talk_base::Thread* worker_thread,
-                            talk_base::Thread* signaling_thread,
-                            AudioDeviceModule* default_adm) {
+CreatePeerConnectionFactory(
+    talk_base::Thread* worker_thread,
+    talk_base::Thread* signaling_thread,
+    AudioDeviceModule* default_adm,
+    cricket::WebRtcVideoDecoderFactory* decoder_factory) {
   scoped_refptr<PeerConnectionFactory> pc_factory(
       new talk_base::RefCountedObject<PeerConnectionFactory>(
-          worker_thread, signaling_thread, default_adm));
+          worker_thread, signaling_thread, default_adm, decoder_factory));
   if (!pc_factory->Initialize()) {
     return NULL;
   }
@@ -148,11 +152,13 @@ PeerConnectionFactory::PeerConnectionFactory()
 PeerConnectionFactory::PeerConnectionFactory(
     talk_base::Thread* worker_thread,
     talk_base::Thread* signaling_thread,
-    AudioDeviceModule* default_adm)
+    AudioDeviceModule* default_adm,
+    cricket::WebRtcVideoDecoderFactory* video_decoder_factory)
     : owns_ptrs_(false),
       signaling_thread_(signaling_thread),
       worker_thread_(worker_thread),
-      default_adm_(default_adm) {
+      default_adm_(default_adm),
+      video_decoder_factory_(video_decoder_factory) {
   ASSERT(worker_thread != NULL);
   ASSERT(signaling_thread != NULL);
   // TODO: Currently there is no way creating an external adm in
@@ -223,7 +229,8 @@ bool PeerConnectionFactory::Initialize_s() {
   // WebRtcMediaEngine.
   cricket::WebRtcMediaEngine* webrtc_media_engine(
       new cricket::WebRtcMediaEngine(default_adm_.get(),
-                                     NULL));   // No secondary adm.
+                                     NULL,  // No secondary adm.
+                                     video_decoder_factory_.get()));
 
   channel_manager_.reset(new cricket::ChannelManager(
       webrtc_media_engine, device_manager, worker_thread_));

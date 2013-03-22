@@ -40,7 +40,7 @@ namespace talk_base {
 // the given URL.
 
 bool GetProxySettingsForUrl(const char* agent, const char* url,
-                            talk_base::ProxyInfo& proxy,
+                            talk_base::ProxyInfo* proxy,
                             bool long_operation = false);
 
 }  // namespace talk_base

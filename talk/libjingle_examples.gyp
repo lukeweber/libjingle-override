@@ -94,85 +94,6 @@
     }, # target peerconnection_server
   ],
   'conditions': [
-    ['OS!="android"', {
-      'targets': [
-        {
-          'target_name': 'call',
-          'type': 'executable',
-          'dependencies': [
-            'libjingle.gyp:libjingle_p2p',
-            'libjingle_xmpphelp',
-          ],
-          'sources': [
-            'examples/call/call_main.cc',
-            'examples/call/callclient.cc',
-            'examples/call/console.cc',
-            'examples/call/friendinvitesendtask.cc',
-            'examples/call/mediaenginefactory.cc',
-            'examples/call/mucinviterecvtask.cc',
-            'examples/call/mucinvitesendtask.cc',
-            'examples/call/presencepushtask.cc',
-          ],
-          'conditions': [
-            ['OS=="linux"', {
-              'link_settings': {
-                'libraries': [
-                  '<!@(pkg-config --libs-only-l gtk+-2.0 gthread-2.0)',
-                ],
-              },
-            }],
-            ['OS=="win"', {
-              'msvs_settings': {
-                'VCLinkerTool': {
-                  'AdditionalDependencies': [
-                    'strmiids.lib',
-                  ],
-                },
-              },
-            }],
-          ],  # conditions
-        },  # target call
-      ], # targets
-    }],  # OS!="android"
-    # TODO(ronghuawu): Enable chat example app.
-    # TODO(sergeyu): Make this example compile on Windows and Mac.
-    # ['OS=="linux"', {
-    #  'targets': [
-    #    {
-    #      'target_name': 'chat',
-    #      'type': 'executable',
-    #      'dependencies': [
-    #        'libjingle.gyp:libjingle_p2p',
-    #        'libjingle_xmpphelp',
-    #      ],
-    #      'sources': [
-    #        'examples/chat/chatapp.cc',
-    #        'examples/chat/chat_main.cc',
-    #        'examples/chat/consoletask.cc',
-    #        'examples/chat/textchatreceivetask.cc',
-    #        'examples/chat/textchatsendtask.cc',
-    #      ],
-    #      'conditions': [
-    #        ['OS=="linux"', {
-    #          'link_settings': {
-    #            'libraries': [
-    #              '<!@(pkg-config --libs-only-l gtk+-2.0 gthread-2.0)',
-    #            ],
-    #          },
-    #        }],
-    #        ['OS=="win"', {
-    #          'msvs_settings': {
-    #            'VCLinkerTool': {
-    #              'AdditionalDependencies': [
-    #                'strmiids.lib',
-    #              ],
-    #            },
-    #          },
-    #        }],
-    #      ],  # conditions
-    #    },  # target chat
-    #  ], # targets
-    # }],  # OS=="linux"
     ['OS=="linux" or OS=="win"', {
       'targets': [
         {
@@ -212,14 +133,16 @@
                 'examples/peerconnection/client/linux/main_wnd.h',
               ],
               'cflags': [
-                '<!@(pkg-config --cflags gtk+-2.0)',
+                '<!@(pkg-config --cflags glib-2.0 gobject-2.0 gtk+-2.0)',
               ],
               'link_settings': {
                 'ldflags': [
-                  '<!@(pkg-config --libs-only-L --libs-only-other gtk+-2.0 gthread-2.0)',
+                  '<!@(pkg-config --libs-only-L --libs-only-other glib-2.0'
+                      ' gobject-2.0 gthread-2.0 gtk+-2.0)',
                 ],
                 'libraries': [
-                  '<!@(pkg-config --libs-only-l gtk+-2.0 gthread-2.0)',
+                  '<!@(pkg-config --libs-only-l glib-2.0 gobject-2.0'
+                      ' gthread-2.0 gtk+-2.0)',
                   '-lX11',
                   '-lXcomposite',
                   '-lXext',

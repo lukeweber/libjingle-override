@@ -393,6 +393,7 @@ extern const StaticQName QN_MUC_ITEM;
 extern const StaticQName QN_MUC_AFFILIATION;
 extern const StaticQName QN_MUC_ROLE;
 extern const StaticQName QN_CLIENT_VERSION;
+extern const StaticQName QN_LOCALE;
 extern const char STR_AFFILIATION_NONE[];
 extern const char STR_ROLE_PARTICIPANT[];
 

@@ -400,6 +400,8 @@ talk.Library(env, name = "videorenderer",
                "media/devices/gtkvideorenderer.cc",
              ],
              lin_packages = [
+               "gobject-2.0",
+               "gthread-2.0",
                "gtk+-2.0",
              ],
 )

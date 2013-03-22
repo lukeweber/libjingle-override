@@ -51,7 +51,9 @@ class Call;
 
 class MediaSessionClient : public SessionClient, public sigslot::has_slots<> {
  public:
+#if !defined(DISABLE_MEDIA_ENGINE_FACTORY)
   MediaSessionClient(const buzz::Jid& jid, SessionManager *manager);
+#endif
   // Alternative constructor, allowing injection of media_engine
   // and device_manager.
   MediaSessionClient(const buzz::Jid& jid, SessionManager *manager,

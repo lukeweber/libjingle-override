@@ -76,7 +76,6 @@
 #include "talk/app/webrtc/jsep.h"
 #include "talk/app/webrtc/mediastreaminterface.h"
 #include "talk/app/webrtc/statstypes.h"
-#include "talk/app/webrtc/webrtcexport.h"
 #include "talk/base/socketaddress.h"
 
 namespace talk_base {
@@ -85,6 +84,7 @@ class Thread;
 
 namespace cricket {
 class PortAllocator;
+class WebRtcVideoDecoderFactory;
 }
 
 namespace webrtc {
@@ -385,18 +385,20 @@ class PeerConnectionFactoryInterface : public talk_base::RefCountInterface {
 };
 
 // Create a new instance of PeerConnectionFactoryInterface.
-PEERCONNECTION_EXPORT
 talk_base::scoped_refptr<PeerConnectionFactoryInterface>
 CreatePeerConnectionFactory();
 
 // Create a new instance of PeerConnectionFactoryInterface.
-// Ownership of |factory| and |default_adm| is transferred to the returned
-// factory.
-PEERCONNECTION_EXPORT
+// Ownership of |factory|, |default_adm|, and |decoder_factory| is transferred
+// to the returned factory.
+// TODO(dwkang): To prevent build break the default value is added for
+// |decoder_factory|. Remove it once Chrome has a value for that.
 talk_base::scoped_refptr<PeerConnectionFactoryInterface>
-CreatePeerConnectionFactory(talk_base::Thread* worker_thread,
-                            talk_base::Thread* signaling_thread,
-                            AudioDeviceModule* default_adm);
+CreatePeerConnectionFactory(
+    talk_base::Thread* worker_thread,
+    talk_base::Thread* signaling_thread,
+    AudioDeviceModule* default_adm,
+    cricket::WebRtcVideoDecoderFactory* decoder_factory = NULL);
 
 }  // namespace webrtc
 

@@ -83,6 +83,7 @@ class P2PTransportChannel : public TransportChannelImpl,
                                  const std::string& ice_pwd);
   virtual void SetRemoteIceCredentials(const std::string& ice_ufrag,
                                        const std::string& ice_pwd);
+  virtual void SetRemoteIceMode(IceMode mode);
   virtual void Connect();
   virtual void Reset();
   virtual void OnSignalingReady();
@@ -100,6 +101,8 @@ class P2PTransportChannel : public TransportChannelImpl,
   // Note: This is only for testing purpose.
   // |ports_| should not be changed from outside.
   const std::vector<PortInterface *>& ports() { return ports_; }
+
+  IceMode remote_ice_mode() const { return remote_ice_mode_; }
 
  private:
   talk_base::Thread* thread() { return worker_thread_; }
@@ -146,7 +149,6 @@ class P2PTransportChannel : public TransportChannelImpl,
   void OnConnectionStateChange(Connection *connection);
   void OnReadPacket(Connection *connection, const char *data, size_t len);
   void OnConnectionDestroyed(Connection *connection);
-  void NominateBestConnection();
   void OnRoleConflict();
 
   void OnUseCandidate(Connection* conn);
@@ -168,7 +170,6 @@ class P2PTransportChannel : public TransportChannelImpl,
   std::vector<RemoteCandidate> remote_candidates_;
   bool sort_dirty_;  // indicates whether another sort is needed right now
   bool was_writable_;
-  bool was_timed_out_;
   typedef std::map<talk_base::Socket::Option, int> OptionMap;
   OptionMap options_;
   std::string ice_ufrag_;
@@ -176,6 +177,7 @@ class P2PTransportChannel : public TransportChannelImpl,
   std::string remote_ice_ufrag_;
   std::string remote_ice_pwd_;
   IceProtocolType protocol_type_;
+  IceMode remote_ice_mode_;
   TransportRole role_;
   uint64 tiebreaker_;
   uint32 remote_candidate_generation_;

@@ -27,14 +27,65 @@
 
 #include "talk/media/base/codec.h"
 
+#include <algorithm>
 #include <sstream>
 
+#include "talk/base/common.h"
 #include "talk/base/stringencode.h"
 #include "talk/base/stringutils.h"
 
 namespace cricket {
 
 static const int kMaxStaticPayloadId = 95;
+
+bool FeedbackParam::operator==(const FeedbackParam& other) const {
+  return _stricmp(other.id().c_str(), id().c_str()) == 0 &&
+      _stricmp(other.param().c_str(), param().c_str()) == 0;
+}
+
+bool FeedbackParams::operator==(const FeedbackParams& other) const {
+  return params_ == other.params_;
+}
+
+bool FeedbackParams::Has(const FeedbackParam& param) const {
+  return std::find(params_.begin(), params_.end(), param) != params_.end();
+}
+
+void FeedbackParams::Add(const FeedbackParam& param) {
+  if (param.id().empty()) {
+    return;
+  }
+  if (Has(param)) {
+    // Param already in |this|.
+    return;
+  }
+  params_.push_back(param);
+  ASSERT(!HasDuplicateEntries());
+}
+
+void FeedbackParams::Intersect(const FeedbackParams& from) {
+  std::vector<FeedbackParam>::iterator iter_to = params_.begin();
+  while (iter_to != params_.end()) {
+    if (!from.Has(*iter_to)) {
+      iter_to = params_.erase(iter_to);
+    } else {
+      ++iter_to;
+    }
+  }
+}
+
+bool FeedbackParams::HasDuplicateEntries() const {
+  for (std::vector<FeedbackParam>::const_iterator iter = params_.begin();
+       iter != params_.end(); ++iter) {
+    for (std::vector<FeedbackParam>::const_iterator found = iter + 1;
+         found != params_.end(); ++found) {
+      if (*found == *iter) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 bool Codec::Matches(int payload, const std::string& nm) const {
   return (payload <= kMaxStaticPayloadId) ?
@@ -66,6 +117,18 @@ void Codec::SetParam(const std::string& name, const std::string& value) {
 
 void Codec::SetParam(const std::string& name, int value)  {
   params[name] = talk_base::ToString(value);
+}
+
+void Codec::AddFeedbackParam(const FeedbackParam& param) {
+  feedback_params.Add(param);
+}
+
+bool Codec::HasFeedbackParam(const FeedbackParam& param) const {
+  return feedback_params.Has(param);
+}
+
+void Codec::IntersectFeedbackParams(const Codec& other) {
+  feedback_params.Intersect(other.feedback_params);
 }
 
 bool AudioCodec::Matches(int payload, const std::string& nm) const {

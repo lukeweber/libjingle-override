@@ -5,6 +5,12 @@ Prerequisites:
   .gclient file should contain a line like:
   target_os = ['android', 'unix']
   Make sure to re-run gclient sync after adding this to download the tools.
+- Set up webrtc-related GYP variables:
+  export GYP_DEFINES="build_with_libjingle=1 build_with_chromium=0 libjingle_java=1 $GYP_DEFINES"
+  export JAVA_HOME=</path/to/JDK>
+  export PATH=$JAVA_HOME/bin:$PATH
+  To cause WEBRTC_LOGGING to emit to Android's logcat, add enable_tracing=1 to
+  the $GYP_DEFINES above.
 - Env vars need to be set up to target Android; easiest way to do this is to run
   (from the libjingle trunk directory):
   . ./build/android/envsetup.sh

@@ -31,6 +31,7 @@
 #include "talk/base/refcount.h"
 #include "talk/base/thread.h"
 #include "talk/base/timeutils.h"
+#include "talk/base/logging.h"
 
 // Audio sample value that is high enough that it doesn't occur naturally when
 // frames are being faked. E.g. NetEq will not generate this large sample value
@@ -42,9 +43,8 @@ static const int kHighSampleValue = 10000;
 // https://code.google.com/p/webrtc/
 static const uint32 kAdmMaxIdleTimeProcess = 1000;
 
-// Constants here are derived by running VoE using a real ADM.
-// The constants correspond to 10ms of mono audio at 44kHz.
-static const int kTimePerFrameMs = 10;
+// The constants correspond to 20ms of mono audio at 44kHz.
+static const int kTimePerFrameMs = 20;
 static const int kNumberOfChannels = 1;
 static const int kSamplesPerSecond = 44000;
 static const int kTotalDelayMs = 0;
@@ -674,6 +674,14 @@ void FakeAudioCaptureModule::ProcessFrameP() {
   const uint32 current_time = talk_base::Time();
   const uint32 wait_time = (next_frame_time_ > current_time) ?
       next_frame_time_ - current_time : 0;
+  if (wait_time == 0) {
+    // Allow the capture module to catch up in time by skipping to encode audio
+    // buffers that correspond to time up to |current_time|. This can happen
+    // if the time until execution returns here is larger than
+    // kTimePerFrameMs.
+    next_frame_time_ = current_time;
+    LOG(LS_WARNING) << "FakeAudioCaptureModule is falling behind.";
+  }
   process_thread_->PostDelayed(wait_time, this, MSG_RUN_PROCESS);
 }
 

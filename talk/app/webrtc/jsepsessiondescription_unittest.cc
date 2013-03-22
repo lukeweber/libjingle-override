@@ -79,14 +79,16 @@ static cricket::SessionDescription* CreateCricketSessionDescription() {
                                  cricket::NS_GINGLE_P2P,
                                  std::vector<std::string>(),
                                  kCandidateUfragVoice, kCandidatePwdVoice,
-                                 NULL, cricket::Candidates()))));
+                                 cricket::ICEMODE_FULL, NULL,
+                                 cricket::Candidates()))));
   EXPECT_TRUE(desc->AddTransportInfo(
       cricket::TransportInfo(cricket::CN_VIDEO,
                              cricket::TransportDescription(
                                  cricket::NS_GINGLE_P2P,
                                  std::vector<std::string>(),
                                  kCandidateUfragVideo, kCandidatePwdVideo,
-                                 NULL, cricket::Candidates()))));
+                                 cricket::ICEMODE_FULL, NULL,
+                                 cricket::Candidates()))));
   return desc;
 }
 

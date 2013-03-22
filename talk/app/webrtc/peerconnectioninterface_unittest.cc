@@ -227,7 +227,7 @@ class PeerConnectionInterfaceTest : public testing::Test {
  protected:
   virtual void SetUp() {
     pc_factory_ = webrtc::CreatePeerConnectionFactory(
-        talk_base::Thread::Current(), talk_base::Thread::Current(), NULL);
+        talk_base::Thread::Current(), talk_base::Thread::Current(), NULL, NULL);
     ASSERT_TRUE(pc_factory_.get() != NULL);
   }
 
@@ -974,6 +974,26 @@ TEST_F(PeerConnectionInterfaceTest, ReceiveFireFoxOffer) {
       cricket::GetFirstDataContent(pc_->local_description()->description());
   ASSERT_TRUE(content != NULL);
   EXPECT_TRUE(content->rejected);
+}
+
+// Test that we can create an audio only offer and receive an answer with a
+// limited set of audio codecs and receive an updated offer with more audio
+// codecs, where the added codecs are not supported.
+TEST_F(PeerConnectionInterfaceTest, ReceiveUpdatedAudioOfferWithBadCodecs) {
+  CreatePeerConnection();
+  AddVoiceStream("audio_label");
+  CreateOfferAsLocalDescription();
+
+  SessionDescriptionInterface* answer =
+      webrtc::CreateSessionDescription(SessionDescriptionInterface::kAnswer,
+                                       webrtc::kAudioSdp);
+  EXPECT_TRUE(DoSetSessionDescription(answer, false));
+
+  SessionDescriptionInterface* updated_offer =
+      webrtc::CreateSessionDescription(SessionDescriptionInterface::kOffer,
+                                       webrtc::kAudioSdpWithUnsupportedCodecs);
+  EXPECT_TRUE(DoSetSessionDescription(updated_offer, false));
+  CreateAnswerAsLocalDescription();
 }
 
 // Test that PeerConnection::Close changes the states to closed and all remote

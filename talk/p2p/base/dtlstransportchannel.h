@@ -196,6 +196,9 @@ class DtlsTransportChannelWrapper : public TransportChannelImpl {
                                        const std::string& ice_pwd) {
     channel_->SetRemoteIceCredentials(ice_ufrag, ice_pwd);
   }
+  virtual void SetRemoteIceMode(IceMode mode) {
+    channel_->SetRemoteIceMode(mode);
+  }
 
   virtual void Connect();
   virtual void Reset();

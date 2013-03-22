@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2004--2011, Google Inc.
+ * Copyright 2013, Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,49 +25,29 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_BASE_LIBDBUSGLIBSYMBOLTABLE_H_
-#define TALK_BASE_LIBDBUSGLIBSYMBOLTABLE_H_
+#ifndef TALK_MEDIA_WEBRTC_WEBRTCVIDEODECODERFACTORY_H_
+#define TALK_MEDIA_WEBRTC_WEBRTCVIDEODECODERFACTORY_H_
 
-#ifdef HAVE_DBUS_GLIB
+#include "talk/base/refcount.h"
+#include "webrtc/common_types.h"
 
-#include <dbus/dbus-glib.h>
-#include <dbus/dbus-glib-lowlevel.h>
+namespace webrtc {
+class VideoDecoder;
+}
 
-#include "talk/base/latebindingsymboltable.h"
+namespace cricket {
 
-namespace talk_base {
+class WebRtcVideoDecoderFactory {
+ public:
+  // Caller takes the ownership of the returned object and it should be released
+  // by calling DestroyVideoDecoder().
+  virtual webrtc::VideoDecoder* CreateVideoDecoder(
+      webrtc::VideoCodecType type) = 0;
+  virtual ~WebRtcVideoDecoderFactory() {}
 
-#define LIBDBUS_GLIB_CLASS_NAME LibDBusGlibSymbolTable
-// The libdbus-glib symbols we need, as an X-Macro list.
-// This list must contain precisely every libdbus-glib function that is used in
-// dbus.cc.
-#define LIBDBUS_GLIB_SYMBOLS_LIST \
-  X(dbus_bus_add_match) \
-  X(dbus_connection_add_filter) \
-  X(dbus_connection_close) \
-  X(dbus_connection_remove_filter) \
-  X(dbus_connection_set_exit_on_disconnect) \
-  X(dbus_g_bus_get) \
-  X(dbus_g_bus_get_private) \
-  X(dbus_g_connection_get_connection) \
-  X(dbus_g_connection_unref) \
-  X(dbus_g_thread_init) \
-  X(dbus_message_get_interface) \
-  X(dbus_message_get_member) \
-  X(dbus_message_get_path) \
-  X(dbus_message_get_type) \
-  X(dbus_message_iter_get_arg_type) \
-  X(dbus_message_iter_get_basic) \
-  X(dbus_message_iter_init) \
-  X(dbus_message_ref) \
-  X(dbus_message_unref)
+  virtual void DestroyVideoDecoder(webrtc::VideoDecoder* decoder) = 0;
+};
 
-#define LATE_BINDING_SYMBOL_TABLE_CLASS_NAME LIBDBUS_GLIB_CLASS_NAME
-#define LATE_BINDING_SYMBOL_TABLE_SYMBOLS_LIST LIBDBUS_GLIB_SYMBOLS_LIST
-#include "talk/base/latebindingsymboltable.h.def"
+}  // namespace cricket
 
-}  // namespace talk_base
-
-#endif  // HAVE_DBUS_GLIB
-
-#endif  // TALK_BASE_LIBDBUSGLIBSYMBOLTABLE_H_
+#endif  // TALK_MEDIA_WEBRTC_WEBRTCVIDEODECODERFACTORY_H_

@@ -35,6 +35,7 @@
 #include "talk/base/helpers.h"
 #include "talk/base/logging.h"
 #include "talk/base/scoped_ptr.h"
+#include "talk/media/base/constants.h"
 #include "talk/media/base/cryptoparams.h"
 #include "talk/p2p/base/constants.h"
 #include "talk/session/media/channelmanager.h"
@@ -640,8 +641,8 @@ static bool CreateMediaContentOffer(
 
 template <class C>
 static void NegotiateCodecs(const std::vector<C>& local_codecs,
-                     const std::vector<C>& offered_codecs,
-                     std::vector<C>* negotiated_codecs) {
+                            const std::vector<C>& offered_codecs,
+                            std::vector<C>* negotiated_codecs) {
   typename std::vector<C>::const_iterator ours;
   for (ours = local_codecs.begin();
        ours != local_codecs.end(); ++ours) {
@@ -649,7 +650,8 @@ static void NegotiateCodecs(const std::vector<C>& local_codecs,
     for (theirs = offered_codecs.begin();
          theirs != offered_codecs.end(); ++theirs) {
       if (ours->Matches(*theirs)) {
-        C negotiated(*ours);
+        C negotiated = *ours;
+        negotiated.IntersectFeedbackParams(*theirs);
         if (IsRtxCodec(negotiated)) {
           // Since we use the payload type from the |offered_codecs|, we also
           // need to use the referenced payload type.

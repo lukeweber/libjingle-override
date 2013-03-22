@@ -90,6 +90,55 @@ static const char kFireFoxSdpOffer[] =
     "a=candidate:5 2 UDP 1694302206 74.95.2.170 45468 typ srflx raddr"
     " 10.0.254.2 rport 61232\r\n";
 
+// Audio SDP with a limited set of audio codecs.
+static const char kAudioSdp[] =
+    "v=0\r\n"
+    "o=- 7859371131 2 IN IP4 192.168.30.208\r\n"
+    "s=-\r\n"
+    "c=IN IP4 192.168.30.208\r\n"
+    "t=0 0\r\n"
+    "m=audio 16000 RTP/SAVPF 0 8 126\r\n"
+    "a=rtpmap:0 PCMU/8000\r\n"
+    "a=rtpmap:8 PCMA/8000\r\n"
+    "a=rtpmap:126 telephone-event/8000\r\n"
+    "a=sendrecv\r\n"
+    "a=rtcp:16000 IN IP4 192.168.30.208\r\n"
+    "a=rtcp-mux\r\n"
+    "a=crypto:1 AES_CM_128_HMAC_SHA1_80 "
+    "inline:tvKIFjbMQ7W0/C2RzhwN0oQglj/7GJg+frdsNRxt\r\n"
+    "a=ice-ufrag:AI2sRT3r\r\n"
+    "a=ice-pwd:lByS9z2RSQlSE9XurlvjYmEm\r\n"
+    "a=ssrc:4227871655 cname:GeAAgb6XCPNLVMX5\r\n"
+    "a=ssrc:4227871655 msid:1NFAV3iD08ioO2339rQS9pfOI9mDf6GeG9F4 a0\r\n"
+    "a=ssrc:4227871655 mslabel:1NFAV3iD08ioO2339rQS9pfOI9mDf6GeG9F4\r\n"
+    "a=ssrc:4227871655 label:1NFAV3iD08ioO2339rQS9pfOI9mDf6GeG9F4a0\r\n"
+    "a=mid:audio\r\n";
+
+static const char kAudioSdpWithUnsupportedCodecs[] =
+    "v=0\r\n"
+    "o=- 6858750541 2 IN IP4 192.168.30.208\r\n"
+    "s=-\r\n"
+    "c=IN IP4 192.168.30.208\r\n"
+    "t=0 0\r\n"
+    "m=audio 16000 RTP/SAVPF 0 8 18 110 126\r\n"
+    "a=rtpmap:0 PCMU/8000\r\n"
+    "a=rtpmap:8 PCMA/8000\r\n"
+    "a=rtpmap:18 WeirdCodec1/8000\r\n"
+    "a=rtpmap:110 WeirdCodec2/8000\r\n"
+    "a=rtpmap:126 telephone-event/8000\r\n"
+    "a=sendonly\r\n"
+    "a=rtcp:16000 IN IP4 192.168.30.208\r\n"
+    "a=rtcp-mux\r\n"
+    "a=crypto:1 AES_CM_128_HMAC_SHA1_80 "
+    "inline:tvKIFjbMQ7W0/C2RzhwN0oQglj/7GJg+frdsNRxt\r\n"
+    "a=ice-ufrag:AI2sRT3r\r\n"
+    "a=ice-pwd:lByS9z2RSQlSE9XurlvjYmEm\r\n"
+    "a=ssrc:4227871655 cname:TsmD02HRfhkJBm4m\r\n"
+    "a=ssrc:4227871655 msid:7nU0TApbB-n4dfPlCplWT9QTEsbBDS1IlpW3 a0\r\n"
+    "a=ssrc:4227871655 mslabel:7nU0TApbB-n4dfPlCplWT9QTEsbBDS1IlpW3\r\n"
+    "a=ssrc:4227871655 label:7nU0TApbB-n4dfPlCplWT9QTEsbBDS1IlpW3a0\r\n"
+    "a=mid:audio\r\n";
+
 }  // namespace webrtc
 
 #endif  // TALK_APP_WEBRTC_TEST_TESTSDPSTRINGS_H_

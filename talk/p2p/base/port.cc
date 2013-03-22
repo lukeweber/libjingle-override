@@ -736,9 +736,13 @@ class ConnectionRequest : public StunRequest {
             STUN_ATTR_ICE_CONTROLLING, connection_->port()->Tiebreaker()));
         // Since we are trying aggressive nomination, sending USE-CANDIDATE
         // attribute in every ping.
-        // Adding USE-CANDIDATE attribute, if the flag is set to true.
-        request->AddAttribute(new StunByteStringAttribute(
-            STUN_ATTR_USE_CANDIDATE));
+        // If we are dealing with a ice-lite end point, nomination flag
+        // in Connection will be set to false by default. Once the connection
+        // becomes "best connection", nomination flag will be turned on.
+        if (connection_->use_candidate_attr()) {
+          request->AddAttribute(new StunByteStringAttribute(
+              STUN_ATTR_USE_CANDIDATE));
+        }
       } else if (connection_->port()->Role() == ROLE_CONTROLLED) {
         request->AddAttribute(new StunUInt64Attribute(
             STUN_ATTR_ICE_CONTROLLED, connection_->port()->Tiebreaker()));
@@ -797,10 +801,10 @@ Connection::Connection(Port* port, size_t index,
   : port_(port), local_candidate_index_(index),
     remote_candidate_(remote_candidate), read_state_(STATE_READ_INIT),
     write_state_(STATE_WRITE_INIT), connected_(true), pruned_(false),
-    requests_(port->thread()), rtt_(DEFAULT_RTT),
-    last_ping_sent_(0), last_ping_received_(0), last_data_received_(0),
-    last_ping_response_received_(0), reported_(false), nominated_(false),
-    state_(STATE_WAITING) {
+    use_candidate_attr_(true), remote_ice_mode_(ICEMODE_FULL),
+    requests_(port->thread()), rtt_(DEFAULT_RTT), last_ping_sent_(0),
+    last_ping_received_(0), last_data_received_(0),
+    last_ping_response_received_(0), reported_(false), state_(STATE_WAITING) {
   // All of our connections start in WAITING state.
   // TODO(mallinath) - Start connections from STATE_FROZEN.
   // Wire up to send stun packets
@@ -875,6 +879,10 @@ void Connection::set_connected(bool value) {
   if (value != old_value) {
     LOG_J(LS_VERBOSE, this) << "set_connected";
   }
+}
+
+void Connection::set_use_candidate_attr(bool enable) {
+  use_candidate_attr_ = enable;
 }
 
 void Connection::OnSendStunPacket(const void* data, size_t size,
@@ -1157,6 +1165,12 @@ void Connection::OnConnectionRequestResponse(ConnectionRequest* request,
   set_write_state(STATE_WRITABLE);
   set_state(STATE_SUCCEEDED);
 
+  if (remote_ice_mode_ == ICEMODE_LITE) {
+    // A ice-lite end point never initiates ping requests. This will allow
+    // us to move to STATE_READABLE.
+    ReceivedPing();
+  }
+
   std::string pings;
   for (size_t i = 0; i < pings_since_last_response_.size(); ++i) {
     char buf[32];
@@ -1231,9 +1245,6 @@ void Connection::CheckTimeout() {
 }
 
 void Connection::HandleRoleConflictFromPeer() {
-  // Maybe we should reverse the nominated flag if we are in controlling mode.
-  if (port_->Role() == ROLE_CONTROLLING)
-    nominated_ = false;  // Role change will be done from Transport.
   port_->SignalRoleConflict();
 }
 

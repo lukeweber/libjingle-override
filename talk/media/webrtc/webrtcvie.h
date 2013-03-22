@@ -34,11 +34,13 @@
 #include "webrtc/common_types.h"
 #include "webrtc/modules/interface/module_common_types.h"
 #include "webrtc/modules/video_capture/include/video_capture.h"
+#include "webrtc/modules/video_coding/codecs/interface/video_codec_interface.h"
 #include "webrtc/modules/video_render/include/video_render.h"
 #include "webrtc/video_engine/include/vie_base.h"
 #include "webrtc/video_engine/include/vie_capture.h"
 #include "webrtc/video_engine/include/vie_codec.h"
 #include "webrtc/video_engine/include/vie_errors.h"
+#include "webrtc/video_engine/include/vie_external_codec.h"
 #include "webrtc/video_engine/include/vie_image_process.h"
 #include "webrtc/video_engine/include/vie_network.h"
 #include "webrtc/video_engine/include/vie_render.h"
@@ -85,13 +87,14 @@ class ViEWrapper {
       : engine_(webrtc::VideoEngine::Create()),
         base_(engine_), codec_(engine_), capture_(engine_),
         network_(engine_), render_(engine_), rtp_(engine_),
-        image_(engine_) {
+        image_(engine_), ext_codec_(engine_) {
   }
 
   ViEWrapper(webrtc::ViEBase* base, webrtc::ViECodec* codec,
              webrtc::ViECapture* capture, webrtc::ViENetwork* network,
              webrtc::ViERender* render, webrtc::ViERTP_RTCP* rtp,
-             webrtc::ViEImageProcess* image)
+             webrtc::ViEImageProcess* image,
+             webrtc::ViEExternalCodec* ext_codec)
       : engine_(NULL),
         base_(base),
         codec_(codec),
@@ -99,7 +102,8 @@ class ViEWrapper {
         network_(network),
         render_(render),
         rtp_(rtp),
-        image_(image) {
+        image_(image),
+        ext_codec_(ext_codec) {
   }
 
   virtual ~ViEWrapper() {}
@@ -111,6 +115,7 @@ class ViEWrapper {
   webrtc::ViERender* render() { return render_.get(); }
   webrtc::ViERTP_RTCP* rtp() { return rtp_.get(); }
   webrtc::ViEImageProcess* image() { return image_.get(); }
+  webrtc::ViEExternalCodec* ext_codec() { return ext_codec_.get(); }
   int error() { return base_->LastError(); }
 
  private:
@@ -122,6 +127,7 @@ class ViEWrapper {
   scoped_vie_ptr<webrtc::ViERender> render_;
   scoped_vie_ptr<webrtc::ViERTP_RTCP> rtp_;
   scoped_vie_ptr<webrtc::ViEImageProcess> image_;
+  scoped_vie_ptr<webrtc::ViEExternalCodec> ext_codec_;
 };
 
 // Adds indirection to static WebRtc functions, allowing them to be mocked.

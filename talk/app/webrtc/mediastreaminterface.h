@@ -37,7 +37,6 @@
 #include <string>
 #include <vector>
 
-#include "talk/app/webrtc/webrtcexport.h"
 #include "talk/base/basictypes.h"
 #include "talk/base/refcount.h"
 #include "talk/base/scoped_ref_ptr.h"
@@ -187,7 +186,7 @@ class MediaStreamInterface : public talk_base::RefCountInterface,
 // MediaConstraintsInterface
 // Interface used for passing arguments about media constraints
 // to the MediaStream and PeerConnection implementation.
-class PEERCONNECTION_EXPORT MediaConstraintsInterface {
+class MediaConstraintsInterface {
  public:
   struct Constraint {
     Constraint() {}
@@ -201,6 +200,7 @@ class PEERCONNECTION_EXPORT MediaConstraintsInterface {
 
   virtual const Constraints& GetMandatory() const = 0;
   virtual const Constraints& GetOptional() const = 0;
+
 
   // Constraint keys used by a local video source.
   // Specified by draft-alvestrand-constraints-resolution-00b
@@ -217,6 +217,7 @@ class PEERCONNECTION_EXPORT MediaConstraintsInterface {
   // These keys are google specific.
   static const char kEchoCancellation[];  // googEchoCancellation
   static const char kAutoGainControl[];  // googAutoGainControl
+  static const char kExperimentalAutoGainControl[];  // googAutoGainControl2
   static const char kNoiseSuppression[];  // googNoiseSuppression
   static const char kHighpassFilter[];  // googHighpassFilter
 

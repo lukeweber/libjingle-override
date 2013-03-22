@@ -29,6 +29,8 @@
 
 #include "talk/base/dbus.h"
 
+#include <glib.h>
+
 #include "talk/base/logging.h"
 #include "talk/base/thread.h"
 
@@ -169,7 +171,7 @@ class DBusMonitor::DBusMonitoringThread : public talk_base::Thread {
       return;
     }
     monitor_->OnMonitoringStatusChanged(DMS_RUNNING);
-    GetSymbols()->g_main_loop_run()(mainloop_);
+    g_main_loop_run(mainloop_);
     monitor_->OnMonitoringStatusChanged(DMS_STOPPED);
 
     // Done normally. Clean up DBus connection.
@@ -181,10 +183,10 @@ class DBusMonitor::DBusMonitoringThread : public talk_base::Thread {
   virtual void Stop() {
     ASSERT(NULL == idle_source_);
     // Add an idle source and let the gmainloop quit on idle.
-    idle_source_ = GetSymbols()->g_idle_source_new()();
+    idle_source_ = g_idle_source_new();
     if (idle_source_) {
-      GetSymbols()->g_source_set_callback()(idle_source_, &Idle, this, NULL);
-      GetSymbols()->g_source_attach()(idle_source_, context_);
+      g_source_set_callback(idle_source_, &Idle, this, NULL);
+      g_source_attach(idle_source_, context_);
     } else {
       LOG(LS_ERROR) << "g_idle_source_new() failed.";
       QuitGMainloop();  // Try to quit anyway.
@@ -241,7 +243,7 @@ class DBusMonitor::DBusMonitoringThread : public talk_base::Thread {
 
   // Sets up the monitoring thread.
   bool Setup() {
-    GetSymbols()->g_main_context_push_thread_default()(context_);
+    g_main_context_push_thread_default(context_);
 
     // Start connection to dbus.
     // If dbus daemon is not running, returns false immediately.
@@ -271,9 +273,9 @@ class DBusMonitor::DBusMonitoringThread : public talk_base::Thread {
   void CleanUp() {
     if (idle_source_) {
       // We did an attach() with the GSource, so we need to destroy() it.
-      GetSymbols()->g_source_destroy()(idle_source_);
+      g_source_destroy(idle_source_);
       // We need to unref() the GSource to end the last reference we got.
-      GetSymbols()->g_source_unref()(idle_source_);
+      g_source_unref(idle_source_);
       idle_source_ = NULL;
     }
     if (connection_) {
@@ -285,9 +287,9 @@ class DBusMonitor::DBusMonitoringThread : public talk_base::Thread {
       GetSymbols()->dbus_g_connection_unref()(connection_);
       connection_ = NULL;
     }
-    GetSymbols()->g_main_loop_unref()(mainloop_);
+    g_main_loop_unref(mainloop_);
     mainloop_ = NULL;
-    GetSymbols()->g_main_context_unref()(context_);
+    g_main_context_unref(context_);
     context_ = NULL;
   }
 
@@ -299,7 +301,7 @@ class DBusMonitor::DBusMonitoringThread : public talk_base::Thread {
 
   // We only hit this when ready to quit.
   void QuitGMainloop() {
-    GetSymbols()->g_main_loop_quit()(mainloop_);
+    g_main_loop_quit(mainloop_);
   }
 
   DBusMonitor *monitor_;
@@ -354,20 +356,20 @@ bool DBusMonitor::AddFilter(DBusSigFilter *filter) {
 
 bool DBusMonitor::StartMonitoring() {
   if (!monitoring_thread_) {
-    GetSymbols()->g_type_init()();
-    GetSymbols()->g_thread_init()(NULL);
+    g_type_init();
+    g_thread_init(NULL);
     GetSymbols()->dbus_g_thread_init()();
 
-    GMainContext *context = GetSymbols()->g_main_context_new()();
+    GMainContext *context = g_main_context_new();
     if (NULL == context) {
       LOG(LS_ERROR) << "g_main_context_new() failed.";
       return false;
     }
 
-    GMainLoop *mainloop = GetSymbols()->g_main_loop_new()(context, FALSE);
+    GMainLoop *mainloop = g_main_loop_new(context, FALSE);
     if (NULL == mainloop) {
       LOG(LS_ERROR) << "g_main_loop_new() failed.";
-      GetSymbols()->g_main_context_unref()(context);
+      g_main_context_unref(context);
       return false;
     }
 
@@ -375,8 +377,8 @@ bool DBusMonitor::StartMonitoring() {
                                                   &filter_list_);
     if (monitoring_thread_ == NULL) {
       LOG(LS_ERROR) << "Failed to create DBus monitoring thread.";
-      GetSymbols()->g_main_context_unref()(context);
-      GetSymbols()->g_main_loop_unref()(mainloop);
+      g_main_context_unref(context);
+      g_main_loop_unref(mainloop);
       return false;
     }
     monitoring_thread_->Start();

@@ -1350,6 +1350,11 @@ bool Session::OnRedirectError(const SessionRedirect& redirect,
 
 bool Session::CheckState(State expected, MessageError* error) {
   if (state() != expected) {
+    // The server can deliver messages out of order/repeated for various
+    // reasons. For example, if the server does not recive our iq response,
+    // it could assume that the iq it sent was lost, and will then send
+    // it again. Ideally, we should implement reliable messaging with
+    // duplicate elimination.
     return BadMessage(buzz::QN_STANZA_NOT_ALLOWED,
                       "message not allowed in current state",
                       error);

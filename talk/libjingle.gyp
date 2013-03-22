@@ -63,7 +63,8 @@
               ],
               'link_settings': {
                 'libraries': [
-                  '<!@(pkg-config --libs-only-l gtk+-2.0 gthread-2.0)',
+                  '<!@(pkg-config --libs-only-l gobject-2.0 gthread-2.0'
+                      ' gtk+-2.0)',
                 ],
               },
             }],
@@ -467,6 +468,7 @@
         'media/webrtc/webrtcpassthroughrender.h',
         'media/webrtc/webrtcvideocapturer.cc',
         'media/webrtc/webrtcvideocapturer.h',
+        'media/webrtc/webrtcvideodecoderfactory.h',
         'media/webrtc/webrtcvideoengine.cc',
         'media/webrtc/webrtcvideoengine.h',
         'media/webrtc/webrtcvideoframe.cc',
@@ -490,7 +492,7 @@
             'third_party/libudev'
           ],
           'cflags': [
-            '<!@(pkg-config --cflags gtk+-2.0)',
+            '<!@(pkg-config --cflags gobject-2.0 gthread-2.0 gtk+-2.0)',
           ],
           'libraries': [
             '-lrt',

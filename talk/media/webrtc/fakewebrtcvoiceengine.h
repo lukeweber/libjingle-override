@@ -375,7 +375,8 @@ class FakeWebRtcVoiceEngine
     if (codec.pltype != -1) {
       for (std::vector<webrtc::CodecInst>::iterator it =
           ch->recv_codecs.begin(); it != ch->recv_codecs.end(); ++it) {
-        if (it->pltype == codec.pltype) {
+        if (it->pltype == codec.pltype &&
+            _stricmp(it->plname, codec.plname) != 0) {
           return -1;
         }
       }
@@ -449,10 +450,12 @@ class FakeWebRtcVoiceEngine
 
   WEBRTC_STUB(SetDtmfFeedbackStatus, (bool enable, bool directFeedback));
   WEBRTC_STUB(GetDtmfFeedbackStatus, (bool& enabled, bool& directFeedback));
+#ifndef USE_WEBRTC_DEV_BRANCH
   WEBRTC_STUB(RegisterTelephoneEventDetection, (int channel,
       webrtc::TelephoneEventDetectionMethods detectionMethod,
       webrtc::VoETelephoneEventObserver& observer));
   WEBRTC_STUB(DeRegisterTelephoneEventDetection, (int channel));
+#endif
   WEBRTC_STUB(SetDtmfPlayoutStatus, (int channel, bool enable));
   WEBRTC_STUB(GetDtmfPlayoutStatus, (int channel, bool& enabled));
 
@@ -466,8 +469,10 @@ class FakeWebRtcVoiceEngine
   WEBRTC_STUB(StartPlayingDtmfTone,
       (int eventCode, int attenuationDb = 10));
   WEBRTC_STUB(StopPlayingDtmfTone, ());
+#ifndef USE_WEBRTC_DEV_BRANCH
   WEBRTC_STUB(GetTelephoneEventDetectionStatus, (int channel,
       bool& enabled, webrtc::TelephoneEventDetectionMethods& detectionMethod));
+#endif
 
   // webrtc::VoEFile
   WEBRTC_FUNC(StartPlayingFileLocally, (int channel, const char* fileNameUTF8,
