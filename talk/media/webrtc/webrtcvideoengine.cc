@@ -921,7 +921,7 @@ bool WebRtcVideoEngine::CanSendCodec(const VideoCodec& requested,
        local_max < video_codecs_.end();
        ++local_max) {
     // First match codecs by payload type
-    if (!requested.Matches(local_max->id, local_max->name)) {
+    if (!requested.Matches(*local_max)) {
       continue;
     }
 

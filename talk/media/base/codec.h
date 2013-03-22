@@ -91,7 +91,6 @@ struct Codec {
   Codec() : id(0), clockrate(0), preference(0) {}
 
   // Indicates if this codec is compatible with the specified codec.
-  bool Matches(int id, const std::string& name) const;
   bool Matches(const Codec& codec) const;
 
   // Find the parameter for |name| and write the value to |out|.
@@ -147,7 +146,6 @@ struct AudioCodec : public Codec {
   AudioCodec() : Codec(), bitrate(0), channels(0) {}
 
   // Indicates if this codec is compatible with the specified codec.
-  bool Matches(int payload, const std::string& nm) const;
   bool Matches(const AudioCodec& codec) const;
 
   static bool Preferable(const AudioCodec& first, const AudioCodec& other) {

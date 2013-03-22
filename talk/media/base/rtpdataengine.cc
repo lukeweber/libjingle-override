@@ -45,6 +45,8 @@ static const size_t kDataMaxRtpPacketLen = 1200U;
 static const unsigned char kReservedSpace[] = {
   0x00, 0x00, 0x00, 0x00
 };
+static const DataCodec kGoogleDataCodec(
+  kGoogleDataCodecId, kGoogleDataCodecName, 0);
 // Amount of overhead SRTP may take.  We need to leave room in the
 // buffer for it, otherwise SRTP will fail later.  If SRTP ever uses
 // more than this, we need to increase this number.
@@ -121,7 +123,7 @@ void RtpClock::Tick(
 const DataCodec* FindUnknownCodec(const std::vector<DataCodec>& codecs) {
   std::vector<cricket::DataCodec>::const_iterator iter;
   for (iter = codecs.begin(); iter != codecs.end(); ++iter) {
-    if (!iter->Matches(kGoogleDataCodecId, kGoogleDataCodecName)) {
+    if (!iter->Matches(kGoogleDataCodec)) {
       return &(*iter);
     }
   }
@@ -131,7 +133,7 @@ const DataCodec* FindUnknownCodec(const std::vector<DataCodec>& codecs) {
 const DataCodec* FindKnownCodec(const std::vector<DataCodec>& codecs) {
   std::vector<cricket::DataCodec>::const_iterator iter;
   for (iter = codecs.begin(); iter != codecs.end(); ++iter) {
-    if (iter->Matches(kGoogleDataCodecId, kGoogleDataCodecName)) {
+    if (iter->Matches(kGoogleDataCodec)) {
       return &(*iter);
     }
   }

@@ -87,13 +87,11 @@ bool FeedbackParams::HasDuplicateEntries() const {
   return false;
 }
 
-bool Codec::Matches(int payload, const std::string& nm) const {
-  return (payload <= kMaxStaticPayloadId) ?
-      (id == payload) : (_stricmp(name.c_str(), nm.c_str()) == 0);
-}
-
 bool Codec::Matches(const Codec& codec) const {
-  return Matches(codec.id, codec.name);
+  // Match the codec id/name based on the typical static/dynamic name rules.
+  // Matching is case-insensitive.
+  return (codec.id <= kMaxStaticPayloadId) ?
+      (id == codec.id) : (_stricmp(name.c_str(), codec.name.c_str()) == 0);
 }
 
 bool Codec::GetParam(const std::string& name, std::string* out) const {
@@ -131,13 +129,6 @@ void Codec::IntersectFeedbackParams(const Codec& other) {
   feedback_params.Intersect(other.feedback_params);
 }
 
-bool AudioCodec::Matches(int payload, const std::string& nm) const {
-  // Match the codec id/name based on the typical static/dynamic name rules.
-  // Matching is case-insensitive.
-  return (payload <= kMaxStaticPayloadId) ?
-      (id == payload) : (_stricmp(name.c_str(), nm.c_str()) == 0);
-}
-
 bool AudioCodec::Matches(const AudioCodec& codec) const {
   // If a nonzero clockrate is specified, it must match the actual clockrate.
   // If a nonzero bitrate is specified, it must match the actual bitrate,
@@ -148,7 +139,7 @@ bool AudioCodec::Matches(const AudioCodec& codec) const {
   // omitted if the number of channels is one."
   // Preference is ignored.
   // TODO(juberti): Treat a zero clockrate as 8000Hz, the RTP default clockrate.
-  return Matches(codec.id, codec.name) &&
+  return Codec::Matches(codec) &&
       ((codec.clockrate == 0 /*&& clockrate == 8000*/) ||
           clockrate == codec.clockrate) &&
       (codec.bitrate == 0 || bitrate <= 0 || bitrate == codec.bitrate) &&
