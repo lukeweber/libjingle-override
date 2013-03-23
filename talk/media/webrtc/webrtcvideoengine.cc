@@ -2213,7 +2213,7 @@ bool WebRtcVideoMediaChannel::SetCapturer(uint32 ssrc,
   capturer->SignalVideoFrame.connect(
       this,
       &WebRtcVideoMediaChannel::SendFrame);
-  if (!capturer->IsScreencast()) {
+  if (!capturer->IsScreencast() && ratio_w_ != 0 && ratio_h_ != 0) {
     capturer->UpdateAspectRatio(ratio_w_, ratio_h_);
   }
   const int64 timestamp = send_channel->local_stream_info()->time_stamp();
@@ -2507,6 +2507,8 @@ void WebRtcVideoMediaChannel::SetInterface(NetworkInterface* iface) {
 }
 
 void WebRtcVideoMediaChannel::UpdateAspectRatio(int ratio_w, int ratio_h) {
+  ASSERT(ratio_w != 0);
+  ASSERT(ratio_h != 0);
   ratio_w_ = ratio_w;
   ratio_h_ = ratio_h;
   // For now assume that all streams want the same aspect ratio.

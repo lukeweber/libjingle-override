@@ -109,6 +109,11 @@ bool VideoCapturer::StartCapturing(const VideoFormat& capture_format) {
 }
 
 void VideoCapturer::UpdateAspectRatio(int ratio_w, int ratio_h) {
+  if (ratio_w == 0 || ratio_h == 0) {
+    LOG(LS_WARNING) << "UpdateAspectRatio ignored invalid ratio: "
+                    << ratio_w << "x" << ratio_h;
+    return;
+  }
   ratio_w_ = ratio_w;
   ratio_h_ = ratio_h;
 }
@@ -260,6 +265,8 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
     can_crop = cam_aspect <= view_aspect;
   }
   if (can_crop && !IsScreencast()) {
+    // TODO(ronghuawu): The capturer should always produce the native
+    // resolution and the cropping should be done in downstream code.
     ComputeCrop(ratio_w_, ratio_h_, captured_frame->width,
                 abs(captured_frame->height), captured_frame->pixel_width,
                 captured_frame->pixel_height, captured_frame->rotation,
