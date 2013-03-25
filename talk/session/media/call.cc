@@ -266,6 +266,7 @@ bool Call::AddSession(Session* session, const SessionDescription* offer) {
   if (media_session.voice_channel) {
     media_session.voice_channel->SignalMediaMonitor.connect(
         this, &Call::OnMediaMonitor);
+    media_session.voice_channel->SignalAudioPlayout.connect(this, &Call::OnAudioPlayout);
     media_session.voice_channel->StartMediaMonitor(kMediaMonitorInterval);
   } else {
     succeeded = false;
@@ -680,7 +681,6 @@ void Call::StopConnectionMonitor(Session* session) {
 void Call::StartAudioMonitor(Session* session, int cms) {
   VoiceChannel* voice_channel = GetVoiceChannel(session);
   if (voice_channel) {
-    SignalAudioPlayout();
     voice_channel->SignalAudioMonitor.connect(this, &Call::OnAudioMonitor);
     voice_channel->StartAudioMonitor(cms);
   }
@@ -743,6 +743,10 @@ void Call::OnMediaMonitor(VoiceChannel* channel, const VoiceMediaInfo& info) {
 
 void Call::OnAudioMonitor(VoiceChannel* channel, const AudioInfo& info) {
   SignalAudioMonitor(this, info);
+}
+
+void Call::OnAudioPlayout() {
+  SignalAudioPlayout();
 }
 
 void Call::OnSpeakerMonitor(CurrentSpeakerMonitor* monitor, uint32 ssrc) {

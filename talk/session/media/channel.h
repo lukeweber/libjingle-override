@@ -219,6 +219,8 @@ class BaseChannel
 
   // Used to alert UI when the muted status changes, perhaps autonomously.
   sigslot::repeater2<BaseChannel*, bool> SignalAutoMuted;
+  // Used to alert when the channel becomes writable
+  sigslot::signal0<> SignalAudioPlayout;
 
  protected:
   MediaEngineInterface* media_engine() const { return media_engine_; }
@@ -309,6 +311,7 @@ class BaseChannel
   virtual void GetSrtpCiphers(std::vector<std::string>* ciphers) const = 0;
   virtual void OnConnectionMonitorUpdate(SocketMonitor* monitor,
       const std::vector<ConnectionInfo>& infos) = 0;
+
 
  private:
   sigslot::signal3<const void*, size_t, bool> SignalSendPacketPreCrypto;
@@ -441,6 +444,7 @@ class VoiceChannel : public BaseChannel {
   virtual void OnMediaMonitorUpdate(
       VoiceMediaChannel* media_channel, const VoiceMediaInfo& info);
   void OnAudioMonitorUpdate(AudioMonitor* monitor, const AudioInfo& info);
+  void OnReadableWriteableChange(TransportChannel* channel);
   void OnVoiceChannelError(uint32 ssrc, VoiceMediaChannel::Error error);
   void SendLastMediaError();
   void OnSrtpError(uint32 ssrc, SrtpFilter::Mode mode, SrtpFilter::Error error);

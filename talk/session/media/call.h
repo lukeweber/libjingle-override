@@ -185,6 +185,7 @@ class Call : public talk_base::MessageHandler, public sigslot::has_slots<> {
                            const std::vector<ConnectionInfo> &infos);
   void OnMediaMonitor(VoiceChannel* channel, const VoiceMediaInfo& info);
   void OnAudioMonitor(VoiceChannel* channel, const AudioInfo& info);
+  void OnAudioPlayout();
   void OnSpeakerMonitor(CurrentSpeakerMonitor* monitor, uint32 ssrc);
   void OnConnectionMonitor(VideoChannel* channel,
                            const std::vector<ConnectionInfo> &infos);

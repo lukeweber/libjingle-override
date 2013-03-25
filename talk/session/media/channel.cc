@@ -845,9 +845,9 @@ bool BaseChannel::IsStreamMuted_w(uint32 ssrc) {
 
 void BaseChannel::ChannelWritable_w() {
   ASSERT(worker_thread_ == talk_base::Thread::Current());
-  if (writable_)
+  if (writable_) {
     return;
-
+  }
   LOG(LS_INFO) << "Channel socket writable ("
                << transport_channel_->content_name() << ", "
                << transport_channel_->component() << ")"
@@ -1384,6 +1384,10 @@ bool VoiceChannel::Init() {
           rtcp_channel)) {
     return false;
   }
+  transport_channel()->SignalWritableState.connect(
+      this, &VoiceChannel::OnReadableWriteableChange);
+  transport_channel()->SignalReadableState.connect(
+      this, &VoiceChannel::OnReadableWriteableChange);
   media_channel()->SignalMediaError.connect(
       this, &VoiceChannel::OnVoiceChannelError);
   srtp_filter()->SignalSrtpError.connect(
@@ -1755,6 +1759,10 @@ void VoiceChannel::OnMediaMonitorUpdate(
 void VoiceChannel::OnAudioMonitorUpdate(AudioMonitor* monitor,
                                         const AudioInfo& info) {
   SignalAudioMonitor(this, info);
+}
+
+void VoiceChannel::OnReadableWriteableChange(TransportChannel* channel) {
+    SignalAudioPlayout();
 }
 
 void VoiceChannel::OnVoiceChannelError(
