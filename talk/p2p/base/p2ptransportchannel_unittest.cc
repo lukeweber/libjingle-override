@@ -130,7 +130,8 @@ class P2PTransportChannelTestBase : public testing::Test,
         socks_server1_(ss_.get(), kSocksProxyAddrs[0],
                        ss_.get(), kSocksProxyAddrs[0]),
         socks_server2_(ss_.get(), kSocksProxyAddrs[1],
-                       ss_.get(), kSocksProxyAddrs[1]) {
+                       ss_.get(), kSocksProxyAddrs[1]),
+        clear_remote_candidates_ufrag_pwd_(false) {
     ep1_.role_ = cricket::ROLE_CONTROLLING;
     ep2_.role_ = cricket::ROLE_CONTROLLED;
     ep1_.allocator_.reset(new cricket::BasicPortAllocator(
@@ -247,12 +248,18 @@ class P2PTransportChannelTestBase : public testing::Test,
   }
 
   void CreateChannels(int num) {
-    ep1_.cd1_.ch_.reset(
-        CreateChannel(0, cricket::ICE_CANDIDATE_COMPONENT_DEFAULT,
-        kIceUfrag[0], kIcePwd[0]));
+    std::string ice_ufrag_ep1_cd1_ch = kIceUfrag[0];
+    std::string ice_pwd_ep1_cd1_ch = kIcePwd[0];
+    std::string ice_ufrag_ep2_cd1_ch = kIceUfrag[1];
+    std::string ice_pwd_ep2_cd1_ch = kIcePwd[1];
+    ep1_.cd1_.ch_.reset(CreateChannel(
+        0, cricket::ICE_CANDIDATE_COMPONENT_DEFAULT,
+        ice_ufrag_ep1_cd1_ch, ice_pwd_ep1_cd1_ch,
+        ice_ufrag_ep2_cd1_ch, ice_pwd_ep2_cd1_ch));
     ep2_.cd1_.ch_.reset(CreateChannel(
         1, cricket::ICE_CANDIDATE_COMPONENT_DEFAULT,
-        kIceUfrag[1], kIcePwd[1]));
+        ice_ufrag_ep2_cd1_ch, ice_pwd_ep2_cd1_ch,
+        ice_ufrag_ep1_cd1_ch, ice_pwd_ep1_cd1_ch));
     if (num == 2) {
       std::string ice_ufrag_ep1_cd2_ch = kIceUfrag[2];
       std::string ice_pwd_ep1_cd2_ch = kIcePwd[2];
@@ -260,25 +267,30 @@ class P2PTransportChannelTestBase : public testing::Test,
       std::string ice_pwd_ep2_cd2_ch = kIcePwd[3];
       // In BUNDLE each endpoint must share common ICE credentials.
       if (ep1_.allocator_->flags() & cricket::PORTALLOCATOR_ENABLE_BUNDLE) {
-        ice_ufrag_ep1_cd2_ch = kIceUfrag[0];
-        ice_pwd_ep1_cd2_ch = kIcePwd[0];
+        ice_ufrag_ep1_cd2_ch = ice_ufrag_ep1_cd1_ch;
+        ice_pwd_ep1_cd2_ch = ice_pwd_ep1_cd1_ch;
       }
       if (ep2_.allocator_->flags() & cricket::PORTALLOCATOR_ENABLE_BUNDLE) {
-        ice_ufrag_ep2_cd2_ch = kIceUfrag[1];
-        ice_pwd_ep2_cd2_ch = kIcePwd[1];
+        ice_ufrag_ep2_cd2_ch = ice_ufrag_ep2_cd1_ch;
+        ice_pwd_ep2_cd2_ch = ice_pwd_ep2_cd1_ch;
       }
       ep1_.cd2_.ch_.reset(CreateChannel(
           0, cricket::ICE_CANDIDATE_COMPONENT_DEFAULT,
-          ice_ufrag_ep1_cd2_ch, ice_pwd_ep1_cd2_ch));
+          ice_ufrag_ep1_cd2_ch, ice_pwd_ep1_cd2_ch,
+          ice_ufrag_ep2_cd2_ch, ice_pwd_ep2_cd2_ch));
       ep2_.cd2_.ch_.reset(CreateChannel(
           1, cricket::ICE_CANDIDATE_COMPONENT_DEFAULT,
-          ice_ufrag_ep2_cd2_ch, ice_pwd_ep2_cd2_ch));
+          ice_ufrag_ep2_cd2_ch, ice_pwd_ep2_cd2_ch,
+          ice_ufrag_ep1_cd2_ch, ice_pwd_ep1_cd2_ch));
     }
   }
-  cricket::P2PTransportChannel* CreateChannel(int endpoint,
-                                              int component,
-                                              const std::string& ice_ufrag,
-                                              const std::string& ice_pwd) {
+  cricket::P2PTransportChannel* CreateChannel(
+      int endpoint,
+      int component,
+      const std::string& local_ice_ufrag,
+      const std::string& local_ice_pwd,
+      const std::string& remote_ice_ufrag,
+      const std::string& remote_ice_pwd) {
     cricket::P2PTransportChannel* channel = new cricket::P2PTransportChannel(
         "test content name", component, NULL, GetAllocator(endpoint));
     channel->SignalRequestSignaling.connect(
@@ -290,7 +302,12 @@ class P2PTransportChannelTestBase : public testing::Test,
     channel->SignalRoleConflict.connect(
         this, &P2PTransportChannelTestBase::OnRoleConflict);
     channel->SetIceProtocolType(GetEndpoint(endpoint)->protocol_type());
-    channel->SetIceCredentials(ice_ufrag, ice_pwd);
+    channel->SetIceCredentials(local_ice_ufrag, local_ice_pwd);
+    if (clear_remote_candidates_ufrag_pwd_) {
+      // This only needs to be set if we're clearing them from the
+      // candidates.  Some unit tests rely on this not being set.
+      channel->SetRemoteIceCredentials(remote_ice_ufrag, remote_ice_pwd);
+    }
     channel->SetRole(GetEndpoint(endpoint)->role());
     channel->SetTiebreaker(GetEndpoint(endpoint)->GetTiebreaker());
     channel->Connect();
@@ -510,7 +527,11 @@ class P2PTransportChannelTestBase : public testing::Test,
     talk_base::scoped_ptr<CandidateData> data(
         static_cast<CandidateData*>(msg->pdata));
     cricket::P2PTransportChannel* rch = GetRemoteChannel(data->channel);
-    const cricket::Candidate& c = data->candidate;
+    cricket::Candidate c = data->candidate;
+    if (clear_remote_candidates_ufrag_pwd_) {
+      c.set_username("");
+      c.set_password("");
+    }
     LOG(LS_INFO) << "Candidate(" << data->channel->component() << "->"
                  << rch->component() << "): " << c.type() << ", " << c.protocol()
                  << ", " << c.address().ToString() << ", " << c.username()
@@ -573,6 +594,10 @@ class P2PTransportChannelTestBase : public testing::Test,
     return GetChannelData(ch)->ch_packets_;
   }
 
+  void set_clear_remote_candidates_ufrag_pwd(bool clear) {
+    clear_remote_candidates_ufrag_pwd_ = clear;
+  }
+
  private:
   talk_base::Thread* main_;
   talk_base::scoped_ptr<talk_base::PhysicalSocketServer> pss_;
@@ -586,6 +611,7 @@ class P2PTransportChannelTestBase : public testing::Test,
   talk_base::SocksProxyServer socks_server2_;
   Endpoint ep1_;
   Endpoint ep2_;
+  bool clear_remote_candidates_ufrag_pwd_;
 };
 
 // The tests have only a few outcomes, which we predefine.
@@ -1017,6 +1043,23 @@ TEST_F(P2PTransportChannelTest, SlowSignaling) {
   // unknown username error. We should just eat that and carry on; mishandling
   // this will instead cause all the callee's connections to be discarded.
   SetSignalingDelay(1, 1000);
+  CreateChannels(1);
+  const cricket::Connection* best_connection = NULL;
+  // Wait until the callee's connections are created.
+  WAIT((best_connection = ep2_ch1()->best_connection()) != NULL, 1000);
+  // Wait to see if they get culled; they shouldn't.
+  WAIT(ep2_ch1()->best_connection() != best_connection, 1000);
+  EXPECT_TRUE(ep2_ch1()->best_connection() == best_connection);
+  DestroyChannels();
+}
+
+// Test that if remote candidates don't have ufrag and pwd, we still work.
+TEST_F(P2PTransportChannelTest, RemoteCandidatesWithoutUfragPwd) {
+  set_clear_remote_candidates_ufrag_pwd(true);
+  ConfigureEndpoints(OPEN, OPEN,
+                     PORTALLOCATOR_ENABLE_SHARED_UFRAG,
+                     PORTALLOCATOR_ENABLE_SHARED_UFRAG,
+                     cricket::ICEPROTO_GOOGLE);
   CreateChannels(1);
   const cricket::Connection* best_connection = NULL;
   // Wait until the callee's connections are created.

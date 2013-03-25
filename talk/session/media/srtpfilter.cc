@@ -167,7 +167,7 @@ bool SrtpFilter::SetRtcpParams(const std::string& send_cs,
                                const uint8* recv_key, int recv_key_len) {
   // This can only be called once, but can be safely called after
   // SetRtpParams
-  if (send_rtcp_session_ || send_rtcp_session_) {
+  if (send_rtcp_session_ || recv_rtcp_session_) {
     LOG(LS_ERROR) << "Tried to set SRTCP Params when filter already active";
     return false;
   }

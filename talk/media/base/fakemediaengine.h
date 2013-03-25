@@ -829,7 +829,7 @@ class FakeVideoEngine : public FakeBaseEngine {
                        FOURCC_I420);
   }
 
-  sigslot::signal2<VideoCapturer*, CaptureState> SignalCaptureStateChange;
+  sigslot::repeater2<VideoCapturer*, CaptureState> SignalCaptureStateChange;
 
  private:
   std::vector<FakeVideoMediaChannel*> channels_;

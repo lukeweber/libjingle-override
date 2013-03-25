@@ -82,7 +82,7 @@ struct StreamParams {
             type == other.type &&
             display == other.display &&
             cname == other.cname &&
-            sync_label == sync_label);
+            sync_label == other.sync_label);
   }
   bool operator!=(const StreamParams &other) const {
     return !(*this == other);

@@ -538,6 +538,16 @@ bool P2PTransportChannel::CreateConnections(const Candidate &remote_candidate,
   Candidate new_remote_candidate(remote_candidate);
   new_remote_candidate.set_generation(
       GetRemoteCandidateGeneration(remote_candidate));
+  // ICE candidates don't need to have username and password set, but
+  // the code below this (specifically, ConnectionRequest::Prepare in
+  // port.cc) uses the remote candidates's username.  So, we set it
+  // here.
+  if (remote_candidate.username().empty()) {
+    new_remote_candidate.set_username(remote_ice_ufrag_);
+  }
+  if (remote_candidate.password().empty()) {
+    new_remote_candidate.set_password(remote_ice_pwd_);
+  }
 
   // Add a new connection for this candidate to every port that allows such a
   // connection (i.e., if they have compatible protocols) and that does not
