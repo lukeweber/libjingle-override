@@ -130,7 +130,7 @@ class BasicNetworkManager : public NetworkManagerBase,
  protected:
 #if defined(POSIX)
   // Separated from CreateNetworks for tests.
-  void ConvertIfAddrs(struct ifaddrs* interfaces,
+  void ConvertIfAddrs(ifaddrs* interfaces,
                       bool include_ignored,
                       NetworkList* networks) const;
 #endif  // defined(POSIX)

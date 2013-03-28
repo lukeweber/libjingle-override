@@ -35,11 +35,18 @@
 #include "talk/media/base/codec.h"
 #include "talk/media/base/videocommon.h"
 #include "talk/media/webrtc/webrtccommon.h"
+#include "talk/media/webrtc/webrtcexport.h"
 #include "talk/session/media/channel.h"
 #include "webrtc/video_engine/include/vie_base.h"
 
+#if !defined(LIBPEERCONNECTION_LIB) && \
+    !defined(LIBPEERCONNECTION_IMPLEMENTATION)
+#error "Bogus include."
+#endif
+
 namespace webrtc {
 class VideoCaptureModule;
+class VideoDecoder;
 class VideoRender;
 class ViEExternalCapture;
 }
@@ -59,6 +66,7 @@ class WebRtcLocalStreamInfo;
 class WebRtcRenderAdapter;
 class WebRtcVideoChannelRecvInfo;
 class WebRtcVideoChannelSendInfo;
+class WebRtcVideoDecoderFactory;
 class WebRtcVideoMediaChannel;
 class WebRtcVoiceEngine;
 
@@ -91,6 +99,7 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   WebRtcVideoMediaChannel* CreateChannel(VoiceMediaChannel* voice_channel);
 
   const std::vector<VideoCodec>& codecs() const;
+  const std::vector<RtpHeaderExtension>& rtp_header_extensions() const;
   void SetLogging(int min_sev, const char* filter);
 
   // If capturer is NULL, unregisters the capturer and stops capturing.
@@ -106,11 +115,22 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
 
   // Set the VoiceEngine for A/V sync. This can only be called before Init.
   bool SetVoiceEngine(WebRtcVoiceEngine* voice_engine);
+  // Set a WebRtcVideoDecoderFactory for external decoding. Video engine does
+  // not take the ownership of |decoder_factory|. The caller needs to make sure
+  // that |decoder_factory| outlives the video engine.
+  void SetExternalDecoderFactory(WebRtcVideoDecoderFactory* decoder_factory);
   // Enable the render module with timing control.
   bool EnableTimedRender();
 
   bool RegisterProcessor(VideoProcessor* video_processor);
   bool UnregisterProcessor(VideoProcessor* video_processor);
+
+  // Returns an external decoder for the given codec type. The return value
+  // can be NULL if decoder factory is not given or it does not support the
+  // codec type. The caller takes the ownership of the returned object.
+  webrtc::VideoDecoder* CreateExternalDecoder(webrtc::VideoCodecType type);
+  // Releases the decoder instance created by CreateExternalDecoder().
+  void DestroyExternalDecoder(webrtc::VideoDecoder* decoder);
 
   // Functions called by WebRtcVideoMediaChannel.
   ViEWrapper* vie() { return vie_wrapper_.get(); }
@@ -171,7 +191,9 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   WebRtcVoiceEngine* voice_engine_;
   int log_level_;
   talk_base::scoped_ptr<webrtc::VideoRender> render_module_;
+  WebRtcVideoDecoderFactory* decoder_factory_;
   std::vector<VideoCodec> video_codecs_;
+  std::vector<RtpHeaderExtension> rtp_header_extensions_;
   VideoFormat default_codec_format_;
   bool initialized_;
   talk_base::CriticalSection channels_crit_;
@@ -229,8 +251,11 @@ class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
   virtual bool SetSendRtpHeaderExtensions(
       const std::vector<RtpHeaderExtension>& extensions);
   virtual bool SetSendBandwidth(bool autobw, int bps);
-  virtual bool SetOptions(int options);
-  virtual int GetOptions() const { return options_; }
+  virtual bool SetOptions(const VideoOptions &options);
+  virtual bool GetOptions(VideoOptions *options) const {
+    *options = options_;
+    return true;
+  }
   virtual void SetInterface(NetworkInterface* iface);
   virtual void UpdateAspectRatio(int ratio_w, int ratio_h);
 
@@ -275,16 +300,17 @@ class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
                         uint32 ssrc_key);
   bool ConfigureReceiving(int channel_id, uint32 remote_ssrc_key);
   bool ConfigureSending(int channel_id, uint32 local_ssrc_key);
-  bool SetNackFec(int channel_id, int red_payload_type, int fec_payload_type);
+  bool SetNackFec(int channel_id, int red_payload_type, int fec_payload_type,
+                  bool nack_enabled);
   bool SetSendCodec(const webrtc::VideoCodec& codec, int min_bitrate,
                     int start_bitrate, int max_bitrate);
   bool SetSendCodec(WebRtcVideoChannelSendInfo* send_channel,
                     const webrtc::VideoCodec& codec, int min_bitrate,
                     int start_bitrate, int max_bitrate);
   void LogSendCodecChange(const std::string& reason);
-  // Prepares the channel with channel id |channel_id| to receive all codecs in
-  // |receive_codecs_| and start receive packets.
-  bool SetReceiveCodecs(int channel_id);
+  // Prepares the channel with channel id |info->channel_id()| to receive all
+  // codecs in |receive_codecs_| and start receive packets.
+  bool SetReceiveCodecs(WebRtcVideoChannelRecvInfo* info);
   // Returns the channel number that receives the stream with SSRC |ssrc|.
   int GetRecvChannelNum(uint32 ssrc);
   // Given captured video frame size, checks if we need to reset vie send codec.
@@ -326,9 +352,9 @@ class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
 
   bool DeleteSendChannel(uint32 ssrc_key);
 
-  bool IsOptionSet(int option) const { return (0 != (options_ & option)); }
-  bool InConferenceMode() const { return IsOptionSet(OPT_CONFERENCE); }
-  void OnFrameCaptured(VideoCapturer* capturer, const CapturedFrame* frame);
+  bool InConferenceMode() const {
+    return options_.conference_mode.GetWithDefaultIfUnset(false);
+  }
   bool RemoveCapturer(uint32 ssrc);
 
 
@@ -339,7 +365,8 @@ class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
   WebRtcVideoEngine* engine_;
   VoiceMediaChannel* voice_channel_;
   int vie_channel_;
-  int options_;
+  bool nack_enabled_;
+  VideoOptions options_;
 
   // Global recv side state.
   // Note the default channel (vie_channel_), i.e. the send channel

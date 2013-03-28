@@ -4,7 +4,7 @@
 # capture and render.
 {
   'variables': {
-    'build_with_chromium': 1,
+    'build_with_chromium%': 1,
     'clang_use_chrome_plugins': 0,
     'enable_protobuf': 1,
     'include_internal_audio_device': 1,
@@ -12,16 +12,4 @@
     'include_internal_video_render': 1,
     'include_pulse_audio': 1,
   },
-  'target_defaults': {
-    'conditions': [
-      ['OS=="mac" and clang==1', {
-        'xcode_settings': {
-          'WARNING_CFLAGS': [
-            # TODO(ronghuawu): Remove once crbug/156530 is fixed.
-            '-Wno-unknown-warning-option',
-          ],
-        },
-      }],
-    ],
-  }, # target_defaults
 }

@@ -30,7 +30,7 @@
 
 #include <map>
 #include "talk/xmpp/jid.h"
-#include "talk/examples/call/status.h"
+#include "talk/xmpp/presencestatus.h"
 
 namespace buzz {
 
@@ -46,7 +46,7 @@ class Muc {
   const Jid & jid() const { return jid_; }
   const Jid & local_jid() const { return local_jid_; }
 
-  typedef std::map<std::string, MucStatus> MemberMap;
+  typedef std::map<std::string, MucPresenceStatus> MemberMap;
 
   // All the intelligence about how to manage the members is in
   // CallClient, so we completely expose the map.

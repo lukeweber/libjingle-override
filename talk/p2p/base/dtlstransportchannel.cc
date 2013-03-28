@@ -124,6 +124,14 @@ DtlsTransportChannelWrapper::DtlsTransportChannelWrapper(
 DtlsTransportChannelWrapper::~DtlsTransportChannelWrapper() {
 }
 
+void DtlsTransportChannelWrapper::Connect() {
+  // We should only get a single call to Connect.
+  ASSERT(dtls_state_ == STATE_NONE ||
+         dtls_state_ == STATE_OFFERED ||
+         dtls_state_ == STATE_ACCEPTED);
+  channel_->Connect();
+}
+
 void DtlsTransportChannelWrapper::Reset() {
   channel_->Reset();
   set_writable(false);
@@ -161,8 +169,12 @@ void DtlsTransportChannelWrapper::SetRole(TransportRole role) {
   // TODO(ekr@rtfm.com): Forbid this if Connect() has been called.
   ASSERT(dtls_state_ < STATE_ACCEPTED);
 
-  dtls_role_ = role == ROLE_CONTROLLING ? talk_base::SSL_CLIENT :
-      talk_base::SSL_SERVER;
+  // Set the role that is most conformant with RFC 5763, Section 5, bullet 1:
+  //     The endpoint that is the offerer MUST [...] be prepared to receive
+  //     a client_hello before it receives the answer.
+  // (IOW, the offerer is the server, and the answerer is the client).
+  dtls_role_ = (role == ROLE_CONTROLLING) ?
+      talk_base::SSL_SERVER : talk_base::SSL_CLIENT;
 
   channel_->SetRole(role);
 }
@@ -229,6 +241,8 @@ bool DtlsTransportChannelWrapper::SetupDtls() {
       LOG_J(LS_ERROR, this) << "Couldn't set DTLS-SRTP ciphers";
       return false;
     }
+  } else {
+    LOG_J(LS_INFO, this) << "Not using DTLS";
   }
 
   LOG_J(LS_INFO, this) << "DTLS setup complete";
@@ -238,7 +252,14 @@ bool DtlsTransportChannelWrapper::SetupDtls() {
 bool DtlsTransportChannelWrapper::SetSrtpCiphers(const std::vector<std::string>&
                                                  ciphers) {
   // SRTP ciphers must be set before the DTLS handshake starts.
-  if (dtls_state_ != STATE_NONE && dtls_state_ != STATE_OFFERED) {
+  // TODO(juberti): In multiplex situations, we may end up calling this function
+  // once for each muxed channel. Depending on the order of calls, this may
+  // result in slightly undesired results, e.g. 32 vs 80-bit MAC. The right way to
+  // fix this would be for the TransportProxyChannels to intersect the ciphers
+  // instead of overwriting, so that "80" followed by "32, 80" results in "80".
+  if (dtls_state_ != STATE_NONE &&
+      dtls_state_ != STATE_OFFERED &&
+      dtls_state_ != STATE_ACCEPTED) {
     ASSERT(false);
     return false;
   }

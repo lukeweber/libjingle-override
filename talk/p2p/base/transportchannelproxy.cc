@@ -27,10 +27,15 @@
 
 #include "talk/p2p/base/transportchannelproxy.h"
 #include "talk/base/common.h"
+#include "talk/base/thread.h"
 #include "talk/p2p/base/transport.h"
 #include "talk/p2p/base/transportchannelimpl.h"
 
 namespace cricket {
+
+enum {
+  MSG_UPDATESTATE,
+};
 
 TransportChannelProxy::TransportChannelProxy(const std::string& content_name,
                                              const std::string& name,
@@ -38,19 +43,26 @@ TransportChannelProxy::TransportChannelProxy(const std::string& content_name,
     : TransportChannel(content_name, component),
       name_(name),
       impl_(NULL) {
+  worker_thread_ = talk_base::Thread::Current();
 }
 
 TransportChannelProxy::~TransportChannelProxy() {
+  // Clearing any pending signal.
+  worker_thread_->Clear(this);
   if (impl_)
     impl_->GetTransport()->DestroyChannel(impl_->component());
 }
 
 void TransportChannelProxy::SetImplementation(TransportChannelImpl* impl) {
-  // Destroy any existing impl_
+  // TODO(juberti): Fix this to occur on the correct thread.
+  // ASSERT(talk_base::Thread::Current() == worker_thread_);
+
+  // Destroy any existing impl_.
   if (impl_) {
     impl_->GetTransport()->DestroyChannel(impl_->component());
   }
 
+  // Adopt the supplied impl, and connect to its signals.
   impl_ = impl;
   impl_->SignalReadableState.connect(
       this, &TransportChannelProxy::OnReadableState);
@@ -63,13 +75,19 @@ void TransportChannelProxy::SetImplementation(TransportChannelImpl* impl) {
        ++it) {
     impl_->SetOption(it->first, it->second);
   }
+
+  // Push down the SRTP ciphers, if any were set.
   if (!pending_srtp_ciphers_.empty()) {
     impl_->SetSrtpCiphers(pending_srtp_ciphers_);
   }
   pending_options_.clear();
+
+  // Post ourselves a message to see if we need to fire state callbacks.
+  worker_thread_->Post(this, MSG_UPDATESTATE);
 }
 
 int TransportChannelProxy::SendPacket(const char* data, size_t len, int flags) {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
   // Fail if we don't have an impl yet.
   if (!impl_) {
     return -1;
@@ -78,6 +96,7 @@ int TransportChannelProxy::SendPacket(const char* data, size_t len, int flags) {
 }
 
 int TransportChannelProxy::SetOption(talk_base::Socket::Option opt, int value) {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
   if (!impl_) {
     pending_options_.push_back(OptionPair(opt, value));
     return 0;
@@ -86,6 +105,7 @@ int TransportChannelProxy::SetOption(talk_base::Socket::Option opt, int value) {
 }
 
 int TransportChannelProxy::GetError() {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
   if (!impl_) {
     return 0;
   }
@@ -93,6 +113,7 @@ int TransportChannelProxy::GetError() {
 }
 
 bool TransportChannelProxy::GetStats(ConnectionInfos* infos) {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
   if (!impl_) {
     return false;
   }
@@ -100,6 +121,7 @@ bool TransportChannelProxy::GetStats(ConnectionInfos* infos) {
 }
 
 bool TransportChannelProxy::IsDtlsActive() const {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
   if (!impl_) {
     return false;
   }
@@ -108,8 +130,9 @@ bool TransportChannelProxy::IsDtlsActive() const {
 
 bool TransportChannelProxy::SetSrtpCiphers(const std::vector<std::string>&
                                            ciphers) {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
   pending_srtp_ciphers_ = ciphers;  // Cache so we can send later, but always
-                            // set so it stays consistent.
+                                    // set so it stays consistent.
   if (impl_) {
     return impl_->SetSrtpCiphers(ciphers);
   }
@@ -117,6 +140,7 @@ bool TransportChannelProxy::SetSrtpCiphers(const std::vector<std::string>&
 }
 
 bool TransportChannelProxy::GetSrtpCipher(std::string* cipher) {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
   if (!impl_) {
     return false;
   }
@@ -129,6 +153,7 @@ bool TransportChannelProxy::ExportKeyingMaterial(const std::string& label,
                                                  bool use_context,
                                                  uint8* result,
                                                  size_t result_len) {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
   if (!impl_) {
     return false;
   }
@@ -136,13 +161,23 @@ bool TransportChannelProxy::ExportKeyingMaterial(const std::string& label,
                                      result, result_len);
 }
 
+TransportRole TransportChannelProxy::GetRole() const {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
+  if (!impl_) {
+    return ROLE_UNKNOWN;
+  }
+  return impl_->GetRole();
+}
+
 void TransportChannelProxy::OnReadableState(TransportChannel* channel) {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
   ASSERT(channel == impl_);
   set_readable(impl_->readable());
   // Note: SignalReadableState fired by set_readable.
 }
 
 void TransportChannelProxy::OnWritableState(TransportChannel* channel) {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
   ASSERT(channel == impl_);
   set_writable(impl_->writable());
   // Note: SignalWritableState fired by set_readable.
@@ -151,14 +186,25 @@ void TransportChannelProxy::OnWritableState(TransportChannel* channel) {
 void TransportChannelProxy::OnReadPacket(TransportChannel* channel,
                                          const char* data, size_t size,
                                          int flags) {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
   ASSERT(channel == impl_);
   SignalReadPacket(this, data, size, flags);
 }
 
 void TransportChannelProxy::OnRouteChange(TransportChannel* channel,
                                           const Candidate& candidate) {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
   ASSERT(channel == impl_);
   SignalRouteChange(this, candidate);
+}
+
+void TransportChannelProxy::OnMessage(talk_base::Message* msg) {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
+  if (msg->message_id == MSG_UPDATESTATE) {
+     // If impl_ is already readable or writable, push up those signals.
+     set_readable(impl_->readable());
+     set_writable(impl_->writable());
+  }
 }
 
 }  // namespace cricket

@@ -91,16 +91,30 @@ class TransportParser {
   // parse (indicating a failure to parse).  If the Translator is null
   // and there are no candidates to parse, then return true,
   // indicating a successful parse of 0 candidates.
-  virtual bool ParseCandidates(SignalingProtocol protocol,
-                               const buzz::XmlElement* elem,
-                               const CandidateTranslator* translator,
-                               Candidates* candidates,
-                               ParseError* error) = 0;
-  virtual bool WriteCandidates(SignalingProtocol protocol,
-                               const Candidates& candidates,
-                               const CandidateTranslator* translator,
-                               XmlElements* candidate_elems,
-                               WriteError* error) = 0;
+
+  // Parse or write a transport description, including ICE credentials and
+  // any DTLS fingerprint. Since only Jingle has transport descriptions, these
+  // functions are only used when serializing to Jingle.
+  virtual bool ParseTransportDescription(const buzz::XmlElement* elem,
+                                         const CandidateTranslator* translator,
+                                         TransportDescription* tdesc,
+                                         ParseError* error) = 0;
+  virtual bool WriteTransportDescription(const TransportDescription& tdesc,
+                                         const CandidateTranslator* translator,
+                                         buzz::XmlElement** tdesc_elem,
+                                         WriteError* error) = 0;
+
+
+  // Parse a single candidate. This must be used when parsing Gingle
+  // candidates, since there is no enclosing transport description.
+  virtual bool ParseGingleCandidate(const buzz::XmlElement* elem,
+                                    const CandidateTranslator* translator,
+                                    Candidate* candidates,
+                                    ParseError* error) = 0;
+  virtual bool WriteGingleCandidate(const Candidate& candidate,
+                                    const CandidateTranslator* translator,
+                                    buzz::XmlElement** candidate_elem,
+                                    WriteError* error) = 0;
 
   // Helper function to parse an element describing an address.  This
   // retrieves the IP and port from the given element and verifies
@@ -159,6 +173,7 @@ class Transport : public talk_base::MessageHandler,
   // any_channels_readable() and any_channels_writable().
   bool readable() const { return any_channels_readable(); }
   bool writable() const { return any_channels_writable(); }
+  bool was_writable() const { return was_writable_; }
   bool any_channels_readable() const {
     return (readable_ == TRANSPORT_STATE_SOME ||
             readable_ == TRANSPORT_STATE_ALL);
@@ -249,9 +264,8 @@ class Transport : public talk_base::MessageHandler,
   // stanza that caused the error is available in session_msg.  If false is
   // returned, the error is considered unrecoverable, and the session is
   // terminated.
-  // TODO: Make OnTransportError take an abstract data type
-  // rather than an XmlElement.  It isn't needed yet, but it might be
-  // later for Jingle compliance.
+  // TODO(juberti): Remove these obsolete functions once Session no longer
+  // references them.
   virtual void OnTransportError(const buzz::XmlElement* error) {}
   sigslot::signal6<Transport*, const buzz::XmlElement*, const buzz::QName&,
                    const std::string&, const std::string&,
@@ -287,6 +301,10 @@ class Transport : public talk_base::MessageHandler,
   // Derived classes can override, but must call the base as well.
   virtual bool ApplyLocalTransportDescription_w(TransportChannelImpl*
                                                 channel);
+
+  // Pushes down remote ice credentials from the remote description to the
+  // transport channel.
+  virtual bool ApplyRemoteTransportDescription_w(TransportChannelImpl* ch);
 
   // Negotiates the transport parameters based on the current local and remote
   // transport description, such at the version of ICE to use, and whether DTLS
@@ -380,7 +398,8 @@ class Transport : public talk_base::MessageHandler,
 
   void OnChannelCandidateReady_s();
 
-  void SetRole_w();
+  void SetRole_w(TransportRole role);
+  void SetRemoteIceMode_w(IceMode mode);
   bool SetLocalTransportDescription_w(const TransportDescription& desc,
                                       ContentAction action);
   bool SetRemoteTransportDescription_w(const TransportDescription& desc,
@@ -394,10 +413,12 @@ class Transport : public talk_base::MessageHandler,
   bool destroyed_;
   TransportState readable_;
   TransportState writable_;
+  bool was_writable_;
   bool connect_requested_;
   TransportRole role_;
   uint64 tiebreaker_;
   TransportProtocol protocol_;
+  IceMode remote_ice_mode_;
   talk_base::scoped_ptr<TransportDescription> local_description_;
   talk_base::scoped_ptr<TransportDescription> remote_description_;
 
@@ -410,6 +431,10 @@ class Transport : public talk_base::MessageHandler,
 
   DISALLOW_EVIL_CONSTRUCTORS(Transport);
 };
+
+// Extract a TransportProtocol from a TransportDescription.
+TransportProtocol TransportProtocolFromDescription(
+    const TransportDescription* desc);
 
 }  // namespace cricket
 

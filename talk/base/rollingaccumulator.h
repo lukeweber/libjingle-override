@@ -88,6 +88,27 @@ class RollingAccumulator {
     return static_cast<T>(sum_ / count_);
   }
 
+  // O(n) time complexity.
+  // Weights nth sample with weight (learning_rate)^n. Learning_rate should be
+  // between (0.0, 1.0], otherwise the non-weighted mean is returned.
+  T ComputeWeightedMean(double learning_rate) const {
+    if (count_ < 1 || learning_rate <= 0.0 || learning_rate >= 1.0) {
+      return ComputeMean();
+    }
+    double weighted_mean = 0.0;
+    double current_weight = 1.0;
+    double weight_sum = 0.0;
+    const size_t max_size = max_count();
+    for (size_t i = 0; i < count_; ++i) {
+      current_weight *= learning_rate;
+      weight_sum += current_weight;
+      // Add max_size to prevent underflow.
+      size_t index = (next_index_ + max_size - i - 1) % max_size;
+      weighted_mean += current_weight * samples_[index];
+    }
+    return static_cast<T>(weighted_mean / weight_sum);
+  }
+
   // Compute estimated variance.  Estimation is more accurate
   // as the number of samples grows.
   T ComputeVariance() const {

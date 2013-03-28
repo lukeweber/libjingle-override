@@ -34,6 +34,9 @@
     # TODO(ronghuawu): For now, disable the Chrome plugins, which causes a
     # flood of chromium-style warnings.
     'clang_use_chrome_plugins%': 0,
+    # Whether or not to build the Java PeerConnection API & tests.
+    'libjingle_java%': 0,
+    'libpeer_target_type%': 'static_library',
   },
   'target_defaults': {
     'include_dirs': [
@@ -45,6 +48,7 @@
       'EXPAT_RELATIVE_PATH',
       'FEATURE_ENABLE_VOICEMAIL',
       'GTEST_RELATIVE_PATH',
+      'JSONCPP_RELATIVE_PATH',
       'LOGGING=1',
       'SRTP_RELATIVE_PATH',
 
@@ -63,6 +67,10 @@
       'USE_WEBRTC_DEV_BRANCH',
     ],
     'conditions': [
+      # TODO(ronghuawu): Support dynamic library build.
+      ['"<(libpeer_target_type)"=="static_library"', {
+        'defines': [ 'LIBPEERCONNECTION_LIB=1' ],
+      }],
       ['OS=="linux"', {
         'defines': [
           'LINUX',

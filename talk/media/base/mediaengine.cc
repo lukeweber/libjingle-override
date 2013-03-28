@@ -27,6 +27,12 @@
 
 #include "talk/media/base/mediaengine.h"
 
+namespace cricket {
+const int MediaEngineInterface::kDefaultAudioDelayOffset = 0;
+}
+
+#if !defined(DISABLE_MEDIA_ENGINE_FACTORY)
+
 #if defined(HAVE_LINPHONE)
 #include "talk/media/other/linphonemediaengine.h"
 #endif  // HAVE_LINPHONE
@@ -43,8 +49,6 @@ namespace cricket {
 #else
 #define AUDIO_ENG_NAME NullVoiceEngine
 #endif //HAVE_WEBRTC_VOICE
-
-const int MediaEngineInterface::kDefaultAudioDelayOffset = 0;
 
 #if defined(HAVE_WEBRTC_VIDEO) 
 template<>
@@ -71,3 +75,5 @@ MediaEngineInterface* MediaEngineFactory::Create() {
 }
 
 };  // namespace cricket
+
+#endif  // DISABLE_MEDIA_ENGINE_FACTORY

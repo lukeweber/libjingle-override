@@ -30,6 +30,18 @@
 
 namespace webrtc {
 
+template <class V>
+static typename V::iterator FindTrack(V* vector,
+                                      const std::string& track_id) {
+  typename V::iterator it = vector->begin();
+  for (; it != vector->end(); ++it) {
+    if ((*it)->id() == track_id) {
+      break;
+    }
+  }
+  return it;
+};
+
 talk_base::scoped_refptr<MediaStream> MediaStream::Create(
     const std::string& label) {
   talk_base::RefCountedObject<MediaStream>* stream =
@@ -38,35 +50,59 @@ talk_base::scoped_refptr<MediaStream> MediaStream::Create(
 }
 
 MediaStream::MediaStream(const std::string& label)
-    : label_(label),
-      ready_state_(MediaStreamInterface::kInitializing),
-      audio_track_list_(
-          new talk_base::RefCountedObject<
-          MediaStreamTrackList<AudioTrackInterface> >()),
-      video_track_list_(
-          new talk_base::RefCountedObject<
-          MediaStreamTrackList<VideoTrackInterface> >()) {
-}
-
-void MediaStream::set_ready_state(
-    MediaStreamInterface::ReadyState new_state) {
-  if (ready_state_ != new_state) {
-    ready_state_ = new_state;
-    Notifier<LocalMediaStreamInterface>::FireOnChanged();
-  }
+    : label_(label) {
 }
 
 bool MediaStream::AddTrack(AudioTrackInterface* track) {
-  if (ready_state() != kInitializing)
-    return false;
-  audio_track_list_->AddTrack(track);
-  return true;
+  return AddTrack<AudioTrackVector, AudioTrackInterface>(&audio_tracks_, track);
 }
 
 bool MediaStream::AddTrack(VideoTrackInterface* track) {
-  if (ready_state() != kInitializing)
+  return AddTrack<VideoTrackVector, VideoTrackInterface>(&video_tracks_, track);
+}
+
+bool MediaStream::RemoveTrack(AudioTrackInterface* track) {
+  return RemoveTrack<AudioTrackVector>(&audio_tracks_, track);
+}
+
+bool MediaStream::RemoveTrack(VideoTrackInterface* track) {
+  return RemoveTrack<VideoTrackVector>(&video_tracks_, track);
+}
+
+talk_base::scoped_refptr<AudioTrackInterface>
+MediaStream::FindAudioTrack(const std::string& track_id) {
+  AudioTrackVector::iterator it = FindTrack(&audio_tracks_, track_id);
+  if (it == audio_tracks_.end())
+    return NULL;
+  return *it;
+}
+
+talk_base::scoped_refptr<VideoTrackInterface>
+MediaStream::FindVideoTrack(const std::string& track_id) {
+  VideoTrackVector::iterator it = FindTrack(&video_tracks_, track_id);
+  if (it == video_tracks_.end())
+    return NULL;
+  return *it;
+}
+
+template <typename TrackVector, typename Track>
+bool MediaStream::AddTrack(TrackVector* tracks, Track* track) {
+  typename TrackVector::iterator it = FindTrack(tracks, track->id());
+  if (it != tracks->end())
     return false;
-  video_track_list_->AddTrack(track);
+  tracks->push_back(track);
+  FireOnChanged();
+  return true;
+}
+
+template <typename TrackVector>
+bool MediaStream::RemoveTrack(TrackVector* tracks,
+                              MediaStreamTrackInterface* track) {
+  typename TrackVector::iterator it = FindTrack(tracks, track->id());
+  if (it == tracks->end())
+    return false;
+  tracks->erase(it);
+  FireOnChanged();
   return true;
 }
 

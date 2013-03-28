@@ -203,6 +203,18 @@ void DumpPlanarArgbTestImage(const std::string& prefix, const uint8* img,
 // Compare two I420 frames.
 bool VideoFrameEqual(const VideoFrame* frame0, const VideoFrame* frame1);
 
+// Checks whether |codecs| contains |codec|; checks using Codec::Matches().
+template <class C>
+bool ContainsMatchingCodec(const std::vector<C>& codecs, const C& codec) {
+  typename std::vector<C>::const_iterator it;
+  for (it = codecs.begin(); it != codecs.end(); ++it) {
+    if (it->Matches(codec)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace cricket
 
 #endif  // TALK_MEDIA_BASE_TESTUTILS_H_

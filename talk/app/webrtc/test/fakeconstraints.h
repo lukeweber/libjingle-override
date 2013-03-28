@@ -77,6 +77,11 @@ class FakeConstraints : public webrtc::MediaConstraintsInterface {
                 talk_base::ToString<int>(width));
   }
 
+  void SetMandatoryMaxFrameRate(int frame_rate) {
+    AddMandatory(MediaConstraintsInterface::kMaxFrameRate,
+                 talk_base::ToString<int>(frame_rate));
+  }
+
   void SetMandatoryReceiveAudio(bool enable) {
     if (enable) {
       AddMandatory(MediaConstraintsInterface::kOfferToReceiveAudio,
@@ -93,6 +98,26 @@ class FakeConstraints : public webrtc::MediaConstraintsInterface {
                    MediaConstraintsInterface::kValueTrue);
     } else {
       AddMandatory(MediaConstraintsInterface::kOfferToReceiveVideo,
+                   MediaConstraintsInterface::kValueFalse);
+    }
+  }
+
+  void SetMandatoryUseRtpMux(bool enable) {
+    if (enable) {
+      AddMandatory(MediaConstraintsInterface::kUseRtpMux,
+                   MediaConstraintsInterface::kValueTrue);
+    } else {
+      AddMandatory(MediaConstraintsInterface::kUseRtpMux,
+                   MediaConstraintsInterface::kValueFalse);
+    }
+  }
+
+  void SetMandatoryIceRestart(bool enable) {
+    if (enable) {
+      AddMandatory(MediaConstraintsInterface::kIceRestart,
+                   MediaConstraintsInterface::kValueTrue);
+    } else {
+      AddMandatory(MediaConstraintsInterface::kIceRestart,
                    MediaConstraintsInterface::kValueFalse);
     }
   }

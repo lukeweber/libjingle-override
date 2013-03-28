@@ -34,14 +34,15 @@
 
 namespace webrtc {
 
+static size_t kMaxQueuedDataPackets = 100;
+
 talk_base::scoped_refptr<DataChannel> DataChannel::Create(
     WebRtcSession* session,
     const std::string& label,
     const DataChannelInit* config) {
-  talk_base::RefCountedObject<DataChannel>* channel =
-      new talk_base::RefCountedObject<DataChannel>(session, label);
+  talk_base::scoped_refptr<DataChannel> channel(
+      new talk_base::RefCountedObject<DataChannel>(session, label));
   if (!channel->Init(config)) {
-    delete channel;
     return NULL;
   }
   return channel;
@@ -68,10 +69,13 @@ bool DataChannel::Init(const DataChannelInit* config) {
   return true;
 }
 
-DataChannel::~DataChannel() {}
+DataChannel::~DataChannel() {
+  ClearQueuedData();
+}
 
 void DataChannel::RegisterObserver(DataChannelObserver* observer) {
   observer_ = observer;
+  DeliverQueuedData();
 }
 
 void DataChannel::UnregisterObserver() {
@@ -120,15 +124,26 @@ void DataChannel::SetReceiveSsrc(uint32 receive_ssrc) {
 
 // The remote peer request that this channel shall be closed.
 void DataChannel::RemotePeerRequestClose() {
-  receive_ssrc_set_ = false;
-  send_ssrc_set_ = false;
-  SetState(kClosing);
-  UpdateState();
+  DoClose();
 }
 
 void DataChannel::SetSendSsrc(uint32 send_ssrc) {
   send_ssrc_ = send_ssrc;
   send_ssrc_set_ = true;
+  UpdateState();
+}
+
+// The underlaying data engine is closing.
+// This function make sure the DataChannel is disconneced and change state to
+// kClosed.
+void DataChannel::OnDataEngineClose() {
+  DoClose();
+}
+
+void DataChannel::DoClose() {
+  receive_ssrc_set_ = false;
+  send_ssrc_set_ = false;
+  SetState(kClosing);
   UpdateState();
 }
 
@@ -141,6 +156,9 @@ void DataChannel::UpdateState() {
         }
         if (was_ever_writable_) {
           SetState(kOpen);
+          // If we have received buffers before the channel got writable.
+          // Deliver them now.
+          DeliverQueuedData();
         }
       }
       break;
@@ -171,6 +189,11 @@ void DataChannel::SetState(DataState state) {
 
 void DataChannel::ConnectToDataSession() {
   ASSERT(session_->data_channel() != NULL);
+  if (!session_->data_channel()) {
+    LOG(LS_ERROR) << "The DataEngine does not exist.";
+    return;
+  }
+
   data_session_ = session_->data_channel();
   data_session_->SignalReadyToSendData.connect(this,
                                                &DataChannel::OnChannelReady);
@@ -183,12 +206,39 @@ void DataChannel::DisconnectFromDataSession() {
   data_session_ = NULL;
 }
 
+void DataChannel::DeliverQueuedData() {
+  if (was_ever_writable_ && observer_) {
+    while (!queued_data_.empty()) {
+      DataBuffer* buffer = queued_data_.front();
+      observer_->OnMessage(*buffer);
+      queued_data_.pop();
+      delete buffer;
+    }
+  }
+}
+
+void DataChannel::ClearQueuedData() {
+  while (!queued_data_.empty()) {
+    DataBuffer* buffer = queued_data_.front();
+    queued_data_.pop();
+    delete buffer;
+  }
+}
+
 void DataChannel::OnDataReceived(cricket::DataChannel* channel,
                                  const cricket::ReceiveDataParams& params,
                                  const::std::string& data) {
-  if (params.ssrc == receive_ssrc_ && observer_) {
-    receive_buffer_.data.SetData(data.c_str(), data.length());
-    observer_->OnMessage(receive_buffer_);
+  if (params.ssrc == receive_ssrc_) {
+    talk_base::scoped_ptr<DataBuffer> buffer(new DataBuffer);
+    buffer->data.SetData(data.c_str(), data.length());
+    if (was_ever_writable_ && observer_) {
+      observer_->OnMessage(*buffer.get());
+    } else {
+      if (queued_data_.size() > kMaxQueuedDataPackets) {
+        ClearQueuedData();
+      }
+      queued_data_.push(buffer.release());
+    }
   }
 }
 

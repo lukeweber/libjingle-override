@@ -247,9 +247,10 @@ TEST_F(WebRtcVoiceEngineTestFake, CreateChannelFail) {
 TEST_F(WebRtcVoiceEngineTestFake, CodecPreference) {
   const std::vector<cricket::AudioCodec>& codecs = engine_.codecs();
   ASSERT_FALSE(codecs.empty());
-  EXPECT_EQ("ISAC", codecs[0].name);
-  EXPECT_EQ(16000, codecs[0].clockrate);
-  EXPECT_EQ(0, codecs[0].bitrate);
+  EXPECT_STRCASEEQ("opus", codecs[0].name.c_str());
+  EXPECT_EQ(48000, codecs[0].clockrate);
+  EXPECT_EQ(2, codecs[0].channels);
+  EXPECT_EQ(64000, codecs[0].bitrate);
   int pref = codecs[0].preference;
   for (size_t i = 1; i < codecs.size(); ++i) {
     EXPECT_GT(pref, codecs[i].preference);
@@ -307,6 +308,7 @@ TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecs) {
   webrtc::CodecInst gcodec;
   talk_base::strcpyn(gcodec.plname, ARRAY_SIZE(gcodec.plname), "ISAC");
   gcodec.plfreq = 16000;
+  gcodec.channels = 1;
   EXPECT_EQ(0, voe_.GetRecPayloadType(channel_num, gcodec));
   EXPECT_EQ(106, gcodec.pltype);
   EXPECT_STREQ("ISAC", gcodec.plname);
@@ -337,6 +339,76 @@ TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsDuplicatePayloadType) {
   EXPECT_FALSE(channel_->SetRecvCodecs(codecs));
 }
 
+// Test that we can decode OPUS without stereo parameters.
+TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsWithOpusNoStereo) {
+  EXPECT_TRUE(SetupEngine());
+  EXPECT_TRUE(channel_->SetOptions(options_conference_));
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kIsacCodec);
+  codecs.push_back(kPcmuCodec);
+  codecs.push_back(kOpusCodec);
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+  EXPECT_TRUE(channel_->AddRecvStream(
+      cricket::StreamParams::CreateLegacy(kSsrc1)));
+  int channel_num2 = voe_.GetLastChannel();
+  webrtc::CodecInst opus;
+  engine_.FindWebRtcCodec(kOpusCodec, &opus);
+  // Even without stereo parameters, recv codecs still specify channels = 2.
+  EXPECT_EQ(2, opus.channels);
+  EXPECT_EQ(111, opus.pltype);
+  EXPECT_STREQ("opus", opus.plname);
+  opus.pltype = 0;
+  EXPECT_EQ(0, voe_.GetRecPayloadType(channel_num2, opus));
+  EXPECT_EQ(111, opus.pltype);
+}
+
+// Test that we can decode OPUS with stereo = 0.
+TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsWithOpus0Stereo) {
+  EXPECT_TRUE(SetupEngine());
+  EXPECT_TRUE(channel_->SetOptions(options_conference_));
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kIsacCodec);
+  codecs.push_back(kPcmuCodec);
+  codecs.push_back(kOpusCodec);
+  codecs[2].params["stereo"] = "0";
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+  EXPECT_TRUE(channel_->AddRecvStream(
+      cricket::StreamParams::CreateLegacy(kSsrc1)));
+  int channel_num2 = voe_.GetLastChannel();
+  webrtc::CodecInst opus;
+  engine_.FindWebRtcCodec(kOpusCodec, &opus);
+  // Even when stereo is off, recv codecs still specify channels = 2.
+  EXPECT_EQ(2, opus.channels);
+  EXPECT_EQ(111, opus.pltype);
+  EXPECT_STREQ("opus", opus.plname);
+  opus.pltype = 0;
+  EXPECT_EQ(0, voe_.GetRecPayloadType(channel_num2, opus));
+  EXPECT_EQ(111, opus.pltype);
+}
+
+// Test that we can decode OPUS with stereo = 1.
+TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsWithOpus1Stereo) {
+  EXPECT_TRUE(SetupEngine());
+  EXPECT_TRUE(channel_->SetOptions(options_conference_));
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kIsacCodec);
+  codecs.push_back(kPcmuCodec);
+  codecs.push_back(kOpusCodec);
+  codecs[2].params["stereo"] = "1";
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+  EXPECT_TRUE(channel_->AddRecvStream(
+      cricket::StreamParams::CreateLegacy(kSsrc1)));
+  int channel_num2 = voe_.GetLastChannel();
+  webrtc::CodecInst opus;
+  engine_.FindWebRtcCodec(kOpusCodec, &opus);
+  EXPECT_EQ(2, opus.channels);
+  EXPECT_EQ(111, opus.pltype);
+  EXPECT_STREQ("opus", opus.plname);
+  opus.pltype = 0;
+  EXPECT_EQ(0, voe_.GetRecPayloadType(channel_num2, opus));
+  EXPECT_EQ(111, opus.pltype);
+}
+
 // Test that changes to recv codecs are applied to all streams.
 TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsWithMultipleStreams) {
   EXPECT_TRUE(SetupEngine());
@@ -354,12 +426,14 @@ TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsWithMultipleStreams) {
   webrtc::CodecInst gcodec;
   talk_base::strcpyn(gcodec.plname, ARRAY_SIZE(gcodec.plname), "ISAC");
   gcodec.plfreq = 16000;
+  gcodec.channels = 1;
   EXPECT_EQ(0, voe_.GetRecPayloadType(channel_num2, gcodec));
   EXPECT_EQ(106, gcodec.pltype);
   EXPECT_STREQ("ISAC", gcodec.plname);
   talk_base::strcpyn(gcodec.plname, ARRAY_SIZE(gcodec.plname),
       "telephone-event");
   gcodec.plfreq = 8000;
+  gcodec.channels = 1;
   EXPECT_EQ(0, voe_.GetRecPayloadType(channel_num2, gcodec));
   EXPECT_EQ(126, gcodec.pltype);
   EXPECT_STREQ("telephone-event", gcodec.plname);
@@ -380,6 +454,7 @@ TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsAfterAddingStreams) {
   webrtc::CodecInst gcodec;
   talk_base::strcpyn(gcodec.plname, ARRAY_SIZE(gcodec.plname), "ISAC");
   gcodec.plfreq = 16000;
+  gcodec.channels = 1;
   EXPECT_EQ(0, voe_.GetRecPayloadType(channel_num2, gcodec));
   EXPECT_EQ(106, gcodec.pltype);
   EXPECT_STREQ("ISAC", gcodec.plname);
@@ -388,6 +463,7 @@ TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsAfterAddingStreams) {
 // Test that we can apply the same set of codecs again while playing.
 TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsWhilePlaying) {
   EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
   std::vector<cricket::AudioCodec> codecs;
   codecs.push_back(kIsacCodec);
   codecs.push_back(kCn16000Codec);
@@ -395,8 +471,28 @@ TEST_F(WebRtcVoiceEngineTestFake, SetRecvCodecsWhilePlaying) {
   EXPECT_TRUE(channel_->SetPlayout(true));
   EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
 
-  codecs[0].bitrate = 100;  // Change codec.
+  // Changing the payload type of a codec should fail.
+  codecs[0].id = 127;
   EXPECT_FALSE(channel_->SetRecvCodecs(codecs));
+  EXPECT_TRUE(voe_.GetPlayout(channel_num));
+}
+
+// Test that we can add a codec while playing.
+TEST_F(WebRtcVoiceEngineTestFake, AddRecvCodecsWhilePlaying) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kIsacCodec);
+  codecs.push_back(kCn16000Codec);
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+  EXPECT_TRUE(channel_->SetPlayout(true));
+
+  codecs.push_back(kOpusCodec);
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+  EXPECT_TRUE(voe_.GetPlayout(channel_num));
+  webrtc::CodecInst gcodec;
+  EXPECT_TRUE(engine_.FindWebRtcCodec(kOpusCodec, &gcodec));
+  EXPECT_EQ(kOpusCodec.id, gcodec.pltype);
 }
 
 TEST_F(WebRtcVoiceEngineTestFake, SetSendBandwidthAuto) {
@@ -483,13 +579,152 @@ TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecs) {
   EXPECT_EQ(106, voe_.GetSendTelephoneEventPayloadType(channel_num));
 }
 
-// Test that we can set opus as send codec with a specific bitrate.
-TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpus) {
+// TODO(pthatcher): Change failure behavior to returning false rather
+// than defaulting to PCMU.
+// Test that if clockrate is not 48000 for opus, we fail by fallback to PCMU.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusBadClockrate) {
   EXPECT_TRUE(SetupEngine());
   int channel_num = voe_.GetLastChannel();
   std::vector<cricket::AudioCodec> codecs;
   codecs.push_back(kOpusCodec);
-  codecs[0].id = 111;
+  codecs[0].bitrate = 0;
+  codecs[0].clockrate = 50000;
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  webrtc::CodecInst gcodec;
+  EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
+  EXPECT_STREQ("PCMU", gcodec.plname);
+}
+
+// Test that if channels=0 for opus, we fail by falling back to PCMU.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusBad0ChannelsNoStereo) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].bitrate = 0;
+  codecs[0].channels = 0;
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  webrtc::CodecInst gcodec;
+  EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
+  EXPECT_STREQ("PCMU", gcodec.plname);
+}
+
+// Test that if channels=0 for opus, we fail by falling back to PCMU.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusBad0Channels1Stereo) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].bitrate = 0;
+  codecs[0].channels = 0;
+  codecs[0].params["stereo"] = "1";
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  webrtc::CodecInst gcodec;
+  EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
+  EXPECT_STREQ("PCMU", gcodec.plname);
+}
+
+// Test that if channel is 1 for opus and there's no stereo, we fail.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpus1ChannelNoStereo) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].bitrate = 0;
+  codecs[0].channels = 1;
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  webrtc::CodecInst gcodec;
+  EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
+  EXPECT_STREQ("PCMU", gcodec.plname);
+}
+
+// Test that if channel is 1 for opus and stereo=0, we fail.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusBad1Channel0Stereo) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].bitrate = 0;
+  codecs[0].channels = 1;
+  codecs[0].params["stereo"] = "0";
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  webrtc::CodecInst gcodec;
+  EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
+  EXPECT_STREQ("PCMU", gcodec.plname);
+}
+
+// Test that if channel is 1 for opus and stereo=1, we fail.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusBad1Channel1Stereo) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].bitrate = 0;
+  codecs[0].channels = 1;
+  codecs[0].params["stereo"] = "1";
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  webrtc::CodecInst gcodec;
+  EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
+  EXPECT_STREQ("PCMU", gcodec.plname);
+}
+
+// Test that with bitrate=0 and no stereo,
+// channels and bitrate are 1 and 32000.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusGood0BitrateNoStereo) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].bitrate = 0;
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  webrtc::CodecInst gcodec;
+  EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
+  EXPECT_STREQ("opus", gcodec.plname);
+  EXPECT_EQ(1, gcodec.channels);
+  EXPECT_EQ(32000, gcodec.rate);
+}
+
+// Test that with bitrate=0 and stereo=0,
+// channels and bitrate are 1 and 32000.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusGood0Bitrate0Stereo) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].bitrate = 0;
+  codecs[0].params["stereo"] = "0";
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  webrtc::CodecInst gcodec;
+  EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
+  EXPECT_STREQ("opus", gcodec.plname);
+  EXPECT_EQ(1, gcodec.channels);
+  EXPECT_EQ(32000, gcodec.rate);
+}
+
+// Test that with bitrate=0 and stereo=1,
+// channels and bitrate are 2 and 64000.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusGood0Bitrate1Stereo) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].bitrate = 0;
+  codecs[0].params["stereo"] = "1";
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  webrtc::CodecInst gcodec;
+  EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
+  EXPECT_STREQ("opus", gcodec.plname);
+  EXPECT_EQ(2, gcodec.channels);
+  EXPECT_EQ(64000, gcodec.rate);
+}
+
+// Test that with bitrate=N and stereo unset,
+// channels and bitrate are 1 and N.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusGoodNBitrateNoStereo) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
   codecs[0].bitrate = 96000;
   EXPECT_TRUE(channel_->SetSendCodecs(codecs));
   webrtc::CodecInst gcodec;
@@ -497,7 +732,60 @@ TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpus) {
   EXPECT_EQ(111, gcodec.pltype);
   EXPECT_EQ(96000, gcodec.rate);
   EXPECT_STREQ("opus", gcodec.plname);
+  EXPECT_EQ(1, gcodec.channels);
+  EXPECT_EQ(48000, gcodec.plfreq);
 }
+
+// Test that with bitrate=N and stereo=0,
+// channels and bitrate are 1 and N.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusGoodNBitrate0Stereo) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].bitrate = 30000;
+  codecs[0].params["stereo"] = "0";
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  webrtc::CodecInst gcodec;
+  EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
+  EXPECT_EQ(1, gcodec.channels);
+  EXPECT_EQ(30000, gcodec.rate);
+  EXPECT_STREQ("opus", gcodec.plname);
+}
+
+// Test that with bitrate=N and without any parameters,
+// channels and bitrate are 1 and N.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusGoodNBitrateNoParameters) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].bitrate = 30000;
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  webrtc::CodecInst gcodec;
+  EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
+  EXPECT_EQ(1, gcodec.channels);
+  EXPECT_EQ(30000, gcodec.rate);
+  EXPECT_STREQ("opus", gcodec.plname);
+}
+
+// Test that with bitrate=N and stereo=1,
+// channels and bitrate are 2 and N.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusGoodNBitrate1Stereo) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].bitrate = 30000;
+  codecs[0].params["stereo"] = "1";
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  webrtc::CodecInst gcodec;
+  EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
+  EXPECT_EQ(2, gcodec.channels);
+  EXPECT_EQ(30000, gcodec.rate);
+  EXPECT_STREQ("opus", gcodec.plname);
+}
+
 
 // Test that we can apply CELT with stereo mode but fail with mono mode.
 TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecsCelt) {
@@ -601,7 +889,7 @@ TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecsBitrate) {
   EXPECT_EQ(0, voe_.GetSendCodec(channel_num, gcodec));
   EXPECT_EQ(111, gcodec.pltype);
   EXPECT_STREQ("opus", gcodec.plname);
-  EXPECT_EQ(64000, gcodec.rate);
+  EXPECT_EQ(32000, gcodec.rate);
 }
 
 // Test that we fall back to PCMU if no codecs are specified.
@@ -1313,6 +1601,25 @@ TEST_F(WebRtcVoiceEngineTestFake, AddRecvStream1On1) {
   int channel_num = voe_.GetLastChannel();
   EXPECT_TRUE(channel_->AddRecvStream(cricket::StreamParams::CreateLegacy(1)));
   EXPECT_EQ(channel_num, voe_.GetLastChannel());
+}
+
+// Test that after adding a recv stream, we do not decode more codecs than
+// those previously passed into SetRecvCodecs.
+TEST_F(WebRtcVoiceEngineTestFake, AddRecvStreamUnsupportedCodec) {
+  EXPECT_TRUE(SetupEngine());
+  EXPECT_TRUE(channel_->SetOptions(options_conference_));
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kIsacCodec);
+  codecs.push_back(kPcmuCodec);
+  EXPECT_TRUE(channel_->SetRecvCodecs(codecs));
+  EXPECT_TRUE(channel_->AddRecvStream(
+      cricket::StreamParams::CreateLegacy(kSsrc1)));
+  int channel_num2 = voe_.GetLastChannel();
+  webrtc::CodecInst gcodec;
+  talk_base::strcpyn(gcodec.plname, ARRAY_SIZE(gcodec.plname), "CELT");
+  gcodec.plfreq = 32000;
+  gcodec.channels = 2;
+  EXPECT_EQ(-1, voe_.GetRecPayloadType(channel_num2, gcodec));
 }
 
 // Test that we properly clean up any streams that were added, even if
@@ -2092,7 +2399,7 @@ TEST(WebRtcVoiceEngineTest, HasCorrectCodecs) {
   cricket::WebRtcVoiceEngine engine;
   // Check codecs by name.
   EXPECT_TRUE(engine.FindCodec(
-      cricket::AudioCodec(96, "opus", 48000, 0, 2, 0)));
+      cricket::AudioCodec(96, "OPUS", 48000, 0, 2, 0)));
   EXPECT_TRUE(engine.FindCodec(
       cricket::AudioCodec(96, "CELT", 32000, 0, 2, 0)));
   EXPECT_TRUE(engine.FindCodec(
@@ -2161,6 +2468,12 @@ TEST(WebRtcVoiceEngineTest, HasCorrectCodecs) {
       EXPECT_EQ(126, it->id);
     } else if (it->name == "red") {
       EXPECT_EQ(127, it->id);
+    } else if (it->name == "opus") {
+      EXPECT_EQ(111, it->id);
+      ASSERT_NE(it->params.find("minptime"), it->params.end());
+      EXPECT_EQ("10", it->params.find("minptime")->second);
+      ASSERT_NE(it->params.find("maxptime"), it->params.end());
+      EXPECT_EQ("60", it->params.find("maxptime")->second);
     }
   }
 

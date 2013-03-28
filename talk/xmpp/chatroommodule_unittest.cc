@@ -208,7 +208,7 @@ public:
     TEST_EQ(chatroom->state(), XMPP_CHATROOM_STATE_NOT_IN_ROOM);
     chatroom->set_nickname("thirdwitch");
     chatroom->set_chatroom_jid(Jid("darkcave@my-server"));
-    chatroom->RequestEnterChatroom("", XMPP_CONNECTION_STATUS_UNKNOWN);
+    chatroom->RequestEnterChatroom("", XMPP_CONNECTION_STATUS_UNKNOWN, "en");
     TEST_EQ(chatroom_handler.StrClear(), "");
     TEST_EQ(handler.OutputActivity(),
       "<presence to=\"darkcave@my-server/thirdwitch\">"

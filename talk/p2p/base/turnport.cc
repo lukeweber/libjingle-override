@@ -46,10 +46,10 @@ namespace cricket {
 static const int TURN_ALLOCATE_REQUEST = STUN_ALLOCATE_REQUEST;
 static const int TURN_ALLOCATE_ERROR_RESPONSE = STUN_ALLOCATE_ERROR_RESPONSE;
 
+// TODO(juberti): Extract to turnmessage.h
 static const int TURN_DEFAULT_PORT = 3478;
 static const int TURN_CHANNEL_NUMBER_START = 0x4000;
-// this isn't default but we make it smaller to get the permission refresh for free
-static const int TURN_CHANNEL_BINDING_TIMEOUT = 5 * 60 * 1000; // 5 minutes 
+static const int TURN_PERMISSION_TIMEOUT = 5 * 60 * 1000;  // 5 minutes
 
 static const size_t TURN_CHANNEL_HEADER_SIZE = 4U;
 
@@ -235,6 +235,10 @@ int TurnPort::SetOption(talk_base::Socket::Option opt, int value) {
   return socket_->SetOption(opt, value);
 }
 
+int TurnPort::GetOption(talk_base::Socket::Option opt, int* value) {
+  return socket_->GetOption(opt, value);
+}
+
 int TurnPort::GetError() {
   return error_;
 }
@@ -405,13 +409,13 @@ void TurnPort::HandleChannelData(int channel_id, const char* data,
 
   // Extract header fields from the message.
   uint16 len = talk_base::GetBE16(data + 2);
-  if (len != size - TURN_CHANNEL_HEADER_SIZE) {
+  if (len > size - TURN_CHANNEL_HEADER_SIZE) {
     LOG_J(LS_WARNING, this) << "Received TURN channel data message with "
                             << "incorrect length, len=" << len;
     return;
   }
+  // Allowing messages larger than |len|, as ChannelData can be padded.
 
-  // Ensure this is a channel we know about.
   TurnEntry* entry = FindEntry(channel_id);
   if (!entry) {
     LOG_J(LS_WARNING, this) << "Received TURN channel data message for invalid "
@@ -695,10 +699,13 @@ void TurnChannelBindRequest::Prepare(StunMessage* request) {
 
 void TurnChannelBindRequest::OnResponse(StunMessage* response) {
   entry_->OnChannelBindSuccess();
-  // Refresh the binding a minute before it expires.
+  // Refresh the channel binding just under the permission timeout
+  // threshold. The channel binding has a longer lifetime, but
+  // this is the easiest way to keep both the channel and the
+  // permission from expiring.
   port_->SendRequest(new TurnChannelBindRequest(
       port_, entry_, channel_id_, ext_addr_),
-      TURN_CHANNEL_BINDING_TIMEOUT - 60 * 1000);
+      TURN_PERMISSION_TIMEOUT - 60 * 1000);
 }
 
 void TurnChannelBindRequest::OnErrorResponse(StunMessage* response) {

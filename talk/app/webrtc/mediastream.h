@@ -38,48 +38,36 @@
 
 namespace webrtc {
 
-class MediaStream : public Notifier<LocalMediaStreamInterface> {
+class MediaStream : public Notifier<MediaStreamInterface> {
  public:
-  template<class T>
-  class MediaStreamTrackList : public MediaStreamTrackListInterface<T> {
-   public:
-    void AddTrack(T* track) {
-      tracks_.push_back(track);
-    }
-    virtual size_t count() const { return tracks_.size(); }
-    virtual T* at(size_t index) {
-      return tracks_.at(index);
-    }
-
-   private:
-    std::vector<talk_base::scoped_refptr<T> > tracks_;
-  };
-
   static talk_base::scoped_refptr<MediaStream> Create(const std::string& label);
 
-  // Implement LocalMediaStreamInterface.
-  virtual bool AddTrack(AudioTrackInterface* track);
-  virtual bool AddTrack(VideoTrackInterface* track);
-  // Implement MediaStreamInterface.
-  virtual std::string label() const { return label_; }
-  virtual MediaStreamTrackListInterface<AudioTrackInterface>* audio_tracks() {
-    return audio_track_list_;
-  }
-  virtual MediaStreamTrackListInterface<VideoTrackInterface>* video_tracks() {
-    return video_track_list_;
-  }
-  virtual ReadyState ready_state() const { return ready_state_; }
-  virtual void set_ready_state(ReadyState new_state);
+  virtual std::string label() const OVERRIDE { return label_; }
+
+  virtual bool AddTrack(AudioTrackInterface* track) OVERRIDE;
+  virtual bool AddTrack(VideoTrackInterface* track) OVERRIDE;
+  virtual bool RemoveTrack(AudioTrackInterface* track) OVERRIDE;
+  virtual bool RemoveTrack(VideoTrackInterface* track) OVERRIDE;
+  virtual talk_base::scoped_refptr<AudioTrackInterface>
+      FindAudioTrack(const std::string& track_id);
+  virtual talk_base::scoped_refptr<VideoTrackInterface>
+      FindVideoTrack(const std::string& track_id);
+
+  virtual AudioTrackVector GetAudioTracks() OVERRIDE { return audio_tracks_; }
+  virtual VideoTrackVector GetVideoTracks() OVERRIDE { return video_tracks_; }
 
  protected:
   explicit MediaStream(const std::string& label);
 
+ private:
+  template <typename TrackVector, typename Track>
+  bool AddTrack(TrackVector* Tracks, Track* track);
+  template <typename TrackVector>
+  bool RemoveTrack(TrackVector* Tracks, MediaStreamTrackInterface* track);
+
   std::string label_;
-  MediaStreamInterface::ReadyState ready_state_;
-  talk_base::scoped_refptr<MediaStreamTrackList<AudioTrackInterface> >
-      audio_track_list_;
-  talk_base::scoped_refptr<MediaStreamTrackList<VideoTrackInterface> >
-      video_track_list_;
+  AudioTrackVector audio_tracks_;
+  VideoTrackVector video_tracks_;
 };
 
 }  // namespace webrtc

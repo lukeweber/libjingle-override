@@ -67,7 +67,7 @@ uint32 CanonicalFourCC(uint32 fourcc) {
 //     adjusting pixel width and pixel height.
 // Limit as of 7/16/12 is 21000 macroblocks (16 x 16 each). b/6726828
 // Compute a size to scale frames to that is below maximum compression
-// and rendering size.
+// and rendering size with the same aspect ratio.
 void ComputeScale(int frame_width, int frame_height,
                   int* scaled_width, int* scaled_height) {
   ASSERT(scaled_width != NULL);
@@ -77,8 +77,8 @@ void ComputeScale(int frame_width, int frame_height,
   // For VP8 the values for max width and height can be found here
   // webrtc/src/video_engine/vie_defines.h (kViEMaxCodecWidth and
   // kViEMaxCodecHeight)
-  const int kMaxWidth = 4048;
-  const int kMaxHeight = 3040;
+  const int kMaxWidth = 4096;
+  const int kMaxHeight = 3072;
   const int kMaxPixels = 2880 * 1800;
   int new_frame_width = frame_width;
   int new_frame_height = frame_height;
@@ -108,15 +108,23 @@ void ComputeScale(int frame_width, int frame_height,
   *scaled_height = new_frame_height;
 }
 
+// Compute size to crop video frame to.
+// If cropped_format_* is 0, return the frame_* size as is.
 void ComputeCrop(int cropped_format_width,
                  int cropped_format_height,
                  int frame_width, int frame_height,
                  int pixel_width, int pixel_height,
                  int rotation,
                  int* cropped_width, int* cropped_height) {
+  ASSERT(cropped_format_width >= 0);
+  ASSERT(cropped_format_height >= 0);
+  ASSERT(frame_width > 0);
+  ASSERT(frame_height > 0);
+  ASSERT(pixel_width >= 0);
+  ASSERT(pixel_height >= 0);
+  ASSERT(rotation == 0 || rotation == 90 || rotation == 180 || rotation == 270);
   ASSERT(cropped_width != NULL);
   ASSERT(cropped_height != NULL);
-  ASSERT(rotation == 0 || rotation == 90 || rotation == 180 || rotation == 270);
   if (!pixel_width) {
     pixel_width = 1;
   }

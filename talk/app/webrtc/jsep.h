@@ -25,10 +25,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// Interfaces matching the draft-ietf-rtcweb-jsep-00.
-// TODO(ronghuawu): Remove all the jsep-00 APIs (marked as deprecated) once
-// chromium (WebKit and glue code) is ready. And update the comment above to
-// jsep-01.
+// Interfaces matching the draft-ietf-rtcweb-jsep-01.
 
 #ifndef TALK_APP_WEBRTC_JSEP_H_
 #define TALK_APP_WEBRTC_JSEP_H_
@@ -46,41 +43,12 @@ class Candidate;
 
 namespace webrtc {
 
-class MediaConstraintsInterface;
-
-class SessionDescriptionOptions {
+struct SdpParseError {
  public:
-  SessionDescriptionOptions() : has_audio_(true), has_video_(true) {}
-  SessionDescriptionOptions(bool receive_audio, bool receive_video)
-      : has_audio_(receive_audio),
-        has_video_(receive_video) {
-  }
-  // The peer wants to  receive audio.
-  bool has_audio() const { return has_audio_; }
-  // The peer wants to receive video.
-  bool has_video() const { return has_video_; }
-
- private:
-  bool has_audio_;
-  bool has_video_;
-};
-
-// Class used for describing what media a PeerConnection can receive.
-class MediaHints {  // Deprecated (jsep00)
- public:
-  MediaHints() : has_audio_(true), has_video_(true) {}
-  MediaHints(bool receive_audio, bool receive_video)
-      : has_audio_(receive_audio),
-        has_video_(receive_video) {
-  }
-  // The peer wants to  receive audio.
-  bool has_audio() const { return has_audio_; }
-  // The peer wants to receive video.
-  bool has_video() const { return has_video_; }
-
- private:
-  bool has_audio_;
-  bool has_video_;
+  // The sdp line that causes the error.
+  std::string line;
+  // Explains the error.
+  std::string description;
 };
 
 // Class representation of an ICE candidate.
@@ -103,9 +71,16 @@ class IceCandidateInterface {
 
 // Creates a IceCandidateInterface based on SDP string.
 // Returns NULL if the sdp string can't be parsed.
+// TODO(ronghuawu): Deprecated.
 IceCandidateInterface* CreateIceCandidate(const std::string& sdp_mid,
                                           int sdp_mline_index,
                                           const std::string& sdp);
+
+// |error| can be NULL if doesn't care about the failure reason.
+IceCandidateInterface* CreateIceCandidate(const std::string& sdp_mid,
+                                          int sdp_mline_index,
+                                          const std::string& sdp,
+                                          SdpParseError* error);
 
 // This class represents a collection of candidates for a specific m-line.
 // This class is used in SessionDescriptionInterface to represent all known
@@ -151,29 +126,16 @@ class SessionDescriptionInterface {
   virtual bool ToString(std::string* out) const = 0;
 };
 
-// Deprecated (jsep00)
-SessionDescriptionInterface* CreateSessionDescription(const std::string& sdp);
 // Creates a SessionDescriptionInterface based on SDP string and the type.
 // Returns NULL if the sdp string can't be parsed or the type is unsupported.
+// TODO(ronghuawu): Deprecated.
 SessionDescriptionInterface* CreateSessionDescription(const std::string& type,
                                                       const std::string& sdp);
 
-// Jsep Ice candidate callback interface. An application should implement these
-// methods to be notified of new local candidates.
-class IceCandidateObserver {
- public:
-  // TODO(ronghuawu): Implement OnIceChange.
-  // Called any time the iceState changes.
-  virtual void OnIceChange() {}
-  // New Ice candidate have been found.
-  virtual void OnIceCandidate(const IceCandidateInterface* candidate) = 0;
-  // All Ice candidates have been found.
-  // Deprecated (jsep00)
-  virtual void OnIceComplete() {}
-
- protected:
-  ~IceCandidateObserver() {}
-};
+// |error| can be NULL if doesn't care about the failure reason.
+SessionDescriptionInterface* CreateSessionDescription(const std::string& type,
+                                                      const std::string& sdp,
+                                                      SdpParseError* error);
 
 // Jsep CreateOffer and CreateAnswer callback interface.
 class CreateSessionDescriptionObserver : public talk_base::RefCountInterface {
@@ -195,103 +157,6 @@ class SetSessionDescriptionObserver : public talk_base::RefCountInterface {
 
  protected:
   ~SetSessionDescriptionObserver() {}
-};
-
-// Interface for implementing Jsep. PeerConnection implements these functions.
-class JsepInterface {
- public:
-  // Indicates the type of SessionDescription in a call to SetLocalDescription
-  // and SetRemoteDescription.
-  // Deprecated (jsep00)
-  enum Action {
-    kOffer,
-    kPrAnswer,
-    kAnswer,
-  };
-
-  // Indicates what types of local candidates should be used.
-  // Deprecated (jsep00)
-  enum IceOptions {
-    kUseAll,
-    kNoRelay,
-    kOnlyRelay
-  };
-
-  struct IceServer {
-    std::string uri;
-    std::string password;
-  };
-
-  typedef std::vector<IceServer> IceServers;
-
-  // Deprecated (jsep00)
-  virtual SessionDescriptionInterface* CreateOffer(const MediaHints& hints) = 0;
-
-  // Deprecated (jsep00)
-  // Create an answer to an offer. Returns NULL if an answer can't be created.
-  virtual SessionDescriptionInterface* CreateAnswer(
-      const MediaHints& hints,
-      const SessionDescriptionInterface* offer) = 0;
-
-  // Deprecated (jsep00)
-  // Starts or updates the ICE Agent process of
-  // gathering local candidates and pinging remote candidates.
-  // SetLocalDescription must be called before calling this method.
-  virtual bool StartIce(IceOptions options) = 0;
-
-  // Deprecated (jsep00)
-  // Sets the local session description.
-  // JsepInterface take ownership of |desc|.
-  virtual bool SetLocalDescription(Action action,
-                                   SessionDescriptionInterface* desc) = 0;
-
-  // Deprecated (jsep00)
-  // Sets the remote session description.
-  // JsepInterface take ownership of |desc|.
-  virtual bool SetRemoteDescription(Action action,
-                                    SessionDescriptionInterface* desc) = 0;
-
-  // Deprecated (jsep00)
-  // Processes received ICE information.
-  virtual bool ProcessIceMessage(
-      const IceCandidateInterface* ice_candidate) = 0;
-
-  virtual const SessionDescriptionInterface* local_description() const = 0;
-  virtual const SessionDescriptionInterface* remote_description() const = 0;
-
-  // JSEP01
-  // Create a new offer.
-  // The CreateSessionDescriptionObserver callback will be called when done.
-  virtual void CreateOffer(CreateSessionDescriptionObserver* observer,
-                           const MediaConstraintsInterface* constraints) = 0;
-  // Create an answer to an offer.
-  // The CreateSessionDescriptionObserver callback will be called when done.
-  virtual void CreateAnswer(CreateSessionDescriptionObserver* observer,
-                            const MediaConstraintsInterface* constraints) = 0;
-  // Sets the local session description.
-  // JsepInterface takes the ownership of |desc| even if it fails.
-  // The |observer| callback will be called when done.
-  virtual void SetLocalDescription(SetSessionDescriptionObserver* observer,
-                                   SessionDescriptionInterface* desc) = 0;
-  // Sets the remote session description.
-  // JsepInterface takes the ownership of |desc| even if it fails.
-  // The |observer| callback will be called when done.
-  virtual void SetRemoteDescription(SetSessionDescriptionObserver* observer,
-                                    SessionDescriptionInterface* desc) = 0;
-  // Restarts or updates the ICE Agent process of gathering local candidates
-  // and pinging remote candidates.
-  virtual bool UpdateIce(const IceServers& configuration,
-                         const MediaConstraintsInterface* constraints) = 0;
-  // Provides a remote candidate to the ICE Agent.
-  // A copy of the |candidate| will be created and added to the remote
-  // description. So the caller of this method still has the ownership of the
-  // |candidate|.
-  // TODO(ronghuawu): Consider to change this so that the AddIceCandidate will
-  // take the ownership of the |candidate|.
-  virtual bool AddIceCandidate(const IceCandidateInterface* candidate) = 0;
-
- protected:
-  virtual ~JsepInterface() {}
 };
 
 }  // namespace webrtc

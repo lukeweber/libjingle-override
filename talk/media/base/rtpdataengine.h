@@ -37,8 +37,8 @@
 
 namespace cricket {
 
-static const int kGoogleDataCodecId = 101;
-static const char kGoogleDataCodecName[] = "google-data";
+extern const int kGoogleDataCodecId;
+extern const char* kGoogleDataCodecName;
 
 struct DataCodec;
 

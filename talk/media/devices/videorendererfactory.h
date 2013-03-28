@@ -28,12 +28,11 @@
 #ifndef TALK_MEDIA_DEVICES_VIDEORENDERERFACTORY_H_
 #define TALK_MEDIA_DEVICES_VIDEORENDERERFACTORY_H_
 
-#if defined(LINUX)
+#include "talk/media/base/videorenderer.h"
+#if defined(LINUX) && defined(HAVE_GTK)
 #include "talk/media/devices/gtkvideorenderer.h"
 #elif defined(OSX) && !defined(CARBON_DEPRECATED)
 #include "talk/media/devices/carbonvideorenderer.h"
-#elif defined(IOS) || defined(OSX)
-#include "talk/media/base/videorenderer.h"  // for base VideoRenderer decl.
 #elif defined(WIN32)
 #include "talk/media/devices/gdivideorenderer.h"
 #endif
@@ -43,7 +42,7 @@ namespace cricket {
 class VideoRendererFactory {
  public:
   static VideoRenderer* CreateGuiVideoRenderer(int x, int y) {
-  #if defined(LINUX)
+  #if defined(LINUX) && defined(HAVE_GTK)
     return new GtkVideoRenderer(x, y);
   #elif defined(OSX) && !defined(CARBON_DEPRECATED)
     CarbonVideoRenderer* renderer = new CarbonVideoRenderer(x, y);

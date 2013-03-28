@@ -69,6 +69,11 @@ const int PHASE_SSLTCP = 3;
 
 const int kNumPhases = 4;
 
+// Both these values are in bytes.
+const int kLargeSocketSendBufferSize = 128 * 1024;
+const int kNormalSocketSendBufferSize = 64 * 1024;
+
+
 const char UDP_PROTOCOL_NAME[] = "udp";
 
 // Returns the phase in which a given local candidate (or rather, the port that
@@ -141,6 +146,8 @@ class AllocationSequence : public talk_base::MessageHandler,
   bool Init();
 
   virtual std::string GetClassname() const { return "AllocationSequence"; }
+  State state() const { return state_; }
+  
   // Disables the phases for a new sequence that this one already covers for an
   // equivalent network setup.
   void DisableEquivalentPhases(talk_base::Network* network,
@@ -177,7 +184,6 @@ class AllocationSequence : public talk_base::MessageHandler,
   void CreateRelayPorts();
   void CreateGturnPort(const RelayServerConfig& config);
   void CreateTurnPort(const RelayServerConfig& config);
-  bool running() { return state_ == kRunning; }
 
   void OnReadPacket(talk_base::AsyncPacketSocket* socket,
                     const char* data, size_t size,
@@ -313,7 +319,7 @@ BasicPortAllocatorSession::~BasicPortAllocatorSession() {
 
   std::vector<PortData>::iterator it;
   for (it = ports_.begin(); it != ports_.end(); it++)
-    delete it->port;
+    delete it->port();
 
   for (uint32 i = 0; i < configs_.size(); ++i)
     delete configs_[i];
@@ -344,7 +350,7 @@ void BasicPortAllocatorSession::StartGetAllPorts() {
   for (uint32 i = 0; i < sequences_.size(); ++i)
     sequences_[i]->Start();
   for (size_t i = 0; i < ports_.size(); ++i)
-    ports_[i].port->Start();
+    ports_[i].port()->Start();
 }
 
 void BasicPortAllocatorSession::StopGetAllPorts() {
@@ -415,20 +421,30 @@ void BasicPortAllocatorSession::OnConfigReady(PortConfiguration* config) {
 
 void BasicPortAllocatorSession::OnConfigStop() {
   ASSERT(talk_base::Thread::Current() == network_thread_);
+
   // If any of the allocated ports have not completed the candidates allocation,
   // mark those as error. Since session doesn't need any new candidates
-  // at this stage of the allocation, its safe to discard any new candidates.
+  // at this stage of the allocation, it's safe to discard any new candidates.
   bool send_signal = false;
   for (std::vector<PortData>::iterator it = ports_.begin();
        it != ports_.end(); ++it) {
-    if (!it->allocation_complete()) {
+    if (!it->complete()) {
       // Updating port state to error, which didn't finish allocating candidates
       // yet.
-      it->state = STATE_ERROR;
+      it->set_error();
       send_signal = true;
     }
   }
 
+  // Did we stop any running sequences?
+  for (std::vector<AllocationSequence*>::iterator it = sequences_.begin();
+       it != sequences_.end() && !send_signal; ++it) {
+    if ((*it)->state() == AllocationSequence::kStopped) {
+      send_signal = true;
+    }
+  }
+
+  // If we stopped anything that was running, send a done signal now.
   if (send_signal) {
     MaybeSignalCandidatesAllocationDone();
   }
@@ -535,6 +551,7 @@ void BasicPortAllocatorSession::AddAllocatedPort(Port* port,
   if (!port)
     return;
 
+  LOG(LS_INFO) << "Adding allocated port for " << content_name();
   port->set_content_name(content_name());
   port->set_component(component_);
   port->set_generation(generation());
@@ -542,6 +559,16 @@ void BasicPortAllocatorSession::AddAllocatedPort(Port* port,
     port->set_proxy(allocator_->user_agent(), allocator_->proxy());
   port->set_send_retransmit_count_attribute((allocator_->flags() &
       PORTALLOCATOR_ENABLE_STUN_RETRANSMIT_ATTRIBUTE) != 0);
+
+  if (content_name().compare(CN_VIDEO) == 0 &&
+      component_ == cricket::ICE_CANDIDATE_COMPONENT_RTP) {
+    // For video RTP alone, we set send-buffer sizes. This used to be set in the
+    // engines/channels.
+    int sendBufSize = (flags() & PORTALLOCATOR_USE_LARGE_SOCKET_SEND_BUFFERS)
+                      ? kLargeSocketSendBufferSize
+                      : kNormalSocketSendBufferSize;
+    port->SetOption(talk_base::Socket::OPT_SNDBUF, sendBufSize);
+  }
 
   PortData data(port, seq);
   ports_.push_back(data);
@@ -564,18 +591,27 @@ void BasicPortAllocatorSession::AddAllocatedPort(Port* port,
     port->Start();
 }
 
+void BasicPortAllocatorSession::OnAllocationSequenceObjectsCreated() {
+  allocation_sequences_created_ = true;
+  // Send candidate allocation complete signal if we have no sequences.
+  MaybeSignalCandidatesAllocationDone();
+}
+
 void BasicPortAllocatorSession::OnCandidateReady(
     Port* port, const Candidate& c) {
   ASSERT(talk_base::Thread::Current() == network_thread_);
-  std::vector<PortData>::iterator it =
-      std::find(ports_.begin(), ports_.end(), port);
-  ASSERT(it != ports_.end());
+  PortData* data = FindPort(port);
+  ASSERT(data != NULL);
+  // Discarding any candidate signal if port allocation status is
+  // already in completed state.
+  if (data->complete())
+    return;
 
   // Send candidates whose protocol is enabled.
   std::vector<Candidate> candidates;
   ProtocolType pvalue;
   if (StringToProto(c.protocol().c_str(), &pvalue) &&
-      it->sequence->ProtocolEnabled(pvalue)) {
+      data->sequence()->ProtocolEnabled(pvalue)) {
     candidates.push_back(c);
   }
 
@@ -584,27 +620,42 @@ void BasicPortAllocatorSession::OnCandidateReady(
   }
 }
 
-void BasicPortAllocatorSession::OnPortReady(Port *port) {
+void BasicPortAllocatorSession::OnPortReady(Port* port) {
   ASSERT(talk_base::Thread::Current() == network_thread_);
-  std::vector<PortData>::iterator it =
-      std::find(ports_.begin(), ports_.end(), port);
-  ASSERT(it != ports_.end());
-  if (it->allocation_complete())
+  PortData* data = FindPort(port);
+  ASSERT(data != NULL);
+  // Ignore any late signals.
+  if (data->complete())
     return;
-  it->state = STATE_READY;
+  data->set_ready();
   SignalPortReady(this, port);
+  // Send candidate allocation complete signal if this was the last port.
   MaybeSignalCandidatesAllocationDone();
 }
 
-void BasicPortAllocatorSession::OnProtocolEnabled(AllocationSequence * seq,
+void BasicPortAllocatorSession::OnAddressError(Port* port) {
+  ASSERT(talk_base::Thread::Current() == network_thread_);
+  PortData* data = FindPort(port);
+  ASSERT(data != NULL);
+  // We might have already given up on this port and stopped it.
+  if (data->complete())
+    return;
+  // SignalAddressError is currently sent from StunPort. But this signal
+  // itself is generic.
+  data->set_error();
+  // Send candidate allocation complete signal if this was the last port.
+  MaybeSignalCandidatesAllocationDone();
+}
+
+void BasicPortAllocatorSession::OnProtocolEnabled(AllocationSequence* seq,
                                                   ProtocolType proto) {
   std::vector<Candidate> candidates;
   for (std::vector<PortData>::iterator it = ports_.begin();
        it != ports_.end(); ++it) {
-    if (it->sequence != seq)
+    if (it->sequence() != seq)
       continue;
 
-    const std::vector<Candidate>& potentials = it->port->Candidates();
+    const std::vector<Candidate>& potentials = it->port()->Candidates();
     for (size_t i = 0; i < potentials.size(); ++i) {
       ProtocolType pvalue;
       if (!StringToProto(potentials[i].protocol().c_str(), &pvalue))
@@ -617,17 +668,12 @@ void BasicPortAllocatorSession::OnProtocolEnabled(AllocationSequence * seq,
 
   if (!candidates.empty()) {
     SignalCandidatesReady(this, candidates);
-    MaybeSignalCandidatesAllocationDone();
   }
 }
 
 void BasicPortAllocatorSession::OnPortAllocationComplete(
     AllocationSequence* seq) {
-  MaybeSignalCandidatesAllocationDone();
-}
-
-void BasicPortAllocatorSession::OnAllocationSequenceObjectsCreated() {
-  allocation_sequences_created_ = true;
+  // Send candidate allocation complete signal if all ports are done.
   MaybeSignalCandidatesAllocationDone();
 }
 
@@ -637,15 +683,23 @@ void BasicPortAllocatorSession::MaybeSignalCandidatesAllocationDone() {
   if (!allocation_sequences_created_)
     return;
 
+  // Check that all port allocation sequences are complete.
+  for (std::vector<AllocationSequence*>::iterator it = sequences_.begin();
+       it != sequences_.end(); ++it) {
+    if ((*it)->state() == AllocationSequence::kRunning)
+      return;
+  }
+
   // If all allocated ports are in ready state, session must have got all
   // expected candidates. Session will trigger candidates allocation complete
   // signal.
   for (std::vector<PortData>::iterator it = ports_.begin();
        it != ports_.end(); ++it) {
-    if (!it->allocation_complete())
+    if (!it->complete())
       return;
   }
-  LOG(INFO) << "LOGT BasicPortAllocatorSession::MaybeSignalCandidatesAllocationDone";
+  LOG(LS_INFO) << "All candidates gathered for " << content_name_ << ":"
+               << component_ << ":" << generation();
   SignalCandidatesAllocationDone(this);
 }
 
@@ -655,7 +709,7 @@ void BasicPortAllocatorSession::OnPortDestroyed(
   ASSERT(talk_base::Thread::Current() == network_thread_);
   for (std::vector<PortData>::iterator iter = ports_.begin();
        iter != ports_.end(); ++iter) {
-    if (port == iter->port) {
+    if (port == iter->port()) {
       ports_.erase(iter);
       LOG_J(LS_INFO, port) << "Removed port from allocator ("
                            << static_cast<int>(ports_.size()) << " remaining)";
@@ -663,19 +717,6 @@ void BasicPortAllocatorSession::OnPortDestroyed(
     }
   }
   ASSERT(false);
-}
-
-void BasicPortAllocatorSession::OnAddressError(Port* port) {
-  ASSERT(talk_base::Thread::Current() == network_thread_);
-  std::vector<PortData>::iterator iter =
-      std::find(ports_.begin(), ports_.end(), port);
-  ASSERT(iter != ports_.end());
-  // SignalAddressError is currently sent from StunPort. But this signal
-  // itself is generic.
-  iter->state = STATE_ERROR;
-  // Send candidate allocation complete signal if all other expected candidates
-  // are already received.
-  MaybeSignalCandidatesAllocationDone();
 }
 
 void BasicPortAllocatorSession::OnConnectionCreated(Port* port,
@@ -699,7 +740,7 @@ void BasicPortAllocatorSession::OnShake() {
 
   for (size_t i = 0; i < ports_.size(); ++i) {
     if (ports_[i].ready())
-      ports.push_back(ports_[i].port);
+      ports.push_back(ports_[i].port());
   }
 
   for (size_t i = 0; i < ports.size(); ++i) {
@@ -719,6 +760,17 @@ void BasicPortAllocatorSession::OnShake() {
 
   if (running_ || (ports.size() > 0) || (connections.size() > 0))
     network_thread_->PostDelayed(ShakeDelay(), this, MSG_SHAKE);
+}
+
+BasicPortAllocatorSession::PortData* BasicPortAllocatorSession::FindPort(
+    Port* port) {
+  for (std::vector<PortData>::iterator it = ports_.begin();
+       it != ports_.end(); ++it) {
+    if (it->port() == port) {
+      return &*it;
+    }
+  }
+  return NULL;
 }
 
 // AllocationSequence
@@ -812,8 +864,11 @@ void AllocationSequence::Start() {
 
 void AllocationSequence::Stop() {
   LOG(INFO) << "LOGT AllocationSequence::Stop";
-  state_ = kStopped;
-  session_->network_thread()->Clear(this, MSG_ALLOCATION_PHASE);
+  // If the port is completed, don't set it to stopped.
+  if (state_ == kRunning) {
+    state_ = kStopped;
+    session_->network_thread()->Clear(this, MSG_ALLOCATION_PHASE);
+  }
 }
 
 void AllocationSequence::OnMessage(talk_base::Message* msg) {
@@ -872,9 +927,8 @@ void AllocationSequence::OnMessage(talk_base::Message* msg) {
     }
   }
 
-  // TODO: use different delays for each stage
   step_ += 1;
-  if (running()) {
+  if (state() == kRunning) {
     session_->network_thread()->PostDelayed(ALLOCATION_STEP_DELAY,
                                             this,
                                             MSG_ALLOCATION_PHASE);

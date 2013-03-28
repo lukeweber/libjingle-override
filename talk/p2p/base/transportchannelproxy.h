@@ -32,7 +32,12 @@
 #include <utility>
 #include <vector>
 
+#include "talk/base/messagehandler.h"
 #include "talk/p2p/base/transportchannel.h"
+
+namespace talk_base {
+class Thread;
+}
 
 namespace cricket {
 
@@ -42,7 +47,8 @@ class TransportChannelImpl;
 // This is needed because clients are allowed to create channels before the
 // network negotiation is complete.  Hence, we create a proxy up front, and
 // when negotiation completes, connect the proxy to the implementaiton.
-class TransportChannelProxy : public TransportChannel {
+class TransportChannelProxy : public TransportChannel,
+                              public talk_base::MessageHandler {
  public:
   TransportChannelProxy(const std::string& content_name,
                         const std::string& name,
@@ -60,6 +66,7 @@ class TransportChannelProxy : public TransportChannel {
   virtual int SendPacket(const char* data, size_t len, int flags);
   virtual int SetOption(talk_base::Socket::Option opt, int value);
   virtual int GetError();
+  virtual TransportRole GetRole() const;
   virtual bool GetStats(ConnectionInfos* infos);
   virtual bool IsDtlsActive() const;
   virtual bool SetSrtpCiphers(const std::vector<std::string>& ciphers);
@@ -80,9 +87,12 @@ class TransportChannelProxy : public TransportChannel {
                     int flags);
   void OnRouteChange(TransportChannel* channel, const Candidate& candidate);
 
-  std::string name_;
+  void OnMessage(talk_base::Message* message);
+
   typedef std::pair<talk_base::Socket::Option, int> OptionPair;
   typedef std::vector<OptionPair> OptionList;
+  std::string name_;
+  talk_base::Thread* worker_thread_;
   TransportChannelImpl* impl_;
   OptionList pending_options_;
   std::vector<std::string> pending_srtp_ciphers_;

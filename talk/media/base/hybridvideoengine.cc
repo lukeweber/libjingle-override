@@ -54,7 +54,7 @@ void HybridVideoMediaChannel::SetInterface(NetworkInterface* iface) {
   }
 }
 
-bool HybridVideoMediaChannel::SetOptions(int options) {
+bool HybridVideoMediaChannel::SetOptions(const VideoOptions &options) {
   bool ret = true;
   if (channel1_) {
     ret = channel1_->SetOptions(options);
@@ -65,17 +65,17 @@ bool HybridVideoMediaChannel::SetOptions(int options) {
   return ret;
 }
 
-int HybridVideoMediaChannel::GetOptions() const {
+bool HybridVideoMediaChannel::GetOptions(VideoOptions *options) const {
   if (active_channel_) {
-    return active_channel_->GetOptions();
+    return active_channel_->GetOptions(options);
   }
   if (channel1_) {
-    return channel1_->GetOptions();
+    return channel1_->GetOptions(options);
   }
   if (channel2_) {
-    return channel2_->GetOptions();
+    return channel2_->GetOptions(options);
   }
-  return 0;
+  return false;
 }
 
 bool HybridVideoMediaChannel::SetRecvCodecs(
@@ -160,8 +160,8 @@ bool HybridVideoMediaChannel::SetSendCodecs(
   if (!return_value) {
     return false;
   }
-  active_channel_->UpdateAspectRatio(send_codec.width, send_codec.height);
   engine_->OnNewSendResolution(send_codec.width, send_codec.height);
+  active_channel_->UpdateAspectRatio(send_codec.width, send_codec.height);
   return true;
 }
 

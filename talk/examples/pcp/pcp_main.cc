@@ -27,10 +27,8 @@
 #include "talk/base/ssladapter.h"
 #include "talk/base/stringutils.h"
 #include "talk/base/thread.h"
-#include "talk/examples/login/autoportallocator.h"
-#include "talk/examples/login/xmpppump.h"
-#include "talk/examples/login/xmppsocket.h"
 #include "talk/p2p/base/sessionmanager.h"
+#include "talk/p2p/client/autoportallocator.h"
 #include "talk/p2p/client/sessionmanagertask.h"
 #include "talk/xmpp/xmppengine.h"
 #ifdef USE_SSL_TUNNEL
@@ -39,6 +37,8 @@
 #include "talk/session/tunnel/tunnelsessionclient.h"
 #include "talk/xmpp/xmppclient.h"
 #include "talk/xmpp/xmppclientsettings.h"
+#include "talk/xmpp/xmpppump.h"
+#include "talk/xmpp/xmppsocket.h"
 
 #ifndef MAX_PATH
 #define MAX_PATH 256
@@ -340,7 +340,7 @@ uint32 Loop(const std::vector<uint32>& ids) {
 #pragma warning(disable:4355)
 #endif
 
-class CustomXmppPump : public XmppPumpNotify, public XmppPump {
+class CustomXmppPump : public buzz::XmppPumpNotify, public buzz::XmppPump {
 public:
   CustomXmppPump() : XmppPump(this), server_(false) { }
 
@@ -632,7 +632,7 @@ int main(int argc, char **argv) {
   CustomXmppPump pump;
   pump.client()->SignalLogInput.connect(&debug_log_, &DebugLog::Input);
   pump.client()->SignalLogOutput.connect(&debug_log_, &DebugLog::Output);
-  pump.DoLogin(LoginSettings(), new XmppSocket(gXmppUseTls), 0);
+  pump.DoLogin(LoginSettings(), new buzz::XmppSocket(gXmppUseTls), 0);
     //new XmppAuth());
 
   // Wait until login succeeds.

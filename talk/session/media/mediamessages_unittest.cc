@@ -81,8 +81,8 @@ class MediaMessagesTest : public testing::Test {
                                             const std::string& type,
                                             const std::string& display) {
     StreamParams stream;
-    stream.nick = nick;
-    stream.name = name;
+    stream.groupid = nick;
+    stream.id = name;
     stream.ssrcs.push_back(ssrc1);
     stream.ssrcs.push_back(ssrc2);
     stream.ssrc_groups.push_back(
@@ -184,10 +184,10 @@ TEST_F(MediaMessagesTest, ViewVgaToFromXml) {
   cricket::XmlElements actual_view_elems;
   cricket::WriteError error;
 
-  view_request.static_video_views.push_back(
-      cricket::StaticVideoView(1234, 640, 480, 30));
-  view_request.static_video_views.push_back(
-      cricket::StaticVideoView(2468, 640, 480, 30));
+  view_request.static_video_views.push_back(cricket::StaticVideoView(
+      cricket::StreamSelector(1234), 640, 480, 30));
+  view_request.static_video_views.push_back(cricket::StaticVideoView(
+      cricket::StreamSelector(2468), 640, 480, 30));
 
   ASSERT_TRUE(cricket::WriteJingleViewRequest(
       "video1", view_request, &actual_view_elems, &error));
@@ -202,11 +202,11 @@ TEST_F(MediaMessagesTest, ViewVgaToFromXml) {
   ASSERT_TRUE(cricket::ParseJingleViewRequest(
       action_elem.get(), &view_request, &parse_error));
   EXPECT_EQ(2U, view_request.static_video_views.size());
-  EXPECT_EQ(1234U, view_request.static_video_views[0].ssrc);
+  EXPECT_EQ(1234U, view_request.static_video_views[0].selector.ssrc);
   EXPECT_EQ(640, view_request.static_video_views[0].width);
   EXPECT_EQ(480, view_request.static_video_views[0].height);
   EXPECT_EQ(30, view_request.static_video_views[0].framerate);
-  EXPECT_EQ(2468U, view_request.static_video_views[1].ssrc);
+  EXPECT_EQ(2468U, view_request.static_video_views[1].selector.ssrc);
 }
 
 // Test deserializing bad view XML.
@@ -229,15 +229,15 @@ TEST_F(MediaMessagesTest, StreamsToFromXml) {
   talk_base::scoped_ptr<buzz::XmlElement> expected_streams_elem(
       buzz::XmlElement::ForStr(
           StreamsXml(
-              StreamXml("nick1", "name1", "101", "102",
+              StreamXml("nick1", "stream1", "101", "102",
                         "semantics1", "type1", "display1"),
-              StreamXml("nick2", "name2", "201", "202",
+              StreamXml("nick2", "stream2", "201", "202",
                         "semantics2", "type2", "display2"))));
 
   std::vector<cricket::StreamParams> expected_streams;
-  expected_streams.push_back(CreateStream("nick1", "name1", 101U, 102U,
+  expected_streams.push_back(CreateStream("nick1", "stream1", 101U, 102U,
                                           "semantics1", "type1", "display1"));
-  expected_streams.push_back(CreateStream("nick2", "name2", 201U, 202U,
+  expected_streams.push_back(CreateStream("nick2", "stream2", 201U, 202U,
                                           "semantics2", "type2", "display2"));
 
   talk_base::scoped_ptr<buzz::XmlElement> actual_desc_elem(

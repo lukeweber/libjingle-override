@@ -26,7 +26,9 @@
 #ifndef TALK_MEDIA_BASE_VIDEOADAPTER_H_  // NOLINT
 #define TALK_MEDIA_BASE_VIDEOADAPTER_H_
 
+#include "talk/base/common.h"  // For ASSERT
 #include "talk/base/criticalsection.h"
+#include "talk/base/logging.h"
 #include "talk/base/scoped_ptr.h"
 #include "talk/base/sigslot.h"
 #include "talk/media/base/videocommon.h"
@@ -102,24 +104,52 @@ class CoordinatedVideoAdapter
   // Enable or disable video adaptation due to the change of the View
   void set_view_adaptation(bool enable) { view_adaptation_ = enable; }
   bool view_adaptation() const { return view_adaptation_; }
+  // Enable or disable video adaptation to fast switch View
+  void set_view_switch(bool enable) { view_switch_ = enable; }
+  bool view_switch() const { return view_switch_; }
   // When the video is decreased, set the waiting time for CPU adaptation to
   // decrease video again.
-  void set_cpu_downgrade_wait_time(uint32 ms) { cpu_downgrade_wait_time_ = ms; }
-  // CPU system load high threshold for reducing resolution.  e.g. 0.90f
+  void set_cpu_downgrade_wait_time(uint32 cpu_downgrade_wait_time) {
+    if (cpu_downgrade_wait_time_ != static_cast<int>(cpu_downgrade_wait_time)) {
+      LOG(LS_INFO) << "VAdapt Change Cpu Downgrade Wait Time from: "
+                   << cpu_downgrade_wait_time_ << " to "
+                   << cpu_downgrade_wait_time;
+      cpu_downgrade_wait_time_ = static_cast<int>(cpu_downgrade_wait_time);
+    }
+  }
+  // CPU system load high threshold for reducing resolution.  e.g. 0.85f
   void set_high_system_threshold(float high_system_threshold) {
-    high_system_threshold_ = high_system_threshold;
+    ASSERT(high_system_threshold <= 1.0f);
+    ASSERT(high_system_threshold >= 0.0f);
+    if (high_system_threshold_ != high_system_threshold) {
+      LOG(LS_INFO) << "VAdapt Change High System Threshold from: "
+                   << high_system_threshold_ << " to " << high_system_threshold;
+      high_system_threshold_ = high_system_threshold;
+    }
   }
   float high_system_threshold() const { return high_system_threshold_; }
   // CPU system load low threshold for increasing resolution.  e.g. 0.70f
   void set_low_system_threshold(float low_system_threshold) {
-    low_system_threshold_ = low_system_threshold;
+    ASSERT(low_system_threshold <= 1.0f);
+    ASSERT(low_system_threshold >= 0.0f);
+    if (low_system_threshold_ != low_system_threshold) {
+      LOG(LS_INFO) << "VAdapt Change Low System Threshold from: "
+                   << low_system_threshold_ << " to " << low_system_threshold;
+      low_system_threshold_ = low_system_threshold;
+    }
   }
   float low_system_threshold() const { return low_system_threshold_; }
-  // CPU process load medium threshold for reducing resolution.  e.g. 0.40f
-  void set_medium_process_threshold(float medium_process_threshold) {
-    medium_process_threshold_ = medium_process_threshold;
+  // CPU process load threshold for reducing resolution.  e.g. 0.10f
+  void set_process_threshold(float process_threshold) {
+    ASSERT(process_threshold <= 1.0f);
+    ASSERT(process_threshold >= 0.0f);
+    if (process_threshold_ != process_threshold) {
+      LOG(LS_INFO) << "VAdapt Change High Process Threshold from: "
+                   << process_threshold_ << " to " << process_threshold;
+      process_threshold_ = process_threshold;
+    }
   }
-  float medium_process_threshold() const { return medium_process_threshold_; }
+  float process_threshold() const { return process_threshold_; }
 
   // Handle the format request from the server via Jingle update message.
   void OnOutputFormatRequest(const VideoFormat& format);
@@ -145,13 +175,14 @@ class CoordinatedVideoAdapter
   bool cpu_adaptation_;  // True if cpu adaptation is enabled.
   bool gd_adaptation_;  // True if gd adaptation is enabled.
   bool view_adaptation_;  // True if view adaptation is enabled.
+  bool view_switch_;  // True if view switch is enabled.
   int cpu_downgrade_count_;
   int cpu_downgrade_wait_time_;
   // cpu system load thresholds relative to max cpus.
-  float high_system_threshold_;  // 0.90f;
-  float low_system_threshold_;  // 0.70f;
+  float high_system_threshold_;
+  float low_system_threshold_;
   // cpu process load thresholds relative to current cpus.
-  float medium_process_threshold_;  // 0.40f;
+  float process_threshold_;
   // Video formats that the server view requests, the CPU wants, and the encoder
   // wants respectively. The adapted output format is the minimum of these.
   int view_desired_num_pixels_;

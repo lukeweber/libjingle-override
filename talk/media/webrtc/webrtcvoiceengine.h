@@ -40,8 +40,14 @@
 #include "talk/base/stream.h"
 #include "talk/media/base/rtputils.h"
 #include "talk/media/webrtc/webrtccommon.h"
+#include "talk/media/webrtc/webrtcexport.h"
 #include "talk/media/webrtc/webrtcvoe.h"
 #include "talk/session/media/channel.h"
+
+#if !defined(LIBPEERCONNECTION_LIB) && \
+    !defined(LIBPEERCONNECTION_IMPLEMENTATION)
+#error "Bogus include."
+#endif
 
 
 namespace cricket {
@@ -153,6 +159,8 @@ class WebRtcVoiceEngine
   bool FindCodec(const AudioCodec& codec);
   bool FindWebRtcCodec(const AudioCodec& codec, webrtc::CodecInst* gcodec);
 
+  const std::vector<RtpHeaderExtension>& rtp_header_extensions() const;
+
   void SetLogging(int min_sev, const char* filter);
 
   bool RegisterProcessor(uint32 ssrc,
@@ -257,6 +265,7 @@ class WebRtcVoiceEngine
   std::string log_filter_;
   bool is_dumping_aec_;
   std::vector<AudioCodec> codecs_;
+  std::vector<RtpHeaderExtension> rtp_header_extensions_;
   bool desired_local_monitor_enable_;
   talk_base::scoped_ptr<WebRtcMonitorStream> monitor_;
   SoundclipList soundclips_;

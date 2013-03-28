@@ -39,6 +39,8 @@ class RefCountInterface {
  public:
   virtual int AddRef() = 0;
   virtual int Release() = 0;
+ protected:
+  virtual ~RefCountInterface() {}
 };
 
 template <class T>
@@ -69,9 +71,6 @@ class RefCountedObject : public T {
       : T(p1, p2, p3, p4, p5), ref_count_(0) {
   }
 
-  virtual ~RefCountedObject() {
-  }
-
   virtual int AddRef() {
     return talk_base::AtomicOps::Increment(&ref_count_);
   }
@@ -85,6 +84,9 @@ class RefCountedObject : public T {
   }
 
  protected:
+  virtual ~RefCountedObject() {
+  }
+
   int ref_count_;
 };
 

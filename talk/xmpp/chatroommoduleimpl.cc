@@ -62,7 +62,8 @@ public:
   virtual const std::string& nickname() const;
   virtual const Jid member_jid() const;
   virtual XmppReturnStatus RequestEnterChatroom(const std::string& password,
-      const std::string& client_version);
+      const std::string& client_version,
+      const std::string& locale);
   virtual XmppReturnStatus RequestExitChatroom();
   virtual XmppReturnStatus RequestConnectionStatusChange(
       XmppPresenceConnectionStatus connection_status);
@@ -273,7 +274,8 @@ std::string GetAttrValueFor(XmppPresenceConnectionStatus connection_status) {
 XmppReturnStatus
 XmppChatroomModuleImpl::RequestEnterChatroom(
     const std::string& password,
-    const std::string& client_version) {
+    const std::string& client_version,
+    const std::string& locale) {
   UNUSED(password);
   if (!engine())
     return XMPP_RETURN_BADSTATE;
@@ -297,6 +299,13 @@ XmppChatroomModuleImpl::RequestEnterChatroom(
                                                         false);
     client_version_element->SetBodyText(client_version);
     muc_x->AddElement(client_version_element);
+  }
+
+  if (!locale.empty()) {
+    XmlElement* locale_element = new XmlElement(QN_LOCALE, false);
+
+    locale_element->SetBodyText(locale);
+    muc_x->AddElement(locale_element);
   }
 
   XmppReturnStatus status = engine()->SendStanza(&element);

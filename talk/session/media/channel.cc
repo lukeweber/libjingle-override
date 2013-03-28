@@ -176,6 +176,15 @@ struct VoiceStatsMessageData : public talk_base::MessageData {
   VoiceMediaInfo* stats;
 };
 
+struct VideoStatsMessageData : public talk_base::MessageData {
+  explicit VideoStatsMessageData(VideoMediaInfo* stats)
+      : result(false),
+        stats(stats) {
+  }
+  bool result;
+  VideoMediaInfo* stats;
+};
+
 struct PacketMessageData : public talk_base::MessageData {
   talk_base::Buffer packet;
 };
@@ -290,8 +299,12 @@ struct AudioOptionsMessageData : public talk_base::MessageData {
 };
 
 struct VideoOptionsMessageData : public talk_base::MessageData {
-  explicit VideoOptionsMessageData(int options) : options(options) {}
-  int options;
+  explicit VideoOptionsMessageData(const VideoOptions& options)
+      : options(options),
+        result(false) {
+  }
+  VideoOptions options;
+  bool result;
 };
 
 struct SetCapturerMessageData : public talk_base::MessageData {
@@ -959,7 +972,7 @@ bool BaseChannel::SetupDtlsSrtp(bool rtcp_channel) {
 
   std::vector<unsigned char> *send_key, *recv_key;
 
-  if (session()->initiator()) {
+  if (channel->GetRole() == ROLE_CONTROLLING) {
     send_key = &server_write_key;
     recv_key = &client_write_key;
   } else {
@@ -1104,8 +1117,8 @@ bool BaseChannel::UpdateLocalStreams_w(const std::vector<StreamParams>& streams,
     for (StreamParamsVec::const_iterator it = streams.begin();
          it != streams.end(); ++it) {
       StreamParams existing_stream;
-      bool stream_exist = GetStreamByNickAndName(local_streams_, it->nick,
-                                                 it->name, &existing_stream);
+      bool stream_exist = GetStreamByIds(local_streams_, it->groupid,
+                                         it->id, &existing_stream);
       if (!stream_exist && it->has_ssrcs()) {
         if (media_channel()->AddSendStream(*it)) {
           local_streams_.push_back(*it);
@@ -1170,8 +1183,8 @@ bool BaseChannel::UpdateRemoteStreams_w(
     for (StreamParamsVec::const_iterator it = streams.begin();
          it != streams.end(); ++it) {
       StreamParams existing_stream;
-      bool stream_exists = GetStreamByNickAndName(remote_streams_, it->nick,
-                                                  it->name, &existing_stream);
+      bool stream_exists = GetStreamByIds(remote_streams_, it->groupid,
+                                          it->id, &existing_stream);
       if (!stream_exists && it->has_ssrcs()) {
         if (AddRecvStream_w(*it)) {
           remote_streams_.push_back(*it);
@@ -1932,6 +1945,12 @@ void VideoChannel::ChangeState() {
   LOG(LS_INFO) << "Changing video state, recv=" << recv << " send=" << send;
 }
 
+bool VideoChannel::GetStats(VideoMediaInfo* stats) {
+  VideoStatsMessageData data(stats);
+  Send(MSG_GETSTATS, &data);
+  return data.result;
+}
+
 void VideoChannel::StartMediaMonitor(int cms) {
   media_monitor_.reset(new VideoMediaMonitor(media_channel(), worker_thread(),
       talk_base::Thread::Current()));
@@ -1968,6 +1987,17 @@ bool VideoChannel::SetLocalContent_w(const MediaContentDescription* content,
     ret &= media_channel()->SetRecvCodecs(video->codecs());
   }
 
+  if (action != CA_UPDATE) {
+    VideoOptions video_options;
+    media_channel()->GetOptions(&video_options);
+    video_options.buffered_mode_latency.Set(video->buffered_mode_latency());
+
+    if (!media_channel()->SetOptions(video_options)) {
+      // Log an error on failure, but don't abort the call.
+      LOG(LS_ERROR) << "Failed to set video channel options";
+    }
+  }
+
   // If everything worked, see if we can start receiving.
   if (ret) {
     ChangeState();
@@ -1997,12 +2027,11 @@ bool VideoChannel::SetRemoteContent_w(const MediaContentDescription* content,
 
   if (action != CA_UPDATE) {
     // Tweak our video processing settings, if needed.
-    int video_options = media_channel()->GetOptions();
-    if (video->conference_mode()) {
-      video_options |= OPT_CONFERENCE;
-    } else {
-      video_options &= (~OPT_CONFERENCE);
-    }
+    VideoOptions video_options;
+    media_channel()->GetOptions(&video_options);
+    video_options.conference_mode.Set(video->conference_mode());
+    video_options.buffered_mode_latency.Set(video->buffered_mode_latency());
+
     if (!media_channel()->SetOptions(video_options)) {
       // Log an error on failure, but don't abort the call.
       LOG(LS_ERROR) << "Failed to set video channel options";
@@ -2028,11 +2057,8 @@ bool VideoChannel::ApplyViewRequest_w(const ViewRequest& request) {
     VideoFormat format(0, 0, 0, cricket::FOURCC_I420);
     StaticVideoViews::const_iterator view;
     for (view = request.static_video_views.begin();
-        view != request.static_video_views.end(); ++view) {
-      // Sender view request from Reflector has SSRC 0 (b/5977302). Here we hack
-      // the client to apply the view request with SSRC 0. TODO(whyuan): Remove
-      // 0 == view->SSRC once Reflector uses the correct SSRC in view request.
-      if (it->has_ssrc(view->ssrc) || 0 == view->ssrc) {
+         view != request.static_video_views.end(); ++view) {
+      if (view->selector.Matches(*it)) {
         format.width = view->width;
         format.height = view->height;
         format.interval = cricket::VideoFormat::FpsToInterval(view->framerate);
@@ -2046,9 +2072,12 @@ bool VideoChannel::ApplyViewRequest_w(const ViewRequest& request) {
   // Check if the view request has invalid streams.
   for (StaticVideoViews::const_iterator it = request.static_video_views.begin();
       it != request.static_video_views.end(); ++it) {
-    if (!GetStreamBySsrc(local_streams(), it->ssrc, NULL)) {
-      LOG(LS_WARNING) << "View request's SSRC " << it->ssrc
-                      << " is not in the local streams.";
+    if (!GetStream(local_streams(), it->selector, NULL)) {
+      LOG(LS_WARNING) << "View request for ("
+                      << it->selector.ssrc << ", '"
+                      << it->selector.groupid << "', '"
+                      << it->selector.streamid << "'"
+                      << ") is not in the local streams.";
     }
   }
 
@@ -2113,19 +2142,24 @@ void VideoChannel::SetScreenCaptureFactory_w(
   }
 }
 
+bool VideoChannel::GetStats_w(VideoMediaInfo* stats) {
+  return media_channel()->GetStats(stats);
+}
+
 void VideoChannel::OnScreencastWindowEvent_s(uint32 ssrc,
                                              talk_base::WindowEvent we) {
   ASSERT(signaling_thread() == talk_base::Thread::Current());
   SignalScreencastWindowEvent(ssrc, we);
 }
 
-void VideoChannel::SetChannelOptions(int options) {
+bool VideoChannel::SetChannelOptions(const VideoOptions &options) {
   VideoOptionsMessageData data(options);
   Send(MSG_SETCHANNELOPTIONS, &data);
+  return data.result;
 }
 
-void VideoChannel::SetChannelOptions_w(int options) {
-  media_channel()->SetOptions(options);
+bool VideoChannel::SetChannelOptions_w(const VideoOptions &options) {
+  return media_channel()->SetOptions(options);
 }
 
 void VideoChannel::OnMessage(talk_base::Message *pmsg) {
@@ -2182,9 +2216,9 @@ void VideoChannel::OnMessage(talk_base::Message *pmsg) {
       break;
     }
     case MSG_SETCHANNELOPTIONS: {
-      const VideoOptionsMessageData* data =
+      VideoOptionsMessageData* data =
          static_cast<VideoOptionsMessageData*>(pmsg->pdata);
-      SetChannelOptions_w(data->options);
+      data->result = SetChannelOptions_w(data->options);
       break;
     }
     case MSG_CHANNEL_ERROR: {
@@ -2204,6 +2238,12 @@ void VideoChannel::OnMessage(talk_base::Message *pmsg) {
       SetScreenCaptureFactoryMessageData* data =
           static_cast<SetScreenCaptureFactoryMessageData*>(pmsg->pdata);
       SetScreenCaptureFactory_w(data->screencapture_factory);
+    }
+    case MSG_GETSTATS: {
+      VideoStatsMessageData* data =
+          static_cast<VideoStatsMessageData*>(pmsg->pdata);
+      data->result = GetStats_w(data->stats);
+      break;
     }
     default:
       BaseChannel::OnMessage(pmsg);

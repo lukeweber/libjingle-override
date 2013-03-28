@@ -122,6 +122,10 @@ class DtlsTransportChannelWrapper : public TransportChannelImpl {
   virtual ~DtlsTransportChannelWrapper();
 
   virtual void SetRole(TransportRole role);
+  // Returns current transport role of the channel.
+  virtual TransportRole GetRole() const {
+    return channel_->GetRole();
+  }
   virtual bool SetLocalIdentity(talk_base::SSLIdentity *identity);
 
   virtual bool SetRemoteFingerprint(const std::string& digest_alg,
@@ -184,16 +188,19 @@ class DtlsTransportChannelWrapper : public TransportChannelImpl {
   virtual void SetIceProtocolType(IceProtocolType type) {
     channel_->SetIceProtocolType(type);
   }
-  virtual void SetIceUfrag(const std::string& ice_ufrag) {
-    channel_->SetIceUfrag(ice_ufrag);
+  virtual void SetIceCredentials(const std::string& ice_ufrag,
+                                 const std::string& ice_pwd) {
+    channel_->SetIceCredentials(ice_ufrag, ice_pwd);
   }
-  virtual void SetIcePwd(const std::string& ice_pwd) {
-    channel_->SetIcePwd(ice_pwd);
+  virtual void SetRemoteIceCredentials(const std::string& ice_ufrag,
+                                       const std::string& ice_pwd) {
+    channel_->SetRemoteIceCredentials(ice_ufrag, ice_pwd);
   }
-  virtual void Connect() {
-    channel_->Connect();
+  virtual void SetRemoteIceMode(IceMode mode) {
+    channel_->SetRemoteIceMode(mode);
   }
 
+  virtual void Connect();
   virtual void Reset();
 
   virtual void OnSignalingReady() {

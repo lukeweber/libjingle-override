@@ -10,8 +10,8 @@ vars = {
   "chromium_trunk" : "http://src.chromium.org/svn/trunk",
   "chromium_git": "https://chromium.googlesource.com",
 
-  "chromium_revision": "172329",
-  "webrtc_revision": "3255",
+  "chromium_revision": "187216",
+  "webrtc_revision": "3729",
 }
 
 # NOTE: Prefer revision numbers to tags for svn deps. Use http rather than
@@ -38,6 +38,15 @@ deps = {
 
   "third_party/icu/":
     From("chromium_deps", "src/third_party/icu"),
+
+  "third_party/jsoncpp/":
+    Var("chromium_trunk") + "/src/third_party/jsoncpp@" + Var("chromium_revision"),
+
+  "third_party/jsoncpp/source":
+    "http://jsoncpp.svn.sourceforge.net/svnroot/jsoncpp/trunk/jsoncpp@248",
+
+  "third_party/junit/":
+    (Var("googlecode_url") % "webrtc") + "/deps/third_party/junit@3367",
 
   "third_party/libjpeg":
     Var("chromium_trunk") + "/src/third_party/libjpeg@" + Var("chromium_revision"),

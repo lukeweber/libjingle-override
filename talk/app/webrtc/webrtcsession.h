@@ -30,12 +30,14 @@
 
 #include <string>
 
-#include "talk/app/webrtc/jsep.h"
+#include "talk/app/webrtc/peerconnectioninterface.h"
+#include "talk/app/webrtc/dtmfsender.h"
 #include "talk/app/webrtc/mediastreamprovider.h"
 #include "talk/app/webrtc/datachannel.h"
 #include "talk/app/webrtc/statstypes.h"
 #include "talk/base/sigslot.h"
 #include "talk/base/thread.h"
+#include "talk/media/base/mediachannel.h"
 #include "talk/p2p/base/session.h"
 #include "talk/p2p/base/transportdescriptionfactory.h"
 #include "talk/session/media/mediasession.h"
@@ -55,13 +57,42 @@ class VoiceChannel;
 
 namespace webrtc {
 
+class IceRestartAnswerLatch;
 class MediaStreamSignaling;
+
+extern const char kCreateChannelFailed[];
+extern const char kInvalidCandidates[];
+extern const char kInvalidSdp[];
+extern const char kMlineMismatch[];
+extern const char kSdpWithoutCrypto[];
+extern const char kSessionError[];
+extern const char kUpdateStateFailed[];
+
+// ICE state callback interface.
+class IceObserver {
+ public:
+  // Called any time the IceConnectionState changes
+  virtual void OnIceConnectionChange(
+      PeerConnectionInterface::IceConnectionState new_state) {}
+  // Called any time the IceGatheringState changes
+  virtual void OnIceGatheringChange(
+      PeerConnectionInterface::IceGatheringState new_state) {}
+  // New Ice candidate have been found.
+  virtual void OnIceCandidate(const IceCandidateInterface* candidate) = 0;
+  // All Ice candidates have been found.
+  // TODO(bemasc): Remove this once callers transition to OnIceGatheringChange.
+  // (via PeerConnectionObserver)
+  virtual void OnIceComplete() {}
+
+ protected:
+  ~IceObserver() {}
+};
 
 class WebRtcSession : public cricket::BaseSession,
                       public AudioProviderInterface,
                       public DataChannelFactory,
                       public VideoProviderInterface,
-                      public JsepInterface {
+                      public DtmfProviderInterface {
  public:
   WebRtcSession(cricket::ChannelManager* channel_manager,
                 talk_base::Thread* signaling_thread,
@@ -71,18 +102,21 @@ class WebRtcSession : public cricket::BaseSession,
   virtual ~WebRtcSession();
 
   bool Initialize(const MediaConstraintsInterface* constraints);
+  // Deletes the voice, video and data channel and changes the session state
+  // to STATE_RECEIVEDTERMINATE.
+  void Terminate();
 
-  void RegisterObserver(IceCandidateObserver* observer) {
+  void RegisterIceObserver(IceObserver* observer) {
     ice_observer_ = observer;
   }
 
-  cricket::VoiceChannel* voice_channel() {
+  virtual cricket::VoiceChannel* voice_channel() {
     return voice_channel_.get();
   }
-  cricket::VideoChannel* video_channel() {
+  virtual cricket::VideoChannel* video_channel() {
     return video_channel_.get();
   }
-  cricket::DataChannel* data_channel() {
+  virtual cricket::DataChannel* data_channel() {
     return data_channel_.get();
   }
 
@@ -95,53 +129,32 @@ class WebRtcSession : public cricket::BaseSession,
   // TODO - It may be necessary to supply error code as well.
   sigslot::signal0<> SignalError;
 
-  // Implements JsepInterface.
-  virtual SessionDescriptionInterface* CreateOffer(const MediaHints& hints);
-  virtual SessionDescriptionInterface* CreateOffer(
+  SessionDescriptionInterface* CreateOffer(
       const MediaConstraintsInterface* constraints);
-  virtual SessionDescriptionInterface* CreateAnswer(
-      const MediaHints& hints,
-      const SessionDescriptionInterface* offer);
-  virtual SessionDescriptionInterface* CreateAnswer(
+
+  SessionDescriptionInterface* CreateAnswer(
       const MediaConstraintsInterface* constraints,
       const SessionDescriptionInterface* offer);
-  virtual bool StartIce(IceOptions options) { return true;}
-  virtual bool SetLocalDescription(Action action,
-                                   SessionDescriptionInterface* desc);
 
-  virtual bool SetRemoteDescription(Action action,
-                                    SessionDescriptionInterface* desc);
-  virtual bool ProcessIceMessage(const IceCandidateInterface* ice_candidate);
-  virtual const SessionDescriptionInterface* local_description() const {
+  bool SetLocalDescription(SessionDescriptionInterface* desc,
+                           std::string* err_desc);
+  bool SetRemoteDescription(SessionDescriptionInterface* desc,
+                            std::string* err_desc);
+  bool ProcessIceMessage(const IceCandidateInterface* ice_candidate);
+  const SessionDescriptionInterface* local_description() const {
     return local_desc_.get();
   }
-  virtual const SessionDescriptionInterface* remote_description() const {
+  const SessionDescriptionInterface* remote_description() const {
     return remote_desc_.get();
   }
 
-  // TODO(ronghuawu): Implement below functions to replace the deprecated ones.
-  virtual void CreateOffer(CreateSessionDescriptionObserver* observer,
-                           const MediaConstraintsInterface* constraints) {}
-  virtual void CreateAnswer(CreateSessionDescriptionObserver* observer,
-                            const MediaConstraintsInterface* constraints) {}
-  virtual void SetLocalDescription(SetSessionDescriptionObserver* observer,
-                                   SessionDescriptionInterface* desc) {}
-  virtual void SetRemoteDescription(SetSessionDescriptionObserver* observer,
-                                    SessionDescriptionInterface* desc) {}
-  virtual bool UpdateIce(const IceServers& configuration,
-                         const MediaConstraintsInterface* constraints) {
-    return false;
-  }
-  virtual bool AddIceCandidate(const IceCandidateInterface* candidate) {
-    return false;
-  }
-
-  bool GetLocalTrackName(uint32 ssrc, std::string* name);
-  bool GetRemoteTrackName(uint32 ssrc, std::string* name);
+  // Get the id used as a media stream track's "id" field from ssrc.
+  virtual bool GetTrackIdBySsrc(uint32 ssrc, std::string* id);
 
   // AudioMediaProviderInterface implementation.
   virtual void SetAudioPlayout(const std::string& name, bool enable);
-  virtual void SetAudioSend(const std::string& name, bool enable);
+  virtual void SetAudioSend(const std::string& name, bool enable,
+                            const cricket::AudioOptions& options);
 
   // Implements VideoMediaProviderInterface.
   virtual bool SetCaptureDevice(const std::string& name,
@@ -149,30 +162,35 @@ class WebRtcSession : public cricket::BaseSession,
   virtual void SetVideoPlayout(const std::string& name,
                                bool enable,
                                cricket::VideoRenderer* renderer);
-  virtual void SetVideoSend(const std::string& name, bool enable);
+  virtual void SetVideoSend(const std::string& name, bool enable,
+                            const cricket::VideoOptions* options);
 
-  virtual bool CanSendDtmf(const std::string& name);
-  virtual bool SendDtmf(const std::string& send_name,
-                        const std::string& tones, int duration,
-                        const std::string& play_name);
+  // Implements DtmfProviderInterface.
+  virtual bool CanInsertDtmf(const std::string& track_id);
+  virtual bool InsertDtmf(const std::string& track_id,
+                          int code, int duration);
+  virtual sigslot::signal0<>* GetOnDestroyedSignal();
 
   talk_base::scoped_refptr<DataChannel> CreateDataChannel(
       const std::string& label,
       const DataChannelInit* config);
 
  private:
+  // Indicates the type of SessionDescription in a call to SetLocalDescription
+  // and SetRemoteDescription.
+  enum Action {
+    kOffer,
+    kPrAnswer,
+    kAnswer,
+  };
   // Invokes ConnectChannels() on transport proxies, which initiates ice
   // candidates allocation.
   bool StartCandidatesAllocation();
   bool UpdateSessionState(Action action, cricket::ContentSource source,
                           const cricket::SessionDescription* desc);
+  static Action GetAction(const std::string& type);
 
   virtual void OnMessage(talk_base::Message* msg);
-
-  // This callback is connected to BaseChannel::SignalFirstPacketReceived.
-  // It is used for detecting if we receive packets without being aware of the
-  // remote SSRC and must create a default media stream.
-  void OnFirstPacketReceived(cricket::BaseChannel* channel);
 
   // Transport related callbacks, override from cricket::BaseSession.
   virtual void OnTransportRequestSignaling(cricket::Transport* transport);
@@ -205,14 +223,15 @@ class WebRtcSession : public cricket::BaseSession,
       const SessionDescriptionInterface* remote_desc);
   // Uses |candidate| in this session.
   bool UseCandidate(const IceCandidateInterface* candidate);
+  // Deletes the corresponding channel of contents that don't exist in |desc|.
+  // |desc| can be null. This means that all channels are deleted.
   void RemoveUnusedChannelsAndTransports(
       const cricket::SessionDescription* desc);
 
   // Allocates media channels based on the |desc|. If |desc| doesn't have
   // the BUNDLE option, this method will disable BUNDLE in PortAllocator.
   // This method will also delete any existing media channels before creating.
-  bool CreateChannels(Action action,
-                      const cricket::SessionDescription* desc);
+  bool CreateChannels(const cricket::SessionDescription* desc);
 
   // Helper methods to create media channels.
   bool CreateVoiceChannel(const cricket::SessionDescription* desc);
@@ -228,6 +247,12 @@ class WebRtcSession : public cricket::BaseSession,
   // Called when processing the local session description.
   void UpdateSessionDescriptionSecurePolicy(cricket::SessionDescription* desc);
 
+  bool GetLocalTrackId(uint32 ssrc, std::string* track_id);
+  bool GetRemoteTrackId(uint32 ssrc, std::string* track_id);
+
+  std::string BadStateErrMsg(const std::string& type, State state);
+  void SetIceConnectionState(PeerConnectionInterface::IceConnectionState state);
+
   talk_base::scoped_ptr<cricket::VoiceChannel> voice_channel_;
   talk_base::scoped_ptr<cricket::VideoChannel> video_channel_;
   talk_base::scoped_ptr<cricket::DataChannel> data_channel_;
@@ -235,7 +260,8 @@ class WebRtcSession : public cricket::BaseSession,
   cricket::TransportDescriptionFactory transport_desc_factory_;
   cricket::MediaSessionDescriptionFactory session_desc_factory_;
   MediaStreamSignaling* mediastream_signaling_;
-  IceCandidateObserver * ice_observer_;
+  IceObserver* ice_observer_;
+  PeerConnectionInterface::IceConnectionState ice_connection_state_;
   talk_base::scoped_ptr<SessionDescriptionInterface> local_desc_;
   talk_base::scoped_ptr<SessionDescriptionInterface> remote_desc_;
   // Candidates that arrived before the remote description was set.
@@ -247,6 +273,10 @@ class WebRtcSession : public cricket::BaseSession,
   // True if this session can create an RTP data engine. This is controlled
   // by the constraint kEnableRtpDataChannels.
   bool allow_rtp_data_engine_;
+  talk_base::scoped_ptr<IceRestartAnswerLatch> ice_restart_latch_;
+  sigslot::signal0<> SignalVoiceChannelDestroyed;
+  sigslot::signal0<> SignalVideoChannelDestroyed;
+  sigslot::signal0<> SignalDataChannelDestroyed;
 };
 
 }  // namespace webrtc

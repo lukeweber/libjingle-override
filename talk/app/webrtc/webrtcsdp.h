@@ -39,15 +39,12 @@
 
 #include <string>
 
-namespace cricket {
-class SessionDescription;
-}
-
 namespace webrtc {
 
 class IceCandidateInterface;
 class JsepIceCandidate;
 class JsepSessionDescription;
+struct SdpParseError;
 
 // Serializes the passed in JsepSessionDescription.
 // Serialize SessionDescription including candidates if
@@ -63,18 +60,22 @@ std::string SdpSerializeCandidate(const IceCandidateInterface& candidate);
 // Deserializes the passed in SDP string to a JsepSessionDescription.
 // message - SDP string to be Deserialized.
 // jdesc - The JsepSessionDescription deserialized from the SDP string.
+// error - The detail error information when parsing fails.
 // return - true on success, false on failure.
 bool SdpDeserialize(const std::string& message,
-                    JsepSessionDescription* jdesc);
+                    JsepSessionDescription* jdesc,
+                    SdpParseError* error);
 
 // Deserializes the passed in SDP string to one JsepIceCandidate.
 // The first line must be a=candidate line and only the first line will be
 // parsed.
 // message - The SDP string to be Deserialized.
 // candidates - The JsepIceCandidate from the SDP string.
+// error - The detail error information when parsing fails.
 // return - true on success, false on failure.
 bool SdpDeserializeCandidate(const std::string& message,
-                             JsepIceCandidate* candidate);
+                             JsepIceCandidate* candidate,
+                             SdpParseError* error);
 }  // namespace webrtc
 
 #endif  // TALK_APP_WEBRTC_WEBRTCSDP_H_

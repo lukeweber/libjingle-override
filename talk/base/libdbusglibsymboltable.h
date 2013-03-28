@@ -60,23 +60,7 @@ namespace talk_base {
   X(dbus_message_iter_get_basic) \
   X(dbus_message_iter_init) \
   X(dbus_message_ref) \
-  X(dbus_message_unref) \
-  X(g_free) \
-  X(g_idle_source_new) \
-  X(g_main_context_new) \
-  X(g_main_context_push_thread_default) \
-  X(g_main_context_unref) \
-  X(g_main_loop_new) \
-  X(g_main_loop_quit) \
-  X(g_main_loop_run) \
-  X(g_main_loop_unref) \
-  X(g_object_unref) \
-  X(g_source_attach) \
-  X(g_source_destroy) \
-  X(g_source_set_callback) \
-  X(g_source_unref) \
-  X(g_thread_init) \
-  X(g_type_init)
+  X(dbus_message_unref)
 
 #define LATE_BINDING_SYMBOL_TABLE_CLASS_NAME LIBDBUS_GLIB_CLASS_NAME
 #define LATE_BINDING_SYMBOL_TABLE_SYMBOLS_LIST LIBDBUS_GLIB_SYMBOLS_LIST

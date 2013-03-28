@@ -45,6 +45,10 @@ static const size_t kDataMaxRtpPacketLen = 1200U;
 static const unsigned char kReservedSpace[] = {
   0x00, 0x00, 0x00, 0x00
 };
+
+const int kGoogleDataCodecId = 101;
+const char* kGoogleDataCodecName = "google-data";
+
 // Amount of overhead SRTP may take.  We need to leave room in the
 // buffer for it, otherwise SRTP will fail later.  If SRTP ever uses
 // more than this, we need to increase this number.
@@ -119,9 +123,10 @@ void RtpClock::Tick(
 }
 
 const DataCodec* FindUnknownCodec(const std::vector<DataCodec>& codecs) {
+  DataCodec data_codec(kGoogleDataCodecId, kGoogleDataCodecName, 0);
   std::vector<cricket::DataCodec>::const_iterator iter;
   for (iter = codecs.begin(); iter != codecs.end(); ++iter) {
-    if (!iter->Matches(kGoogleDataCodecId, kGoogleDataCodecName)) {
+    if (!iter->Matches(data_codec)) {
       return &(*iter);
     }
   }
@@ -129,9 +134,10 @@ const DataCodec* FindUnknownCodec(const std::vector<DataCodec>& codecs) {
 }
 
 const DataCodec* FindKnownCodec(const std::vector<DataCodec>& codecs) {
+  DataCodec data_codec(kGoogleDataCodecId, kGoogleDataCodecName, 0);
   std::vector<cricket::DataCodec>::const_iterator iter;
   for (iter = codecs.begin(); iter != codecs.end(); ++iter) {
-    if (iter->Matches(kGoogleDataCodecId, kGoogleDataCodecName)) {
+    if (iter->Matches(data_codec)) {
       return &(*iter);
     }
   }
@@ -169,7 +175,7 @@ bool RtpDataMediaChannel::AddSendStream(const StreamParams& stream) {
 
   StreamParams found_stream;
   if (GetStreamBySsrc(send_streams_, stream.first_ssrc(), &found_stream)) {
-    LOG(LS_WARNING) << "Not adding data send stream '" << stream.name
+    LOG(LS_WARNING) << "Not adding data send stream '" << stream.id
                     << "' with ssrc=" << stream.first_ssrc()
                     << " because stream already exists.";
     return false;
@@ -182,7 +188,7 @@ bool RtpDataMediaChannel::AddSendStream(const StreamParams& stream) {
       kDataCodecClockrate,
       talk_base::CreateRandomNonZeroId(), talk_base::CreateRandomNonZeroId());
 
-  LOG(LS_INFO) << "Added data send stream '" << stream.name
+  LOG(LS_INFO) << "Added data send stream '" << stream.id
                << "' with ssrc=" << stream.first_ssrc();
   return true;
 }
@@ -206,14 +212,14 @@ bool RtpDataMediaChannel::AddRecvStream(const StreamParams& stream) {
 
   StreamParams found_stream;
   if (GetStreamBySsrc(recv_streams_, stream.first_ssrc(), &found_stream)) {
-    LOG(LS_WARNING) << "Not adding data recv stream '" << stream.name
+    LOG(LS_WARNING) << "Not adding data recv stream '" << stream.id
                     << "' with ssrc=" << stream.first_ssrc()
                     << " because stream already exists.";
     return false;
   }
 
   recv_streams_.push_back(stream);
-  LOG(LS_INFO) << "Added data recv stream '" << stream.name
+  LOG(LS_INFO) << "Added data recv stream '" << stream.id
                << "' with ssrc=" << stream.first_ssrc();
   return true;
 }
@@ -266,7 +272,8 @@ void RtpDataMediaChannel::OnPacketReceived(talk_base::Buffer* packet) {
   }
 
   // Uncomment this for easy debugging.
-  // LOG(LS_INFO) << "Received packet from " << found_stream.nick << ":"
+  // LOG(LS_INFO) << "Received packet"
+  //              << " groupid=" << found_stream.groupid
   //              << ", ssrc=" << header.ssrc
   //              << ", seqnum=" << header.seq_num
   //              << ", timestamp=" << header.timestamp
@@ -346,7 +353,7 @@ bool RtpDataMediaChannel::SendData(
 
   // Uncomment this for easy debugging.
   // LOG(LS_INFO) << "Sent packet: "
-  //              << " stream=" << found_stream.name
+  //              << " stream=" << found_stream.id
   //              << ", seqnum=" << header.seq_num
   //              << ", timestamp=" << header.timestamp
   //              << ", len=" << data_len;

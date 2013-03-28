@@ -63,20 +63,20 @@ const int JsepSessionDescription::kMaxVideoCodecWidth = 1280;
 const int JsepSessionDescription::kMaxVideoCodecHeight = 720;
 const int JsepSessionDescription::kDefaultVideoCodecPreference = 1;
 
-// TODO(perkj): Remove CreateSessionDescription(const std::string& sdp) once
-// JSEP00 is removed.
-SessionDescriptionInterface* CreateSessionDescription(const std::string& sdp) {
-  return CreateSessionDescription(JsepSessionDescription::kOffer, sdp);
+SessionDescriptionInterface* CreateSessionDescription(const std::string& type,
+                                                      const std::string& sdp) {
+  return CreateSessionDescription(type, sdp, NULL);
 }
 
 SessionDescriptionInterface* CreateSessionDescription(const std::string& type,
-                                                      const std::string& sdp) {
+                                                      const std::string& sdp,
+                                                      SdpParseError* error) {
   if (!IsTypeSupported(type)) {
     return NULL;
   }
 
   JsepSessionDescription* jsep_desc = new JsepSessionDescription(type);
-  if (!jsep_desc->Initialize(sdp)) {
+  if (!jsep_desc->Initialize(sdp, error)) {
     delete jsep_desc;
     return NULL;
   }
@@ -103,8 +103,9 @@ bool JsepSessionDescription::Initialize(
   return true;
 }
 
-bool JsepSessionDescription::Initialize(const std::string& sdp) {
-  return SdpDeserialize(sdp, this);
+bool JsepSessionDescription::Initialize(const std::string& sdp,
+                                        SdpParseError* error) {
+  return SdpDeserialize(sdp, this, error);
 }
 
 bool JsepSessionDescription::AddCandidate(
@@ -151,6 +152,8 @@ size_t JsepSessionDescription::number_of_mediasections() const {
 
 const IceCandidateCollection* JsepSessionDescription::candidates(
     size_t mediasection_index) const {
+  if (mediasection_index >= candidate_collection_.size())
+    return NULL;
   return &candidate_collection_[mediasection_index];
 }
 
@@ -185,29 +188,6 @@ bool JsepSessionDescription::GetMediasectionIndex(
     }
   }
   return true;
-}
-
-// TODO(perkj): Remove this once webrtcsession is updated to jsep01.
-JsepInterface::Action
-JsepSessionDescription::GetAction(const std::string& type) {
-  bool known_type = false;
-  JsepInterface::Action  action = webrtc::JsepInterface::kOffer;
-
-  if (type == kOffer) {
-    action = webrtc::JsepInterface::kOffer;
-    known_type =true;
-  }
-  if (type == kPrAnswer) {
-    action = webrtc::JsepInterface::kPrAnswer;
-    known_type =true;
-  }
-  if (type == kAnswer) {
-    action = webrtc::JsepInterface::kAnswer;
-    known_type =true;
-  }
-
-  ASSERT(known_type);
-  return action;
 }
 
 }  // namespace webrtc

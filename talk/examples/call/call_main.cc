@@ -44,16 +44,16 @@
 #include "talk/examples/call/callclient.h"
 #include "talk/examples/call/console.h"
 #include "talk/examples/call/mediaenginefactory.h"
-#include "talk/examples/login/xmppauth.h"
-#include "talk/examples/login/xmpppump.h"
-#include "talk/examples/login/xmppthread.h"
 #include "talk/p2p/base/constants.h"
 #ifdef ANDROID
 #include "talk/media/other/androidmediaengine.h"
 #endif
 #include "talk/session/media/mediasessionclient.h"
 #include "talk/session/media/srtpfilter.h"
+#include "talk/xmpp/xmppauth.h"
 #include "talk/xmpp/xmppclientsettings.h"
+#include "talk/xmpp/xmpppump.h"
+#include "talk/xmpp/xmppsocket.h"
 
 class DebugLog : public sigslot::has_slots<> {
  public:
@@ -255,6 +255,8 @@ int main(int argc, char **argv) {
   DEFINE_bool(help, false, "Prints this message");
   DEFINE_bool(multisession, false,
               "Enable support for multiple sessions in calls.");
+  DEFINE_bool(roster, false,
+      "Enable roster messages printed in console.");
 
   // parse options
   FlagList::SetFlagsFromCommandLine(&argc, argv, true);
@@ -284,6 +286,7 @@ int main(int argc, char **argv) {
   bool data_channel_enabled = FLAG_datachannel;
   bool multisession_enabled = FLAG_multisession;
   talk_base::SSLIdentity* ssl_identity = NULL;
+  bool show_roster_messages = FLAG_roster;
 
   // Set up debugging.
   if (debug) {
@@ -466,6 +469,7 @@ int main(int argc, char **argv) {
   client->SetRender(render);
   client->SetDataChannelEnabled(data_channel_enabled);
   client->SetMultiSessionEnabled(multisession_enabled);
+  client->SetShowRosterMessages(show_roster_messages);
   console->Start();
 
   client->SetPortAllocatorFilter(cricket::PORTALLOCATOR_FILTER_ALLOW_TURN);
@@ -476,7 +480,7 @@ int main(int argc, char **argv) {
   }
 
   Print(("Logging in to " + server + " as " + jid.Str() + "\n").c_str());
-  pump.DoLogin(xcs, new XmppSocket(buzz::TLS_REQUIRED), new XmppAuth());
+  pump.DoLogin(xcs, new buzz::XmppSocket(buzz::TLS_REQUIRED), new XmppAuth());
   main_thread->Run();
   pump.DoDisconnect();
 

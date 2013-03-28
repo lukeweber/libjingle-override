@@ -45,6 +45,8 @@ class Thread;
 
 namespace webrtc {
 
+class RemoteTracksInterface;
+
 // RemoteMediaStreamObserver is triggered when
 // MediaStreamSignaling::UpdateRemoteStreams is called with a new
 // SessionDescription with a new set of MediaStreams and DataChannels.
@@ -130,92 +132,98 @@ class MediaStreamSignaling {
   // cricket::MediaSessionOptions returned by GetMediaSessionOptions().
   bool AddDataChannel(DataChannel* data_channel);
 
-  // Returns a MediaSessionOptions struct with options decided by |hints| and
+  // Returns a MediaSessionOptions struct with options decided by |constraints|,
   // the local MediaStreams and DataChannels.
-  virtual const cricket::MediaSessionOptions& GetMediaSessionOptions(
-      const MediaHints& hints);
+  virtual bool GetOptionsForOffer(
+      const MediaConstraintsInterface* constraints,
+      cricket::MediaSessionOptions* options);
 
-  // Updates or creates remote MediaStream objects given a
-  // remote SessionDescription.
+  // Returns a MediaSessionOptions struct with options decided by
+  // |constraints|, the local MediaStreams and DataChannels.
+  virtual bool GetOptionsForAnswer(
+      const MediaConstraintsInterface* constraints,
+      cricket::MediaSessionOptions* options);
+
+  // Called when the remote session description has changed. The purpose is to
+  // update remote MediaStreams and DataChannels with the current
+  // session state.
   // If the remote SessionDescription contain information about a new remote
   // MediaStreams a new remote MediaStream is created and
   // RemoteMediaStreamObserver::OnAddStream is called.
   // If a remote MediaStream is missing from
   // the remote SessionDescription RemoteMediaStreamObserver::OnRemoveStream
   // is called.
-  //
   // If the SessionDescription contains information about a new DataChannel,
   // RemoteMediaStreamObserver::OnAddDataChannel is called with the DataChannel.
-  void UpdateRemoteStreams(const SessionDescriptionInterface* desc);
+  void OnRemoteDescriptionChanged(const SessionDescriptionInterface* desc);
 
-  // Updates local DataChannels with information about its local SSRC.
-  void UpdateLocalStreams(const SessionDescriptionInterface* desc);
+  // Called when the local session description has changed. The purpose is to
+  // update local and remote MediaStreams and DataChannels with the current
+  // session state.
+  // If |desc| indicates that the media type should be rejected, the method
+  // ends the remote MediaStreamTracks.
+  // It also updates local DataChannels with information about its local SSRC.
+  void OnLocalDescriptionChanged(const SessionDescriptionInterface* desc);
 
-  // Notify the MediaStreamSignaling object that media has been received.
-  // This is used by MediaStreamSignaling to decide if a default remote
-  // MediaStream must be created.
-  void SetMediaReceived();
+  // Called when the audio channel closes.
+  void OnAudioChannelClose();
+  // Called when the video channel closes.
+  void OnVideoChannelClose();
+  // Called when the data channel closes.
+  void OnDataChannelClose();
 
   // Returns the SSRC for a given track.
-  bool GetRemoteTrackSsrc(const std::string& name, uint32* ssrc) const;
+  bool GetRemoteAudioTrackSsrc(const std::string& track_id, uint32* ssrc) const;
+  bool GetRemoteVideoTrackSsrc(const std::string& track_id, uint32* ssrc) const;
 
   // Returns all current remote MediaStreams.
   StreamCollectionInterface* remote_streams() const {
-    return remote_streams_.get(); }
+    return remote_streams_.get();
+  }
 
  private:
-  // We can use LocalMediaStreamInterface as RemoteMediaStream since the are the
-  // same except that tracks can be added and removed on the
-  // LocalMediaStreamInterface
-  typedef LocalMediaStreamInterface RemoteMediaStream;
+  struct RemotePeerInfo {
+    RemotePeerInfo()
+        : msid_supported(false),
+          default_audio_track_needed(false),
+          default_video_track_needed(false) {
+    }
+    // True if it has been discovered that the remote peer support MSID.
+    bool msid_supported;
+    // The remote peer indicates in the session description that audio will be
+    // sent but no MSID is given.
+    bool default_audio_track_needed;
+    // The remote peer indicates in the session description that video will be
+    // sent but no MSID is given.
+    bool default_video_track_needed;
 
-  // Create new MediaStreams and Tracks if they exist in |streams|
-  // Both new and existing MediaStreams are added to |current_streams|.
-  template <typename Track, typename TrackProxy>
+    bool IsDefaultMediaStreamNeeded() {
+      return !msid_supported && (default_audio_track_needed ||
+          default_video_track_needed);
+    }
+  };
+  void UpdateSessionOptions();
+  // Makes sure a MediaStream Track is created for each StreamParam in
+  // |streams|. |media_type| is the type of the |streams| and can be either
+  // audio or video.
+  // If a new MediaStream is created it is added to |new_streams|.
   void UpdateRemoteStreamsList(
       const std::vector<cricket::StreamParams>& streams,
-      StreamCollection* current_streams);
-  template <typename Track, typename TrackProxy>
-    void AddRemoteTrack(const std::string& track_label,
-                        uint32 ssrc,
-                        RemoteMediaStream* stream);
-
-  void UpdateSessionOptions();
+      cricket::MediaType media_type,
+      StreamCollection* new_streams);
+  // Finds remote MediaStreams without any tracks and removes them from
+  // |remote_streams_| and notifies the observer that the MediaStream no longer
+  // exist.
+  void UpdateEndedRemoteMediaStreams();
   void MaybeCreateDefaultStream();
-  void UpdateEndedRemoteStream(MediaStreamInterface* stream);
+  RemoteTracksInterface* GetRemoteTracks(cricket::MediaType type);
+
   void UpdateLocalDataChannels(const cricket::StreamParamsVec& streams);
   void UpdateRemoteDataChannels(const cricket::StreamParamsVec& streams);
   void UpdateClosingDataChannels(
       const std::vector<std::string>& active_channels, bool is_local_update);
   void CreateRemoteDataChannel(const std::string& label, uint32 remote_ssrc);
 
-  struct RemotePeerInfo {
-    RemotePeerInfo()
-        : media_received(false),
-          description_set_once(false),
-          supports_msid(false),
-          supports_audio(false),
-          supports_video(false) {
-    }
-    bool media_received;  // Media has been received from the remote peer.
-    // UpdateRemoteStreams has been called at least once.
-    bool description_set_once;
-    bool supports_msid;
-    // The remote peer indicates in the session description that audio is
-    // supported.
-    bool supports_audio;
-    // The remote peer indicates in the session description that video is
-    // supported.
-    bool supports_video;
-
-    bool IsDefaultMediaStreamNeeded() {
-      // Returns true iff media has been received and
-      // UpdateRemoteStreams has been called at least once but never with any
-      // StreamParams and it support audio and/or video.
-      return media_received && description_set_once && !supports_msid &&
-          (supports_audio || supports_video);
-    }
-  };
   RemotePeerInfo remote_info_;
   talk_base::Thread* signaling_thread_;
   DataChannelFactory* data_channel_factory_;
@@ -223,13 +231,12 @@ class MediaStreamSignaling {
   RemoteMediaStreamObserver* stream_observer_;
   talk_base::scoped_refptr<StreamCollectionInterface> local_streams_;
   talk_base::scoped_refptr<StreamCollection> remote_streams_;
+  talk_base::scoped_ptr<RemoteTracksInterface> remote_audio_tracks_;
+  talk_base::scoped_ptr<RemoteTracksInterface> remote_video_tracks_;
 
   typedef std::map<std::string, talk_base::scoped_refptr<DataChannel> >
       DataChannels;
   DataChannels data_channels_;
-
-  typedef std::map<std::string, uint32> TrackSsrcMap;
-  TrackSsrcMap remote_track_ssrc_;
 };
 
 }  // namespace webrtc

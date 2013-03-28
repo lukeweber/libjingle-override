@@ -116,6 +116,13 @@ class FileMediaEngine : public MediaEngineInterface {
   virtual const std::vector<VideoCodec>& video_codecs() {
     return video_codecs_;
   }
+  virtual const std::vector<RtpHeaderExtension>& audio_rtp_header_extensions() {
+    return audio_rtp_header_extensions_;
+  }
+  virtual const std::vector<RtpHeaderExtension>& video_rtp_header_extensions() {
+    return video_rtp_header_extensions_;
+  }
+
   virtual bool FindAudioCodec(const AudioCodec& codec) { return true; }
   virtual bool FindVideoCodec(const VideoCodec& codec) { return true; }
   virtual void SetVoiceLogging(int min_sev, const char* filter) {}
@@ -141,6 +148,11 @@ class FileMediaEngine : public MediaEngineInterface {
     return VideoFormat();
   }
 
+  virtual sigslot::repeater2<VideoCapturer*, CaptureState>&
+      SignalVideoCaptureStateChange() {
+    return signal_state_change_;
+  }
+
  private:
   std::string voice_input_filename_;
   std::string voice_output_filename_;
@@ -148,6 +160,10 @@ class FileMediaEngine : public MediaEngineInterface {
   std::string video_output_filename_;
   std::vector<AudioCodec> voice_codecs_;
   std::vector<VideoCodec> video_codecs_;
+  std::vector<RtpHeaderExtension> audio_rtp_header_extensions_;
+  std::vector<RtpHeaderExtension> video_rtp_header_extensions_;
+  sigslot::repeater2<VideoCapturer*, CaptureState>
+     signal_state_change_;
 
   DISALLOW_COPY_AND_ASSIGN(FileMediaEngine);
 };
@@ -270,17 +286,20 @@ class FileVideoChannel : public VideoMediaChannel {
   virtual bool RemoveRecvStream(uint32 ssrc) { return true; }
   virtual bool MuteStream(uint32 ssrc, bool on) { return false; }
   virtual bool SetSendBandwidth(bool autobw, int bps) { return true; }
-  virtual bool SetOptions(int options) {
+  virtual bool SetOptions(const VideoOptions& options) {
     options_ = options;
     return true;
   }
-  virtual int GetOptions() const { return options_; }
+  virtual bool GetOptions(VideoOptions* options) const {
+    *options = options_;
+    return true;
+  }
   virtual void UpdateAspectRatio(int ratio_w, int ratio_h) {}
 
  private:
   uint32 send_ssrc_;
   talk_base::scoped_ptr<RtpSenderReceiver> rtp_sender_receiver_;
-  int options_;
+  VideoOptions options_;
 
   DISALLOW_COPY_AND_ASSIGN(FileVideoChannel);
 };

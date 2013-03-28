@@ -489,6 +489,8 @@ class VideoChannel : public BaseChannel {
   // has been started or not.
   bool IsScreencasting();
   int ScreencastFps(uint32 ssrc);
+  // Get statistics about the current media session.
+  bool GetStats(VideoMediaInfo* stats);
 
   sigslot::signal2<VideoChannel*, const std::vector<ConnectionInfo>&>
       SignalConnectionMonitor;
@@ -507,7 +509,7 @@ class VideoChannel : public BaseChannel {
       ScreenCapturerFactory* screencapture_factory);
 
   // Configuration and setting.
-  void SetChannelOptions(int options);
+  bool SetChannelOptions(const VideoOptions& options);
 
  protected:
   // downcasts a MediaChannel
@@ -544,6 +546,7 @@ class VideoChannel : public BaseChannel {
   int ScreencastFps_w(uint32 ssrc) const;
   void SetScreenCaptureFactory_w(
       ScreenCapturerFactory* screencapture_factory);
+  bool GetStats_w(VideoMediaInfo* stats);
 
   virtual void OnMessage(talk_base::Message* pmsg);
   virtual void GetSrtpCiphers(std::vector<std::string>* ciphers) const;
@@ -559,7 +562,7 @@ class VideoChannel : public BaseChannel {
   void OnVideoChannelError(uint32 ssrc, VideoMediaChannel::Error error);
   void OnSrtpError(uint32 ssrc, SrtpFilter::Mode mode, SrtpFilter::Error error);
   // Configuration and setting.
-  void SetChannelOptions_w(int options);
+  bool SetChannelOptions_w(const VideoOptions& options);
 
   VoiceChannel* voice_channel_;
   VideoRenderer* renderer_;

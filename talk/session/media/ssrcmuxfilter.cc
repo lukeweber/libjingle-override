@@ -84,6 +84,9 @@ bool SsrcMuxFilter::RemoveStream(uint32 ssrc) {
 }
 
 bool SsrcMuxFilter::FindStream(uint32 ssrc) const {
+  if (ssrc == 0) {
+    return false;
+  }
   return (GetStreamBySsrc(streams_, ssrc, NULL));
 }
 

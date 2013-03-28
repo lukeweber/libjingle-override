@@ -151,6 +151,7 @@ class SessionDescription {
   TransportInfos& transport_infos() { return transport_infos_; }
   const TransportInfo* GetTransportInfoByName(
       const std::string& name) const;
+  TransportInfo* GetTransportInfoByName(const std::string& name);
   const TransportDescription* GetTransportDescriptionByName(
       const std::string& name) const {
     const TransportInfo* tinfo = GetTransportInfoByName(name);

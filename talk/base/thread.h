@@ -36,7 +36,6 @@
 #ifdef POSIX
 #include <pthread.h>
 #endif
-
 #include "talk/base/constructormagic.h"
 #include "talk/base/messagequeue.h"
 
@@ -119,12 +118,10 @@ class Thread : public MessageQueue {
   Thread(SocketServer* ss = NULL);
   virtual ~Thread();
 
-  static inline Thread* Current() {
-    return ThreadManager::Instance()->CurrentThread();
-  }
+  static Thread* Current();
 
   bool IsCurrent() const {
-    return ThreadManager::Instance()->CurrentThread() == this;
+    return Current() == this;
   }
 
   // Sleeps the calling thread for the specified number of milliseconds, during

@@ -51,13 +51,13 @@ typedef std::vector<PortAllocatorFactoryInterface::TurnConfiguration>
 // the PeerConnection functionality.
 class PeerConnection : public PeerConnectionInterface,
                        public RemoteMediaStreamObserver,
-                       public IceCandidateObserver,
+                       public IceObserver,
                        public talk_base::MessageHandler,
                        public sigslot::has_slots<> {
  public:
   explicit PeerConnection(PeerConnectionFactory* factory);
 
-  bool Initialize(const JsepInterface::IceServers& configuration,
+  bool Initialize(const PeerConnectionInterface::IceServers& configuration,
                   const MediaConstraintsInterface* constraints,
                   webrtc::PortAllocatorFactoryInterface* allocator_factory,
                   PeerConnectionObserver* observer);
@@ -66,10 +66,9 @@ class PeerConnection : public PeerConnectionInterface,
   virtual bool AddStream(MediaStreamInterface* local_stream,
                          const MediaConstraintsInterface* constraints);
   virtual void RemoveStream(MediaStreamInterface* local_stream);
-  virtual bool CanSendDtmf(const AudioTrackInterface* track);
-  virtual bool SendDtmf(const AudioTrackInterface* send_track,
-                        const std::string& tones, int duration,
-                        const AudioTrackInterface* play_track);
+
+  virtual talk_base::scoped_refptr<DtmfSenderInterface> CreateDtmfSender(
+      AudioTrackInterface* track);
 
   virtual talk_base::scoped_refptr<DataChannelInterface> CreateDataChannel(
       const std::string& label,
@@ -77,21 +76,12 @@ class PeerConnection : public PeerConnectionInterface,
   virtual bool GetStats(StatsObserver* observer,
                         webrtc::MediaStreamTrackInterface* track);
 
+  virtual SignalingState signaling_state();
 
-  virtual ReadyState ready_state();
+  // TODO(bemasc): Remove ice_state() when callers are removed.
   virtual IceState ice_state();
-
-  // TODO(ronghuawu): Remove deprecated Jsep functions.
-  virtual SessionDescriptionInterface* CreateOffer(const MediaHints& hints);
-  virtual SessionDescriptionInterface* CreateAnswer(
-      const MediaHints& hints,
-      const SessionDescriptionInterface* offer);
-  virtual bool StartIce(IceOptions options);
-  virtual bool SetLocalDescription(Action action,
-                                   SessionDescriptionInterface* desc);
-  virtual bool SetRemoteDescription(Action action,
-                                    SessionDescriptionInterface* desc);
-  virtual bool ProcessIceMessage(const IceCandidateInterface* ice_candidate);
+  virtual IceConnectionState ice_connection_state();
+  virtual IceGatheringState ice_gathering_state();
 
   virtual const SessionDescriptionInterface* local_description() const;
   virtual const SessionDescriptionInterface* remote_description() const;
@@ -109,6 +99,8 @@ class PeerConnection : public PeerConnectionInterface,
                          const MediaConstraintsInterface* constraints);
   virtual bool AddIceCandidate(const IceCandidateInterface* candidate);
 
+  virtual void Close();
+
  protected:
   virtual ~PeerConnection();
 
@@ -121,15 +113,16 @@ class PeerConnection : public PeerConnectionInterface,
   virtual void OnRemoveStream(MediaStreamInterface* stream);
   virtual void OnAddDataChannel(DataChannelInterface* data_channel);
 
-  // Implements IceCandidateObserver
-  virtual void OnIceChange();
+  // Implements IceObserver
+  virtual void OnIceConnectionChange(IceConnectionState new_state);
+  virtual void OnIceGatheringChange(IceGatheringState new_state);
   virtual void OnIceCandidate(const IceCandidateInterface* candidate);
   virtual void OnIceComplete();
 
   // Signals from WebRtcSession.
   void OnSessionStateChange(cricket::BaseSession* session,
                             cricket::BaseSession::State state);
-  void ChangeReadyState(PeerConnectionInterface::ReadyState ready_state);
+  void ChangeSignalingState(SignalingState signaling_state);
 
   bool DoInitialize(const StunConfigurations& stun_config,
                     const TurnConfigurations& turn_config,
@@ -144,6 +137,10 @@ class PeerConnection : public PeerConnectionInterface,
   void PostSetSessionDescriptionFailure(SetSessionDescriptionObserver* observer,
                                         const std::string& error);
 
+  bool IsClosed() const {
+    return signaling_state_ == PeerConnectionInterface::kClosed;
+  }
+
   // Storing the factory as a scoped reference pointer ensures that the memory
   // in the PeerConnectionFactoryImpl remains available as long as the
   // PeerConnection is running. It is passed to PeerConnection as a raw pointer.
@@ -152,9 +149,11 @@ class PeerConnection : public PeerConnectionInterface,
   // will refer to the same reference count.
   talk_base::scoped_refptr<PeerConnectionFactory> factory_;
   PeerConnectionObserver* observer_;
-  ReadyState ready_state_;
-  // TODO(ronghuawu): Implement ice_state.
+  SignalingState signaling_state_;
+  // TODO(bemasc): Remove ice_state_.
   IceState ice_state_;
+  IceConnectionState ice_connection_state_;
+  IceGatheringState ice_gathering_state_;
   talk_base::scoped_refptr<StreamCollection> local_media_streams_;
 
   talk_base::scoped_ptr<cricket::PortAllocator> port_allocator_;

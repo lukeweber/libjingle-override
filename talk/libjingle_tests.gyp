@@ -2,26 +2,26 @@
 # libjingle
 # Copyright 2012, Google Inc.
 #
-# Redistribution and use in source and binary forms, with or without 
+# Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
-#  1. Redistributions of source code must retain the above copyright notice, 
+#  1. Redistributions of source code must retain the above copyright notice,
 #     this list of conditions and the following disclaimer.
 #  2. Redistributions in binary form must reproduce the above copyright notice,
 #     this list of conditions and the following disclaimer in the documentation
 #     and/or other materials provided with the distribution.
-#  3. The name of the author may not be used to endorse or promote products 
+#  3. The name of the author may not be used to endorse or promote products
 #     derived from this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
-# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 # MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
-# EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
+# EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
 # SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
 # PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
 # OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR 
-# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
@@ -195,7 +195,7 @@
       'sources': [
         'sound/automaticallychosensoundsystem_unittest.cc',
       ],
-    },  # target libjingle_sound_unittest    
+    },  # target libjingle_sound_unittest
     {
       'target_name': 'libjingle_media_unittest',
       'type': 'executable',
@@ -316,21 +316,59 @@
       ],
       # TODO(ronghuawu): Reenable below unit tests that require gmock.
       'sources': [
-        'app/webrtc/test/fakeaudiocapturemodule.cc',
-        'app/webrtc/test/fakeaudiocapturemodule_unittest.cc',
+        'app/webrtc/dtmfsender_unittest.cc',
         'app/webrtc/jsepsessiondescription_unittest.cc',
+        'app/webrtc/localaudiosource_unittest.cc',
         'app/webrtc/localvideosource_unittest.cc',
         # 'app/webrtc/mediastream_unittest.cc',
         # 'app/webrtc/mediastreamhandler_unittest.cc',
         'app/webrtc/mediastreamsignaling_unittest.cc',
-        'app/webrtc/peerconnectioninterface_unittest.cc',
         'app/webrtc/peerconnection_unittest.cc',
         'app/webrtc/peerconnectionfactory_unittest.cc',
+        'app/webrtc/peerconnectioninterface_unittest.cc',
         # 'app/webrtc/peerconnectionproxy_unittest.cc',
+        'app/webrtc/test/fakeaudiocapturemodule.cc',
+        'app/webrtc/test/fakeaudiocapturemodule_unittest.cc',
         'app/webrtc/videotrack_unittest.cc',
         'app/webrtc/webrtcsdp_unittest.cc',
         'app/webrtc/webrtcsession_unittest.cc',
       ],
     },  # target libjingle_peerconnection_unittest
+  ],
+  'conditions': [
+    ['libjingle_java == 1', {
+      'targets': [
+        {
+          'target_name': 'libjingle_peerconnection_test_jar',
+          'type': 'none',
+          'actions': [
+            {
+              'variables': {
+                'java_src_dir': 'app/webrtc/javatests/src',
+                'java_files': [
+                  'app/webrtc/javatests/src/org/webrtc/PeerConnectionTest.java',
+                ],
+              },
+              'action_name': 'create_jar',
+              'inputs': [
+                'build/build_jar.sh',
+                '<@(java_files)',
+                '<(PRODUCT_DIR)/libjingle_peerconnection.jar',
+                '<(DEPTH)/third_party/junit/junit-4.11.jar',
+              ],
+              'outputs': [
+                '<(PRODUCT_DIR)/libjingle_peerconnection_test.jar',
+              ],
+              'action': [
+                'build/build_jar.sh', '/usr', '<@(_outputs)',
+                '<(INTERMEDIATE_DIR)',
+                '<(java_src_dir):<(PRODUCT_DIR)/libjingle_peerconnection.jar:<(DEPTH)/third_party/junit/junit-4.11.jar',
+                '<@(java_files)'
+              ],
+            },
+          ],
+        },
+      ],
+    }],
   ],
 }

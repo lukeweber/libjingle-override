@@ -35,31 +35,73 @@
 #include <vector>
 
 #include "talk/base/basictypes.h"
+#include "talk/base/stringencode.h"
 
 namespace webrtc {
 
 // StatsElement contains a time stamped list of name/value pairs.
-struct StatsElement {
-  StatsElement() : timestamp(0) { }
-  double timestamp;  // Time since 1970-01-01T00:00:00Z in milliseconds.
+class StatsElement {
+ public:
   struct Value {
     std::string name;
     std::string value;
   };
+
+  StatsElement() : timestamp(0) { }
+
+  void AddValue(const std::string& name, const std::string& value);
+  void AddValue(const std::string& name, int64 value);
+
+  double timestamp;  // Time since 1970-01-01T00:00:00Z in milliseconds.
   typedef std::vector<Value> Values;
   Values values;
 
   // StatsValue names
   static const char kStatsValueNameAudioOutputLevel[];
+  static const char kStatsValueNameAudioInputLevel[];
+  static const char kStatsValueNameBytesSent[];
+  static const char kStatsValueNamePacketsSent[];
+  static const char kStatsValueNameBytesReceived[];
+  static const char kStatsValueNamePacketsReceived[];
+  static const char kStatsValueNamePacketsLost[];
+
+  // Internal StatsValue names
+  static const char kStatsValueNameFirsReceived[];
+  static const char kStatsValueNameFirsSent[];
+  static const char kStatsValueNameFrameHeightReceived[];
+  static const char kStatsValueNameFrameHeightSent[];
+  static const char kStatsValueNameFrameRateReceived[];
+  static const char kStatsValueNameFrameRateDecoded[];
+  static const char kStatsValueNameFrameRateOutput[];
+  static const char kStatsValueNameFrameRateInput[];
+  static const char kStatsValueNameFrameRateSent[];
+  static const char kStatsValueNameFrameWidthReceived[];
+  static const char kStatsValueNameFrameWidthSent[];
+  static const char kStatsValueNameJitterReceived[];
+  static const char kStatsValueNameNacksReceived[];
+  static const char kStatsValueNameNacksSent[];
+  static const char kStatsValueNameRtt[];
+  static const char kStatsValueNameAvailableSendBandwidth[];
+  static const char kStatsValueNameAvailableReceiveBandwidth[];
+  static const char kStatsValueNameTargetEncBitrate[];
+  static const char kStatsValueNameActualEncBitrate[];
+  static const char kStatsValueNameRetransmitBitrate[];
+  static const char kStatsValueNameTransmitBitrate[];
+  static const char kStatsValueNameBucketDelay[];
 };
 
 // StatsReport contains local and remote StatsElements that pertain to the same
 // object, for instance a SSRC.
 struct StatsReport {
-  std::string id;  // SSRC in decimal for SSRCs
-  std::string type;  // "SSRC" for SSRCs
+  std::string id;  // See below for contents.
+  std::string type;  // See below for contents.
   StatsElement local;  // Statistics gathered locally.
   StatsElement remote;  // Statistics received in a RTCP report.
+
+  // StatsReport of |type| = "VideoBWE" is statistics for Bandwidth Estimation,
+  // which is global per-session.  The |id| field is "bweforvideo" (will
+  // probably change in the future).
+  static const char kStatsReportTypeBwe[];
 
   // StatsReport of |type| = "ssrc" is statistics for a specific rtp stream.
   // The |id| field is the SSRC in decimal form of the rtp stream.

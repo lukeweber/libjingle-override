@@ -35,10 +35,15 @@ namespace cricket {
 // Simple subclass for use in mocks.
 class NullVideoFrame : public VideoFrame {
  public:
-  virtual bool Reset(uint32 format, int w, int h, int dw, int dh,
-                   uint8* sample, size_t sample_size,
-                   size_t pixel_width, size_t pixel_height,
-                   int64 elapsed_time, int64 time_stamp, int rotation) {
+  virtual bool Reset(uint32 format, int w, int h, int dw, int dh, uint8 *sample,
+                     size_t sample_size, size_t pixel_width,
+                     size_t pixel_height, int64 elapsed_time, int64 time_stamp,
+                     int rotation) {
+    return false;
+  }
+  virtual bool InitToBlack(int w, int h, size_t pixel_width,
+                           size_t pixel_height, int64 elapsed_time,
+                           int64 time_stamp) {
     return false;
   }
   virtual size_t GetWidth() const { return 0; }
@@ -61,32 +66,23 @@ class NullVideoFrame : public VideoFrame {
   virtual void SetTimeStamp(int64 time_stamp) {}
   virtual int GetRotation() const { return 0; }
 
-  virtual VideoFrame *Copy() const {
-    return NULL;
-  }
+  virtual VideoFrame *Copy() const { return NULL; }
 
-  virtual bool MakeExclusive() {
-    return false;
-  }
+  virtual bool MakeExclusive() { return false; }
 
-  virtual size_t CopyToBuffer(uint8 *buffer, size_t size) const {
-    return 0;
-  }
+  virtual size_t CopyToBuffer(uint8 *buffer, size_t size) const { return 0; }
 
   virtual size_t ConvertToRgbBuffer(uint32 to_fourcc, uint8 *buffer,
                                     size_t size, int stride_rgb) const {
     return 0;
   }
 
-  virtual void StretchToPlanes(uint8 *y, uint8 *u, uint8 *v,
-                               int32 pitchY, int32 pitchU, int32 pitchV,
-                               size_t width, size_t height,
-                               bool interpolate, bool crop) const {
-  }
+  virtual void StretchToPlanes(
+      uint8 *y, uint8 *u, uint8 *v, int32 pitchY, int32 pitchU, int32 pitchV,
+      size_t width, size_t height, bool interpolate, bool crop) const {}
 
-  virtual VideoFrame* CreateEmptyFrame(int w, int h,
-                                       size_t pixel_width, size_t pixel_height,
-                                       int64 elapsed_time,
+  virtual VideoFrame *CreateEmptyFrame(int w, int h, size_t pixel_width,
+                                       size_t pixel_height, int64 elapsed_time,
                                        int64 time_stamp) const {
     return NULL;
   }

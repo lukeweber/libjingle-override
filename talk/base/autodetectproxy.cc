@@ -29,11 +29,8 @@
 #include "talk/base/httpcommon.h"
 #include "talk/base/httpcommon-inl.h"
 #include "talk/base/nethelpers.h"
-#include "talk/base/proxydetect.h"
 
 namespace talk_base {
-
-enum { MSG_TIMEOUT = SignalThread::ST_MSG_FIRST_AVAILABLE };
 
 static const ProxyType TEST_ORDER[] = {
   PROXY_HTTPS, PROXY_SOCKS5, PROXY_UNKNOWN
@@ -62,7 +59,7 @@ void AutoDetectProxy::DoWork() {
   // TODO: Try connecting to server_url without proxy first here?
   if (!server_url_.empty()) {
     LOG(LS_INFO) << "GetProxySettingsForUrl(" << server_url_ << ") - start";
-    GetProxySettingsForUrl(agent_.c_str(), server_url_.c_str(), proxy_, true);
+    GetProxyForUrl(agent_.c_str(), server_url_.c_str(), &proxy_);
     LOG(LS_INFO) << "GetProxySettingsForUrl - stop";
   }
   Url<char> url(proxy_.address.HostAsURIString());

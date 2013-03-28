@@ -38,7 +38,6 @@
 #include <net/if.h>
 #include <unistd.h>
 #include <errno.h>
-// There's no ifaddrs.h in Android.
 #ifndef ANDROID
 #include <ifaddrs.h>
 #else
@@ -183,7 +182,6 @@ BasicNetworkManager::~BasicNetworkManager() {
 }
 
 #if defined(POSIX)
-
 void BasicNetworkManager::ConvertIfAddrs(struct ifaddrs* interfaces,
                                          bool include_ignored,
                                          NetworkList* networks) const {

@@ -30,11 +30,13 @@
 
 namespace talk_base {
 
-static bool IsApproximate(double expected, double value, double eps) {
-  return expected - eps <= value && value <= expected + eps;
-}
+namespace {
 
-TEST(RollingAccumulatorTest, TestZeroSamples) {
+const double kLearningRate = 0.5;
+
+}  // namespace
+
+TEST(RollingAccumulatorTest, ZeroSamples) {
   RollingAccumulator<int> accum(10);
 
   EXPECT_EQ(0U, accum.count());
@@ -42,7 +44,7 @@ TEST(RollingAccumulatorTest, TestZeroSamples) {
   EXPECT_EQ(0, accum.ComputeVariance());
 }
 
-TEST(RollingAccumulatorTest, TestSomeSamples) {
+TEST(RollingAccumulatorTest, SomeSamples) {
   RollingAccumulator<int> accum(10);
   for (int i = 0; i < 4; ++i) {
     accum.AddSample(i);
@@ -51,10 +53,11 @@ TEST(RollingAccumulatorTest, TestSomeSamples) {
   EXPECT_EQ(4U, accum.count());
   EXPECT_EQ(6, accum.ComputeSum());
   EXPECT_EQ(1, accum.ComputeMean());
+  EXPECT_EQ(2, accum.ComputeWeightedMean(kLearningRate));
   EXPECT_EQ(1, accum.ComputeVariance());
 }
 
-TEST(RollingAccumulatorTest, TestRollingSamples) {
+TEST(RollingAccumulatorTest, RollingSamples) {
   RollingAccumulator<int> accum(10);
   for (int i = 0; i < 12; ++i) {
     accum.AddSample(i);
@@ -63,19 +66,37 @@ TEST(RollingAccumulatorTest, TestRollingSamples) {
   EXPECT_EQ(10U, accum.count());
   EXPECT_EQ(65, accum.ComputeSum());
   EXPECT_EQ(6, accum.ComputeMean());
-  EXPECT_TRUE(IsApproximate(9, accum.ComputeVariance(), 1));
+  EXPECT_EQ(10, accum.ComputeWeightedMean(kLearningRate));
+  EXPECT_NEAR(9, accum.ComputeVariance(), 1);
 }
 
-TEST(RollingAccumulatorTest, TestRollingSamplesDouble) {
+TEST(RollingAccumulatorTest, RollingSamplesDouble) {
   RollingAccumulator<double> accum(10);
   for (int i = 0; i < 23; ++i) {
     accum.AddSample(5 * i);
   }
 
-  EXPECT_EQ(10U, accum.count());
-  EXPECT_TRUE(IsApproximate(875.0, accum.ComputeSum(), 1E-6));
-  EXPECT_TRUE(IsApproximate(87.5, accum.ComputeMean(), 1E-6));
-  EXPECT_TRUE(IsApproximate(229.166667, accum.ComputeVariance(), 25));
+  EXPECT_EQ(10u, accum.count());
+  EXPECT_DOUBLE_EQ(875.0, accum.ComputeSum());
+  EXPECT_DOUBLE_EQ(87.5, accum.ComputeMean());
+  EXPECT_NEAR(105.049, accum.ComputeWeightedMean(kLearningRate), 0.1);
+  EXPECT_NEAR(229.166667, accum.ComputeVariance(), 25);
+}
+
+TEST(RollingAccumulatorTest, ComputeWeightedMeanCornerCases) {
+  RollingAccumulator<int> accum(10);
+  EXPECT_EQ(0, accum.ComputeWeightedMean(kLearningRate));
+  EXPECT_EQ(0, accum.ComputeWeightedMean(0.0));
+  EXPECT_EQ(0, accum.ComputeWeightedMean(1.1));
+
+  for (int i = 0; i < 8; ++i) {
+    accum.AddSample(i);
+  }
+
+  EXPECT_EQ(3, accum.ComputeMean());
+  EXPECT_EQ(3, accum.ComputeWeightedMean(0));
+  EXPECT_EQ(3, accum.ComputeWeightedMean(1.1));
+  EXPECT_EQ(6, accum.ComputeWeightedMean(kLearningRate));
 }
 
 }  // namespace talk_base

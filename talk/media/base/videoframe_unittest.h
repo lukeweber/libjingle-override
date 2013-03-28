@@ -183,7 +183,7 @@ class VideoFrameTest : public testing::Test {
                                               uint32 width, uint32 height) {
     int y1_pos, y2_pos, u_pos, v_pos;
     if (!GetYuv422Packing(fourcc, &y1_pos, &y2_pos, &u_pos, &v_pos)) {
-      return false;
+      return NULL;
     }
 
     talk_base::scoped_ptr<talk_base::MemoryStream> ms(
@@ -1524,10 +1524,6 @@ void Construct##FOURCC##Rotate##ROTATE() {                                     \
     ConvertToBuffer(2, 0, false, TO, kError,
                     cricket::FOURCC_UYVY, libyuv::UYVYToI420);
   }
-  void ConvertToV210Buffer() {
-    ConvertToBuffer(3, 0, false, TO, kError,
-                    cricket::FOURCC_V210, libyuv::V210ToI420);
-  }
 
   // Tests ConvertToRGBBuffer formats with odd stride.
   void ConvertToARGBBufferStride() {
@@ -1589,10 +1585,6 @@ void Construct##FOURCC##Rotate##ROTATE() {                                     \
   void ConvertToUYVYBufferStride() {
     ConvertToBuffer(2, kOddStride, false, TO, kError,
                     cricket::FOURCC_UYVY, libyuv::UYVYToI420);
-  }
-  void ConvertToV210BufferStride() {
-    ConvertToBuffer(3, kOddStride, false, TO, kError,
-                    cricket::FOURCC_V210, libyuv::V210ToI420);
   }
 
   // Tests ConvertToRGBBuffer formats with negative stride to invert image.
@@ -1656,10 +1648,6 @@ void Construct##FOURCC##Rotate##ROTATE() {                                     \
     ConvertToBuffer(2, 0, true, TO, kError,
                     cricket::FOURCC_UYVY, libyuv::UYVYToI420);
   }
-  void ConvertToV210BufferInverted() {
-    ConvertToBuffer(3, 0, true, TO, kError,
-                    cricket::FOURCC_V210, libyuv::V210ToI420);
-  }
 
   // Tests ConvertFrom formats.
   void ConvertFromARGBBuffer() {
@@ -1721,10 +1709,6 @@ void Construct##FOURCC##Rotate##ROTATE() {                                     \
   void ConvertFromUYVYBuffer() {
     ConvertToBuffer(2, 0, false, FROM, kError,
                     cricket::FOURCC_UYVY, libyuv::UYVYToI420);
-  }
-  void ConvertFromV210Buffer() {
-    ConvertToBuffer(3, 0, false, FROM, kError,
-                    cricket::FOURCC_V210, libyuv::V210ToI420);
   }
 
   // Tests ConvertFrom formats with odd stride.
@@ -1788,10 +1772,6 @@ void Construct##FOURCC##Rotate##ROTATE() {                                     \
     ConvertToBuffer(2, kOddStride, false, FROM, kError,
                     cricket::FOURCC_UYVY, libyuv::UYVYToI420);
   }
-  void ConvertFromV210BufferStride() {
-    ConvertToBuffer(3, kOddStride, false, FROM, kError,
-                    cricket::FOURCC_V210, libyuv::V210ToI420);
-  }
 
   // Tests ConvertFrom formats with negative stride to invert image.
   void ConvertFromARGBBufferInverted() {
@@ -1853,10 +1833,6 @@ void Construct##FOURCC##Rotate##ROTATE() {                                     \
   void ConvertFromUYVYBufferInverted() {
     ConvertToBuffer(2, 0, true, FROM, kError,
                     cricket::FOURCC_UYVY, libyuv::UYVYToI420);
-  }
-  void ConvertFromV210BufferInverted() {
-    ConvertToBuffer(3, 0, true, FROM, kError,
-                    cricket::FOURCC_V210, libyuv::V210ToI420);
   }
 
   // Test converting from I420 to I422.

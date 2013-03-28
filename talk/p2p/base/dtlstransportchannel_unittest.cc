@@ -67,7 +67,9 @@ class DtlsTestClient : public sigslot::has_slots<> {
       protocol_(cricket::ICEPROTO_GOOGLE),
       packet_size_(0),
       use_dtls_srtp_(false),
-      negotiated_dtls_(false) {
+      negotiated_dtls_(false),
+      received_dtls_client_hello_(false),
+      received_dtls_server_hello_(false) {
   }
   void SetIceProtocol(cricket::TransportProtocol proto) {
     protocol_ = proto;
@@ -146,13 +148,15 @@ class DtlsTestClient : public sigslot::has_slots<> {
     std::string transport_type = (protocol_ == cricket::ICEPROTO_GOOGLE) ?
         cricket::NS_GINGLE_P2P : cricket::NS_JINGLE_ICE_UDP;
     cricket::TransportDescription local_desc(
-        transport_type, cricket::TransportOptions(), kIceUfrag1, kIcePwd1,
-        local_fingerprint.release(), cricket::Candidates());
+        transport_type, std::vector<std::string>(), kIceUfrag1, kIcePwd1,
+        cricket::ICEMODE_FULL, local_fingerprint.release(),
+        cricket::Candidates());
     ASSERT_TRUE(transport_->SetLocalTransportDescription(local_desc,
                                                          cricket::CA_OFFER));
     cricket::TransportDescription remote_desc(
-        transport_type, cricket::TransportOptions(), kIceUfrag1, kIcePwd1,
-        remote_fingerprint.release(), cricket::Candidates());
+        transport_type, std::vector<std::string>(), kIceUfrag1, kIcePwd1,
+        cricket::ICEMODE_FULL, remote_fingerprint.release(),
+        cricket::Candidates());
     ASSERT_TRUE(transport_->SetRemoteTransportDescription(remote_desc,
                                                           cricket::CA_ANSWER));
 
@@ -167,6 +171,16 @@ class DtlsTestClient : public sigslot::has_slots<> {
 
   bool writable() const { return transport_->writable(); }
 
+  void CheckRole(talk_base::SSLRole role) {
+    if (role == talk_base::SSL_CLIENT) {
+      ASSERT_FALSE(received_dtls_client_hello_);
+      ASSERT_TRUE(received_dtls_server_hello_);
+    } else {
+      ASSERT_TRUE(received_dtls_client_hello_);
+      ASSERT_FALSE(received_dtls_server_hello_);
+    } 
+  }
+  
   void CheckSrtp(const std::string& expected_cipher) {
     for (std::vector<cricket::DtlsTransportChannelWrapper*>::iterator it =
            channels_.begin(); it != channels_.end(); ++it) {
@@ -274,15 +288,24 @@ class DtlsTestClient : public sigslot::has_slots<> {
     // Flags shouldn't be set on the underlying TransportChannel packets.
     ASSERT_EQ(0, flags);
 
+    // Look at the handshake packets to see what role we played.
     // Check that non-handshake packets are DTLS data or SRTP bypass.
-    if (negotiated_dtls_ && !(data[0] >= 20 && data[0] <= 22)) {
-      ASSERT_TRUE(data[0] == 23 || IsRtpLeadByte(data[0]));
-      if (data[0] == 23) {
-        ASSERT_TRUE(VerifyEncryptedPacket(data, size));
-      } else if (IsRtpLeadByte(data[0])) {
-        ASSERT_TRUE(VerifyPacket(data, size, NULL));
+    if (negotiated_dtls_) {
+      if (data[0] == 22 && size > 17) {
+        if (data[13] == 1) {
+          received_dtls_client_hello_ = true;
+        } else if (data[13] == 2) {
+          received_dtls_server_hello_ = true;
+        }
+      } else if (!(data[0] >= 20 && data[0] <= 22)) {
+        ASSERT_TRUE(data[0] == 23 || IsRtpLeadByte(data[0]));
+        if (data[0] == 23) {
+          ASSERT_TRUE(VerifyEncryptedPacket(data, size));
+        } else if (IsRtpLeadByte(data[0])) {
+          ASSERT_TRUE(VerifyPacket(data, size, NULL));
+        }
       }
-    }
+    } 
   }
 
  private:
@@ -297,6 +320,8 @@ class DtlsTestClient : public sigslot::has_slots<> {
   std::set<int> received_;
   bool use_dtls_srtp_;
   bool negotiated_dtls_;
+  bool received_dtls_client_hello_;
+  bool received_dtls_server_hello_;
 };
 
 
@@ -349,12 +374,18 @@ class DtlsTransportChannelTest : public testing::Test {
     EXPECT_TRUE(rv);
     if (!rv)
       return false;
+
     EXPECT_TRUE_WAIT(client1_.writable() && client2_.writable(), 10000);
-    if (!client1_.writable())
-      return false;
-    if (!client2_.writable())
+    if (!client1_.writable() || !client2_.writable())
       return false;
 
+    // Check that we used the right roles.
+    if (use_dtls_) {
+      client1_.CheckRole(talk_base::SSL_SERVER);
+      client2_.CheckRole(talk_base::SSL_CLIENT);
+    }
+
+    // Check that we negotiated the right ciphers.
     if (use_dtls_srtp_) {
       client1_.CheckSrtp(AES_CM_128_HMAC_SHA1_80);
       client2_.CheckSrtp(AES_CM_128_HMAC_SHA1_80);
@@ -396,12 +427,12 @@ TEST_F(DtlsTransportChannelTest, TestChannelSetupIce) {
   cricket::FakeTransportChannel* channel2 = client2_.GetFakeChannel(0);
   ASSERT_TRUE(channel1 != NULL);
   ASSERT_TRUE(channel2 != NULL);
-  EXPECT_EQ(cricket::ROLE_CONTROLLING, channel1->role());
+  EXPECT_EQ(cricket::ROLE_CONTROLLING, channel1->GetRole());
   EXPECT_EQ(1U, channel1->tiebreaker());
   EXPECT_EQ(cricket::ICEPROTO_RFC5245, channel1->protocol());
   EXPECT_EQ(kIceUfrag1, channel1->ice_ufrag());
   EXPECT_EQ(kIcePwd1, channel1->ice_pwd());
-  ASSERT_EQ(cricket::ROLE_CONTROLLED, channel2->role());
+  EXPECT_EQ(cricket::ROLE_CONTROLLED, channel2->GetRole());
   EXPECT_EQ(2U, channel2->tiebreaker());
   EXPECT_EQ(cricket::ICEPROTO_RFC5245, channel2->protocol());
 }
@@ -415,12 +446,12 @@ TEST_F(DtlsTransportChannelTest, TestChannelSetupGice) {
   cricket::FakeTransportChannel* channel2 = client2_.GetFakeChannel(0);
   ASSERT_TRUE(channel1 != NULL);
   ASSERT_TRUE(channel2 != NULL);
-  EXPECT_EQ(cricket::ROLE_CONTROLLING, channel1->role());
+  EXPECT_EQ(cricket::ROLE_CONTROLLING, channel1->GetRole());
   EXPECT_EQ(1U, channel1->tiebreaker());
   EXPECT_EQ(cricket::ICEPROTO_GOOGLE, channel1->protocol());
   EXPECT_EQ(kIceUfrag1, channel1->ice_ufrag());
   EXPECT_EQ(kIcePwd1, channel1->ice_pwd());
-  ASSERT_EQ(cricket::ROLE_CONTROLLED, channel2->role());
+  EXPECT_EQ(cricket::ROLE_CONTROLLED, channel2->GetRole());
   EXPECT_EQ(2U, channel2->tiebreaker());
   EXPECT_EQ(cricket::ICEPROTO_GOOGLE, channel2->protocol());
 }

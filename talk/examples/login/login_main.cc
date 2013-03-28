@@ -29,11 +29,10 @@
 #include <iostream>
 
 #include "talk/base/thread.h"
-#include "talk/examples/login/xmppthread.h"
 #include "talk/xmpp/constants.h"
 #include "talk/xmpp/xmppclientsettings.h"
 #include "talk/xmpp/xmppengine.h"
-
+#include "talk/xmpp/xmppthread.h"
 
 int main(int argc, char **argv) {
   std::cout << "OAuth Access Token: ";
@@ -45,7 +44,7 @@ int main(int argc, char **argv) {
   std::getline(std::cin, username);
 
   // Start xmpp on a different thread
-  XmppThread thread;
+  buzz::XmppThread thread;
   thread.Start();
 
   buzz::XmppClientSettings xcs;

@@ -70,17 +70,20 @@ class FakeTransportChannel : public TransportChannelImpl,
         role_(ROLE_UNKNOWN),
         tiebreaker_(0),
         ice_proto_(ICEPROTO_HYBRID),
+        remote_ice_mode_(ICEMODE_FULL),
         dtls_fingerprint_("", NULL, 0) {
   }
   ~FakeTransportChannel() {
     Reset();
   }
 
-  TransportRole role() const { return role_; }
   uint64 tiebreaker() const { return tiebreaker_; }
   TransportProtocol protocol() const { return ice_proto_; }
+  IceMode remote_ice_mode() const { return remote_ice_mode_; }
   const std::string& ice_ufrag() const { return ice_ufrag_; }
   const std::string& ice_pwd() const { return ice_pwd_; }
+  const std::string& remote_ice_ufrag() const { return remote_ice_ufrag_; }
+  const std::string& remote_ice_pwd() const { return remote_ice_pwd_; }
   const talk_base::SSLFingerprint& dtls_fingerprint() const {
     return dtls_fingerprint_;
   }
@@ -94,10 +97,21 @@ class FakeTransportChannel : public TransportChannelImpl,
   }
 
   virtual void SetRole(TransportRole role) { role_ = role; }
+  virtual TransportRole GetRole() const { return role_; }
   virtual void SetTiebreaker(uint64 tiebreaker) { tiebreaker_ = tiebreaker; }
   virtual void SetIceProtocolType(IceProtocolType type) { ice_proto_ = type; }
-  virtual void SetIceUfrag(const std::string& ufrag) { ice_ufrag_ = ufrag; }
-  virtual void SetIcePwd(const std::string& pwd) { ice_pwd_ = pwd; }
+  virtual void SetIceCredentials(const std::string& ice_ufrag,
+                                 const std::string& ice_pwd) {
+    ice_ufrag_ = ice_ufrag;
+    ice_pwd_ = ice_pwd;
+  }
+  virtual void SetRemoteIceCredentials(const std::string& ice_ufrag,
+                                       const std::string& ice_pwd) {
+    remote_ice_ufrag_ = ice_ufrag;
+    remote_ice_pwd_ = ice_pwd;
+  }
+
+  virtual void SetRemoteIceMode(IceMode mode) { remote_ice_mode_ = mode; }
   virtual bool SetRemoteFingerprint(const std::string& alg, const uint8* digest,
                                     size_t digest_len) {
     dtls_fingerprint_ = talk_base::SSLFingerprint(alg, digest, digest_len);
@@ -250,6 +264,9 @@ class FakeTransportChannel : public TransportChannelImpl,
   IceProtocolType ice_proto_;
   std::string ice_ufrag_;
   std::string ice_pwd_;
+  std::string remote_ice_ufrag_;
+  std::string remote_ice_pwd_;
+  IceMode remote_ice_mode_;
   talk_base::SSLFingerprint dtls_fingerprint_;
 };
 
@@ -295,6 +312,9 @@ class FakeTransport : public Transport {
   void set_identity(talk_base::SSLIdentity* identity) {
     identity_ = identity;
   }
+
+  using Transport::local_description;
+  using Transport::remote_description;
 
  protected:
   virtual TransportChannelImpl* CreateTransportChannel(int component) {
@@ -405,6 +425,7 @@ class FakeSession : public BaseSession {
     for (TransportMap::const_iterator it = transport_proxies().begin();
         it != transport_proxies().end(); ++it) {
       it->second->CompleteNegotiation();
+      it->second->ConnectChannels();
     }
   }
 

@@ -47,15 +47,18 @@ class VideoFrame {
   VideoFrame() {}
   virtual ~VideoFrame() {}
 
+  virtual bool InitToBlack(int w, int h, size_t pixel_width,
+                           size_t pixel_height, int64 elapsed_time,
+                           int64 time_stamp) = 0;
   // Creates a frame from a raw sample with FourCC |format| and size |w| x |h|.
   // |h| can be negative indicating a vertically flipped image.
   // |dw| is destination width; can be less than |w| if cropping is desired.
   // |dh| is destination height, like |dw|, but must be a positive number.
   // Returns whether the function succeeded or failed.
-  virtual bool Reset(uint32 fourcc, int w, int h, int dw, int dh,
-                     uint8 *sample, size_t sample_size,
-                     size_t pixel_width, size_t pixel_height,
-                     int64 elapsed_time, int64 time_stamp, int rotation) = 0;
+  virtual bool Reset(uint32 fourcc, int w, int h, int dw, int dh, uint8 *sample,
+                     size_t sample_size, size_t pixel_width,
+                     size_t pixel_height, int64 elapsed_time, int64 time_stamp,
+                     int rotation) = 0;
 
   // Basic accessors.
   virtual size_t GetWidth() const = 0;
@@ -108,8 +111,8 @@ class VideoFrame {
   // See talk/base/stream.h for a description of StreamResult and error.
   // Error may be NULL. If a non-success value is returned from
   // StreamInterface::Write(), we immediately return with that value.
-  virtual talk_base::StreamResult Write(talk_base::StreamInterface* stream,
-                                        int* error);
+  virtual talk_base::StreamResult Write(talk_base::StreamInterface *stream,
+                                        int *error);
 
   // Converts the I420 data to RGB of a certain type such as ARGB and ABGR.
   // Returns the frame's actual size, regardless of whether it was written or
@@ -122,10 +125,9 @@ class VideoFrame {
   // height. The parameter "interpolate" controls whether to interpolate or just
   // take the nearest-point. The parameter "crop" controls whether to crop this
   // frame to the aspect ratio of the given dimensions before stretching.
-  virtual void StretchToPlanes(uint8 *y, uint8 *u, uint8 *v,
-                               int32 pitchY, int32 pitchU, int32 pitchV,
-                               size_t width, size_t height,
-                               bool interpolate, bool crop) const;
+  virtual void StretchToPlanes(
+      uint8 *y, uint8 *u, uint8 *v, int32 pitchY, int32 pitchU, int32 pitchV,
+      size_t width, size_t height, bool interpolate, bool crop) const;
 
   // Writes the frame into the given frame buffer, stretched to the given width
   // and height, provided that it is of sufficient size. Returns the frame's
@@ -155,8 +157,8 @@ class VideoFrame {
   bool SetToBlack();
 
   // Tests if sample is valid.  Returns true if valid.
-  static bool Validate(uint32 fourcc, int w, int h,
-                       const uint8 *sample, size_t sample_size);
+  static bool Validate(uint32 fourcc, int w, int h, const uint8 *sample,
+                       size_t sample_size);
 
   // Size of an I420 image of given dimensions when stored as a frame buffer.
   static size_t SizeOf(size_t w, size_t h) {
@@ -165,9 +167,8 @@ class VideoFrame {
 
  protected:
   // Creates an empty frame.
-  virtual VideoFrame* CreateEmptyFrame(int w, int h,
-                                       size_t pixel_width, size_t pixel_height,
-                                       int64 elapsed_time,
+  virtual VideoFrame *CreateEmptyFrame(int w, int h, size_t pixel_width,
+                                       size_t pixel_height, int64 elapsed_time,
                                        int64 time_stamp) const = 0;
 };
 

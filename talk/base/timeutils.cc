@@ -94,6 +94,55 @@ uint32 Time() {
   return static_cast<uint32>(TimeNanos() / kNumNanosecsPerMillisec);
 }
 
+#if defined(WIN32)
+static const uint64 kFileTimeToUnixTimeEpochOffset = 116444736000000000ULL;
+
+struct timeval {
+  long tv_sec, tv_usec;  // NOLINT
+};
+
+// Emulate POSIX gettimeofday().
+// Based on breakpad/src/third_party/glog/src/utilities.cc
+static int gettimeofday(struct timeval *tv, void *tz) {
+  // FILETIME is measured in tens of microseconds since 1601-01-01 UTC.
+  FILETIME ft;
+  GetSystemTimeAsFileTime(&ft);
+
+  LARGE_INTEGER li;
+  li.LowPart = ft.dwLowDateTime;
+  li.HighPart = ft.dwHighDateTime;
+
+  // Convert to seconds and microseconds since Unix time Epoch.
+  int64 micros = (li.QuadPart - kFileTimeToUnixTimeEpochOffset) / 10;
+  tv->tv_sec = static_cast<long>(micros / kNumMicrosecsPerSec);  // NOLINT
+  tv->tv_usec = static_cast<long>(micros % kNumMicrosecsPerSec); // NOLINT
+
+  return 0;
+}
+
+// Emulate POSIX gmtime_r().
+static struct tm *gmtime_r(const time_t *timep, struct tm *result) {
+  // On Windows, gmtime is thread safe.
+  struct tm *tm = gmtime(timep);  // NOLINT
+  if (tm == NULL) {
+    return NULL;
+  }
+  *result = *tm;
+  return result;
+}
+#endif  // WIN32
+
+void CurrentTmTime(struct tm *tm, int *microseconds) {
+  struct timeval timeval;
+  if (gettimeofday(&timeval, NULL) < 0) {
+    // Incredibly unlikely code path.
+    timeval.tv_sec = timeval.tv_usec = 0;
+  }
+  time_t secs = timeval.tv_sec;
+  gmtime_r(&secs, tm);
+  *microseconds = timeval.tv_usec;
+}
+
 uint32 TimeAfter(int32 elapsed) {
   ASSERT(elapsed >= 0);
   ASSERT(static_cast<uint32>(elapsed) < HALF);

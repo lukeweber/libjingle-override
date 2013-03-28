@@ -112,6 +112,61 @@ class MockDataChannelObserver : public webrtc::DataChannelObserver {
   std::string last_message_;
 };
 
+class MockStatsObserver : public webrtc::StatsObserver {
+ public:
+  MockStatsObserver()
+      : called_(false) {}
+  virtual ~MockStatsObserver() {}
+  virtual void OnComplete(const std::vector<webrtc::StatsReport>& reports) {
+    called_ = true;
+    reports_ = reports;
+  }
+
+  bool called() const { return called_; }
+  size_t number_of_reports() const { return reports_.size(); }
+
+  int AudioOutputLevel() {
+    return GetSsrcStatsValue(
+        webrtc::StatsElement::kStatsValueNameAudioOutputLevel);
+  }
+
+  int AudioInputLevel() {
+    return GetSsrcStatsValue(
+        webrtc::StatsElement::kStatsValueNameAudioInputLevel);
+  }
+
+  int BytesReceived() {
+    return GetSsrcStatsValue(
+        webrtc::StatsElement::kStatsValueNameBytesReceived);
+  }
+
+  int BytesSent() {
+    return GetSsrcStatsValue(webrtc::StatsElement::kStatsValueNameBytesSent);
+  }
+
+ private:
+  int GetSsrcStatsValue(const std::string name) {
+    if (reports_.empty()) {
+      return 0;
+    }
+    for (size_t i = 0; i < reports_.size(); ++i) {
+      if (reports_[i].type != StatsReport::kStatsReportTypeSsrc)
+        continue;
+      webrtc::StatsElement::Values::const_iterator it =
+          reports_[i].local.values.begin();
+      for (; it != reports_[i].local.values.end(); ++it) {
+        if (it->name == name) {
+          return talk_base::FromString<int>(it->value);
+        }
+      }
+    }
+    return 0;
+  }
+
+  bool called_;
+  std::vector<webrtc::StatsReport> reports_;
+};
+
 }  // namespace webrtc
 
 #endif  // TALK_APP_WEBRTC_TEST_MOCKPEERCONNECTIONOBSERVERS_H_

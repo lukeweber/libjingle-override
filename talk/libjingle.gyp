@@ -42,6 +42,109 @@
         }],
       ],
     }],
+
+    ['libjingle_java == 1', {
+      'targets': [
+        {
+          'target_name': 'libjingle_peerconnection_so',
+          'type': 'loadable_module',
+          'dependencies': [
+            'libjingle_peerconnection',
+            '<(DEPTH)/third_party/icu/icu.gyp:icuuc',
+          ],
+          'sources': [
+            'app/webrtc/java/jni/peerconnection_jni.cc'
+          ],
+          'conditions': [
+            ['OS=="linux"', {
+              'include_dirs': [
+                '/usr/local/buildtools/java/jdk7-64/include',
+                '/usr/local/buildtools/java/jdk7-64/include/linux',
+              ],
+              'link_settings': {
+                'libraries': [
+                  '<!@(pkg-config --libs-only-l gobject-2.0 gthread-2.0'
+                      ' gtk+-2.0)',
+                ],
+              },
+            }],
+          ],
+        },
+        {
+          'target_name': 'libjingle_peerconnection_jar',
+          'type': 'none',
+          'actions': [
+            {
+              'variables': {
+                'java_src_dir': 'app/webrtc/java/src',
+                'webrtc_modules_dir': '<(DEPTH)/third_party/webrtc/modules',
+                'peerconnection_java_files': [
+                  'app/webrtc/java/src/org/webrtc/AudioSource.java',
+                  'app/webrtc/java/src/org/webrtc/AudioTrack.java',
+                  'app/webrtc/java/src/org/webrtc/IceCandidate.java',
+                  'app/webrtc/java/src/org/webrtc/MediaConstraints.java',
+                  'app/webrtc/java/src/org/webrtc/MediaSource.java',
+                  'app/webrtc/java/src/org/webrtc/MediaStream.java',
+                  'app/webrtc/java/src/org/webrtc/MediaStreamTrack.java',
+                  'app/webrtc/java/src/org/webrtc/PeerConnectionFactory.java',
+                  'app/webrtc/java/src/org/webrtc/PeerConnection.java',
+                  'app/webrtc/java/src/org/webrtc/SdpObserver.java',
+                  'app/webrtc/java/src/org/webrtc/StatsObserver.java',
+                  'app/webrtc/java/src/org/webrtc/StatsReport.java',
+                  'app/webrtc/java/src/org/webrtc/SessionDescription.java',
+                  'app/webrtc/java/src/org/webrtc/VideoCapturer.java',
+                  'app/webrtc/java/src/org/webrtc/VideoRenderer.java',
+                  'app/webrtc/java/src/org/webrtc/VideoSource.java',
+                  'app/webrtc/java/src/org/webrtc/VideoTrack.java',
+                ],
+                # TODO(fischman): extract this into a webrtc gyp var that can be
+                # included here, or better yet, build a proper .jar in webrtc
+                # and include it here.
+                'android_java_files': [
+                  '<(webrtc_modules_dir)/audio_device/android/org/webrtc/voiceengine/WebRTCAudioDevice.java',
+                  '<(webrtc_modules_dir)/video_capture/android/java/org/webrtc/videoengine/CaptureCapabilityAndroid.java',
+                  '<(webrtc_modules_dir)/video_capture/android/java/org/webrtc/videoengine/VideoCaptureAndroid.java',
+                  '<(webrtc_modules_dir)/video_capture/android/java/org/webrtc/videoengine/VideoCaptureDeviceInfoAndroid.java',
+                  '<(webrtc_modules_dir)/video_render/android/java/org/webrtc/videoengine/ViEAndroidGLES20.java',
+                  '<(webrtc_modules_dir)/video_render/android/java/org/webrtc/videoengine/ViERenderer.java',
+                  '<(webrtc_modules_dir)/video_render/android/java/org/webrtc/videoengine/ViESurfaceRenderer.java',
+                ],
+              },
+              'action_name': 'create_jar',
+              'inputs': [
+                'build/build_jar.sh',
+                '<@(java_files)',
+              ],
+              'outputs': [
+                '<(PRODUCT_DIR)/libjingle_peerconnection.jar',
+              ],
+              'conditions': [
+                ['OS=="android"', {
+                  'variables': {
+                    'java_files': ['<@(peerconnection_java_files)', '<@(android_java_files)'],
+                    'build_classpath': '<(java_src_dir):<(DEPTH)/third_party/android_tools/sdk/platforms/android-<(android_sdk_version)/android.jar',
+                  },
+                }, {
+                  'variables': {
+                    'java_files': ['<@(peerconnection_java_files)'],
+                    'build_classpath': '<(java_src_dir)',
+                  },
+                }],
+              ],
+              'action': [
+                'build/build_jar.sh', '/usr', '<@(_outputs)',
+                '<(INTERMEDIATE_DIR)',
+                '<(build_classpath)',
+                '<@(java_files)'
+              ],
+            },
+          ],
+          'dependencies': [
+            'libjingle_peerconnection_so',
+          ],
+        },
+      ],
+    }],
   ],
 
   'targets': [
@@ -50,10 +153,11 @@
       'type': 'static_library',
       'dependencies': [
         '<(DEPTH)/third_party/expat/expat.gyp:expat',
-        # '<(DEPTH)/net/third_party/nss/ssl.gyp:libssl',
+        '<(DEPTH)/third_party/jsoncpp/jsoncpp.gyp:jsoncpp',
       ],
       'export_dependent_settings': [
         '<(DEPTH)/third_party/expat/expat.gyp:expat',
+        '<(DEPTH)/third_party/jsoncpp/jsoncpp.gyp:jsoncpp',
       ],
       'sources': [
         'base/asyncfile.cc',
@@ -83,7 +187,10 @@
         'base/httpcommon.cc',
         'base/httprequest.cc',
         'base/httpserver.cc',
+        'base/ifaddrs-android.cc',
+        'base/ifaddrs-android.h',
         'base/ipaddress.cc',
+        'base/json.cc',
         'base/logging.cc',
         'base/md5.cc',
         'base/messagedigest.cc',
@@ -153,6 +260,9 @@
         'xmpp/mucroomlookuptask.cc',
         'xmpp/mucroomuniquehangoutidtask.cc',
         'xmpp/pingtask.cc',
+        'xmpp/presenceouttask.cc',
+        'xmpp/presencereceivetask.cc',
+        'xmpp/presencestatus.cc',
         'xmpp/pubsubclient.cc',
         'xmpp/pubsub_task.cc',
         'xmpp/pubsubtasks.cc',
@@ -165,6 +275,10 @@
         'xmpp/xmpplogintask.cc',
         'xmpp/xmppstanzaparser.cc',
         'xmpp/xmpptask.cc',
+        'xmpp/xmppauth.cc',
+        'xmpp/xmpppump.cc',
+        'xmpp/xmppsocket.cc',
+        'xmpp/xmppthread.cc',
       ],
       'conditions': [
         ['OS=="mac" or OS=="win"', {
@@ -175,6 +289,9 @@
           ],
         }],
         ['OS=="android"', {
+          'sources': [
+            'base/ifaddrs-android.cc',
+          ],
           'link_settings': {
             'libraries': [
               '-llog',
@@ -342,6 +459,7 @@
         'media/base/streamparams.cc',
         'media/base/videoadapter.cc',
         'media/base/videocapturer.cc',
+        'media/base/mutedvideocapturer.cc',
         'media/base/videocommon.cc',
         'media/base/videoframe.cc',
         'media/devices/devicemanager.cc',
@@ -350,6 +468,7 @@
         'media/webrtc/webrtcpassthroughrender.h',
         'media/webrtc/webrtcvideocapturer.cc',
         'media/webrtc/webrtcvideocapturer.h',
+        'media/webrtc/webrtcvideodecoderfactory.h',
         'media/webrtc/webrtcvideoengine.cc',
         'media/webrtc/webrtcvideoengine.h',
         'media/webrtc/webrtcvideoframe.cc',
@@ -373,7 +492,7 @@
             'third_party/libudev'
           ],
           'cflags': [
-            '<!@(pkg-config --cflags gtk+-2.0)',
+            '<!@(pkg-config --cflags gobject-2.0 gthread-2.0 gtk+-2.0)',
           ],
           'libraries': [
             '-lrt',
@@ -384,6 +503,7 @@
         ['OS=="win"', {
           'sources': [
             'media/devices/gdivideorenderer.cc',
+            'media/devices/win32deviceinfo.cc',
             'media/devices/win32devicemanager.cc',
           ],
           'msvs_settings': {
@@ -400,6 +520,7 @@
         ['OS=="mac"', {
           'sources': [
             'media/devices/carbonvideorenderer.cc',
+            'media/devices/macdeviceinfo.cc',
             'media/devices/macdevicemanager.cc',
             'media/devices/macdevicemanagermm.mm',
           ],
@@ -421,6 +542,11 @@
               ],
             },
           },
+        }],
+        ['OS=="android"', {
+          'sources': [
+            'media/devices/androiddevicemanager.cc',
+          ],
         }],
       ],
     },  # target libjingle_media
@@ -507,20 +633,18 @@
       'sources': [
         'app/webrtc/audiotrack.cc',
         'app/webrtc/datachannel.cc',
+        'app/webrtc/dtmfsender.cc',
         'app/webrtc/jsepicecandidate.cc',
         'app/webrtc/jsepsessiondescription.cc',
+        'app/webrtc/localaudiosource.cc',
         'app/webrtc/localvideosource.cc',
         'app/webrtc/mediastream.cc',
         'app/webrtc/mediastreamhandler.cc',
-        'app/webrtc/mediastreamproxy.cc',
         'app/webrtc/mediastreamsignaling.cc',
-        'app/webrtc/mediastreamtrackproxy.cc',
-        'app/webrtc/peerconnectionfactory.cc',
         'app/webrtc/peerconnection.cc',
-        'app/webrtc/peerconnectionproxy.cc',
+        'app/webrtc/peerconnectionfactory.cc',
         'app/webrtc/portallocatorfactory.cc',
         'app/webrtc/statscollector.cc',
-        'app/webrtc/videosourceproxy.cc',
         'app/webrtc/videotrack.cc',
         'app/webrtc/videotrackrenderers.cc',
         'app/webrtc/webrtcsdp.cc',

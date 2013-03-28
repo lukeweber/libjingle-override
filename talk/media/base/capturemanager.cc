@@ -36,12 +36,11 @@
 namespace cricket {
 
 const VideoFormatPod VideoCapturerState::kDefaultCaptureFormat = {
-    640, 360, FPS_TO_INTERVAL(30), FOURCC_ANY};
+  640, 360, FPS_TO_INTERVAL(30), FOURCC_ANY
+};
 
 VideoCapturerState::VideoCapturerState(CaptureRenderAdapter* adapter)
-    : adapter_(adapter),
-      start_count_(1) {
-}
+    : adapter_(adapter), start_count_(1) {}
 
 VideoCapturerState* VideoCapturerState::Create(VideoCapturer* video_capturer) {
   CaptureRenderAdapter* adapter = CaptureRenderAdapter::Create(video_capturer);
@@ -60,12 +59,11 @@ void VideoCapturerState::AddCaptureResolution(
       return;
     }
   }
-  CaptureResolutionInfo capture_resolution = {desired_format, 1};
+  CaptureResolutionInfo capture_resolution = { desired_format, 1 };
   capture_formats_.push_back(capture_resolution);
 }
 
-bool VideoCapturerState::RemoveCaptureResolution(
-    const VideoFormat& format) {
+bool VideoCapturerState::RemoveCaptureResolution(const VideoFormat& format) {
   for (CaptureFormats::iterator iter = capture_formats_.begin();
        iter != capture_formats_.end(); ++iter) {
     if (format == iter->video_format) {
@@ -101,9 +99,7 @@ VideoFormat VideoCapturerState::GetHighestFormat(
   return highest_format;
 }
 
-int VideoCapturerState::IncCaptureStartRef() {
-  return ++start_count_;
-}
+int VideoCapturerState::IncCaptureStartRef() { return ++start_count_; }
 
 int VideoCapturerState::DecCaptureStartRef() {
   if (start_count_ > 0) {
@@ -224,8 +220,8 @@ bool CaptureManager::IsCapturerRegistered(VideoCapturer* video_capturer) const {
 }
 
 bool CaptureManager::RegisterVideoCapturer(VideoCapturer* video_capturer) {
-  VideoCapturerState* capture_state = VideoCapturerState::Create(
-      video_capturer);
+  VideoCapturerState* capture_state =
+      VideoCapturerState::Create(video_capturer);
   if (!capture_state) {
     return false;
   }
@@ -257,26 +253,27 @@ void CaptureManager::UnregisterVideoCapturer(
 }
 
 bool CaptureManager::StartWithBestCaptureFormat(
-    VideoCapturerState* capture_state,
-    VideoCapturer* video_capturer) {
+    VideoCapturerState* capture_state, VideoCapturer* video_capturer) {
   VideoFormat highest_asked_format =
       capture_state->GetHighestFormat(video_capturer);
   VideoFormat capture_format;
   if (!video_capturer->GetBestCaptureFormat(highest_asked_format,
                                             &capture_format)) {
-     LOG(LS_WARNING) << "Unsupported format:"
-                     << " width=" << highest_asked_format.width
-                     << " height=" << highest_asked_format.height
-                     << ". Supported formats are:";
-     const std::vector<VideoFormat>* formats =
-         video_capturer->GetSupportedFormats();
-     for (std::vector<VideoFormat>::const_iterator i = formats->begin();
-          i != formats->end(); ++i) {
-       const VideoFormat& format = *i;
-       LOG(LS_WARNING) << "  " << GetFourccName(format.fourcc) << ":"
-                       << format.width << "x" << format.height << "x"
-                       << format.framerate();
-     }
+    LOG(LS_WARNING) << "Unsupported format:"
+                    << " width=" << highest_asked_format.width
+                    << " height=" << highest_asked_format.height
+                    << ". Supported formats are:";
+    const std::vector<VideoFormat>* formats =
+        video_capturer->GetSupportedFormats();
+    ASSERT(formats != NULL);
+    for (std::vector<VideoFormat>::const_iterator i = formats->begin();
+         i != formats->end(); ++i) {
+      const VideoFormat& format = *i;
+      LOG(LS_WARNING) << "  " << GetFourccName(format.fourcc)
+                      << ":" << format.width << "x" << format.height << "x"
+                      << format.framerate();
+    }
+    return false;
   }
   return video_capturer->StartCapturing(capture_format);
 }

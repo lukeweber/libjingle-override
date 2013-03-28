@@ -32,10 +32,12 @@
 #include <vector>
 
 #include "talk/base/basictypes.h"
+#include "talk/base/logging.h"
 #include "talk/base/sigslot.h"
 #include "talk/base/socket.h"
 #include "talk/base/window.h"
 #include "talk/media/base/codec.h"
+#include "talk/media/base/constants.h"
 #include "talk/media/base/streamparams.h"
 // TODO(juberti): re-evaluate this include
 #include "talk/session/media/audiomonitor.h"
@@ -58,11 +60,11 @@ const int kMinRtpHeaderExtensionId = 1;
 const int kMaxRtpHeaderExtensionId = 255;
 const int kScreencastDefaultFps = 5;
 
-// Used in AudioOptions to signify "unset" values.
+// Used in AudioOptions and VideoOptions to signify "unset" values.
 template <class T>
 class Settable {
  public:
- Settable() : set_(false), val_() {}
+  Settable() : set_(false), val_() {}
   explicit Settable(T val) : set_(true), val_(val) {}
 
   bool IsSet() const {
@@ -74,31 +76,76 @@ class Settable {
     return set_;
   }
 
-  void Set(T val) {
+  T GetWithDefaultIfUnset(const T& default_value) const {
+    return set_ ? val_ : default_value;
+  }
+
+  virtual void Set(T val) {
     set_ = true;
     val_ = val;
   }
 
   void Clear() {
+    Set(T());
     set_ = false;
-    val_ = T();
   }
 
-  void SetFrom(Settable<T> o) {
+  void SetFrom(const Settable<T>& o) {
+    // Set this value based on the value of o, iff o is set.  If this value is
+    // set and o is unset, the current value will be unchanged.
     T val;
     if (o.Get(&val)) {
       Set(val);
     }
   }
 
+  std::string ToString() const {
+    return set_ ? talk_base::ToString(val_) : "";
+  }
+
   bool operator==(const Settable<T>& o) const {
-    return (set_ == o.set_) && (val_ == o.val_);
+    // Equal if both are unset with any value or both set with the same value.
+    return (set_ == o.set_) && (!set_ || (val_ == o.val_));
+  }
+
+  bool operator!=(const Settable<T>& o) const {
+    return !operator==(o);
+  }
+
+ protected:
+  void InitializeValue(const T &val) {
+    val_ = val;
   }
 
  private:
   bool set_;
   T val_;
 };
+
+class SettablePercent : public Settable<float> {
+ public:
+  virtual void Set(float val) {
+    if (val < 0) {
+      val = 0;
+    }
+    if (val >  1.0) {
+      val = 1.0;
+    }
+    Settable<float>::Set(val);
+  }
+};
+
+template <class T>
+static std::string ToStringIfSet(const char* key, const Settable<T>& val) {
+  std::string str;
+  if (val.IsSet()) {
+    str = key;
+    str += ": ";
+    str += val.ToString();
+    str += ", ";
+  }
+  return str;
+}
 
 // Options that can be applied to a VoiceMediaChannel or a VoiceMediaEngine.
 // Used to be flags, but that makes it hard to selectively apply options.
@@ -114,6 +161,7 @@ struct AudioOptions {
     typing_detection.SetFrom(change.typing_detection);
     conference_mode.SetFrom(change.conference_mode);
     adjust_agc_delta.SetFrom(change.adjust_agc_delta);
+    experimental_agc.SetFrom(change.experimental_agc);
   }
 
   bool operator==(const AudioOptions& o) const {
@@ -124,44 +172,22 @@ struct AudioOptions {
         stereo_swapping == o.stereo_swapping &&
         typing_detection == o.typing_detection &&
         conference_mode == o.conference_mode &&
+        experimental_agc == o.experimental_agc &&
         adjust_agc_delta == o.adjust_agc_delta;
   }
 
-  virtual std::string ToString() const {
+  std::string ToString() const {
     std::ostringstream ost;
     ost << "AudioOptions {";
-    bool aec;
-    if (echo_cancellation.Get(&aec)) {
-      ost << "aec: " << aec << ", ";
-    }
-    bool agc;
-    if (auto_gain_control.Get(&agc)) {
-      ost << "agc: " << agc << ", ";
-    }
-    bool ns;
-    if (noise_suppression.Get(&ns)) {
-      ost << "ns: " << ns << ", ";
-    }
-    bool hf;
-    if (highpass_filter.Get(&hf)) {
-      ost << "hf: " << hf << ", ";
-    }
-    bool swap;
-    if (stereo_swapping.Get(&swap)) {
-      ost << "swap: " << swap << ", ";
-    }
-    bool typing;
-    if (typing_detection.Get(&typing)) {
-      ost << "typing: " << typing << ", ";
-    }
-    bool conference;
-    if (conference_mode.Get(&conference)) {
-      ost << "conference: " << conference << ", ";
-    }
-    int agc_delta;
-    if (adjust_agc_delta.Get(&agc_delta)) {
-      ost << "agc_delta: " << agc_delta << ", ";
-    }
+    ost << ToStringIfSet("aec", echo_cancellation);
+    ost << ToStringIfSet("agc", auto_gain_control);
+    ost << ToStringIfSet("ns", noise_suppression);
+    ost << ToStringIfSet("hf", highpass_filter);
+    ost << ToStringIfSet("swap", stereo_swapping);
+    ost << ToStringIfSet("typing", typing_detection);
+    ost << ToStringIfSet("conference", conference_mode);
+    ost << ToStringIfSet("agc_delta", adjust_agc_delta);
+    ost << ToStringIfSet("experimental_agc", experimental_agc);
     ost << "}";
     return ost.str();
   }
@@ -181,6 +207,120 @@ struct AudioOptions {
   Settable<bool> typing_detection;
   Settable<bool> conference_mode;
   Settable<int> adjust_agc_delta;
+  Settable<bool> experimental_agc;
+};
+
+// Options that can be applied to a VideoMediaChannel or a VideoMediaEngine.
+// Used to be flags, but that makes it hard to selectively apply options.
+// We are moving all of the setting of options to structs like this,
+// but some things currently still use flags.
+struct VideoOptions {
+  VideoOptions() {
+    process_adaptation_threshhold.Set(kProcessCpuThreshold);
+    system_low_adaptation_threshhold.Set(kLowSystemCpuThreshold);
+    system_high_adaptation_threshhold.Set(kHighSystemCpuThreshold);
+  }
+
+  void SetAll(const VideoOptions& change) {
+    adapt_input_to_encoder.SetFrom(change.adapt_input_to_encoder);
+    adapt_input_to_cpu_usage.SetFrom(change.adapt_input_to_cpu_usage);
+    adapt_view_switch.SetFrom(change.adapt_view_switch);
+    video_noise_reduction.SetFrom(change.video_noise_reduction);
+    video_three_layers.SetFrom(change.video_three_layers);
+    video_enable_camera_list.SetFrom(change.video_enable_camera_list);
+    video_one_layer_screencast.SetFrom(change.video_one_layer_screencast);
+    video_high_bitrate.SetFrom(change.video_high_bitrate);
+    video_watermark.SetFrom(change.video_watermark);
+    video_temporal_layer_screencast.SetFrom(
+        change.video_temporal_layer_screencast);
+    video_leaky_bucket.SetFrom(change.video_leaky_bucket);
+    conference_mode.SetFrom(change.conference_mode);
+    process_adaptation_threshhold.SetFrom(change.process_adaptation_threshhold);
+    system_low_adaptation_threshhold.SetFrom(
+        change.system_low_adaptation_threshhold);
+    system_high_adaptation_threshhold.SetFrom(
+        change.system_high_adaptation_threshhold);
+    buffered_mode_latency.SetFrom(change.buffered_mode_latency);
+  }
+
+  bool operator==(const VideoOptions& o) const {
+    return adapt_input_to_encoder == o.adapt_input_to_encoder &&
+        adapt_input_to_cpu_usage == o.adapt_input_to_cpu_usage &&
+        adapt_view_switch == o.adapt_view_switch &&
+        video_noise_reduction == o.video_noise_reduction &&
+        video_three_layers == o.video_three_layers &&
+        video_enable_camera_list == o.video_enable_camera_list &&
+        video_one_layer_screencast == o.video_one_layer_screencast &&
+        video_high_bitrate == o.video_high_bitrate &&
+        video_watermark == o.video_watermark &&
+        video_temporal_layer_screencast == o.video_temporal_layer_screencast &&
+        video_leaky_bucket == o.video_leaky_bucket &&
+        conference_mode == o.conference_mode &&
+        process_adaptation_threshhold == o.process_adaptation_threshhold &&
+        system_low_adaptation_threshhold ==
+            o.system_low_adaptation_threshhold &&
+        system_high_adaptation_threshhold ==
+            o.system_high_adaptation_threshhold &&
+        buffered_mode_latency == o.buffered_mode_latency;
+  }
+
+  std::string ToString() const {
+    std::ostringstream ost;
+    ost << "VideoOptions {";
+    ost << ToStringIfSet("encoder adaption", adapt_input_to_encoder);
+    ost << ToStringIfSet("cpu adaption", adapt_input_to_cpu_usage);
+    ost << ToStringIfSet("adapt view switch", adapt_view_switch);
+    ost << ToStringIfSet("noise reduction", video_noise_reduction);
+    ost << ToStringIfSet("3 layers", video_three_layers);
+    ost << ToStringIfSet("camera list", video_enable_camera_list);
+    ost << ToStringIfSet("1 layer screencast",
+                        video_one_layer_screencast);
+    ost << ToStringIfSet("high bitrate", video_high_bitrate);
+    ost << ToStringIfSet("watermark", video_watermark);
+    ost << ToStringIfSet("video temporal layer screencast",
+                         video_temporal_layer_screencast);
+    ost << ToStringIfSet("leaky bucket", video_leaky_bucket);
+    ost << ToStringIfSet("conference mode", conference_mode);
+    ost << ToStringIfSet("process", process_adaptation_threshhold);
+    ost << ToStringIfSet("low", system_low_adaptation_threshhold);
+    ost << ToStringIfSet("high", system_high_adaptation_threshhold);
+    ost << ToStringIfSet("buffered mode latency", buffered_mode_latency);
+    ost << "}";
+    return ost.str();
+  }
+
+  // Encoder adaption, which is the gd callback in LMI, and TBA in WebRTC.
+  Settable<bool> adapt_input_to_encoder;
+  // Enable CPU adaptation?
+  Settable<bool> adapt_input_to_cpu_usage;
+  // Enable Adapt View Switch?
+  Settable<bool> adapt_view_switch;
+  // Enable denoising?
+  Settable<bool> video_noise_reduction;
+  // Experimental: Enable multi layer?
+  Settable<bool> video_three_layers;
+  // Experimental: Enable camera list?
+  Settable<bool> video_enable_camera_list;
+  // Experimental: Enable one layer screencast?
+  Settable<bool> video_one_layer_screencast;
+  // Experimental: Enable WebRtc higher bitrate?
+  Settable<bool> video_high_bitrate;
+  // Experimental: Add watermark to the rendered video image.
+  Settable<bool> video_watermark;
+  // Experimental: Enable WebRTC layered screencast.
+  Settable<bool> video_temporal_layer_screencast;
+  // Enable WebRTC leaky bucket when sending media packets.
+  Settable<bool> video_leaky_bucket;
+  // Use conference mode?
+  Settable<bool> conference_mode;
+  // Threshhold for process cpu adaptation.  (Process limit)
+  SettablePercent process_adaptation_threshhold;
+  // Low threshhold for cpu adaptation.  (Adapt up)
+  SettablePercent system_low_adaptation_threshhold;
+  // High threshhold for cpu adaptation.  (Adapt down)
+  SettablePercent system_high_adaptation_threshhold;
+  // Specify buffered mode latency in milliseconds.
+  Settable<int> buffered_mode_latency;
 };
 
 // A class for playing out soundclips.
@@ -205,6 +345,13 @@ struct RtpHeaderExtension {
   std::string uri;
   int id;
   // TODO(juberti): SendRecv direction;
+
+  bool operator==(const RtpHeaderExtension& ext) const {
+    // id is a reserved word in objective-c. Therefore the id attribute has to
+    // be a fully qualified name in order to compile on IOS.
+    return this->id == ext.id &&
+        uri == ext.uri;
+  }
 };
 
 // Returns the named header extension if found among all extensions, NULL
@@ -228,21 +375,6 @@ enum MediaChannelOptions {
 enum VoiceMediaChannelOptions {
   // Tune the audio stream for vcs with different target levels.
   OPT_AGC_MINUS_10DB = 0x80000000
-};
-
-enum VideoMediaChannelOptions {
-  // Increase the output framerate by 2x by interpolating frames.
-  OPT_INTERPOLATE = 0x10000,
-  // Adapt the video input to the encoder based on CPU.
-  OPT_ADAPT_INPUT_TO_CPU_USAGE = 0x20000,
-  // Enable video adaption based on encoder's estimation on bandwidth and
-  // cpu load.
-  OPT_ADAPT_INPUT_TO_ENCODER = 0x40000,
-  // Enable video noise reduction.
-  OPT_VIDEO_NOISE_REDUCTION = 0x80000,
-  // Enable WebRTC leaky bucket when sending media packets.
-  OPT_VIDEO_LEAKY_BUCKET = 0x160000,
-  OPT_VIDEO_WATERMARK = 0x320000,
 };
 
 // DTMF flags to control if a DTMF tone should be played and/or sent.
@@ -337,7 +469,7 @@ struct VoiceSenderInfo {
 
   uint32 ssrc;
   std::string codec_name;
-  int bytes_sent;
+  int64 bytes_sent;
   int packets_sent;
   int packets_lost;
   float fraction_lost;
@@ -368,7 +500,7 @@ struct VoiceReceiverInfo {
   }
 
   uint32 ssrc;
-  int bytes_rcvd;
+  int64 bytes_rcvd;
   int packets_rcvd;
   int packets_lost;
   float fraction_lost;
@@ -403,7 +535,7 @@ struct VideoSenderInfo {
   std::vector<uint32> ssrcs;
   std::vector<SsrcGroup> ssrc_groups;
   std::string codec_name;
-  int bytes_sent;
+  int64 bytes_sent;
   int packets_sent;
   int packets_cached;
   int packets_lost;
@@ -437,7 +569,7 @@ struct VideoReceiverInfo {
 
   std::vector<uint32> ssrcs;
   std::vector<SsrcGroup> ssrc_groups;
-  int bytes_rcvd;
+  int64 bytes_rcvd;
   // vector<int> layer_bytes_rcvd;
   int packets_rcvd;
   int packets_lost;
@@ -461,7 +593,7 @@ struct DataSenderInfo {
 
   uint32 ssrc;
   std::string codec_name;
-  int bytes_sent;
+  int64 bytes_sent;
   int packets_sent;
 };
 
@@ -473,7 +605,7 @@ struct DataReceiverInfo {
   }
 
   uint32 ssrc;
-  int bytes_rcvd;
+  int64 bytes_rcvd;
   int packets_rcvd;
 };
 
@@ -649,11 +781,12 @@ class VideoMediaChannel : public MediaChannel {
   // Reuqest each of the remote senders to send an intra frame.
   virtual bool RequestIntraFrame() = 0;
   // Sets the media options to use.
-  virtual bool SetOptions(int options) { return false; }
-  virtual int GetOptions() const { return 0; }
+  virtual bool SetOptions(const VideoOptions& options) = 0;
+  virtual bool GetOptions(VideoOptions* options) const = 0;
   virtual void UpdateAspectRatio(int ratio_w, int ratio_h) = 0;
 
-  // Signals events from the currently active window.
+  // Signal errors from MediaChannel.  Arguments are:
+  //     ssrc(uint32), and error(VideoMediaChannel::Error).
   sigslot::signal2<uint32, Error> SignalMediaError;
 
  protected:

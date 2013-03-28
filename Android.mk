@@ -150,9 +150,9 @@ LOCAL_MEDIA_SRC := \
 	talk/media/base/videocapturer.cc \
 	talk/media/base/videocommon.cc \
 	talk/media/base/videoframe.cc \
+	talk/media/devices/androiddevicemanager.cc \
 	talk/media/devices/devicemanager.cc \
 	talk/media/devices/filevideocapturer.cc \
-	talk/media/devices/dummydevicemanager.cc \
 	talk/media/webrtc/webrtcpassthroughrender.cc \
 	talk/media/webrtc/webrtcvideocapturer.cc \
 	talk/media/webrtc/webrtcvideoengine.cc \

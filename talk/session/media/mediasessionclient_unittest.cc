@@ -69,7 +69,7 @@ static const cricket::VideoCodec kVideoCodecs[] = {
 };
 
 static const cricket::DataCodec kDataCodecs[] = {
-  cricket::DataCodec(101, "google-data", 0)
+  cricket::DataCodec(127, "google-data", 0)
 };
 
 const std::string kGingleCryptoOffer = \
@@ -439,7 +439,7 @@ const std::string kJingleVideoInitiateWithData(
      "    </content>                                                    " \
      "    <content name='test data'>                                    " \
      "      <description xmlns='urn:xmpp:jingle:apps:rtp:1' media='data'> " \
-     "        <payload-type id='101' name='google-data'/>               " \
+     "        <payload-type id='127' name='google-data'/>               " \
      "        <rtcp-mux/>                                               " \
      "      </description>                                              " \
      "     <transport xmlns=\"http://www.google.com/transport/p2p\"/>   " \
@@ -1560,7 +1560,7 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     buzz::XmlElement* e = PayloadTypeFromContent(content);
     ASSERT_TRUE(e != NULL);
     cricket::DataCodec codec = parser_->DataCodecFromPayloadType(e);
-    EXPECT_EQ(101, codec.id);
+    EXPECT_EQ(127, codec.id);
     EXPECT_EQ("google-data", codec.name);
 
     CheckDataRtcpMux(true, call_->sessions()[0]->local_description());
@@ -2397,18 +2397,18 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     ClearStanzas();
 
     cricket::StreamParams stream;
-    stream.name = "test-stream";
+    stream.id = "test-stream";
     stream.ssrcs.push_back(1001);
     talk_base::scoped_ptr<buzz::XmlElement> expected_stream_add(
         buzz::XmlElement::ForStr(
             JingleOutboundStreamAdd(
                 call_->sessions()[0]->id(),
-                "video", stream.name, "1001")));
+                "video", stream.id, "1001")));
     talk_base::scoped_ptr<buzz::XmlElement> expected_stream_remove(
         buzz::XmlElement::ForStr(
             JingleOutboundStreamRemove(
                 call_->sessions()[0]->id(),
-                "video", stream.name)));
+                "video", stream.id)));
 
     call_->SendVideoStreamUpdate(call_->sessions()[0],
                                  call_->CreateVideoStreamUpdate(stream));
@@ -2474,7 +2474,7 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     SetJingleSid(streams_stanza.get());
     client_->session_manager()->OnIncomingMessage(streams_stanza.get());
     ASSERT_EQ(1U, last_streams_added_.audio().size());
-    ASSERT_EQ("Bob", last_streams_added_.audio()[0].nick);
+    ASSERT_EQ("Bob", last_streams_added_.audio()[0].groupid);
     ASSERT_EQ(1U, last_streams_added_.audio()[0].ssrcs.size());
     ASSERT_EQ(1234U, last_streams_added_.audio()[0].first_ssrc());
 
@@ -2497,7 +2497,7 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     SetJingleSid(streams_stanza.get());
     client_->session_manager()->OnIncomingMessage(streams_stanza.get());
     ASSERT_EQ(1U, last_streams_added_.audio().size());
-    ASSERT_EQ("Joe", last_streams_added_.audio()[0].nick);
+    ASSERT_EQ("Joe", last_streams_added_.audio()[0].groupid);
     ASSERT_EQ(1U, last_streams_added_.audio()[0].ssrcs.size());
     ASSERT_EQ(2468U, last_streams_added_.audio()[0].first_ssrc());
 
@@ -2506,7 +2506,7 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     SetJingleSid(streams_stanza.get());
     client_->session_manager()->OnIncomingMessage(streams_stanza.get());
     ASSERT_EQ(1U, last_streams_added_.video().size());
-    ASSERT_EQ("Bob", last_streams_added_.video()[0].nick);
+    ASSERT_EQ("Bob", last_streams_added_.video()[0].groupid);
     ASSERT_EQ(1U, last_streams_added_.video()[0].ssrcs.size());
     ASSERT_EQ(5678U, last_streams_added_.video()[0].first_ssrc());
 
@@ -2525,7 +2525,7 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     SetJingleSid(streams_stanza.get());
     client_->session_manager()->OnIncomingMessage(streams_stanza.get());
     ASSERT_EQ(1U, last_streams_added_.video().size());
-    ASSERT_EQ("Bob", last_streams_added_.video()[0].nick);
+    ASSERT_EQ("Bob", last_streams_added_.video()[0].groupid);
     ASSERT_EQ(1U, last_streams_added_.video()[0].ssrcs.size());
     ASSERT_EQ(5679U, last_streams_added_.video()[0].first_ssrc());
 
@@ -2539,7 +2539,8 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     ClearStanzas();
 
     cricket::ViewRequest viewRequest;
-    cricket::StaticVideoView staticVideoView(5678U, 640, 480, 30);
+    cricket::StaticVideoView staticVideoView(
+        cricket::StreamSelector(5678U), 640, 480, 30);
     viewRequest.static_video_views.push_back(staticVideoView);
     talk_base::scoped_ptr<buzz::XmlElement> expected_view_elem(
         buzz::XmlElement::ForStr(JingleView("5678", "640", "480", "30")));

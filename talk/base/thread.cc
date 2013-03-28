@@ -54,6 +54,11 @@ ThreadManager* ThreadManager::Instance() {
   return &thread_manager;
 }
 
+// static
+Thread* Thread::Current() {
+  return ThreadManager::Instance()->CurrentThread();
+}
+
 #ifdef POSIX
 ThreadManager::ThreadManager() {
   pthread_key_create(&key_, NULL);
@@ -221,6 +226,8 @@ bool Thread::Start(Runnable* runnable) {
   if (!owned_) return false;
   ASSERT(!started_);
   if (started_) return false;
+
+  Restart();  // reset fStop_ if the thread is being restarted
 
   // Make sure that ThreadManager is created on the main thread before
   // we start a new thread.

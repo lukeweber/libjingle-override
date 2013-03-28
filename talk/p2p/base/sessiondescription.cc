@@ -194,6 +194,17 @@ const TransportInfo* SessionDescription::GetTransportInfoByName(
   return NULL;
 }
 
+TransportInfo* SessionDescription::GetTransportInfoByName(
+    const std::string& name) {
+  for (TransportInfos::iterator iter = transport_infos_.begin();
+       iter != transport_infos_.end(); ++iter) {
+    if (iter->content_name == name) {
+      return &(*iter);
+    }
+  }
+  return NULL;
+}
+
 void SessionDescription::RemoveGroupByName(const std::string& name) {
   for (ContentGroups::iterator iter = content_groups_.begin();
        iter != content_groups_.end(); ++iter) {

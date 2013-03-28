@@ -54,6 +54,7 @@ const uint32 PORTALLOCATOR_ENABLE_IPV6 = 0x40;
 const uint32 PORTALLOCATOR_ENABLE_SHARED_UFRAG = 0x80;
 const uint32 PORTALLOCATOR_ENABLE_SHARED_SOCKET = 0x100;
 const uint32 PORTALLOCATOR_ENABLE_STUN_RETRANSMIT_ATTRIBUTE = 0x200;
+const uint32 PORTALLOCATOR_USE_LARGE_SOCKET_SEND_BUFFERS = 0x400;
 
 enum {
   PORTALLOCATOR_FILTER_ALLOW_NONE = 0,
@@ -131,7 +132,7 @@ class PortAllocator : public sigslot::has_slots<> {
       const std::string& ice_ufrag,
       const std::string& ice_pwd);
 
-  PortAllocatorSessionMuxer* GetSessionMuxer(const std::string& sid) const;
+  PortAllocatorSessionMuxer* GetSessionMuxer(const std::string& key) const;
   void OnSessionMuxerDestroyed(PortAllocatorSessionMuxer* session);
 
   uint32 flags() const { return flags_; }
