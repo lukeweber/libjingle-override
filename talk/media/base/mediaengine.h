@@ -47,7 +47,7 @@
 #include "talk/media/base/voiceprocessor.h"
 #include "talk/media/devices/devicemanager.h"
 
-#if defined(GOOGLE_CHROME_BUILD) || defined(CHROMIUM_BUILD)
+#if !defined(IOS) && (defined(GOOGLE_CHROME_BUILD) || defined(CHROMIUM_BUILD))
 #define DISABLE_MEDIA_ENGINE_FACTORY
 #endif
 

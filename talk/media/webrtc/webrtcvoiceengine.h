@@ -44,10 +44,10 @@
 #include "talk/media/webrtc/webrtcvoe.h"
 #include "talk/session/media/channel.h"
 
-#if !defined(LIBPEERCONNECTION_LIB) && \
-    !defined(LIBPEERCONNECTION_IMPLEMENTATION)
-#error "Bogus include."
-#endif
+//#if !defined(LIBPEERCONNECTION_LIB) && \
+//    !defined(LIBPEERCONNECTION_IMPLEMENTATION)
+//#error "Bogus include."
+//#endif
 
 
 namespace cricket {
