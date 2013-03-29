@@ -355,6 +355,10 @@
         'talk/xmpp/xmppstanzaparser.h',
         'talk/xmpp/xmpptask.cc',
         'talk/xmpp/xmpptask.h',
+        'talk/xmpp/module.h',
+        'talk/xmpp/moduleimpl.cc',
+        'talk/xmpp/rostermodule.h',
+        'talk/xmpp/rostermoduleimpl.cc',
       ],
       'include_dirs': [
         '<(DEPTH)/third_party/libjingle',
@@ -392,6 +396,7 @@
           'sources': [
 #            'talk/base/maccocoasocketserver.mm',
 #            'talk/base/maccocoasocketserver.h',
+            'talk/media/devices/iosdeviceinfo.cc',
             'talk/base/macasyncsocket.h',
             'talk/base/macasyncsocket.cc',
             'talk/base/macconversion.cc',
@@ -595,12 +600,11 @@
         'talk/media/base/rtpdump.h',
         'talk/media/base/rtputils.cc',
         'talk/media/base/rtputils.h',
+        'talk/media/devices/deviceinfo.h',
         'talk/media/devices/devicemanager.cc',
         'talk/media/devices/devicemanager.h',
-        'talk/media/devices/dummydevicemanager.cc',
         'talk/media/devices/filevideocapturer.cc',
         'talk/media/devices/filevideocapturer.h',
-        'talk/media/devices/dummydevicemanager.h',
         'talk/session/media/audiomonitor.cc',
         'talk/session/media/audiomonitor.h',
         'talk/session/media/call.cc',
@@ -650,6 +654,13 @@
         'talk/media/webrtc/webrtcvoe.h',
         'talk/media/webrtc/webrtcvoiceengine.cc',
         'talk/media/webrtc/webrtcvoiceengine.h',
+      ],
+      'conditions': [
+          ['OS=="ios"', {
+              'sources': [
+                'talk/media/devices/iosdeviceinfo.cc',
+              ],
+          }],
       ],
       'dependencies': [
         '<(DEPTH)/third_party/libsrtp/libsrtp.gyp:libsrtp',
