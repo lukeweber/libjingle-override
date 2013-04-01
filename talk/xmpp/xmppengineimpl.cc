@@ -52,7 +52,11 @@ XmppEngineImpl::XmppEngineImpl()
       password_(),
       requested_resource_(STR_EMPTY),
       tls_option_(buzz::TLS_REQUIRED),
+#ifdef IOS_XMPP_FRAMEWORK
+      login_task_(NULL),
+#else
       login_task_(new XmppLoginTask(this)),
+#endif
       next_id_(0),
       state_(STATE_START),
       encrypted_(false),

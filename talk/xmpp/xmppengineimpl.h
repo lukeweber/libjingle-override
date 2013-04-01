@@ -182,7 +182,9 @@ class XmppEngineImpl : public XmppEngine {
   //! Call this when building iq stanzas, to ensure that each iq
   //! gets its own unique id.
   virtual std::string NextId();
-
+#ifdef IOS_XMPP_FRAMEWORK
+    void SignalBound(const Jid& fullJid);
+#endif
  private:
   friend class XmppLoginTask;
   friend class XmppIqEntry;
@@ -196,7 +198,9 @@ class XmppEngineImpl : public XmppEngine {
   std::string ChooseBestSaslMechanism(
       const std::vector<std::string>& mechanisms, bool encrypted);
   SaslMechanism* GetSaslMechanism(const std::string& name);
+#ifndef IOS_XMPP_FRAMEWORK
   void SignalBound(const Jid& fullJid);
+#endif
   void SignalStreamError(const XmlElement* streamError);
   void SignalError(Error errorCode, int subCode);
   bool HasError();

@@ -42,14 +42,22 @@ XmppStanzaParser::XmppStanzaParser(XmppStanzaParseHandler *psph) :
   psph_(psph),
   innerHandler_(this),
   parser_(&innerHandler_),
+#ifdef IOS_XMPP_FRAMEWORK
+  depth_(1),
+#else
   depth_(0),
+#endif
   builder_() {
 }
 
 void
 XmppStanzaParser::Reset() {
   parser_.Reset();
+#ifdef IOS_XMPP_FRAMEWORK
+  depth_ = 1;
+#else
   depth_ = 0;
+#endif
   builder_.Reset();
 }
 
