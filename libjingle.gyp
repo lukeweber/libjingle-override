@@ -145,6 +145,7 @@
       ['OS=="ios"', {
         'defines': [
           'IOS',
+          'IOS_XMPP_FRAMEWORK',
           'CARBON_DEPRECATED',
         ],
       }],
