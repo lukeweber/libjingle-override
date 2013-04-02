@@ -574,7 +574,7 @@ class WebRtcSessionTest : public testing::Test {
         cricket::SecurePolicy secure_policy,
         const std::string& session_version,
         const SessionDescriptionInterface* current_desc) {
-    std::string session_id = talk_base::ToString(talk_base::CreateRandomId());
+    std::string session_id = talk_base::ToString(talk_base::CreateRandomId64());
     const cricket::SessionDescription* cricket_desc = NULL;
     if (current_desc) {
       cricket_desc = current_desc->description();
@@ -617,7 +617,7 @@ class WebRtcSessionTest : public testing::Test {
       cricket::MediaSessionOptions options) {
     desc_factory_->set_secure(cricket::SEC_REQUIRED);
     const std::string session_id =
-        talk_base::ToString(talk_base::CreateRandomId());
+        talk_base::ToString(talk_base::CreateRandomId64());
     JsepSessionDescription* answer(
         new JsepSessionDescription(JsepSessionDescription::kAnswer));
     if (!answer->Initialize(desc_factory_->CreateAnswer(offer->description(),

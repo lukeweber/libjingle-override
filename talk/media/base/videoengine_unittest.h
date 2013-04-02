@@ -93,7 +93,6 @@ class VideoEngineOverride : public T {
   }
   virtual ~VideoEngineOverride() {
   }
-
   bool is_camera_on() const { return T::GetVideoCapturer()->IsRunning(); }
   void set_has_senders(bool has_senders) {
     if (has_senders) {
@@ -126,7 +125,7 @@ class VideoEngineOverride : public T {
   }
 #define TEST_POST_VIDEOENGINE_INIT(TestClass, func) \
   TEST_F(TestClass, func##PostInit) { \
-    EXPECT_TRUE(engine_.Init()); \
+    EXPECT_TRUE(engine_.Init(talk_base::Thread::Current())); \
     func##Body(); \
     engine_.Terminate(); \
   }
@@ -136,7 +135,7 @@ class VideoEngineTest : public testing::Test {
  protected:
   // Tests starting and stopping the engine, and creating a channel.
   void StartupShutdown() {
-    EXPECT_TRUE(engine_.Init());
+    EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
     cricket::VideoMediaChannel* channel = engine_.CreateChannel(NULL);
     EXPECT_TRUE(channel != NULL);
     delete channel;
@@ -151,7 +150,7 @@ class VideoEngineTest : public testing::Test {
     EXPECT_EQ(S_OK, CoInitializeEx(NULL, COINIT_MULTITHREADED));
 
     // Engine should start even with COM already inited.
-    EXPECT_TRUE(engine_.Init());
+    EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
     engine_.Terminate();
     // Refcount after terminate should be 1; this tests if it is nonzero.
     EXPECT_EQ(S_FALSE, CoInitializeEx(NULL, COINIT_MULTITHREADED));
@@ -167,7 +166,7 @@ class VideoEngineTest : public testing::Test {
 
   void RegisterVideoProcessor() {
     cricket::FakeMediaProcessor vp;
-    EXPECT_TRUE(engine_.Init());
+    EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
     EXPECT_TRUE(engine_.RegisterProcessor(&vp));
     bool drop_frame = false;
     engine_.TriggerMediaFrame(0, NULL, &drop_frame);
@@ -184,7 +183,7 @@ class VideoEngineTest : public testing::Test {
   void SetCapture() {
     cricket::Device device("test", "device");
     EXPECT_FALSE(engine_.GetVideoCapturer());
-    EXPECT_TRUE(engine_.Init());
+    EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
     cricket::FakeVideoCapturer video_capturer;
     EXPECT_TRUE(engine_.SetVideoCapturer(&video_capturer));
     EXPECT_TRUE(engine_.GetVideoCapturer() != NULL);
@@ -565,7 +564,7 @@ class VideoMediaChannelTest : public testing::Test,
 
   virtual void SetUp() {
     cricket::Device device("test", "device");
-    EXPECT_TRUE(engine_.Init());
+    EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
     video_capturer_.reset(new cricket::FakeVideoCapturer);
     EXPECT_TRUE(video_capturer_.get() != NULL);
     EXPECT_TRUE(engine_.SetVideoCapturer(video_capturer_.get()));
@@ -1413,10 +1412,10 @@ class VideoMediaChannelTest : public testing::Test,
   }
 
   void HighAspectHighHeightCapturer() {
-    const int kWidth  = 100;
+    const int kWidth  = 80;
     const int kHeight = 10000;
-    const int kScaledWidth = 28;
-    const int kScaledHeight = 3072;
+    const int kScaledWidth = 20;
+    const int kScaledHeight = 2500;
 
     cricket::VideoCodec codec(DefaultCodec());
     EXPECT_TRUE(SetOneCodec(codec));

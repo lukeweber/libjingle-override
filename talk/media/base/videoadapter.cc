@@ -25,7 +25,7 @@
 
 #include "talk/media/base/videoadapter.h"
 
-#include <limits.h>
+#include <limits.h>  // For INT_MAX
 
 #include "talk/media/base/constants.h"
 #include "talk/base/logging.h"
@@ -67,7 +67,7 @@ static float kScaleFactors[] = {
 };
 #endif
 
-// Find scale factor that applied to width and height, is best match
+// Find the scale factor that, when applied to width and height, is closest
 // to num_pixels.
 float VideoAdapter::FindClosestScale(int width, int height,
                                      int target_num_pixels) {
@@ -86,7 +86,7 @@ float VideoAdapter::FindClosestScale(int width, int height,
     if (diff < best_distance) {
       best_distance = diff;
       best_index = i;
-      if (!best_distance) {  // Found exact match
+      if (best_distance == 0) {  // Found exact match.
         break;
       }
     }
@@ -94,9 +94,8 @@ float VideoAdapter::FindClosestScale(int width, int height,
   return kScaleFactors[best_index];
 }
 
-
-// Find scale factor that applied to width and height, produces less than
-// num_pixels.
+// Finds the scale factor that, when applied to width and height, produces
+// fewer than num_pixels.
 float VideoAdapter::FindLowerScale(int width, int height,
                                    int target_num_pixels) {
   if (!target_num_pixels) {
@@ -111,7 +110,7 @@ float VideoAdapter::FindLowerScale(int width, int height,
     if (diff >= 0 && diff < best_distance) {
       best_distance = diff;
       best_index = i;
-      if (!best_distance) {  // Found exact match.
+      if (best_distance == 0) {  // Found exact match.
         break;
       }
     }
@@ -225,8 +224,9 @@ bool VideoAdapter::AdaptFrame(const VideoFrame* in_frame,
     float scale = VideoAdapter::FindClosestScale(in_frame->GetWidth(),
                                                  in_frame->GetHeight(),
                                                  output_num_pixels_);
-    output_format_.width = static_cast<int>(in_frame->GetWidth() * scale);
-    output_format_.height = static_cast<int>(in_frame->GetHeight() * scale);
+    output_format_.width = static_cast<int>(in_frame->GetWidth() * scale + .5f);
+    output_format_.height = static_cast<int>(in_frame->GetHeight() * scale +
+                                             .5f);
   }
 
   if (!StretchToOutputFrame(in_frame)) {
@@ -473,8 +473,8 @@ bool CoordinatedVideoAdapter::IsMinimumFormat(int pixels) {
                              input.height,
                              pixels);
   }
-  new_output.width = static_cast<int>(input.width * scale);
-  new_output.height = static_cast<int>(input.height * scale);
+  new_output.width = static_cast<int>(input.width * scale + .5f);
+  new_output.height = static_cast<int>(input.height * scale + .5f);
   int new_pixels = new_output.width * new_output.height;
   int num_pixels = GetOutputNumPixels();
   return new_pixels <= num_pixels;
@@ -494,7 +494,7 @@ bool CoordinatedVideoAdapter::AdaptToMinimumFormat(int* new_width,
   if (!input.IsSize0x0()) {
     float scale = FindLowerScale(input.width, input.height, min_num_pixels);
     min_num_pixels =
-        static_cast<int>(input.width * input.height * scale * scale);
+        static_cast<int>(input.width * input.height * scale * scale + .5f);
   }
   // Reduce resolution further, if necessary, based on encoder bandwidth (GD).
   if (encoder_desired_num_pixels_ &&
@@ -523,8 +523,9 @@ bool CoordinatedVideoAdapter::AdaptToMinimumFormat(int* new_width,
   if (!input.IsSize0x0()) {
     scale = FindClosestScale(input.width, input.height, min_num_pixels);
   }
-  *new_width = new_output.width = static_cast<int>(input.width * scale);
-  *new_height = new_output.height = static_cast<int>(input.height * scale);
+  *new_width = new_output.width = static_cast<int>(input.width * scale + .5f);
+  *new_height = new_output.height = static_cast<int>(input.height * scale +
+                                                     .5f);
   new_output.interval = view_desired_interval_;
   SetOutputFormat(new_output);
   int new_num_pixels = GetOutputNumPixels();

@@ -407,7 +407,7 @@ WebRtcSession::WebRtcSession(cricket::ChannelManager* channel_manager,
                              cricket::PortAllocator* port_allocator,
                              MediaStreamSignaling* mediastream_signaling)
     : cricket::BaseSession(signaling_thread, worker_thread, port_allocator,
-                           talk_base::ToString(talk_base::CreateRandomId()),
+                           talk_base::ToString(talk_base::CreateRandomId64()),
                            cricket::NS_JINGLE_RTP, false),
       channel_manager_(channel_manager),
       session_desc_factory_(channel_manager, &transport_desc_factory_),
@@ -418,7 +418,6 @@ WebRtcSession::WebRtcSession(cricket::ChannelManager* channel_manager,
       // as the session id and session version. To simplify, it should be fine
       // to just use a random number as session id and start version from
       // |kInitSessionVersion|.
-      session_id_(talk_base::ToString(talk_base::CreateRandomId())),
       session_version_(kInitSessionVersion),
       older_version_remote_peer_(false),
       allow_rtp_data_engine_(false),
@@ -545,7 +544,7 @@ SessionDescriptionInterface* WebRtcSession::CreateOffer(
   ASSERT(session_version_ + 1 > session_version_);
   JsepSessionDescription* offer(new JsepSessionDescription(
       JsepSessionDescription::kOffer));
-  if (!offer->Initialize(desc, session_id_,
+  if (!offer->Initialize(desc, id(),
                          talk_base::ToString(session_version_++))) {
     delete offer;
     return NULL;
@@ -594,7 +593,7 @@ SessionDescriptionInterface* WebRtcSession::CreateAnswer(
   ASSERT(session_version_ + 1 > session_version_);
   JsepSessionDescription* answer(new JsepSessionDescription(
       JsepSessionDescription::kAnswer));
-  if (!answer->Initialize(desc, session_id_,
+  if (!answer->Initialize(desc, id(),
                           talk_base::ToString(session_version_++))) {
     delete answer;
     return NULL;

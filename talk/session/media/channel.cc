@@ -696,8 +696,9 @@ bool BaseChannel::SendPacket(bool rtcp, talk_base::Buffer* packet) {
     packet->SetLength(len);
   } else if (secure_required_) {
     // This is a double check for something that supposedly can't happen.
-    LOG(LS_ERROR) <<
-        "Trying to send insecure packet when crypto is required by policy";
+    LOG(LS_ERROR) << "Can't send outgoing " << PacketType(rtcp)
+                  << " packet when SRTP is inactive and crypto is required";
+
     ASSERT(false);
     return false;
   }
@@ -772,10 +773,18 @@ void BaseChannel::HandlePacket(bool rtcp, talk_base::Buffer* packet) {
 
     packet->SetLength(len);
   } else if (secure_required_) {
-    // This is a double check for something that supposedly can't happen.
-    LOG(LS_ERROR) <<
-        "Trying to receive insecure packet when crypto is required by policy";
-    ASSERT(false);
+    // Our session description indicates that SRTP is required, but we got a
+    // packet before our SRTP filter is active. This means either that
+    // a) we got SRTP packets before we received the SDES keys, in which case
+    //    we can't decrypt it anyway, or
+    // b) we got SRTP packets before DTLS completed on both the RTP and RTCP
+    //    channels, so we haven't yet extracted keys, even if DTLS did complete
+    //    on the channel that the packets are being sent on. It's really good
+    //    practice to wait for both RTP and RTCP to be good to go before sending
+    //    media, to prevent weird failure modes, so it's fine for us to just eat
+    //    packets here. This is all sidestepped if RTCP mux is used anyway.
+    LOG(LS_WARNING) << "Can't process incoming " << PacketType(rtcp)
+                    << " packet when SRTP is inactive and crypto is required";
     return;
   }
 

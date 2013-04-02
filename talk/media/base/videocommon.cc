@@ -25,6 +25,7 @@
 
 #include "talk/media/base/videocommon.h"
 
+#include <limits.h>  // For INT_MAX
 #include <math.h>
 #include <sstream>
 
@@ -62,13 +63,45 @@ uint32 CanonicalFourCC(uint32 fourcc) {
   return fourcc;
 }
 
+static float kScaleFactors[] = {
+  1.f,  // full size
+  1.f / 2.f,  // 1/2 scale
+  1.f / 4.f,  // 1/4 scale
+  1.f / 8.f,  // 1/8 scale
+  1.f / 16.f  // 1/16 scale
+};
+
+// Finds the scale factor that, when applied to width and height, produces
+// fewer than num_pixels.
+static float FindLowerScale(int width, int height,
+                            int target_num_pixels) {
+  if (!target_num_pixels) {
+    return 0.f;
+  }
+  int best_distance = INT_MAX;
+  int best_index = 0;  // Default to unscaled.
+  for (size_t i = 0u; i < ARRAY_SIZE(kScaleFactors); ++i) {
+    int test_num_pixels = static_cast<int>(width * kScaleFactors[i] *
+                                           height * kScaleFactors[i]);
+    int diff = target_num_pixels - test_num_pixels;
+    if (diff >= 0 && diff < best_distance) {
+      best_distance = diff;
+      best_index = i;
+      if (best_distance == 0) {  // Found exact match.
+        break;
+      }
+    }
+  }
+  return kScaleFactors[best_index];
+}
+
 // TODO(fbarchard): Remove kMaxPixels when encoder has no limit.
 // TODO(fbarchard): Consider clamping dimensions to max independently,
 //     adjusting pixel width and pixel height.
 // Limit as of 7/16/12 is 21000 macroblocks (16 x 16 each). b/6726828
 // Compute a size to scale frames to that is below maximum compression
 // and rendering size with the same aspect ratio.
-void ComputeScale(int frame_width, int frame_height,
+void ComputeScale(int frame_width, int frame_height, int fps,
                   int* scaled_width, int* scaled_height) {
   ASSERT(scaled_width != NULL);
   ASSERT(scaled_height != NULL);
@@ -79,33 +112,35 @@ void ComputeScale(int frame_width, int frame_height,
   // kViEMaxCodecHeight)
   const int kMaxWidth = 4096;
   const int kMaxHeight = 3072;
-  const int kMaxPixels = 2880 * 1800;
+  // Maximum pixels is normally limited by codec.
+  // But if framerate is high, reduce to half for performance.
+  const int kMaxPixels = (fps > 5) ? 1440 * 900 : 2880 * 1800;
   int new_frame_width = frame_width;
   int new_frame_height = frame_height;
 
   // Limit width.
   if (new_frame_width > kMaxWidth) {
-    new_frame_height = new_frame_height * kMaxWidth / new_frame_width & ~1;
+    new_frame_height = new_frame_height * kMaxWidth / new_frame_width;
     new_frame_width = kMaxWidth;
   }
   // Limit height.
   if (new_frame_height > kMaxHeight) {
-    new_frame_width = new_frame_width * kMaxHeight / new_frame_height & ~3;
+    new_frame_width = new_frame_width * kMaxHeight / new_frame_height;
     new_frame_height = kMaxHeight;
   }
   // Limit number of pixels.
   if (new_frame_width * new_frame_height > kMaxPixels) {
     // Compute new width such that width * height is less than maximum but
     // maintains original captured frame aspect ratio.
-    // Round down width to multiple of 4 so odd width won't round up beyond
-    // maximum, and so chroma channel is even width to simplify spatial
-    // resampling.
     new_frame_width = static_cast<int>(sqrtf(static_cast<float>(
-        kMaxPixels) * new_frame_width / new_frame_height)) & ~3;
-    new_frame_height = kMaxPixels / new_frame_width & ~1;
+        kMaxPixels) * new_frame_width / new_frame_height));
+    new_frame_height = kMaxPixels / new_frame_width;
   }
-  *scaled_width = new_frame_width;
-  *scaled_height = new_frame_height;
+  // Snap to a scale factor that is less than or equal to target pixels.
+  float scale = FindLowerScale(frame_width, frame_height,
+                               new_frame_width * new_frame_height);
+  *scaled_width = static_cast<int>(frame_width * scale + .5f);
+  *scaled_height = static_cast<int>(frame_height * scale + .5f);
 }
 
 // Compute size to crop video frame to.

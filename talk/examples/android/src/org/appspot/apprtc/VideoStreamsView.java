@@ -145,7 +145,7 @@ public class VideoStreamsView
     long now = System.nanoTime();
     if (lastFPSLogTime == -1 || now - lastFPSLogTime > 1e9) {
       double fps = numFramesSinceLastLog / ((now - lastFPSLogTime) / 1e9);
-      Log.e(TAG, "Rendered FPS: " + fps);
+      Log.d(TAG, "Rendered FPS: " + fps);
       lastFPSLogTime = now;
       numFramesSinceLastLog = 1;
     }

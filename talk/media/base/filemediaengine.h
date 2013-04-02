@@ -78,7 +78,9 @@ class FileMediaEngine : public MediaEngineInterface {
   }
 
   // Implement pure virtual methods of MediaEngine.
-  virtual bool Init() { return true; }
+  virtual bool Init(talk_base::Thread* worker_thread) {
+    return true;
+  }
   virtual void Terminate() {}
   virtual int GetCapabilities();
   virtual VoiceMediaChannel* CreateChannel();

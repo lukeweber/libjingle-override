@@ -579,6 +579,7 @@ void WebRtcVideoEngine::Construct(ViEWrapper* vie_wrapper,
                                   ViETraceWrapper* tracing,
                                   WebRtcVoiceEngine* voice_engine) {
   LOG(LS_INFO) << "WebRtcVideoEngine::WebRtcVideoEngine";
+  worker_thread_ = NULL;
   vie_wrapper_.reset(vie_wrapper);
   vie_wrapper_base_initialized_ = false;
   tracing_.reset(tracing);
@@ -630,8 +631,10 @@ WebRtcVideoEngine::~WebRtcVideoEngine() {
   ASSERT(SignalMediaFrame.is_empty());
 }
 
-bool WebRtcVideoEngine::Init() {
+bool WebRtcVideoEngine::Init(talk_base::Thread* worker_thread) {
   LOG(LS_INFO) << "WebRtcVideoEngine::Init";
+  worker_thread_ = worker_thread;
+  ASSERT(worker_thread_ != NULL);
   bool result = InitVideoEngine();
   if (result) {
     LOG(LS_INFO) << "VideoEngine Init done";
@@ -2400,13 +2403,6 @@ bool WebRtcVideoMediaChannel::SetOptions(const VideoOptions &options) {
     return true;
   }
 
-  // Reject new options if we're already sending.
-  if (sending()) {
-    LOG(LS_INFO) << "Not setting options - already sending | "
-                 << options.ToString();
-    return false;
-  }
-
   // Trigger SetSendCodec to set correct noise reduction state if the option has
   // changed.
   bool denoiser_changed =
@@ -3245,8 +3241,7 @@ void WebRtcVideoMediaChannel::QueueBlackFrame(uint32 ssrc, int64 timestamp,
     const int delay_ms = static_cast<int> (
         2 * cricket::VideoFormat::FpsToInterval(framerate) *
         talk_base::kNumMillisecsPerSec / talk_base::kNumNanosecsPerSec);
-    talk_base::Thread::Current()->PostDelayed(delay_ms, this, 0,
-                                              black_frame_data);
+    worker_thread()->PostDelayed(delay_ms, this, 0, black_frame_data);
   }
 }
 

@@ -146,12 +146,12 @@ class HybridVideoEngine : public HybridVideoEngineInterface {
     SignalCaptureStateChange.repeat(video2_.SignalCaptureStateChange);
   }
 
-  bool Init() {
-    if (!video1_.Init()) {
+  bool Init(talk_base::Thread* worker_thread) {
+    if (!video1_.Init(worker_thread)) {
       LOG(LS_ERROR) << "Failed to init VideoEngine1";
       return false;
     }
-    if (!video2_.Init()) {
+    if (!video2_.Init(worker_thread)) {
       LOG(LS_ERROR) << "Failed to init VideoEngine2";
       video1_.Terminate();
       return false;

@@ -1337,7 +1337,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
 // codec have the same default payload type as an audio codec that is already in
 // use, the added codecs payload types are changed.
 TEST_F(MediaSessionDescriptionFactoryTest,
-       RespondentCreatesOfferWithVideoAndRtxAfterCreatingAudiAnswer) {
+       RespondentCreatesOfferWithVideoAndRtxAfterCreatingAudioAnswer) {
   std::vector<VideoCodec> f1_codecs = MAKE_VECTOR(kVideoCodecs1);
   VideoCodec rtx_f1;
   rtx_f1.id = 126;
@@ -1399,6 +1399,61 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   int pt_referenced_by_rtx = talk_base::FromString<int>(
       rtx.params[cricket::kCodecParamAssociatedPayloadType]);
   EXPECT_EQ(new_h264_pl_type, pt_referenced_by_rtx);
+}
+
+// Test that RTX is ignored when there is no associated payload type parameter.
+TEST_F(MediaSessionDescriptionFactoryTest, RtxWithoutApt) {
+  MediaSessionOptions opts;
+  opts.has_video = true;
+  opts.has_audio = false;
+  std::vector<VideoCodec> f1_codecs = MAKE_VECTOR(kVideoCodecs1);
+  VideoCodec rtx_f1;
+  rtx_f1.id = 126;
+  rtx_f1.name = cricket::kRtxCodecName;
+
+  f1_codecs.push_back(rtx_f1);
+  f1_.set_video_codecs(f1_codecs);
+
+  std::vector<VideoCodec> f2_codecs = MAKE_VECTOR(kVideoCodecs2);
+  VideoCodec rtx_f2;
+  rtx_f2.id = 127;
+  rtx_f2.name = cricket::kRtxCodecName;
+
+  // This creates rtx for H264 with the payload type |f2_| uses.
+  rtx_f2.SetParam(cricket::kCodecParamAssociatedPayloadType,
+                  talk_base::ToString<int>(kVideoCodecs2[0].id));
+  f2_codecs.push_back(rtx_f2);
+  f2_.set_video_codecs(f2_codecs);
+
+  talk_base::scoped_ptr<SessionDescription> offer(f1_.CreateOffer(opts, NULL));
+  ASSERT_TRUE(offer.get() != NULL);
+  // kCodecParamAssociatedPayloadType will always be added to the offer when RTX
+  // is selected. Manually remove kCodecParamAssociatedPayloadType so that it
+  // is possible to test that that RTX is dropped when
+  // kCodecParamAssociatedPayloadType is missing in the offer.
+  VideoContentDescription* desc =
+      static_cast<cricket::VideoContentDescription*>(
+          offer->GetContentDescriptionByName(cricket::CN_VIDEO));
+  ASSERT_TRUE(desc != NULL);
+  std::vector<VideoCodec> codecs = desc->codecs();
+  for (std::vector<VideoCodec>::iterator iter = codecs.begin();
+       iter != codecs.end(); ++iter) {
+    if (iter->name.find(cricket::kRtxCodecName) == 0) {
+      iter->params.clear();
+    }
+  }
+  desc->set_codecs(codecs);
+
+  talk_base::scoped_ptr<SessionDescription> answer(
+      f2_.CreateAnswer(offer.get(), opts, NULL));
+
+  const VideoContentDescription* vcd =
+      GetFirstVideoContentDescription(answer.get());
+
+  for (std::vector<VideoCodec>::const_iterator iter = vcd->codecs().begin();
+       iter != vcd->codecs().end(); ++iter) {
+    ASSERT_STRNE(iter->name.c_str(), cricket::kRtxCodecName);
+  }
 }
 
 // Create an updated offer after creating an answer to the original offer and
@@ -1752,5 +1807,3 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCryptoOfferDtlsButNotSdes) {
       answer->GetTransportDescriptionByName("data");
   EXPECT_TRUE(data_answer_trans_desc->identity_fingerprint.get() != NULL);
 }
-
-

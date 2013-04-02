@@ -90,6 +90,11 @@ class TurnPort : public Port {
                             const talk_base::SocketAddress& remote_addr);
 
   const std::string& hash() const { return hash_; }
+  const std::string& nonce() const { return nonce_; }
+
+  // This signal is only for testing purpose.
+  sigslot::signal3<TurnPort*, const talk_base::SocketAddress&, int>
+      SignalCreatePermissionResult;
 
  protected:
   TurnPort(talk_base::Thread* thread,
@@ -134,6 +139,7 @@ class TurnPort : public Port {
   void SendRequest(StunRequest* request, int delay);
   int Send(const void* data, size_t size);
   void UpdateHash();
+  bool UpdateNonce(StunMessage* response);
 
   bool HasPermission(const talk_base::IPAddress& ipaddr) const;
   TurnEntry* FindEntry(const talk_base::SocketAddress& address) const;
@@ -149,8 +155,8 @@ class TurnPort : public Port {
   int error_;
 
   StunRequestManager request_manager_;
-  std::string realm_;       // From 401 response message.
-  std::string nonce_;       // From 401 response message.
+  std::string realm_;       // From 401/438 response message.
+  std::string nonce_;       // From 401/438 response message.
   std::string hash_;        // Digest of username:realm:password
 
   int next_channel_number_;

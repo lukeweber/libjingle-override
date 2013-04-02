@@ -64,7 +64,7 @@ using cricket::PROTOCOL_GINGLE;
 static const std::string kInitiator = "init@init.com";
 static const std::string kResponder = "resp@resp.com";
 // Expected from test random number generator.
-static const std::string kSessionId = "2154761789";
+static const std::string kSessionId = "9254631414740579489";
 // TODO: When we need to test more than one transport type,
 // allow this to be injected like the content types are.
 static const std::string kTransportType = "http://www.google.com/transport/p2p";

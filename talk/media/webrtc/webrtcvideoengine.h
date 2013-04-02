@@ -89,7 +89,7 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   ~WebRtcVideoEngine();
 
   // Basic video engine implementation.
-  bool Init();
+  bool Init(talk_base::Thread* worker_thread);
   void Terminate();
 
   int GetCapabilities();
@@ -133,6 +133,7 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   void DestroyExternalDecoder(webrtc::VideoDecoder* decoder);
 
   // Functions called by WebRtcVideoMediaChannel.
+  talk_base::Thread* worker_thread() { return worker_thread_; }
   ViEWrapper* vie() { return vie_wrapper_.get(); }
   const VideoFormat& default_codec_format() const {
     return default_codec_format_;
@@ -185,6 +186,7 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   virtual void Print(webrtc::TraceLevel level, const char* trace, int length);
   void ClearCapturer();
 
+  talk_base::Thread* worker_thread_;
   talk_base::scoped_ptr<ViEWrapper> vie_wrapper_;
   bool vie_wrapper_base_initialized_;
   talk_base::scoped_ptr<ViETraceWrapper> tracing_;
@@ -195,6 +197,7 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   std::vector<VideoCodec> video_codecs_;
   std::vector<RtpHeaderExtension> rtp_header_extensions_;
   VideoFormat default_codec_format_;
+
   bool initialized_;
   talk_base::CriticalSection channels_crit_;
   VideoChannels channels_;
@@ -358,6 +361,7 @@ class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
   bool RemoveCapturer(uint32 ssrc);
 
 
+  talk_base::MessageQueue* worker_thread() { return engine_->worker_thread(); }
   void QueueBlackFrame(uint32 ssrc, int64 timestamp, int framerate);
   void FlushBlackFrame(uint32 ssrc, int64 timestamp);
 

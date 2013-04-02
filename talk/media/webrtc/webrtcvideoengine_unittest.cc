@@ -90,7 +90,7 @@ class WebRtcVideoEngineTestFake : public testing::Test {
         voice_channel_(NULL) {
   }
   bool SetupEngine() {
-    bool result = engine_.Init();
+    bool result = engine_.Init(talk_base::Thread::Current());
     if (result) {
       channel_ = engine_.CreateChannel(voice_channel_);
       result = (channel_ != NULL);
@@ -203,14 +203,14 @@ class WebRtcVideoMediaChannelTest
 // Tests that our stub library "works".
 TEST_F(WebRtcVideoEngineTestFake, StartupShutdown) {
   EXPECT_FALSE(vie_.IsInited());
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   EXPECT_TRUE(vie_.IsInited());
   engine_.Terminate();
 }
 
 // Tests that we can create and destroy a channel.
 TEST_F(WebRtcVideoEngineTestFake, CreateChannel) {
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   channel_ = engine_.CreateChannel(voice_channel_);
   EXPECT_TRUE(channel_ != NULL);
   EXPECT_EQ(1, engine_.GetNumOfChannels());
@@ -222,7 +222,7 @@ TEST_F(WebRtcVideoEngineTestFake, CreateChannel) {
 // Tests that we properly handle failures in CreateChannel.
 TEST_F(WebRtcVideoEngineTestFake, CreateChannelFail) {
   vie_.set_fail_create_channel(true);
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   channel_ = engine_.CreateChannel(voice_channel_);
   EXPECT_TRUE(channel_ == NULL);
 }
@@ -230,7 +230,7 @@ TEST_F(WebRtcVideoEngineTestFake, CreateChannelFail) {
 // Tests that we properly handle failures in AllocateExternalCaptureDevice.
 TEST_F(WebRtcVideoEngineTestFake, AllocateExternalCaptureDeviceFail) {
   vie_.set_fail_alloc_capturer(true);
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   channel_ = engine_.CreateChannel(voice_channel_);
   EXPECT_TRUE(channel_ == NULL);
 }
@@ -1167,7 +1167,7 @@ TEST_F(WebRtcVideoEngineTest, FindCodec) {
 }
 
 TEST_F(WebRtcVideoEngineTest, StartupShutdown) {
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   engine_.Terminate();
 }
 
@@ -1185,7 +1185,7 @@ TEST_F(WebRtcVideoEngineTest, DISABLED_CheckCoInitialize) {
 #endif
 
 TEST_F(WebRtcVideoEngineTest, CreateChannel) {
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   cricket::VideoMediaChannel* channel = engine_.CreateChannel(NULL);
   EXPECT_TRUE(channel != NULL);
   delete channel;
@@ -1361,7 +1361,7 @@ TEST_F(WebRtcVideoMediaChannelTest, HighAspectHighHeightCapturer) {
   Base::HighAspectHighHeightCapturer();
 }
 
-TEST_F(WebRtcVideoMediaChannelTest, SetOptionsFailsWhenSending) {
+TEST_F(WebRtcVideoMediaChannelTest, SetOptionsSucceedsWhenSending) {
   cricket::VideoOptions options;
   options.conference_mode.Set(true);
   EXPECT_TRUE(channel_->SetOptions(options));
@@ -1377,13 +1377,10 @@ TEST_F(WebRtcVideoMediaChannelTest, SetOptionsFailsWhenSending) {
   EXPECT_TRUE(channel_->SetSendCodecs(codecs));
   EXPECT_TRUE(channel_->SetSend(true));
 
-  // Verify SetOptions returns false if channel is already sending.
+  // Verify SetOptions returns true if channel is already sending.
   cricket::VideoOptions options3;
   options3.conference_mode.Set(true);
-  EXPECT_FALSE(channel_->SetOptions(options3));
-
-  // Verify SetOptions returns true with the old options.
-  EXPECT_TRUE(channel_->SetOptions(options2));
+  EXPECT_TRUE(channel_->SetOptions(options3));
 }
 
 // Tests empty StreamParams is rejected.

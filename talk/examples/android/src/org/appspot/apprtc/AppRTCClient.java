@@ -216,7 +216,7 @@ public class AppRTCClient {
       final Pattern tokenPattern = Pattern.compile(
           ".*\n *openChannel\\('([^']*)'\\);\n.*");
       final Pattern postMessagePattern = Pattern.compile(
-          ".*\n *path = '/(message\\?r=[0-9]+)' \\+ '(&u=[0-9]+)';\n.*");
+          ".*\n *path = '/(message\\?r=.+)' \\+ '(&u=[0-9]+)';\n.*");
       final Pattern fullRoomPattern = Pattern.compile(
           ".*\n *Sorry, this room is full\\..*");
       final Pattern pcConfigPattern = Pattern.compile(

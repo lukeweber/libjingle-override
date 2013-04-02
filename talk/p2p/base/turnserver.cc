@@ -83,6 +83,8 @@ class TurnServer::Allocation : public talk_base::MessageHandler,
   const std::string& key() const { return key_; }
   const std::string& transaction_id() const { return transaction_id_; }
   const std::string& username() const { return username_; }
+  const std::string& last_nonce() const { return last_nonce_; }
+  void set_last_nonce(const std::string& nonce) { last_nonce_ = nonce; }
 
   std::string ToString() const;
 
@@ -130,6 +132,7 @@ class TurnServer::Allocation : public talk_base::MessageHandler,
   std::string key_;
   std::string transaction_id_;
   std::string username_;
+  std::string last_nonce_;
   PermissionList perms_;
   ChannelList channels_;
 };
@@ -201,7 +204,8 @@ static bool InitErrorResponse(const StunMessage* req, int code,
 TurnServer::TurnServer(talk_base::Thread* thread)
     : thread_(thread),
       nonce_key_(talk_base::CreateRandomString(kNonceKeySize)),
-      auth_hook_(NULL) {
+      auth_hook_(NULL),
+      enable_otu_nonce_(false) {
 }
 
 TurnServer::~TurnServer() {
@@ -356,6 +360,18 @@ bool TurnServer::CheckAuthorization(const Connection& conn,
     return false;
   }
 
+  // Fail if one-time-use nonce feature is enabled.
+  Allocation* allocation = FindAllocation(conn);
+  if (enable_otu_nonce_ && allocation &&
+      allocation->last_nonce() == nonce_attr->GetString()) {
+    SendErrorResponseWithRealmAndNonce(conn, msg, STUN_ERROR_STALE_NONCE,
+                                       STUN_ERROR_REASON_STALE_NONCE);
+    return false;
+  }
+
+  if (allocation) {
+    allocation->set_last_nonce(nonce_attr->GetString());
+  }
   // Success.
   return true;
 }
@@ -472,10 +488,9 @@ void TurnServer::SendErrorResponse(const Connection& conn,
   SendStun(conn, &resp);
 }
 
-void TurnServer::SendErrorResponseWithRealmAndNonce(const Connection& conn,
-                                                    const StunMessage* msg,
-                                                    int code,
-                                                    const std::string& reason) {
+void TurnServer::SendErrorResponseWithRealmAndNonce(
+    const Connection& conn, const StunMessage* msg,
+    int code, const std::string& reason) {
   TurnMessage resp;
   InitErrorResponse(msg, code, reason, &resp);
   VERIFY(resp.AddAttribute(new StunByteStringAttribute(
@@ -794,7 +809,10 @@ bool TurnServer::Allocation::HasPermission(const talk_base::IPAddress& addr) {
 void TurnServer::Allocation::AddPermission(const talk_base::IPAddress& addr) {
   Permission* perm = FindPermission(addr);
   if (!perm) {
-    perms_.push_back(new Permission(thread_, addr));
+    perm = new Permission(thread_, addr);
+    perm->SignalDestroyed.connect(
+        this, &TurnServer::Allocation::OnPermissionDestroyed);
+    perms_.push_back(perm);
   } else {
     perm->Refresh();
   }

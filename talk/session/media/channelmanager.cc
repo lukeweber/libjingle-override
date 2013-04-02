@@ -344,7 +344,7 @@ bool ChannelManager::Init() {
 
   ASSERT(worker_thread_ != NULL);
   if (worker_thread_ && worker_thread_->started()) {
-    if (media_engine_->Init()) {
+    if (media_engine_->Init(worker_thread_)) {
       initialized_ = true;
 
       // Now that we're initialized, apply any stored preferences. A preferred

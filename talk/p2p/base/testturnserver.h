@@ -56,6 +56,10 @@ class TestTurnServer : public TurnAuthInterface {
     server_.set_auth_hook(this);
   }
 
+  void set_enable_otu_nonce(bool enable) {
+    server_.set_enable_otu_nonce(enable);
+  }
+
  private:
   // For this test server, succeed if the password is the same as the username.
   // Obviously, do not use this in a production environment.

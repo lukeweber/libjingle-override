@@ -64,8 +64,8 @@ class WebRtcMediaEngine : public cricket::MediaEngineInterface {
   virtual ~WebRtcMediaEngine() {
     DestroyWebRtcMediaEngine(delegate_);
   }
-  virtual bool Init() OVERRIDE {
-    return delegate_->Init();
+  virtual bool Init(talk_base::Thread* worker_thread) OVERRIDE {
+    return delegate_->Init(worker_thread);
   }
   virtual void Terminate() OVERRIDE {
     delegate_->Terminate();

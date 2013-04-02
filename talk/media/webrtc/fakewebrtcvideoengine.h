@@ -616,6 +616,9 @@ class FakeWebRtcVideoEngine
   WEBRTC_STUB(DeregisterObserver, (const int));
 
   // webrtc::ViENetwork
+#ifdef USE_WEBRTC_DEV_BRANCH
+  WEBRTC_VOID_STUB(SetNetworkTransmissionState, (const int, const bool));
+#endif
   WEBRTC_STUB(SetLocalReceiver, (const int, const unsigned short,
       const unsigned short, const char*));
   WEBRTC_STUB(GetLocalReceiver, (const int, unsigned short&,

@@ -121,7 +121,7 @@ class WebRtcVoiceEngine
                     VoEWrapper* voe_wrapper_sc,
                     VoETraceWrapper* tracing);
   ~WebRtcVoiceEngine();
-  bool Init();
+  bool Init(talk_base::Thread* worker_thread);
   void Terminate();
 
   int GetCapabilities();

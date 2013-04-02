@@ -75,6 +75,7 @@ class TurnPortTest : public testing::Test,
         turn_ready_(false),
         turn_error_(false),
         turn_unknown_address_(false),
+        turn_create_permission_success_(false),
         udp_ready_(false) {
     network_.AddIP(talk_base::IPAddress(INADDR_ANY));
   }
@@ -90,6 +91,13 @@ class TurnPortTest : public testing::Test,
                             cricket::IceMessage* msg, const std::string& rf,
                             bool /*port_muxed*/) {
     turn_unknown_address_ = true;
+  }
+  void OnTurnCreatePermissionResult(TurnPort* port, const SocketAddress& addr,
+                                     int code) {
+    // Ignoring the address.
+    if (code == 0) {
+      turn_create_permission_success_ = true;
+    }
   }
   void OnTurnReadPacket(Connection* conn, const char* data, size_t size) {
     turn_packets_.push_back(talk_base::Buffer(data, size));
@@ -116,6 +124,8 @@ class TurnPortTest : public testing::Test,
         &TurnPortTest::OnTurnAddressError);
     turn_port_->SignalUnknownAddress.connect(this,
         &TurnPortTest::OnTurnUnknownAddress);
+    turn_port_->SignalCreatePermissionResult.connect(this,
+        &TurnPortTest::OnTurnCreatePermissionResult);
   }
   void CreateUdpPort() {
     udp_port_.reset(UDPPort::Create(main_, &socket_factory_, &network_,
@@ -123,6 +133,43 @@ class TurnPortTest : public testing::Test,
                                     kIceUfrag2, kIcePwd2));
     udp_port_->SignalAddressReady.connect(
         this, &TurnPortTest::OnUdpAddressReady);
+  }
+
+  void TestTurnConnection() {
+    // Create ports and prepare addresses.
+    CreateTurnPort(kTurnUdpIntAddr, kTurnUsername, kTurnPassword);
+    turn_port_->PrepareAddress();
+    ASSERT_TRUE_WAIT(turn_ready_, kTimeout);
+    CreateUdpPort();
+    udp_port_->PrepareAddress();
+    ASSERT_TRUE_WAIT(udp_ready_, kTimeout);
+
+    // Send ping from UDP to TURN.
+    Connection* conn1 = udp_port_->CreateConnection(
+                    turn_port_->Candidates()[0], Port::ORIGIN_MESSAGE);
+    ASSERT_TRUE(conn1 != NULL);
+    conn1->Ping(0);
+    WAIT(!turn_unknown_address_, kTimeout);
+    EXPECT_FALSE(turn_unknown_address_);
+    EXPECT_EQ(Connection::STATE_READ_INIT, conn1->read_state());
+    EXPECT_EQ(Connection::STATE_WRITE_INIT, conn1->write_state());
+
+    // Send ping from TURN to UDP.
+    Connection* conn2 = turn_port_->CreateConnection(
+                    udp_port_->Candidates()[0], Port::ORIGIN_MESSAGE);
+    ASSERT_TRUE(conn2 != NULL);
+    ASSERT_TRUE_WAIT(turn_create_permission_success_, kTimeout);
+    conn2->Ping(0);
+
+    EXPECT_EQ_WAIT(Connection::STATE_WRITABLE, conn2->write_state(), kTimeout);
+    EXPECT_EQ(Connection::STATE_READABLE, conn1->read_state());
+    EXPECT_EQ(Connection::STATE_READ_INIT, conn2->read_state());
+    EXPECT_EQ(Connection::STATE_WRITE_INIT, conn1->write_state());
+
+    // Send another ping from UDP to TURN.
+    conn1->Ping(0);
+    EXPECT_EQ_WAIT(Connection::STATE_WRITABLE, conn1->write_state(), kTimeout);
+    EXPECT_EQ(Connection::STATE_READABLE, conn2->read_state());
   }
 
  protected:
@@ -138,6 +185,7 @@ class TurnPortTest : public testing::Test,
   bool turn_ready_;
   bool turn_error_;
   bool turn_unknown_address_;
+  bool turn_create_permission_success_;
   bool udp_ready_;
   std::vector<talk_base::Buffer> turn_packets_;
   std::vector<talk_base::Buffer> udp_packets_;
@@ -167,38 +215,15 @@ TEST_F(TurnPortTest, TestTurnAllocateBadPassword) {
 // outside. It should reach its destination. Finally, try again from the
 // outside. It should now work as well.
 TEST_F(TurnPortTest, TestTurnConnection) {
-  // Create ports and prepare addresses.
-  CreateTurnPort(kTurnUdpIntAddr, kTurnUsername, kTurnPassword);
-  turn_port_->PrepareAddress();
-  ASSERT_TRUE_WAIT(turn_ready_, kTimeout);
-  CreateUdpPort();
-  udp_port_->PrepareAddress();
-  ASSERT_TRUE_WAIT(udp_ready_, kTimeout);
+  TestTurnConnection();
+}
 
-  // Send ping from UDP to TURN.
-  Connection* conn1 = udp_port_->CreateConnection(
-      turn_port_->Candidates()[0], Port::ORIGIN_MESSAGE);
-  ASSERT_TRUE(conn1 != NULL);
-  conn1->Ping(0);
-  WAIT(!turn_unknown_address_, kTimeout);
-  EXPECT_FALSE(turn_unknown_address_);
-  EXPECT_EQ(Connection::STATE_READ_INIT, conn1->read_state());
-  EXPECT_EQ(Connection::STATE_WRITE_INIT, conn1->write_state());
-
-  // Send ping from TURN to UDP.
-  Connection* conn2 = turn_port_->CreateConnection(
-      udp_port_->Candidates()[0], Port::ORIGIN_MESSAGE);
-  ASSERT_TRUE(conn2 != NULL);
-  conn2->Ping(0);
-  EXPECT_EQ_WAIT(Connection::STATE_WRITABLE, conn2->write_state(), kTimeout);
-  EXPECT_EQ(Connection::STATE_READABLE, conn1->read_state());
-  EXPECT_EQ(Connection::STATE_READ_INIT, conn2->read_state());
-  EXPECT_EQ(Connection::STATE_WRITE_INIT, conn1->write_state());
-
-  // Send another ping from UDP to TURN.
-  conn1->Ping(0);
-  EXPECT_EQ_WAIT(Connection::STATE_WRITABLE, conn1->write_state(), kTimeout);
-  EXPECT_EQ(Connection::STATE_READABLE, conn2->read_state());
+// Run TurnConnectionTest with one-time-use nonce feature.
+// Here server will send a 438 STALE_NONCE error message for
+// every TURN transaction.
+TEST_F(TurnPortTest, TestTurnConnectionUsingOTUNonce) {
+  turn_server_.set_enable_otu_nonce(true);
+  TestTurnConnection();
 }
 
 // Do a TURN allocation, establish a connection, and send some data.

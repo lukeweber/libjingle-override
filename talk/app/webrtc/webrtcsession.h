@@ -266,7 +266,6 @@ class WebRtcSession : public cricket::BaseSession,
   talk_base::scoped_ptr<SessionDescriptionInterface> remote_desc_;
   // Candidates that arrived before the remote description was set.
   std::vector<IceCandidateInterface*> saved_candidates_;
-  std::string session_id_;
   uint64 session_version_;
   // If the remote peer is using a older version of implementation.
   bool older_version_remote_peer_;

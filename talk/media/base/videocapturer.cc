@@ -220,8 +220,8 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
 #if defined(HAVE_YUV)
   if (IsScreencast()) {
     int scaled_width, scaled_height;
-    ComputeScale(captured_frame->width, captured_frame->height, &scaled_width,
-                 &scaled_height);
+    ComputeScale(captured_frame->width, captured_frame->height, 5,
+                 &scaled_width, &scaled_height);
     if (FOURCC_ARGB == captured_frame->fourcc &&
         (scaled_width != captured_frame->height ||
          scaled_height != captured_frame->height)) {

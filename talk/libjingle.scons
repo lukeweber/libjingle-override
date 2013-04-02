@@ -438,6 +438,21 @@ talk.App(env, name = "login",
            "videorenderer",
          ],
 )
+talk.App(env, name = "chat",
+         libs = [
+           "jingle",
+           "expat",
+           "xmpphelp",
+         ],
+         srcs = [
+           "examples/chat/chatapp.cc",
+           "examples/chat/chat_main.cc",
+           "examples/chat/consoletask.cc",
+           "examples/chat/textchatreceivetask.cc",
+           "examples/chat/textchatsendtask.cc",
+         ],
+         posix_libs = SSL_LIBS,
+)
 talk.App(env, name = "call",
          mac_frameworks = [
            "AudioToolbox",

@@ -221,9 +221,9 @@ TEST_F(LocalVideoSourceTest, MandatoryConstraintCif5Fps) {
                  kMaxWaitMs);
   const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
-  EXPECT_EQ(352 , format->width);
-  EXPECT_EQ(288 , format->height);
-  EXPECT_EQ(5 , format->framerate());
+  EXPECT_EQ(352, format->width);
+  EXPECT_EQ(288, format->height);
+  EXPECT_EQ(5, format->framerate());
 }
 
 // Test that the capture output is 720P if the camera support it and the
@@ -241,9 +241,9 @@ TEST_F(LocalVideoSourceTest, MandatoryMinVgaOptional720P) {
                  kMaxWaitMs);
   const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
-  EXPECT_EQ(1280 , format->width);
-  EXPECT_EQ(720 , format->height);
-  EXPECT_EQ(30 , format->framerate());
+  EXPECT_EQ(1280, format->width);
+  EXPECT_EQ(720, format->height);
+  EXPECT_EQ(30, format->framerate());
 }
 
 // Test that the capture output have aspect ratio 4:3 if a mandatory constraint
@@ -262,9 +262,9 @@ TEST_F(LocalVideoSourceTest, MandatoryAspectRatio4To3) {
                  kMaxWaitMs);
   const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
-  EXPECT_EQ(640 , format->width);
-  EXPECT_EQ(480 , format->height);
-  EXPECT_EQ(30 , format->framerate());
+  EXPECT_EQ(640, format->width);
+  EXPECT_EQ(480, format->height);
+  EXPECT_EQ(30, format->framerate());
 }
 
 
@@ -304,9 +304,9 @@ TEST_F(LocalVideoSourceTest, NoCameraCapability) {
                  kMaxWaitMs);
   const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
-  EXPECT_EQ(640 , format->width);
-  EXPECT_EQ(480 , format->height);
-  EXPECT_EQ(30 , format->framerate());
+  EXPECT_EQ(640, format->width);
+  EXPECT_EQ(480, format->height);
+  EXPECT_EQ(30, format->framerate());
 }
 
 // Test that the source can start the video and get the requested aspect ratio
@@ -467,9 +467,9 @@ TEST_F(LocalVideoSourceTest, MixedOptionsAndConstraints) {
                  kMaxWaitMs);
   const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
-  EXPECT_EQ(352 , format->width);
-  EXPECT_EQ(288 , format->height);
-  EXPECT_EQ(5 , format->framerate());
+  EXPECT_EQ(352, format->width);
+  EXPECT_EQ(288, format->height);
+  EXPECT_EQ(5, format->framerate());
 
   bool value = true;
   EXPECT_TRUE(local_source_->options()->video_noise_reduction.Get(&value));
@@ -477,3 +477,38 @@ TEST_F(LocalVideoSourceTest, MixedOptionsAndConstraints) {
   EXPECT_FALSE(local_source_->options()->video_leaky_bucket.Get(&value));
 }
 
+// Tests that the source starts video with the default resolution for
+// screencast if no constraint is set.
+TEST_F(LocalVideoSourceTest, ScreencastResolutionNoConstraint) {
+  capturer_->TestWithoutCameraFormats();
+  capturer_->SetScreencast(true);
+
+  CreateLocalVideoSource();
+  EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
+                 kMaxWaitMs);
+  const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
+  ASSERT_TRUE(format != NULL);
+  EXPECT_EQ(640, format->width);
+  EXPECT_EQ(480, format->height);
+  EXPECT_EQ(30, format->framerate());
+}
+
+// Tests that the source starts video with the max width and height set by
+// constraints for screencast.
+TEST_F(LocalVideoSourceTest, ScreencastResolutionWithConstraint) {
+  TestConstraints constraints;
+  constraints.AddMandatory(MediaConstraintsInterface::kMaxWidth, "480");
+  constraints.AddMandatory(MediaConstraintsInterface::kMaxHeight, "270");
+
+  capturer_->TestWithoutCameraFormats();
+  capturer_->SetScreencast(true);
+
+  CreateLocalVideoSource(&constraints);
+  EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
+                 kMaxWaitMs);
+  const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
+  ASSERT_TRUE(format != NULL);
+  EXPECT_EQ(480, format->width);
+  EXPECT_EQ(270, format->height);
+  EXPECT_EQ(30, format->framerate());
+}

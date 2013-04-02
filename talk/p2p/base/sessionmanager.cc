@@ -80,7 +80,7 @@ SessionClient* SessionManager::GetClient(const std::string& content_type) {
 Session* SessionManager::CreateSession(const std::string& local_name,
                                        const std::string& content_type) {
   return CreateSession(local_name, local_name,
-                       talk_base::ToString(talk_base::CreateRandomId()),
+                       talk_base::ToString(talk_base::CreateRandomId64()),
                        content_type, false);
 }
 

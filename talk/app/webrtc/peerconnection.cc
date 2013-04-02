@@ -191,7 +191,7 @@ bool ParseIceServers(const PeerConnectionInterface::IceServers& configuration,
                         << address << " can't proceed.";
           return false;
         }
-        std::string username = turn_tokens[0];
+        std::string username = talk_base::s_url_decode(turn_tokens[0]);
         address = turn_tokens[1];
         turn_config->push_back(TurnConfiguration(address, port,
                                                  username, server.password));

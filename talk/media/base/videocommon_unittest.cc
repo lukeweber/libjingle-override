@@ -99,38 +99,73 @@ TEST(VideoCommonTest, TestVideoFormatCompare) {
   EXPECT_TRUE(format.IsPixelRateLess(format2));
 }
 
-TEST(VideoCommonTest, TestComputeScale) {
+TEST(VideoCommonTest, TestComputeScaleWithLowFps) {
   int scaled_width, scaled_height;
 
-  // Request small enough.  Expect no change.
-  ComputeScale(2560, 1600, &scaled_width, &scaled_height);
+  // Request small enough. Expect no change.
+  ComputeScale(2560, 1600, 5, &scaled_width, &scaled_height);
   EXPECT_EQ(2560, scaled_width);
   EXPECT_EQ(1600, scaled_height);
 
-  // Request too many pixels.  Expect max pixels.
-  ComputeScale(4096, 2560, &scaled_width, &scaled_height);
-  EXPECT_EQ(2880, scaled_width);
-  EXPECT_EQ(1800, scaled_height);
+  // Request too many pixels. Expect 1/2 size.
+  ComputeScale(4096, 2560, 5, &scaled_width, &scaled_height);
+  EXPECT_EQ(2048, scaled_width);
+  EXPECT_EQ(1280, scaled_height);
 
-  // Request too many pixels and too wide and tall.  Expect max pixels.
-  ComputeScale(16000, 10000, &scaled_width, &scaled_height);
-  EXPECT_EQ(2880, scaled_width);
-  EXPECT_EQ(1800, scaled_height);
+  // Request too many pixels and too wide and tall. Expect 1/4 size.
+  ComputeScale(16000, 10000, 5, &scaled_width, &scaled_height);
+  EXPECT_EQ(2000, scaled_width);
+  EXPECT_EQ(1250, scaled_height);
 
-  // Request too wide. (two 30 inch monitors). Expect width scaled to max.
-  ComputeScale(5120, 1600, &scaled_width, &scaled_height);
-  EXPECT_EQ(4072, scaled_width);
-  EXPECT_EQ(1272, scaled_height);
+  // Request too wide. (two 30 inch monitors). Expect 1/2 size.
+  ComputeScale(5120, 1600, 5, &scaled_width, &scaled_height);
+  EXPECT_EQ(2560, scaled_width);
+  EXPECT_EQ(800, scaled_height);
 
-  // Request too wide but not too many pixels.  Expect width scaled to max.
-  ComputeScale(8192, 1024, &scaled_width, &scaled_height);
+  // Request too wide but not too many pixels. Expect 1/2 size.
+  ComputeScale(8192, 1024, 5, &scaled_width, &scaled_height);
   EXPECT_EQ(4096, scaled_width);
   EXPECT_EQ(512, scaled_height);
 
-  // Request too tall.  Expect height scaled to max.
-  ComputeScale(1024, 8192, &scaled_width, &scaled_height);
-  EXPECT_EQ(384, scaled_width);
-  EXPECT_EQ(3072, scaled_height);
+  // Request too tall. Expect 1/4 size.
+  ComputeScale(1024, 8192, 5, &scaled_width, &scaled_height);
+  EXPECT_EQ(256, scaled_width);
+  EXPECT_EQ(2048, scaled_height);
+}
+
+// Same as TestComputeScale but with 15 fps instead of 5 fps.
+TEST(VideoCommonTest, TestComputeScaleWithHighFps) {
+  int scaled_width, scaled_height;
+
+  // Request small enough but high fps. Expect 1/2 size.
+  ComputeScale(2560, 1600, 15, &scaled_width, &scaled_height);
+  EXPECT_EQ(1280, scaled_width);
+  EXPECT_EQ(800, scaled_height);
+
+  // Request too many pixels. Expect 1/4 size.
+  ComputeScale(4096, 2560, 15, &scaled_width, &scaled_height);
+  EXPECT_EQ(1024, scaled_width);
+  EXPECT_EQ(640, scaled_height);
+
+  // Request too many pixels and too wide and tall. Expect 1/8 size.
+  ComputeScale(16000, 10000, 15, &scaled_width, &scaled_height);
+  EXPECT_EQ(1000, scaled_width);
+  EXPECT_EQ(625, scaled_height);
+
+  // Request too wide. (two 30 inch monitors). Expect 1/4 size.
+  ComputeScale(5120, 1600, 15, &scaled_width, &scaled_height);
+  EXPECT_EQ(1280, scaled_width);
+  EXPECT_EQ(400, scaled_height);
+
+  // Request too wide but not too many pixels. Expect 1/4 size.
+  ComputeScale(8192, 1024, 15, &scaled_width, &scaled_height);
+  EXPECT_EQ(2048, scaled_width);
+  EXPECT_EQ(256, scaled_height);
+
+  // Request too tall. Expect 1/4 size.
+  ComputeScale(1024, 8192, 15, &scaled_width, &scaled_height);
+  EXPECT_EQ(256, scaled_width);
+  EXPECT_EQ(2048, scaled_height);
 }
 
 TEST(VideoCommonTest, TestComputeCrop) {

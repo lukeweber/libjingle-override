@@ -353,7 +353,7 @@ void OpenSSLStreamAdapter::SetMode(SSLMode mode) {
 
 StreamResult OpenSSLStreamAdapter::Write(const void* data, size_t data_len,
                                          size_t* written, int* error) {
-  LOG(LS_INFO) << "OpenSSLStreamAdapter::Write(" << data_len << ")";
+  LOG(LS_VERBOSE) << "OpenSSLStreamAdapter::Write(" << data_len << ")";
 
   switch (state_) {
   case SSL_NONE:
@@ -388,17 +388,17 @@ StreamResult OpenSSLStreamAdapter::Write(const void* data, size_t data_len,
   int ssl_error = SSL_get_error(ssl_, code);
   switch (ssl_error) {
   case SSL_ERROR_NONE:
-    LOG(LS_INFO) << " -- success";
+    LOG(LS_VERBOSE) << " -- success";
     ASSERT(0 < code && static_cast<unsigned>(code) <= data_len);
     if (written)
       *written = code;
     return SR_SUCCESS;
   case SSL_ERROR_WANT_READ:
-    LOG(LS_INFO) << " -- error want read";
+    LOG(LS_VERBOSE) << " -- error want read";
     ssl_write_needs_read_ = true;
     return SR_BLOCK;
   case SSL_ERROR_WANT_WRITE:
-    LOG(LS_INFO) << " -- error want write";
+    LOG(LS_VERBOSE) << " -- error want write";
     return SR_BLOCK;
 
   case SSL_ERROR_ZERO_RETURN:
@@ -413,7 +413,7 @@ StreamResult OpenSSLStreamAdapter::Write(const void* data, size_t data_len,
 
 StreamResult OpenSSLStreamAdapter::Read(void* data, size_t data_len,
                                         size_t* read, int* error) {
-  LOG(LS_INFO) << "OpenSSLStreamAdapter::Read(" << data_len << ")";
+  LOG(LS_VERBOSE) << "OpenSSLStreamAdapter::Read(" << data_len << ")";
   switch (state_) {
     case SSL_NONE:
       // pass-through in clear text
@@ -449,7 +449,7 @@ StreamResult OpenSSLStreamAdapter::Read(void* data, size_t data_len,
   int ssl_error = SSL_get_error(ssl_, code);
   switch (ssl_error) {
     case SSL_ERROR_NONE:
-      LOG(LS_INFO) << " -- success";
+      LOG(LS_VERBOSE) << " -- success";
       ASSERT(0 < code && static_cast<unsigned>(code) <= data_len);
       if (read)
         *read = code;
@@ -468,18 +468,18 @@ StreamResult OpenSSLStreamAdapter::Read(void* data, size_t data_len,
       }
       return SR_SUCCESS;
     case SSL_ERROR_WANT_READ:
-      LOG(LS_INFO) << " -- error want read";
+      LOG(LS_VERBOSE) << " -- error want read";
       return SR_BLOCK;
     case SSL_ERROR_WANT_WRITE:
-      LOG(LS_INFO) << " -- error want write";
+      LOG(LS_VERBOSE) << " -- error want write";
       ssl_read_needs_write_ = true;
       return SR_BLOCK;
     case SSL_ERROR_ZERO_RETURN:
-      LOG(LS_INFO) << " -- remote side closed";
+      LOG(LS_VERBOSE) << " -- remote side closed";
       return SR_EOS;
       break;
     default:
-      LOG(LS_INFO) << " -- error " << code;
+      LOG(LS_VERBOSE) << " -- error " << code;
       Error("SSL_read", (ssl_error ? ssl_error : -1), false);
       if (error)
         *error = ssl_error_code_;
@@ -500,11 +500,12 @@ void OpenSSLStreamAdapter::FlushInput(unsigned int left) {
     ASSERT(ssl_error == SSL_ERROR_NONE);
 
     if (ssl_error != SSL_ERROR_NONE) {
-      LOG(LS_INFO) << " -- error " << code;
+      LOG(LS_VERBOSE) << " -- error " << code;
       Error("SSL_read", (ssl_error ? ssl_error : -1), false);
       return;
     }
-    LOG(LS_INFO) << " -- flushed " << code << " bytes";
+
+    LOG(LS_VERBOSE) << " -- flushed " << code << " bytes";
     left -= code;
   }
 }
@@ -534,7 +535,7 @@ void OpenSSLStreamAdapter::OnEvent(StreamInterface* stream, int events,
   int signal_error = 0;
   ASSERT(stream == this->stream());
   if ((events & SE_OPEN)) {
-    LOG(LS_INFO) << "OpenSSLStreamAdapter::OnEvent SE_OPEN";
+    LOG(LS_VERBOSE) << "OpenSSLStreamAdapter::OnEvent SE_OPEN";
     if (state_ != SSL_WAIT) {
       ASSERT(state_ == SSL_NONE);
       events_to_signal |= SE_OPEN;
@@ -547,7 +548,7 @@ void OpenSSLStreamAdapter::OnEvent(StreamInterface* stream, int events,
     }
   }
   if ((events & (SE_READ|SE_WRITE))) {
-    LOG(LS_INFO) << "OpenSSLStreamAdapter::OnEvent"
+    LOG(LS_VERBOSE) << "OpenSSLStreamAdapter::OnEvent"
                  << ((events & SE_READ) ? " SE_READ" : "")
                  << ((events & SE_WRITE) ? " SE_WRITE" : "");
     if (state_ == SSL_NONE) {
@@ -560,18 +561,18 @@ void OpenSSLStreamAdapter::OnEvent(StreamInterface* stream, int events,
     } else if (state_ == SSL_CONNECTED) {
       if (((events & SE_READ) && ssl_write_needs_read_) ||
           (events & SE_WRITE)) {
-        LOG(LS_INFO) << " -- onStreamWriteable";
+        LOG(LS_VERBOSE) << " -- onStreamWriteable";
         events_to_signal |= SE_WRITE;
       }
       if (((events & SE_WRITE) && ssl_read_needs_write_) ||
           (events & SE_READ)) {
-        LOG(LS_INFO) << " -- onStreamReadable";
+        LOG(LS_VERBOSE) << " -- onStreamReadable";
         events_to_signal |= SE_READ;
       }
     }
   }
   if ((events & SE_CLOSE)) {
-    LOG(LS_INFO) << "OpenSSLStreamAdapter::OnEvent(SE_CLOSE, " << err << ")";
+    LOG(LS_VERBOSE) << "OpenSSLStreamAdapter::OnEvent(SE_CLOSE, " << err << ")";
     Cleanup();
     events_to_signal |= SE_CLOSE;
     // SE_CLOSE is the only event that uses the final parameter to OnEvent().
@@ -640,7 +641,7 @@ int OpenSSLStreamAdapter::BeginSSL() {
 }
 
 int OpenSSLStreamAdapter::ContinueSSL() {
-  LOG(LS_INFO) << "ContinueSSL";
+  LOG(LS_VERBOSE) << "ContinueSSL";
   ASSERT(state_ == SSL_CONNECTING);
 
   // Clear the DTLS timer
@@ -650,7 +651,7 @@ int OpenSSLStreamAdapter::ContinueSSL() {
   int ssl_error;
   switch (ssl_error = SSL_get_error(ssl_, code)) {
     case SSL_ERROR_NONE:
-      LOG(LS_INFO) << " -- success";
+      LOG(LS_VERBOSE) << " -- success";
 
       if (!SSLPostConnectionCheck(ssl_, ssl_server_name_.c_str(),
                                   peer_certificate_ ?
@@ -665,7 +666,7 @@ int OpenSSLStreamAdapter::ContinueSSL() {
       break;
 
     case SSL_ERROR_WANT_READ: {
-        LOG(LS_INFO) << " -- error want read";
+        LOG(LS_VERBOSE) << " -- error want read";
 #ifdef HAVE_DTLS
         struct timeval timeout;
         if (DTLSv1_get_timeout(ssl_, &timeout)) {
@@ -678,12 +679,12 @@ int OpenSSLStreamAdapter::ContinueSSL() {
       break;
 
     case SSL_ERROR_WANT_WRITE:
-      LOG(LS_INFO) << " -- error want write";
+      LOG(LS_VERBOSE) << " -- error want write";
       break;
 
     case SSL_ERROR_ZERO_RETURN:
     default:
-      LOG(LS_INFO) << " -- error " << code;
+      LOG(LS_VERBOSE) << " -- error " << code;
       return (ssl_error != 0) ? ssl_error : -1;
   }
 

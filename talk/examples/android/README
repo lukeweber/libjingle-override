@@ -31,10 +31,10 @@ ant debug
 adb install -r bin/AppRTCDemo-debug.apk
 adb shell am force-stop org.appspot.apprtc
 
-In desktop chrome, navigate to http://apprtc.appspot.com and note the r=NNN room
+In desktop chrome, navigate to http://apprtc.appspot.com and note the r=<NNN> room
 number in the resulting URL, and replace it into the following command:
 
-adb shell am start -a android.intent.action.VIEW -d '"https://rtcami.appspot.com/?r=NNN"'
+adb shell am start -a android.intent.action.VIEW -d '"https://apprtc.appspot.com/?r=<NNN>"'
 
 This should result in the app launching on Android and connecting to the apprtc
 page displayed in the desktop browser.

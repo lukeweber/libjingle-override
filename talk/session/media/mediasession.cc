@@ -653,9 +653,14 @@ static void NegotiateCodecs(const std::vector<C>& local_codecs,
         C negotiated = *ours;
         negotiated.IntersectFeedbackParams(*theirs);
         if (IsRtxCodec(negotiated)) {
-          // Since we use the payload type from the |offered_codecs|, we also
-          // need to use the referenced payload type.
-          negotiated.params = theirs->params;
+          // Only negotiate RTX if kCodecParamAssociatedPayloadType has been
+          // set.
+          std::string apt_value;
+          if (!theirs->GetParam(kCodecParamAssociatedPayloadType, &apt_value)) {
+            LOG(LS_WARNING) << "RTX missing associated payload type.";
+            continue;
+          }
+          negotiated.SetParam(kCodecParamAssociatedPayloadType, apt_value);
         }
         negotiated.id = theirs->id;
         negotiated_codecs->push_back(negotiated);

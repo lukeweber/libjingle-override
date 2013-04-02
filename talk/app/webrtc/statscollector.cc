@@ -297,7 +297,8 @@ bool StatsCollector::GetStats(MediaStreamTrackInterface* track,
   // If no selector given, add all Stats to |reports|.
   ReportsMap::const_iterator it = track_reports_.begin();
   for (; it != track_reports_.end(); ++it) {
-    reports->push_back(it->second);
+    if (!it->second.type.empty())
+      reports->push_back(it->second);
   }
 
   return true;

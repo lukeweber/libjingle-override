@@ -49,7 +49,7 @@ using webrtc::VideoTrackInterface;
 namespace {
 
 static const char kStunIceServer[] = "stun:stun.l.google.com:19302";
-static const char kTurnIceServer[] = "turn:test@test.com:1234";
+static const char kTurnIceServer[] = "turn:test%40hello.com@test.com:1234";
 static const char kInvalidTurnIceServer[] = "turn:test.com:1234";
 static const char kTurnPassword[] = "turnpassword";
 

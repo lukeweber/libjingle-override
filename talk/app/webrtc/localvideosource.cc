@@ -98,6 +98,44 @@ GetReadyState(cricket::CaptureState state) {
   return MediaSourceInterface::kEnded;
 }
 
+void SetUpperLimit(int new_limit, int* original_limit) {
+  if (*original_limit < 0 || new_limit < *original_limit)
+    *original_limit = new_limit;
+}
+
+// Updates |format_upper_limit| from |constraint|.
+// If constraint.maxFoo is smaller than format_upper_limit.foo,
+// set format_upper_limit.foo to constraint.maxFoo.
+void SetUpperLimitFromConstraint(
+    const MediaConstraintsInterface::Constraint& constraint,
+    cricket::VideoFormat* format_upper_limit) {
+  if (constraint.key == MediaConstraintsInterface::kMaxWidth) {
+    int value = talk_base::FromString<int>(constraint.value);
+    SetUpperLimit(value, &(format_upper_limit->width));
+  } else if (constraint.key == MediaConstraintsInterface::kMaxHeight) {
+    int value = talk_base::FromString<int>(constraint.value);
+    SetUpperLimit(value, &(format_upper_limit->height));
+  }
+}
+
+// Fills |format_out| with the max width and height allowed by |constraints|.
+void FromConstraintsForScreencast(
+    const MediaConstraintsInterface::Constraints& constraints,
+    cricket::VideoFormat* format_out) {
+  typedef MediaConstraintsInterface::Constraints::const_iterator
+      ConstraintsIterator;
+
+  cricket::VideoFormat upper_limit(-1, -1, 0, 0);
+  for (ConstraintsIterator constraints_it = constraints.begin();
+       constraints_it != constraints.end(); ++constraints_it)
+    SetUpperLimitFromConstraint(*constraints_it, &upper_limit);
+
+  if (upper_limit.width >= 0)
+    format_out->width = upper_limit.width;
+  if (upper_limit.height >= 0)
+    format_out->height = upper_limit.height;
+}
+
 // Returns true if |constraint| is fulfilled. |format_out| can differ from
 // |format_in| if the format is changed by the constraint. Ie - the frame rate
 // can be changed by setting maxFrameRate.
@@ -312,6 +350,12 @@ void LocalVideoSource::Initialize(
   if (video_capturer_->GetSupportedFormats() &&
       video_capturer_->GetSupportedFormats()->size() > 0) {
     formats = *video_capturer_->GetSupportedFormats();
+  } else if (video_capturer_->IsScreencast()) {
+    // The screen capturer can accept any resolution and we will derive the
+    // format from the constraints if any.
+    // Note that this only affects tab capturing, not desktop capturing,
+    // since desktop capturer does not respect the VideoFormat passed in.
+    formats.push_back(cricket::VideoFormat(kDefaultResolution));
   } else {
     // The VideoCapturer implementation doesn't support capability enumeration.
     // We need to guess what the camera support.
@@ -325,6 +369,12 @@ void LocalVideoSource::Initialize(
         constraints->GetMandatory();
     MediaConstraintsInterface::Constraints optional_constraints;
     optional_constraints = constraints->GetOptional();
+
+    if (video_capturer_->IsScreencast()) {
+      // Use the maxWidth and maxHeight allowed by constraints for screencast.
+      FromConstraintsForScreencast(mandatory_constraints, &(formats[0]));
+    }
+
     formats = FilterFormats(mandatory_constraints, optional_constraints,
                             formats);
 
@@ -340,13 +390,11 @@ void LocalVideoSource::Initialize(
         return;
       }
       options_.SetAll(options);
+    } else {
+      LOG(LS_WARNING) << "Failed to find a suitable video format.";
+      SetState(kEnded);
+      return;
     }
-  }
-
-  if (formats.size() == 0) {
-    LOG(LS_WARNING) << "Failed to find a suitable video format.";
-    SetState(kEnded);
-    return;
   }
 
   format_ = GetBestCaptureFormat(formats);

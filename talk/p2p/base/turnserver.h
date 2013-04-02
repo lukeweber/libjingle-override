@@ -82,6 +82,8 @@ class TurnServer : public sigslot::has_slots<> {
   // Sets the authentication callback; does not take ownership.
   void set_auth_hook(TurnAuthInterface* auth_hook) { auth_hook_ = auth_hook; }
 
+  void set_enable_otu_nonce(bool enable) { enable_otu_nonce_ = enable; }
+
   // Starts listening for packets from internal clients.
   void AddInternalServerSocket(talk_base::AsyncPacketSocket* socket);
   // Specifies the factory to use for creating external sockets.
@@ -138,8 +140,10 @@ class TurnServer : public sigslot::has_slots<> {
 
   void SendErrorResponse(const Connection& conn, const StunMessage* req,
                          int code, const std::string& reason);
+
   void SendErrorResponseWithRealmAndNonce(const Connection& conn,
-                                          const StunMessage* req, int code,
+                                          const StunMessage* req,
+                                          int code,
                                           const std::string& reason);
   void SendStun(const Connection& conn, StunMessage* msg);
   void Send(const Connection& conn, const talk_base::ByteBuffer& buf);
@@ -151,6 +155,9 @@ class TurnServer : public sigslot::has_slots<> {
   std::string realm_;
   std::string software_;
   TurnAuthInterface* auth_hook_;
+  // otu - one-time-use. Server will respond with 438 if it's
+  // sees the same nonce in next transaction.
+  bool enable_otu_nonce_;
   talk_base::scoped_ptr<talk_base::AsyncPacketSocket> server_socket_;
   talk_base::scoped_ptr<talk_base::PacketSocketFactory>
       external_socket_factory_;

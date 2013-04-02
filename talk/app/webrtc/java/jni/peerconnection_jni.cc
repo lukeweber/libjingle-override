@@ -895,6 +895,9 @@ extern "C" jint JNIEXPORT JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
         "SetLevelFilter failed");
 #endif  // ANDROID
 
+  // Uncomment to get sensitive logs emitted (to stderr or logcat).
+  // talk_base::LogMessage::LogToDebug(talk_base::LS_SENSITIVE);
+
   return JNI_VERSION_1_6;
 }
 

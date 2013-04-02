@@ -129,14 +129,17 @@ class TurnEntry : public sigslot::has_slots<> {
   const talk_base::SocketAddress& address() const { return ext_addr_; }
   BindState state() const { return state_; }
 
+  // Helper methods to send permission and channel bind requests.
+  void SendCreatePermissionRequest();
+  void SendChannelBindRequest(int delay);
   // Sends a packet to the given destination address.
   // This will wrap the packet in STUN if necessary.
   int Send(const void* data, size_t size, bool payload);
 
   void OnCreatePermissionSuccess();
-  void OnCreatePermissionError();
+  void OnCreatePermissionError(StunMessage* response, int code);
   void OnChannelBindSuccess();
-  void OnChannelBindError();
+  void OnChannelBindError(StunMessage* response, int code);
 
  private:
   TurnPort* port_;
@@ -467,6 +470,30 @@ void TurnPort::UpdateHash() {
                                    credentials_.password, &hash_));
 }
 
+bool TurnPort::UpdateNonce(StunMessage* response) {
+  // When stale nonce error received, we should update
+  // hash and store realm and nonce.
+  // Check the mandatory attributes.
+  const StunByteStringAttribute* realm_attr =
+      response->GetByteString(STUN_ATTR_REALM);
+  if (!realm_attr) {
+    LOG(LS_ERROR) << "Missing STUN_ATTR_REALM attribute in "
+                  << "stale nonce error response.";
+    return false;
+  }
+  set_realm(realm_attr->GetString());
+
+  const StunByteStringAttribute* nonce_attr =
+      response->GetByteString(STUN_ATTR_NONCE);
+  if (!nonce_attr) {
+    LOG(LS_ERROR) << "Missing STUN_ATTR_NONCE attribute in "
+                  << "stale nonce error response.";
+    return false;
+  }
+  set_nonce(nonce_attr->GetString());
+  return true;
+}
+
 static bool MatchesIP(TurnEntry* e, talk_base::IPAddress ipaddr) {
   return e->address().ipaddr() == ipaddr;
 }
@@ -560,15 +587,14 @@ void TurnAllocateRequest::OnResponse(StunMessage* response) {
 
 void TurnAllocateRequest::OnErrorResponse(StunMessage* response) {
   // Process error response according to RFC5766, Section 6.4.
-  const StunErrorCodeAttribute* errorcode = response->GetErrorCode();
-  switch (errorcode->code()) {
+  const StunErrorCodeAttribute* error_code = response->GetErrorCode();
+  switch (error_code->code()) {
     case STUN_ERROR_UNAUTHORIZED:       // Unauthrorized.
-    case STUN_ERROR_STALE_CREDENTIALS:  // Stale Nonce.
-      OnAuthChallenge(response, errorcode->code());
+      OnAuthChallenge(response, error_code->code());
       break;
     default:
       LOG_J(LS_WARNING, port_) << "Allocate response error, code="
-                               << errorcode->code();
+                               << error_code->code();
       port_->OnAllocateError();
   }
 }
@@ -637,6 +663,16 @@ void TurnRefreshRequest::OnResponse(StunMessage* response) {
 
 void TurnRefreshRequest::OnErrorResponse(StunMessage* response) {
   // TODO(juberti): Handle 437 error response as a success.
+  const StunErrorCodeAttribute* error_code = response->GetErrorCode();
+  LOG_J(LS_WARNING, port_) << "Refresh response error, code="
+                           << error_code->code();
+
+  if (error_code->code() == STUN_ERROR_STALE_NONCE) {
+    if (port_->UpdateNonce(response)) {
+      // Send RefreshRequest immediately.
+      port_->SendRequest(new TurnRefreshRequest(port_), 0);
+    }
+  }
 }
 
 void TurnRefreshRequest::OnTimeout() {
@@ -664,7 +700,8 @@ void TurnCreatePermissionRequest::OnResponse(StunMessage* response) {
 }
 
 void TurnCreatePermissionRequest::OnErrorResponse(StunMessage* response) {
-  entry_->OnCreatePermissionError();
+  const StunErrorCodeAttribute* error_code = response->GetErrorCode();
+  entry_->OnCreatePermissionError(response, error_code->code());
 }
 
 void TurnCreatePermissionRequest::OnTimeout() {
@@ -697,13 +734,12 @@ void TurnChannelBindRequest::OnResponse(StunMessage* response) {
   // threshold. The channel binding has a longer lifetime, but
   // this is the easiest way to keep both the channel and the
   // permission from expiring.
-  port_->SendRequest(new TurnChannelBindRequest(
-      port_, entry_, channel_id_, ext_addr_),
-      TURN_PERMISSION_TIMEOUT - 60 * 1000);
+  entry_->SendChannelBindRequest(TURN_PERMISSION_TIMEOUT - 60 * 1000);
 }
 
 void TurnChannelBindRequest::OnErrorResponse(StunMessage* response) {
-  entry_->OnChannelBindError();
+  const StunErrorCodeAttribute* error_code = response->GetErrorCode();
+  entry_->OnChannelBindError(response, error_code->code());
 }
 
 void TurnChannelBindRequest::OnTimeout() {
@@ -716,8 +752,18 @@ TurnEntry::TurnEntry(TurnPort* port, int channel_id,
       channel_id_(channel_id),
       ext_addr_(ext_addr),
       state_(STATE_UNBOUND) {
+  // Creating permission for |ext_addr_|.
+  SendCreatePermissionRequest();
+}
+
+void TurnEntry::SendCreatePermissionRequest() {
   port_->SendRequest(new TurnCreatePermissionRequest(
       port_, this, ext_addr_), 0);
+}
+
+void TurnEntry::SendChannelBindRequest(int delay) {
+  port_->SendRequest(new TurnChannelBindRequest(
+      port_, this, channel_id_, ext_addr_), delay);
 }
 
 int TurnEntry::Send(const void* data, size_t size, bool payload) {
@@ -736,8 +782,7 @@ int TurnEntry::Send(const void* data, size_t size, bool payload) {
 
     // If we're sending real data, request a channel bind that we can use later.
     if (state_ == STATE_UNBOUND && payload) {
-      port_->SendRequest(new TurnChannelBindRequest(
-          port_, this, channel_id_, ext_addr_), 0);
+      SendChannelBindRequest(0);
       state_ = STATE_BINDING;
     }
   } else {
@@ -752,11 +797,21 @@ int TurnEntry::Send(const void* data, size_t size, bool payload) {
 void TurnEntry::OnCreatePermissionSuccess() {
   LOG_J(LS_INFO, port_) << "Create permission for " << ext_addr_.ToString()
                         << " succeeded";
+  // For success result code will be 0.
+  port_->SignalCreatePermissionResult(port_, ext_addr_, 0);
 }
 
-void TurnEntry::OnCreatePermissionError() {
+void TurnEntry::OnCreatePermissionError(StunMessage* response, int code) {
   LOG_J(LS_WARNING, port_) << "Create permission for " << ext_addr_.ToString()
-                           << " failed";
+                           << " failed, code=" << code;
+  if (code == STUN_ERROR_STALE_NONCE) {
+    if (port_->UpdateNonce(response)) {
+      SendCreatePermissionRequest();
+    }
+  } else {
+    // Send signal with error code.
+    port_->SignalCreatePermissionResult(port_, ext_addr_, code);
+  }
 }
 
 void TurnEntry::OnChannelBindSuccess() {
@@ -766,11 +821,17 @@ void TurnEntry::OnChannelBindSuccess() {
   state_ = STATE_BOUND;
 }
 
-void TurnEntry::OnChannelBindError() {
+void TurnEntry::OnChannelBindError(StunMessage* response, int code) {
   // TODO(mallinath) - Implement handling of error response for channel
   // bind request as per http://tools.ietf.org/html/rfc5766#section-11.3
   LOG_J(LS_WARNING, port_) << "Channel bind for " << ext_addr_.ToString()
-                           << " failed";
+                           << " failed, code=" << code;
+  if (code == STUN_ERROR_STALE_NONCE) {
+    if (port_->UpdateNonce(response)) {
+      // Send channel bind request with fresh nonce.
+      SendChannelBindRequest(0);
+    }
+  }
 }
 
 }  // namespace cricket

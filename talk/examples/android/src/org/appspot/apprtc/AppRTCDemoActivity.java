@@ -30,6 +30,7 @@ package org.appspot.apprtc;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Point;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
@@ -97,6 +98,9 @@ public class AppRTCDemoActivity extends Activity
 
     abortUnless(PeerConnectionFactory.initializeAndroidGlobals(this),
         "Failed to initializeAndroidGlobals");
+
+    ((AudioManager) getSystemService(AUDIO_SERVICE)).setMode(
+        AudioManager.MODE_IN_COMMUNICATION);
 
     // TODO(fischman): allow this client to act as a room-creator, handing out
     // the new room URL and acting as a JSEP "answerer".  ATM this only acts as

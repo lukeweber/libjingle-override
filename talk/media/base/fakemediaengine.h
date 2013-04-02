@@ -623,8 +623,7 @@ class FakeBaseEngine {
         options_(0),
         options_changed_(false),
         fail_create_channel_(false) {}
-
-  bool Init() { return true; }
+  bool Init(talk_base::Thread* worker_thread) { return true; }
   void Terminate() {}
 
   bool SetOptions(int options) {
@@ -667,7 +666,6 @@ class FakeVoiceEngine : public FakeBaseEngine {
     // sanity checks against that.
     codecs_.push_back(AudioCodec(101, "fake_audio_codec", 0, 0, 1, 0));
   }
-
   int GetCapabilities() { return AUDIO_SEND | AUDIO_RECV; }
 
   VoiceMediaChannel* CreateChannel() {
@@ -763,7 +761,6 @@ class FakeVideoEngine : public FakeBaseEngine {
     // sanity checks against that.
     codecs_.push_back(VideoCodec(0, "fake_video_codec", 0, 0, 0, 0));
   }
-
   int GetCapabilities() { return VIDEO_SEND | VIDEO_RECV; }
   bool SetDefaultEncoderConfig(const VideoEncoderConfig& config) {
     default_encoder_config_ = config;

@@ -397,7 +397,7 @@ WebRtcVoiceEngine::~WebRtcVoiceEngine() {
   tracing_->SetTraceCallback(NULL);
 }
 
-bool WebRtcVoiceEngine::Init() {
+bool WebRtcVoiceEngine::Init(talk_base::Thread* worker_thread) {
   LOG(LS_INFO) << "WebRtcVoiceEngine::Init";
   bool res = InitInternal();
   if (res) {
