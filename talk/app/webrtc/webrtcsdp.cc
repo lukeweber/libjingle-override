@@ -172,6 +172,8 @@ static const char kSdpDelimiterSpace = ' ';
 static const char kSdpDelimiterColon = ':';
 static const char kSdpDelimiterSemicolon = ';';
 static const char kSdpDelimiterSlash = '/';
+static const char kNewLine = '\n';
+static const char kReturn = '\r';
 static const char kLineBreak[] = "\r\n";
 
 // TODO: Generate the Session and Time description
@@ -200,6 +202,11 @@ static const char kDefaultPort[] = "1";
 static const char kApplicationSpecificMaximum[] = "AS";
 
 static const int kDefaultVideoClockrate = 90000;
+
+// ISAC special-case.
+static const char kIsacCodecName[] = "ISAC";  // From webrtcvoiceengine.cc
+static const int kIsacWbDefaultRate = 32000;  // From acm_common_defs.h
+static const int kIsacSwbDefaultRate = 56000;  // From acm_common_defs.h
 
 struct SsrcInfo {
   SsrcInfo()
@@ -305,15 +312,24 @@ static bool ParseFingerprintAttribute(const std::string& line,
 
 // Helper functions
 
+// Below ParseFailed*** functions output the line that caused the parsing
+// failure and the detailed reason (|description|) of the failure to |error|.
+// The functions always return false so that they can be used directly in the
+// following way when error happens:
+// "return ParseFailed***(...);"
+
+// The line starting at |line_start| of |message| is the failing line.
+// The reason for the failure should be provided in the |description|.
+// An example of a description could be "unknown character".
 static bool ParseFailed(const std::string& message,
                         size_t line_start,
                         const std::string& description,
                         SdpParseError* error) {
   // Get the first line of |message| from |line_start|.
   std::string first_line = message;
-  size_t line_end = message.find('\n', line_start);
+  size_t line_end = message.find(kNewLine, line_start);
   if (line_end != std::string::npos) {
-    if (line_end > 0 && (message.at(line_end - 1) == '\r')) {
+    if (line_end > 0 && (message.at(line_end - 1) == kReturn)) {
       --line_end;
     }
     first_line = message.substr(line_start, (line_end - line_start));
@@ -328,36 +344,55 @@ static bool ParseFailed(const std::string& message,
   return false;
 }
 
-static bool ParseFailed(const std::string& message,
+// |line| is the failing line. The reason for the failure should be
+// provided in the |description|.
+static bool ParseFailed(const std::string& line,
                         const std::string& description,
                         SdpParseError* error) {
-  return ParseFailed(message, 0, description, error);
+  return ParseFailed(line, 0, description, error);
 }
 
-static bool ParseFailedExpectFieldNum(const std::string& message,
+// Parses failure where the failing SDP line isn't know or there are multiple
+// failing lines.
+static bool ParseFailed(const std::string& description,
+                        SdpParseError* error) {
+  return ParseFailed("", description, error);
+}
+
+// |line| is the failing line. The failure is due to the fact that |line|
+// doesn't have |expected_fields| fields.
+static bool ParseFailedExpectFieldNum(const std::string& line,
                                       int expected_fields,
                                       SdpParseError* error) {
   std::ostringstream description;
-  description << "Expects exactly " << expected_fields << " fields.";
-  return ParseFailed(message, description.str(), error);
+  description << "Expects " << expected_fields << " fields.";
+  return ParseFailed(line, description.str(), error);
 }
 
-static bool ParseFailedExpectMinFieldNum(const std::string& message,
+// |line| is the failing line. The failure is due to the fact that |line| has
+// less than |expected_min_fields| fields.
+static bool ParseFailedExpectMinFieldNum(const std::string& line,
                                          int expected_min_fields,
                                          SdpParseError* error) {
   std::ostringstream description;
   description << "Expects at least " << expected_min_fields << " fields.";
-  return ParseFailed(message, description.str(), error);
+  return ParseFailed(line, description.str(), error);
 }
 
-static bool ParseFailedGetValue(const std::string& message,
+// |line| is the failing line. The failure is due to the fact that it failed to
+// get the value of |attribute|.
+static bool ParseFailedGetValue(const std::string& line,
                                 const std::string& attribute,
                                 SdpParseError* error) {
   std::ostringstream description;
   description << "Failed to get the value of attribute: " << attribute;
-  return ParseFailed(message, description.str(), error);
+  return ParseFailed(line, description.str(), error);
 }
 
+// The line starting at |line_start| of |message| is the failing line. The
+// failure is due to the line type (e.g. the "m" part of the "m-line")
+// not matching what is expected. The expected line type should be
+// provided as |line_type|.
 static bool ParseFailedExpectLine(const std::string& message,
                                   size_t line_start,
                                   const char line_type,
@@ -381,13 +416,13 @@ static bool GetLine(const std::string& message,
                     size_t* pos,
                     std::string* line) {
   size_t line_begin = *pos;
-  size_t line_end = message.find('\n', line_begin);
+  size_t line_end = message.find(kNewLine, line_begin);
   if (line_end == std::string::npos) {
     return false;
   }
   // Update the new start position
   *pos = line_end + 1;
-  if (line_end > 0 && (message.at(line_end - 1) == '\r')) {
+  if (line_end > 0 && (message.at(line_end - 1) == kReturn)) {
     --line_end;
   }
   *line = message.substr(line_begin, (line_end - line_begin));
@@ -408,7 +443,7 @@ static bool GetLine(const std::string& message,
   return true;
 }
 
-// Init the |os| to "|type|=|value|".
+// Init |os| to "|type|=|value|".
 static void InitLine(const char type,
                      const std::string& value,
                      std::ostringstream* os) {
@@ -416,7 +451,7 @@ static void InitLine(const char type,
   *os << type << kSdpDelimiterEqual << value;
 }
 
-// Init the |os| to "a=|attribute|".
+// Init |os| to "a=|attribute|".
 static void InitAttrLine(const std::string& attribute, std::ostringstream* os) {
   InitLine(kLineTypeAttributes, attribute, os);
 }
@@ -2384,8 +2419,7 @@ bool ParseContent(const std::string& message,
     // Verify audio codec ensures that no audio codec has been populated with
     // only fmtp.
     if (!VerifyAudioCodecs(audio_desc)) {
-      return ParseFailed(line, "Failed to parse audio codecs correctly.",
-                         error);
+      return ParseFailed("Failed to parse audio codecs correctly.", error);
     }
     AddAudioAttribute(kCodecParamMaxPTime, maxptime_as_string, audio_desc);
     AddAudioAttribute(kCodecParamPTime, ptime_as_string, audio_desc);
@@ -2398,8 +2432,7 @@ bool ParseContent(const std::string& message,
       // Verify video codec ensures that no video codec has been populated with
       // only rtcp-fb.
       if (!VerifyVideoCodecs(video_desc)) {
-        return ParseFailed(line, "Failed to parse video codecs correctly.",
-                           error);
+        return ParseFailed("Failed to parse video codecs correctly.", error);
       }
   }
 
@@ -2644,9 +2677,21 @@ bool ParseRtpmapAttribute(const std::string& line,
     if (codec_params.size() == 3) {
       channels = talk_base::FromString<int>(codec_params[2]);
     }
+    int bitrate = 0;
+    // The default behavior for ISAC (bitrate == 0) in webrtcvoiceengine.cc
+    // (specifically FindWebRtcCodec) is bandwidth-adaptive variable bitrate.
+    // The bandwidth adaptation doesn't always work well, so this code
+    // sets a fixed target bitrate instead.
+    if (_stricmp(encoding_name.c_str(), kIsacCodecName) == 0) {
+      if (clock_rate <= 16000) {
+        bitrate = kIsacWbDefaultRate;
+      } else {
+        bitrate = kIsacSwbDefaultRate;
+      }
+    }
     AudioContentDescription* audio_desc =
         static_cast<AudioContentDescription*>(media_desc);
-    UpdateCodec(payload_type, encoding_name, clock_rate, 0, channels,
+    UpdateCodec(payload_type, encoding_name, clock_rate, bitrate, channels,
                 preference, audio_desc);
   } else if (media_type == cricket::MEDIA_TYPE_DATA) {
     DataContentDescription* data_desc =

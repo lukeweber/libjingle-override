@@ -40,6 +40,7 @@
 using testing::_;
 using testing::DoAll;
 using testing::Return;
+using testing::ReturnNull;
 using testing::SetArgPointee;
 
 namespace cricket {
@@ -78,9 +79,9 @@ std::string ExtractStatsValue(std::string type,
   for (size_t i = 0; i < reports.size(); ++i) {
     if (reports[i].type != type)
       continue;
-    webrtc::StatsElement::Values::const_iterator it =
-        reports[i].local.values.begin();
-    for (; it != reports[i].local.values.end(); ++it) {
+    webrtc::StatsReport::Values::const_iterator it =
+        reports[i].values.begin();
+    for (; it != reports[i].values.end(); ++it) {
       if (it->name == name) {
         return it->value;
       }
@@ -88,6 +89,16 @@ std::string ExtractStatsValue(std::string type,
   }
 
   return "NOT FOUND";
+}
+
+const webrtc::StatsReport* FindFirstReportByType(webrtc::StatsReports reports,
+                                            std::string type) {
+  for (size_t i = 0; i < reports.size(); ++i) {
+    if (reports[i].type == type) {
+      return &reports[i];
+    }
+  }
+  return NULL;
 }
 
 std::string ExtractSsrcStatsValue(webrtc::StatsReports reports,
@@ -102,21 +113,28 @@ std::string ExtractBweStatsValue(webrtc::StatsReports reports,
       webrtc::StatsReport::kStatsReportTypeBwe, reports, name);
 }
 
-// This test verifies that 64-bit counters are handled by truncation when
-// they pass the 32-bit possible values.
-// It documents existing behavior, it does not recommend it.
-TEST(StatsCollector, BytesCounterHandles64Bits) {
+class StatsCollectorTest : public testing::Test {
+ protected:
+  StatsCollectorTest()
+    : media_engine_(new cricket::FakeMediaEngine),
+      channel_manager_(
+          new cricket::ChannelManager(media_engine_,
+                                      new cricket::FakeDeviceManager(),
+                                      talk_base::Thread::Current())),
+      session_(channel_manager_.get()) {
+  }
+
+  cricket::FakeMediaEngine* media_engine_;
+  talk_base::scoped_ptr<cricket::ChannelManager> channel_manager_;
+  MockWebRtcSession session_;
+};
+
+// This test verifies that 64-bit counters are passed successfully.
+TEST_F(StatsCollectorTest, BytesCounterHandles64Bits) {
   webrtc::StatsCollector stats;  // Implementation under test.
-  cricket::FakeMediaEngine* media_engine = new cricket::FakeMediaEngine;
-  // The media_engine is owned by the channel_manager.
-  talk_base::scoped_ptr<cricket::ChannelManager> channel_manager(
-      new cricket::ChannelManager(media_engine,
-                                  new cricket::FakeDeviceManager(),
-                                  talk_base::Thread::Current()));
-  MockWebRtcSession session(channel_manager.get());
   MockVideoMediaChannel* media_channel = new MockVideoMediaChannel;
   cricket::VideoChannel video_channel(talk_base::Thread::Current(),
-      media_engine, media_channel, &session, "", false, NULL);
+      media_engine_, media_channel, &session_, "", false, NULL);
   webrtc::StatsReports reports;  // returned values.
   cricket::VideoSenderInfo video_sender_info;
   cricket::VideoMediaInfo stats_read;
@@ -126,7 +144,7 @@ TEST(StatsCollector, BytesCounterHandles64Bits) {
   const int64 kBytesSent = 12345678901234LL;
   const std::string kBytesSentString("12345678901234");
 
-  stats.set_session(&session);
+  stats.set_session(&session_);
   talk_base::scoped_refptr<webrtc::MediaStream> stream(
       webrtc::MediaStream::Create("streamlabel"));
   stream->AddTrack(webrtc::VideoTrack::Create(kNameOfTrack, NULL));
@@ -137,12 +155,12 @@ TEST(StatsCollector, BytesCounterHandles64Bits) {
   video_sender_info.bytes_sent = kBytesSent;
   stats_read.senders.push_back(video_sender_info);
 
-  EXPECT_CALL(session, video_channel())
+  EXPECT_CALL(session_, video_channel())
     .WillRepeatedly(Return(&video_channel));
   EXPECT_CALL(*media_channel, GetStats(_))
     .WillOnce(DoAll(SetArgPointee<0>(stats_read),
                     Return(true)));
-  EXPECT_CALL(session, GetTrackIdBySsrc(kSsrcOfTrack, _))
+  EXPECT_CALL(session_, GetTrackIdBySsrc(kSsrcOfTrack, _))
     .WillOnce(DoAll(SetArgPointee<1>(kNameOfTrack),
                     Return(true)));
   stats.UpdateStats();
@@ -152,18 +170,11 @@ TEST(StatsCollector, BytesCounterHandles64Bits) {
 }
 
 // Test that BWE information is reported via stats.
-TEST(StatsCollector, BandwidthEstimationInfoIsReported) {
+TEST_F(StatsCollectorTest, BandwidthEstimationInfoIsReported) {
   webrtc::StatsCollector stats;  // Implementation under test.
-  cricket::FakeMediaEngine* media_engine = new cricket::FakeMediaEngine;
-  // The media_engine is owned by the channel_manager.
-  talk_base::scoped_ptr<cricket::ChannelManager> channel_manager(
-      new cricket::ChannelManager(media_engine,
-                                  new cricket::FakeDeviceManager(),
-                                  talk_base::Thread::Current()));
-  MockWebRtcSession session(channel_manager.get());
   MockVideoMediaChannel* media_channel = new MockVideoMediaChannel;
   cricket::VideoChannel video_channel(talk_base::Thread::Current(),
-      media_engine, media_channel, &session, "", false, NULL);
+      media_engine_, media_channel, &session_, "", false, NULL);
   webrtc::StatsReports reports;  // returned values.
   cricket::VideoSenderInfo video_sender_info;
   cricket::VideoMediaInfo stats_read;
@@ -174,7 +185,7 @@ TEST(StatsCollector, BandwidthEstimationInfoIsReported) {
   const int64 kBytesSent = 12345678901234LL;
   const std::string kBytesSentString("12345678901234");
 
-  stats.set_session(&session);
+  stats.set_session(&session_);
   talk_base::scoped_refptr<webrtc::MediaStream> stream(
       webrtc::MediaStream::Create("streamlabel"));
   stream->AddTrack(webrtc::VideoTrack::Create(kNameOfTrack, NULL));
@@ -190,12 +201,12 @@ TEST(StatsCollector, BandwidthEstimationInfoIsReported) {
   bwe.target_enc_bitrate = kTargetEncBitrate;
   stats_read.bw_estimations.push_back(bwe);
 
-  EXPECT_CALL(session, video_channel())
+  EXPECT_CALL(session_, video_channel())
     .WillRepeatedly(Return(&video_channel));
   EXPECT_CALL(*media_channel, GetStats(_))
     .WillOnce(DoAll(SetArgPointee<0>(stats_read),
                     Return(true)));
-  EXPECT_CALL(session, GetTrackIdBySsrc(kSsrcOfTrack, _))
+  EXPECT_CALL(session_, GetTrackIdBySsrc(kSsrcOfTrack, _))
     .WillOnce(DoAll(SetArgPointee<1>(kNameOfTrack),
                     Return(true)));
   stats.UpdateStats();
@@ -206,7 +217,19 @@ TEST(StatsCollector, BandwidthEstimationInfoIsReported) {
   EXPECT_EQ(kTargetEncBitrateString, result);
 }
 
-// NOTE: when a third test is added here, extract the initialization bits common
-// to all tests into a StatsCollector::SetUp().
+// This test verifies that an object of type "googSession" always
+// exists in the returned stats.
+TEST_F(StatsCollectorTest, SessionObjectExists) {
+  webrtc::StatsCollector stats;  // Implementation under test.
+  webrtc::StatsReports reports;  // returned values.
+  stats.set_session(&session_);
+  EXPECT_CALL(session_, video_channel())
+    .WillRepeatedly(ReturnNull());
+  stats.UpdateStats();
+  stats.GetStats(NULL, &reports);
+  const webrtc::StatsReport* session_report = FindFirstReportByType(
+      reports, webrtc::StatsReport::kStatsReportTypeSession);
+  EXPECT_FALSE(session_report == NULL);
+}
 
 }  // namespace

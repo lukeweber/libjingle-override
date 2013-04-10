@@ -38,6 +38,7 @@
 #include "talk/base/buffer.h"
 #include "talk/base/byteorder.h"
 #include "talk/base/common.h"
+#include "talk/base/cpumonitor.h"
 #include "talk/base/logging.h"
 #include "talk/base/stringutils.h"
 #include "talk/base/thread.h"
@@ -45,6 +46,8 @@
 #include "talk/media/base/constants.h"
 #include "talk/media/base/rtputils.h"
 #include "talk/media/base/streamparams.h"
+#include "talk/media/base/videoadapter.h"
+#include "talk/media/base/videocapturer.h"
 #include "talk/media/base/videorenderer.h"
 #include "talk/media/devices/filevideocapturer.h"
 #include "talk/media/webrtc/webrtcvideodecoderfactory.h"
@@ -102,6 +105,24 @@ static void LogMultiline(talk_base::LoggingSeverity sev, char* text) {
     LOG_V(sev) << tok;
   }
 }
+
+// Severity is an integer because it comes is assumed to be from command line.
+static int SeverityToFilter(int severity) {
+  int filter = webrtc::kTraceNone;
+  switch (severity) {
+    case talk_base::LS_VERBOSE:
+      filter |= webrtc::kTraceAll;
+    case talk_base::LS_INFO:
+      filter |= (webrtc::kTraceStateInfo | webrtc::kTraceInfo);
+    case talk_base::LS_WARNING:
+      filter |= (webrtc::kTraceTerseInfo | webrtc::kTraceWarning);
+    case talk_base::LS_ERROR:
+      filter |= (webrtc::kTraceError | webrtc::kTraceCritical);
+  }
+  return filter;
+}
+
+static const int kCpuMonitorPeriodMs = 2000;  // 2 seconds.
 
 static const bool kRembNotSending = false;
 static const bool kRembSending = true;
@@ -384,7 +405,8 @@ class WebRtcVideoChannelRecvInfo  {
 class WebRtcVideoChannelSendInfo  {
  public:
   WebRtcVideoChannelSendInfo(int channel_id, int capture_id,
-                             webrtc::ViEExternalCapture* external_capture)
+                             webrtc::ViEExternalCapture* external_capture,
+                             talk_base::CpuMonitor* cpu_monitor)
       : channel_id_(channel_id),
         capture_id_(capture_id),
         sending_(false),
@@ -395,14 +417,26 @@ class WebRtcVideoChannelSendInfo  {
         capturer_updated_(false),
         reference_timestamp_(0),
         timestamp_delta_(0),
-        interval_(0) {
+        interval_(0),
+        video_adapter_(new CoordinatedVideoAdapter) {
+    // TODO(asapersson):
+    // video_adapter_->SignalCpuAdaptationUnable.connect(
+    //     this, &WebRtcVideoChannelSendInfo::OnCpuAdaptationUnable);
+    if (cpu_monitor) {
+      cpu_monitor->SignalUpdate.connect(
+          video_adapter_.get(), &CoordinatedVideoAdapter::OnCpuLoadUpdated);
+    }
   }
 
   int channel_id() const { return channel_id_; }
   int capture_id() const { return capture_id_; }
   void set_sending(bool sending) { sending_ = sending; }
   bool sending() const { return sending_; }
-  void set_muted(bool on) { muted_ = on; }
+  void set_muted(bool on) {
+    // TODO(asapersson): add support.
+    // video_adapter_->SetBlackOutput(on);
+    muted_ = on;
+  }
   bool muted() {return muted_; }
 
   WebRtcEncoderObserver* encoder_observer() { return &encoder_observer_; }
@@ -415,11 +449,23 @@ class WebRtcVideoChannelSendInfo  {
     if (video_format_ != cricket::VideoFormat()) {
       interval_ = video_format_.interval;
     }
+    video_adapter_->OnOutputFormatRequest(video_format_);
   }
   void set_interval(int64 interval) {
     if (video_format() == cricket::VideoFormat()) {
       interval_ = interval;
     }
+  }
+
+  bool AdaptFrame(const VideoFrame* in_frame, const VideoFrame** out_frame) {
+    if (!video_adapter_->cpu_adaptation()) {
+      // Skip adapting frame (to make it possible to turn off cpu adaptation in
+      // case of a problem and skip calling the video_adapter).
+      *out_frame = in_frame;
+      return true;
+    }
+    *out_frame = NULL;
+    return video_adapter_->AdaptFrame(in_frame, out_frame);
   }
 
   StreamParams* stream_params() { return stream_params_.get(); }
@@ -443,6 +489,29 @@ class WebRtcVideoChannelSendInfo  {
     }
     capturer_updated_ = true;
     video_capturer_ = video_capturer;
+    if (video_capturer && !video_capturer->IsScreencast()) {
+      const VideoFormat* capture_format = video_capturer->GetCaptureFormat();
+      if (capture_format) {
+        video_adapter_->SetInputFormat(*capture_format);
+      }
+    }
+  }
+
+  void ApplyCpuOptions(const VideoOptions& options) {
+    bool cpu_adapt;
+    float low, med, high;
+    if (options.adapt_input_to_cpu_usage.Get(&cpu_adapt)) {
+      video_adapter_->set_cpu_adaptation(cpu_adapt);
+    }
+    if (options.process_adaptation_threshhold.Get(&med)) {
+      video_adapter_->set_process_threshold(med);
+    }
+    if (options.system_low_adaptation_threshhold.Get(&low)) {
+      video_adapter_->set_low_system_threshold(low);
+    }
+    if (options.system_high_adaptation_threshhold.Get(&high)) {
+      video_adapter_->set_high_system_threshold(high);
+    }
   }
   void RecalculateTimestamp(VideoFrame* frame, WebRtc_Word64* clocks) {
     ASSERT(frame != NULL);
@@ -513,6 +582,8 @@ class WebRtcVideoChannelSendInfo  {
   int64 timestamp_delta_;  // The offset in timestamp between the capturers
                            // capturers timestamp and |reference_timestamp_|.
   int64 interval_;
+
+  talk_base::scoped_ptr<CoordinatedVideoAdapter> video_adapter_;
 };
 
 const WebRtcVideoEngine::VideoCodecPref
@@ -561,23 +632,27 @@ static void UpdateVideoCodec(const cricket::VideoFormat& video_format,
 }
 
 WebRtcVideoEngine::WebRtcVideoEngine() {
-  Construct(new ViEWrapper(), new ViETraceWrapper(), NULL);
-}
-
-WebRtcVideoEngine::WebRtcVideoEngine(WebRtcVoiceEngine* voice_engine,
-                                     ViEWrapper* vie_wrapper) {
-  Construct(vie_wrapper, new ViETraceWrapper(), voice_engine);
+  Construct(new ViEWrapper(), new ViETraceWrapper(), NULL,
+      new talk_base::CpuMonitor(talk_base::Thread::Current()));
 }
 
 WebRtcVideoEngine::WebRtcVideoEngine(WebRtcVoiceEngine* voice_engine,
                                      ViEWrapper* vie_wrapper,
-                                     ViETraceWrapper* tracing) {
-  Construct(vie_wrapper, tracing, voice_engine);
+                                     talk_base::CpuMonitor* cpu_monitor) {
+  Construct(vie_wrapper, new ViETraceWrapper(), voice_engine, cpu_monitor);
+}
+
+WebRtcVideoEngine::WebRtcVideoEngine(WebRtcVoiceEngine* voice_engine,
+                                     ViEWrapper* vie_wrapper,
+                                     ViETraceWrapper* tracing,
+                                     talk_base::CpuMonitor* cpu_monitor) {
+  Construct(vie_wrapper, tracing, voice_engine, cpu_monitor);
 }
 
 void WebRtcVideoEngine::Construct(ViEWrapper* vie_wrapper,
                                   ViETraceWrapper* tracing,
-                                  WebRtcVoiceEngine* voice_engine) {
+                                  WebRtcVoiceEngine* voice_engine,
+                                  talk_base::CpuMonitor* cpu_monitor) {
   LOG(LS_INFO) << "WebRtcVideoEngine::WebRtcVideoEngine";
   worker_thread_ = NULL;
   vie_wrapper_.reset(vie_wrapper);
@@ -585,7 +660,7 @@ void WebRtcVideoEngine::Construct(ViEWrapper* vie_wrapper,
   tracing_.reset(tracing);
   voice_engine_ = voice_engine;
   initialized_ = false;
-  log_level_ = kDefaultLogSeverity;
+  SetTraceFilter(SeverityToFilter(kDefaultLogSeverity));
   render_module_.reset(new WebRtcPassthroughRender());
   local_renderer_w_ = local_renderer_h_ = 0;
   local_renderer_ = NULL;
@@ -593,8 +668,14 @@ void WebRtcVideoEngine::Construct(ViEWrapper* vie_wrapper,
   frame_listeners_ = 0;
   capture_started_ = false;
   decoder_factory_ = NULL;
+  cpu_monitor_.reset(cpu_monitor);
+  if (cpu_monitor_->Start(kCpuMonitorPeriodMs)) {
+  } else {
+    LOG(LS_ERROR) << "Failed to start CPU monitor.";
+    cpu_monitor_.reset();
+  }
 
-  ApplyLogging("");
+  SetTraceOptions("");
   if (tracing_->SetTraceCallback(this) != 0) {
     LOG_RTCERR1(SetTraceCallback, this);
   }
@@ -882,9 +963,9 @@ WebRtcVideoEngine::rtp_header_extensions() const {
 void WebRtcVideoEngine::SetLogging(int min_sev, const char* filter) {
   // if min_sev == -1, we keep the current log level.
   if (min_sev >= 0) {
-    log_level_ = min_sev;
+    SetTraceFilter(SeverityToFilter(min_sev));
   }
-  ApplyLogging(filter);
+  SetTraceOptions(filter);
 }
 
 int WebRtcVideoEngine::GetLastEngineError() {
@@ -1092,25 +1173,17 @@ bool WebRtcVideoEngine::EnableTimedRender() {
   return true;
 }
 
+void WebRtcVideoEngine::SetTraceFilter(int filter) {
+  tracing_->SetTraceFilter(filter);
+}
+
 // See https://sites.google.com/a/google.com/wavelet/
 //     Home/Magic-Flute--RTC-Engine-/Magic-Flute-Command-Line-Parameters
 // for all supported command line setttings.
-void WebRtcVideoEngine::ApplyLogging(const std::string& log_filter) {
-  int filter = 0;
-  switch (log_level_) {
-    case talk_base::LS_VERBOSE: filter |= webrtc::kTraceAll;
-    case talk_base::LS_INFO: filter |=
-        webrtc::kTraceStateInfo | webrtc::kTraceInfo;
-    case talk_base::LS_WARNING: filter |=
-        webrtc::kTraceWarning | webrtc::kTraceTerseInfo;
-    case talk_base::LS_ERROR: filter |=
-        webrtc::kTraceError | webrtc::kTraceCritical;
-  }
-  tracing_->SetTraceFilter(filter);
-
+void WebRtcVideoEngine::SetTraceOptions(const std::string& options) {
   // Set WebRTC trace file.
   std::vector<std::string> opts;
-  talk_base::tokenize(log_filter, ' ', '"', '"', &opts);
+  talk_base::tokenize(options, ' ', '"', '"', &opts);
   std::vector<std::string>::iterator tracefile =
       std::find(opts.begin(), opts.end(), "tracefile");
   if (tracefile != opts.end() && ++tracefile != opts.end()) {
@@ -1215,27 +1288,23 @@ void WebRtcVideoEngine::Print(webrtc::TraceLevel level, const char* trace,
   talk_base::LoggingSeverity sev = talk_base::LS_VERBOSE;
   if (level == webrtc::kTraceError || level == webrtc::kTraceCritical)
     sev = talk_base::LS_ERROR;
-  else if (level == webrtc::kTraceWarning || level == webrtc::kTraceTerseInfo)
+  else if (level == webrtc::kTraceWarning)
     sev = talk_base::LS_WARNING;
   else if (level == webrtc::kTraceStateInfo || level == webrtc::kTraceInfo)
     sev = talk_base::LS_INFO;
+  else if (level == webrtc::kTraceTerseInfo)
+    sev = talk_base::LS_INFO;
 
-  if (sev >= log_level_) {
-    if (level == webrtc::kTraceTerseInfo) {
-      // Actually use LS_INFO for TerseInfo.
-      sev = talk_base::LS_INFO;
-    }
-    // Skip past boilerplate prefix text
-    if (length < 72) {
-      std::string msg(trace, length);
-      LOG(LS_ERROR) << "Malformed webrtc log message: ";
-      LOG_V(sev) << msg;
-    } else {
-      std::string msg(trace + 71, length - 72);
-      if (!ShouldIgnoreTrace(msg) &&
-          (!voice_engine_ || !voice_engine_->ShouldIgnoreTrace(msg))) {
-        LOG_V(sev) << "webrtc: " << msg;
-      }
+  // Skip past boilerplate prefix text
+  if (length < 72) {
+    std::string msg(trace, length);
+    LOG(LS_ERROR) << "Malformed webrtc log message: ";
+    LOG_V(sev) << msg;
+  } else {
+    std::string msg(trace + 71, length - 72);
+    if (!ShouldIgnoreTrace(msg) &&
+        (!voice_engine_ || !voice_engine_->ShouldIgnoreTrace(msg))) {
+      LOG_V(sev) << "webrtc: " << msg;
     }
   }
 }
@@ -2215,7 +2284,7 @@ bool WebRtcVideoMediaChannel::SetCapturer(uint32 ssrc,
   send_channel->set_video_capturer(capturer);
   capturer->SignalVideoFrame.connect(
       this,
-      &WebRtcVideoMediaChannel::SendFrame);
+      &WebRtcVideoMediaChannel::AdaptAndSendFrame);
   if (!capturer->IsScreencast() && ratio_w_ != 0 && ratio_h_ != 0) {
     capturer->UpdateAspectRatio(ratio_w_, ratio_h_);
   }
@@ -2424,6 +2493,13 @@ bool WebRtcVideoMediaChannel::SetOptions(const VideoOptions &options) {
   // Save the options, to be interpreted where appropriate.
   options_ = options;
 
+  // Set CPU options for all send channels.
+  for (SendChannelMap::iterator iter = send_channels_.begin();
+       iter != send_channels_.end(); ++iter) {
+    WebRtcVideoChannelSendInfo* send_channel = iter->second;
+    send_channel->ApplyCpuOptions(options_);
+  }
+
   // Adjust send codec bitrate if needed.
   int conf_max_bitrate = kDefaultConferenceModeMaxVideoBitrate;
 
@@ -2538,6 +2614,25 @@ bool WebRtcVideoMediaChannel::GetRenderer(uint32 ssrc,
   return true;
 }
 
+void WebRtcVideoMediaChannel::AdaptAndSendFrame(VideoCapturer* capturer,
+                                                const VideoFrame* frame) {
+  if (capturer->IsScreencast()) {
+    // Do not adapt frames that are screencast.
+    SendFrame(capturer, frame);
+    return;
+  }
+  WebRtcVideoChannelSendInfo* send_channel = GetSendChannel(capturer);
+  if (!send_channel) {
+    SendFrame(capturer, frame);
+    return;
+  }
+  const VideoFrame* output_frame = NULL;
+  send_channel->AdaptFrame(frame, &output_frame);
+  if (output_frame) {
+    SendFrame(send_channel, output_frame, capturer->IsScreencast());
+  }
+}
+
 // TODO(zhurunz): Add unittests to test this function.
 void WebRtcVideoMediaChannel::SendFrame(VideoCapturer* capturer,
                                         const VideoFrame* frame) {
@@ -2565,6 +2660,10 @@ bool WebRtcVideoMediaChannel::SendFrame(
     const VideoFrame* frame,
     bool is_screencast) {
   if (!send_channel) {
+    return false;
+  }
+  if (!send_codec_) {
+    // Send codec has not been set. No reason to process the frame any further.
     return false;
   }
   const VideoFormat& video_format = send_channel->video_format();
@@ -2842,7 +2941,9 @@ bool WebRtcVideoMediaChannel::ConfigureSending(int channel_id,
   }
   talk_base::scoped_ptr<WebRtcVideoChannelSendInfo> send_channel(
       new WebRtcVideoChannelSendInfo(channel_id, vie_capture,
-                                     external_capture));
+                                     external_capture,
+                                     engine()->cpu_monitor()));
+  send_channel->ApplyCpuOptions(options_);
 
   // Register encoder observer for outgoing framerate and bitrate.
   if (engine()->vie()->codec()->RegisterEncoderObserver(
@@ -3134,10 +3235,8 @@ bool WebRtcVideoMediaChannel::MaybeResetVieSendCodec(
   if (reset) {
     *reset = false;
   }
+  ASSERT(send_codec_.get() != NULL);
 
-  if (!send_codec_) {
-    return false;
-  }
   webrtc::VideoCodec target_codec = *send_codec_.get();
   const VideoFormat& video_format = send_channel->video_format();
   UpdateVideoCodec(video_format, &target_codec);
@@ -3162,7 +3261,7 @@ bool WebRtcVideoMediaChannel::MaybeResetVieSendCodec(
   const int cur_height = vie_codec.height;
 
   // Only reset send codec when there is a size change. Additionally,
-  // automatic resize needs to be turned of when screencasting and on when
+  // automatic resize needs to be turned off when screencasting and on when
   // not screencasting.
   // Don't allow automatic resizing for screencasting.
   bool automatic_resize = !is_screencast;

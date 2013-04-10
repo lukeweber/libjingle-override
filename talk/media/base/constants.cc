@@ -81,4 +81,10 @@ const char* kCodecParamMaxBitrate = "x-google-max-bitrate";
 const char* kCodecParamMinBitrate = "x-google-min-bitrate";
 const char* kCodecParamMaxQuantization = "x-google-max-quantization";
 
+const int kGoogleRtpDataCodecId = 101;
+const char kGoogleRtpDataCodecName[] = "google-data";
+
+const int kGoogleSctpDataCodecId = 108;
+const char kGoogleSctpDataCodecName[] = "google-sctp-data";
+
 }  // namespace cricket

@@ -30,6 +30,7 @@
 #include "talk/base/logging.h"
 #include "talk/base/thread.h"
 #include "talk/base/window.h"
+#include "talk/media/base/constants.h"
 #include "talk/media/base/screencastid.h"
 #include "talk/p2p/base/parsing.h"
 #include "talk/session/media/call.h"
@@ -277,9 +278,10 @@ bool Call::AddSession(Session* session, const SessionDescription* offer) {
   // If desired, create data channel
   if (has_data_ && succeeded) {
     bool rtcp = false;
+    // TODO(pthatcher): Use SCTP if available.
     media_session.data_channel =
         session_client_->channel_manager()->CreateDataChannel(
-            session, data_offer->name, rtcp);
+            session, data_offer->name, rtcp, kGoogleRtpDataCodecName);
     if (media_session.data_channel) {
       media_session.data_channel->SignalDataReceived.connect(
           this, &Call::OnDataReceived);

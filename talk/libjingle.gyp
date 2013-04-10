@@ -638,6 +638,7 @@
         'app/webrtc/jsepsessiondescription.cc',
         'app/webrtc/localaudiosource.cc',
         'app/webrtc/localvideosource.cc',
+        'app/webrtc/mediaconstraintsinterface.cc',
         'app/webrtc/mediastream.cc',
         'app/webrtc/mediastreamhandler.cc',
         'app/webrtc/mediastreamsignaling.cc',

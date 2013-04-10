@@ -51,6 +51,10 @@ class VideoRender;
 class ViEExternalCapture;
 }
 
+namespace talk_base {
+class CpuMonitor;
+}  // namespace talk_base
+
 namespace cricket {
 
 class VideoCapturer;
@@ -78,14 +82,16 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
  public:
   // Creates the WebRtcVideoEngine with internal VideoCaptureModule.
   WebRtcVideoEngine();
-  // For testing purposes. Allows the WebRtcVoiceEngine and
-  // ViEWrapper to be mocks.
-  // TODO(juberti): Remove the 2-arg ctor once fake tracing is implemented.
-  WebRtcVideoEngine(WebRtcVoiceEngine* voice_engine,
-                    ViEWrapper* vie_wrapper);
+  // For testing purposes. Allows the WebRtcVoiceEngine,
+  // ViEWrapper and CpuMonitor to be mocks.
+  // TODO(juberti): Remove the 3-arg ctor once fake tracing is implemented.
   WebRtcVideoEngine(WebRtcVoiceEngine* voice_engine,
                     ViEWrapper* vie_wrapper,
-                    ViETraceWrapper* tracing);
+                    talk_base::CpuMonitor* cpu_monitor);
+  WebRtcVideoEngine(WebRtcVoiceEngine* voice_engine,
+                    ViEWrapper* vie_wrapper,
+                    ViETraceWrapper* tracing,
+                    talk_base::CpuMonitor* cpu_monitor);
   ~WebRtcVideoEngine();
 
   // Basic video engine implementation.
@@ -155,6 +161,8 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
 
   VideoFormat GetStartCaptureFormat() const { return default_codec_format_; }
 
+  talk_base::CpuMonitor* cpu_monitor() { return cpu_monitor_.get(); }
+
  protected:
   // When a video processor registers with the engine.
   // SignalMediaFrame will be invoked for every video frame.
@@ -175,10 +183,12 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
 
   void Construct(ViEWrapper* vie_wrapper,
                  ViETraceWrapper* tracing,
-                 WebRtcVoiceEngine* voice_engine);
+                 WebRtcVoiceEngine* voice_engine,
+                 talk_base::CpuMonitor* cpu_monitor);
   bool SetDefaultCodec(const VideoCodec& codec);
   bool RebuildCodecList(const VideoCodec& max_codec);
-  void ApplyLogging(const std::string& log_filter);
+  void SetTraceFilter(int filter);
+  void SetTraceOptions(const std::string& options);
   bool InitVideoEngine();
   bool SetCapturer(VideoCapturer* capturer);
 
@@ -191,7 +201,6 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   bool vie_wrapper_base_initialized_;
   talk_base::scoped_ptr<ViETraceWrapper> tracing_;
   WebRtcVoiceEngine* voice_engine_;
-  int log_level_;
   talk_base::scoped_ptr<webrtc::VideoRender> render_module_;
   WebRtcVideoDecoderFactory* decoder_factory_;
   std::vector<VideoCodec> video_codecs_;
@@ -212,6 +221,8 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   // Critical section to protect the media processor register/unregister
   // while processing a frame
   talk_base::CriticalSection signal_media_critical_;
+
+  talk_base::scoped_ptr<talk_base::CpuMonitor> cpu_monitor_;
 };
 
 class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
@@ -268,6 +279,8 @@ class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
   void SendFrame(VideoCapturer* capturer, const VideoFrame* frame);
   bool SendFrame(WebRtcVideoChannelSendInfo* channel_info,
                  const VideoFrame* frame, bool is_screencast);
+
+  void AdaptAndSendFrame(VideoCapturer* capturer, const VideoFrame* frame);
 
   // Thunk functions for use with HybridVideoEngine
   void OnLocalFrame(VideoCapturer* capturer, const VideoFrame* frame) {

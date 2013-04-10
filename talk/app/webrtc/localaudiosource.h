@@ -38,6 +38,8 @@
 
 namespace webrtc {
 
+class MediaConstraintsInterface;
+
 class LocalAudioSource : public Notifier<AudioSourceInterface> {
  public:
   // Creates an instance of LocalAudioSource.

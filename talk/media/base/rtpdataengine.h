@@ -32,13 +32,11 @@
 #include <vector>
 
 #include "talk/base/timing.h"
+#include "talk/media/base/constants.h"
 #include "talk/media/base/mediachannel.h"
 #include "talk/media/base/mediaengine.h"
 
 namespace cricket {
-
-extern const int kGoogleDataCodecId;
-extern const char* kGoogleDataCodecName;
 
 struct DataCodec;
 
@@ -46,7 +44,9 @@ class RtpDataEngine : public DataEngineInterface {
  public:
   RtpDataEngine();
 
-  virtual DataMediaChannel* CreateChannel();
+  // codec_name == "" means use the default codec.
+  virtual DataMediaChannel* CreateChannel(
+      const std::string& codec_name);
 
   virtual const std::vector<DataCodec>& data_codecs() {
     return data_codecs_;

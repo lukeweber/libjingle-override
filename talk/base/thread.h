@@ -85,8 +85,6 @@ class ThreadManager {
   DISALLOW_COPY_AND_ASSIGN(ThreadManager);
 };
 
-class Thread;
-
 struct _SendMessage {
   _SendMessage() {}
   Thread *thread;
@@ -115,7 +113,7 @@ class Runnable {
 
 class Thread : public MessageQueue {
  public:
-  Thread(SocketServer* ss = NULL);
+  explicit Thread(SocketServer* ss = NULL);
   virtual ~Thread();
 
   static Thread* Current();
@@ -243,7 +241,7 @@ class Thread : public MessageQueue {
 
 class AutoThread : public Thread {
  public:
-  AutoThread(SocketServer* ss = 0);
+  explicit AutoThread(SocketServer* ss = 0);
   virtual ~AutoThread();
 
  private:

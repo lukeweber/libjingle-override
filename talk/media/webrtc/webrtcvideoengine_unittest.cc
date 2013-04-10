@@ -25,8 +25,11 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "talk/base/fakecpumonitor.h"
 #include "talk/base/gunit.h"
+#include "talk/base/logging.h"
 #include "talk/base/scoped_ptr.h"
+#include "talk/base/stream.h"
 #include "talk/media/base/constants.h"
 #include "talk/media/base/fakemediaprocessor.h"
 #include "talk/media/base/mediachannel.h"
@@ -40,6 +43,7 @@
 #include "talk/media/webrtc/webrtcvideoframe.h"
 #include "talk/media/webrtc/webrtcvoiceengine.h"
 #include "talk/session/media/mediasession.h"
+#include "webrtc/system_wrappers/interface/trace.h"
 
 // Tests for the WebRtcVideoEngine/VideoChannel code.
 
@@ -84,8 +88,10 @@ class WebRtcVideoEngineTestFake : public testing::Test {
  public:
   WebRtcVideoEngineTestFake()
       : vie_(kVideoCodecs, ARRAY_SIZE(kVideoCodecs)),
+        cpu_monitor_(new talk_base::FakeCpuMonitor(
+            talk_base::Thread::Current())),
         engine_(NULL,  // cricket::WebRtcVoiceEngine
-                new FakeViEWrapper(&vie_)),
+                new FakeViEWrapper(&vie_), cpu_monitor_),
         channel_(NULL),
         voice_channel_(NULL) {
   }
@@ -166,6 +172,7 @@ class WebRtcVideoEngineTestFake : public testing::Test {
 
  protected:
   cricket::FakeWebRtcVideoEngine vie_;
+  talk_base::FakeCpuMonitor* cpu_monitor_;
   cricket::WebRtcVideoEngine engine_;
   cricket::WebRtcVideoMediaChannel* channel_;
   cricket::WebRtcVoiceMediaChannel* voice_channel_;
@@ -206,6 +213,40 @@ TEST_F(WebRtcVideoEngineTestFake, StartupShutdown) {
   EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   EXPECT_TRUE(vie_.IsInited());
   engine_.Terminate();
+}
+
+// Tests that webrtc logs are logged when they should be.
+TEST_F(WebRtcVideoEngineTest, WebRtcShouldLog) {
+  const char webrtc_log[] = "WebRtcVideoEngineTest.WebRtcShouldLog";
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
+  engine_.SetLogging(talk_base::LS_INFO, "");
+  std::string str;
+  talk_base::StringStream stream(str);
+  talk_base::LogMessage::AddLogToStream(&stream, talk_base::LS_INFO);
+  EXPECT_EQ(talk_base::LS_INFO, talk_base::LogMessage::GetLogToStream(&stream));
+  webrtc::Trace::Add(webrtc::kTraceStateInfo, webrtc::kTraceUndefined, 0,
+                     webrtc_log);
+  EXPECT_TRUE_WAIT(std::string::npos != str.find(webrtc_log), 10);
+  talk_base::LogMessage::RemoveLogToStream(&stream);
+}
+
+// Tests that webrtc logs are not logged when they should't be.
+TEST_F(WebRtcVideoEngineTest, WebRtcShouldNotLog) {
+  const char webrtc_log[] = "WebRtcVideoEngineTest.WebRtcShouldNotLog";
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
+  // WebRTC should never be logged lower than LS_INFO.
+  engine_.SetLogging(talk_base::LS_WARNING, "");
+  std::string str;
+  talk_base::StringStream stream(str);
+  // Make sure that WebRTC is not logged, even at lowest severity
+  talk_base::LogMessage::AddLogToStream(&stream, talk_base::LS_SENSITIVE);
+  EXPECT_EQ(talk_base::LS_SENSITIVE,
+            talk_base::LogMessage::GetLogToStream(&stream));
+  webrtc::Trace::Add(webrtc::kTraceStateInfo, webrtc::kTraceUndefined, 0,
+                     webrtc_log);
+  talk_base::Thread::Current()->ProcessMessages(10);
+  EXPECT_EQ(std::string::npos, str.find(webrtc_log));
+  talk_base::LogMessage::RemoveLogToStream(&stream);
 }
 
 // Tests that we can create and destroy a channel.
@@ -1121,6 +1162,176 @@ TEST_F(WebRtcVideoEngineTestFake, SendReceiveBitratesStats) {
   ASSERT_EQ(send_video_bitrate, info.bw_estimations[0].target_enc_bitrate);
 }
 
+TEST_F(WebRtcVideoEngineTestFake, TestSetAdaptInputToCpuUsage) {
+  EXPECT_TRUE(SetupEngine());
+  cricket::VideoOptions options_in, options_out;
+  bool cpu_adapt = false;
+  channel_->SetOptions(options_in);
+  EXPECT_TRUE(channel_->GetOptions(&options_out));
+  EXPECT_FALSE(options_out.adapt_input_to_cpu_usage.Get(&cpu_adapt));
+  // Set adapt input CPU usage option.
+  options_in.adapt_input_to_cpu_usage.Set(true);
+  EXPECT_TRUE(channel_->SetOptions(options_in));
+  EXPECT_TRUE(channel_->GetOptions(&options_out));
+  EXPECT_TRUE(options_out.adapt_input_to_cpu_usage.Get(&cpu_adapt));
+  EXPECT_TRUE(cpu_adapt);
+}
+
+TEST_F(WebRtcVideoEngineTestFake, TestSetCpuThreshold) {
+  EXPECT_TRUE(SetupEngine());
+  float low, high;
+  cricket::VideoOptions options_in, options_out;
+  // Verify that initial values are set.
+  EXPECT_TRUE(channel_->GetOptions(&options_out));
+  EXPECT_TRUE(options_out.system_low_adaptation_threshhold.Get(&low));
+  EXPECT_EQ(low, 0.65f);
+  EXPECT_TRUE(options_out.system_high_adaptation_threshhold.Get(&high));
+  EXPECT_EQ(high, 0.85f);
+  // Set new CPU threshold values.
+  options_in.system_low_adaptation_threshhold.Set(0.45f);
+  options_in.system_high_adaptation_threshhold.Set(0.95f);
+  EXPECT_TRUE(channel_->SetOptions(options_in));
+  EXPECT_TRUE(channel_->GetOptions(&options_out));
+  EXPECT_TRUE(options_out.system_low_adaptation_threshhold.Get(&low));
+  EXPECT_EQ(low, 0.45f);
+  EXPECT_TRUE(options_out.system_high_adaptation_threshhold.Get(&high));
+  EXPECT_EQ(high, 0.95f);
+}
+
+TEST_F(WebRtcVideoEngineTestFake, TestSetInvalidCpuThreshold) {
+  EXPECT_TRUE(SetupEngine());
+  float low, high;
+  cricket::VideoOptions options_in, options_out;
+  // Valid range is [0, 1].
+  options_in.system_low_adaptation_threshhold.Set(-1.5f);
+  options_in.system_high_adaptation_threshhold.Set(1.5f);
+  EXPECT_TRUE(channel_->SetOptions(options_in));
+  EXPECT_TRUE(channel_->GetOptions(&options_out));
+  EXPECT_TRUE(options_out.system_low_adaptation_threshhold.Get(&low));
+  EXPECT_EQ(low, 0.0f);
+  EXPECT_TRUE(options_out.system_high_adaptation_threshhold.Get(&high));
+  EXPECT_EQ(high, 1.0f);
+}
+
+TEST_F(WebRtcVideoEngineTestFake, TestAdaptToOutputFormat) {
+  EXPECT_TRUE(SetupEngine());
+  EXPECT_TRUE(channel_->AddSendStream(
+      CreateSimStreamParams("cname", MAKE_VECTOR(kSsrcs3))));
+
+  // Capture format HD
+  cricket::FakeVideoCapturer video_capturer;
+  const std::vector<cricket::VideoFormat>* formats =
+      video_capturer.GetSupportedFormats();
+  cricket::VideoFormat capture_format_hd = (*formats)[0];
+  EXPECT_EQ(cricket::CS_RUNNING, video_capturer.Start(capture_format_hd));
+  EXPECT_TRUE(channel_->SetCapturer(kSsrcs3[0], &video_capturer));
+  cricket::VideoOptions options;
+  options.adapt_input_to_cpu_usage.Set(true);
+  EXPECT_TRUE(channel_->SetOptions(options));
+
+  cricket::VideoCodec send_codec(100, "VP8", 800, 600, 30, 0);
+  cricket::VideoFormat vga_format(640, 360,
+      cricket::VideoFormat::FpsToInterval(30), cricket::FOURCC_I420);
+  std::vector<cricket::VideoCodec> codecs;
+  codecs.push_back(send_codec);
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  EXPECT_TRUE(channel_->SetSendStreamFormat(kSsrcs3[0], vga_format));
+  EXPECT_TRUE(channel_->SetSend(true));
+
+  // Capture format HD -> adapt (OnOutputFormatRequest VGA) -> VGA.
+  EXPECT_TRUE(video_capturer.CaptureFrame());
+  const int channel0 = vie_.GetChannelFromLocalSsrc(kSsrcs3[0]);
+  ASSERT_NE(-1, channel0);
+  VerifyVP8SendCodec(channel0, vga_format.width, vga_format.height, 0,
+                     kMaxBandwidthKbps, kMinBandwidthKbps, kStartBandwidthKbps,
+                     30);
+  EXPECT_TRUE(channel_->SetCapturer(kSsrcs3[0], NULL));
+}
+
+TEST_F(WebRtcVideoEngineTestFake, TestAdaptToCpuLoad) {
+  EXPECT_TRUE(SetupEngine());
+  EXPECT_TRUE(channel_->AddSendStream(
+      CreateSimStreamParams("cname", MAKE_VECTOR(kSsrcs3))));
+
+  // Capture format VGA
+  cricket::FakeVideoCapturer video_capturer;
+  const std::vector<cricket::VideoFormat>* formats =
+      video_capturer.GetSupportedFormats();
+  cricket::VideoFormat capture_format_vga = (*formats)[1];
+  EXPECT_EQ(cricket::CS_RUNNING, video_capturer.Start(capture_format_vga));
+  EXPECT_TRUE(channel_->SetCapturer(kSsrcs3[0], &video_capturer));
+
+  // Make OnCpuLoadUpdate trigger downgrade.
+  cricket::VideoOptions options;
+  options.adapt_input_to_cpu_usage.Set(true);
+  options.process_adaptation_threshhold.Set(0.1f);
+  options.system_low_adaptation_threshhold.Set(0.65f);
+  options.system_high_adaptation_threshhold.Set(0.85f);
+  EXPECT_TRUE(channel_->SetOptions(options));
+  cpu_monitor_->SignalUpdate(1, 1, 0.1f, 0.85f);
+
+  cricket::VideoCodec send_codec(100, "VP8", 640, 480, 30, 0);
+  std::vector<cricket::VideoCodec> codecs;
+  codecs.push_back(send_codec);
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  EXPECT_TRUE(channel_->SetSendStreamFormat(kSsrcs3[0], cricket::VideoFormat(
+        send_codec.width, send_codec.height,
+        cricket::VideoFormat::FpsToInterval(send_codec.framerate),
+        cricket::FOURCC_I420)));
+  EXPECT_TRUE(channel_->SetSend(true));
+
+  // Capture format VGA -> adapt (OnCpuLoadUpdate downgrade) -> VGA/2.
+  EXPECT_TRUE(video_capturer.CaptureFrame());
+  const int channel0 = vie_.GetChannelFromLocalSsrc(kSsrcs3[0]);
+  ASSERT_NE(-1, channel0);
+  VerifyVP8SendCodec(channel0, 3*send_codec.width/4, 3*send_codec.height/4, 0,
+                     kMaxBandwidthKbps, kMinBandwidthKbps, kStartBandwidthKbps,
+                     send_codec.framerate);
+  EXPECT_TRUE(channel_->SetCapturer(kSsrcs3[0], NULL));
+}
+
+TEST_F(WebRtcVideoEngineTestFake, TestAdaptToCpuLoadDisabled) {
+  EXPECT_TRUE(SetupEngine());
+  EXPECT_TRUE(channel_->AddSendStream(
+      CreateSimStreamParams("cname", MAKE_VECTOR(kSsrcs3))));
+
+  // Capture format VGA
+  cricket::FakeVideoCapturer video_capturer;
+  const std::vector<cricket::VideoFormat>* formats =
+      video_capturer.GetSupportedFormats();
+  cricket::VideoFormat capture_format_vga = (*formats)[1];
+  EXPECT_EQ(cricket::CS_RUNNING, video_capturer.Start(capture_format_vga));
+  EXPECT_TRUE(channel_->SetCapturer(kSsrcs3[0], &video_capturer));
+
+  // Make OnCpuLoadUpdate trigger downgrade.
+  cricket::VideoOptions options;
+  options.adapt_input_to_cpu_usage.Set(false);
+  options.process_adaptation_threshhold.Set(0.1f);
+  options.system_low_adaptation_threshhold.Set(0.65f);
+  options.system_high_adaptation_threshhold.Set(0.85f);
+  EXPECT_TRUE(channel_->SetOptions(options));
+  cpu_monitor_->SignalUpdate(1, 1, 0.1f, 0.85f);
+
+  cricket::VideoCodec send_codec(100, "VP8", 640, 480, 30, 0);
+  std::vector<cricket::VideoCodec> codecs;
+  codecs.push_back(send_codec);
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  EXPECT_TRUE(channel_->SetSendStreamFormat(kSsrcs3[0], cricket::VideoFormat(
+        send_codec.width, send_codec.height,
+        cricket::VideoFormat::FpsToInterval(send_codec.framerate),
+        cricket::FOURCC_I420)));
+  EXPECT_TRUE(channel_->SetSend(true));
+
+  // Capture format VGA -> no adapt -> VGA.
+  EXPECT_TRUE(video_capturer.CaptureFrame());
+  const int channel0 = vie_.GetChannelFromLocalSsrc(kSsrcs3[0]);
+  ASSERT_NE(-1, channel0);
+  VerifyVP8SendCodec(channel0, send_codec.width, send_codec.height, 0,
+                     kMaxBandwidthKbps, kMinBandwidthKbps, kStartBandwidthKbps,
+                     send_codec.framerate);
+  EXPECT_TRUE(channel_->SetCapturer(kSsrcs3[0], NULL));
+}
+
 /////////////////////////
 // Tests with real ViE //
 /////////////////////////
@@ -1268,6 +1479,40 @@ TEST_F(WebRtcVideoMediaChannelTest, SendAndReceiveH264SvcQqvga) {
 }
 TEST_F(WebRtcVideoMediaChannelTest, SendManyResizeOnce) {
   SendManyResizeOnce();
+}
+
+TEST_F(WebRtcVideoMediaChannelTest, SendVp8HdAndReceiveAdaptedVp8Vga) {
+  EXPECT_TRUE(engine_.SetVideoCapturer(NULL));
+  channel_->UpdateAspectRatio(1280, 720);
+  video_capturer_.reset(new cricket::FakeVideoCapturer);
+  const std::vector<cricket::VideoFormat>* formats =
+      video_capturer_->GetSupportedFormats();
+  cricket::VideoFormat capture_format_hd = (*formats)[0];
+  EXPECT_EQ(cricket::CS_RUNNING, video_capturer_->Start(capture_format_hd));
+  EXPECT_TRUE(channel_->SetCapturer(kSsrc, video_capturer_.get()));
+  // TODO(asapersson): Remove if the cpu_adaptation() check in
+  // WebRtcVideoChannelSendInfo::AdaptFrame is removed.
+  // Make sure that a cpu load update does not trigger any change.
+  cricket::VideoOptions options;
+  options.adapt_input_to_cpu_usage.Set(true);
+  options.system_low_adaptation_threshhold.Set(0.0f);
+  options.system_high_adaptation_threshhold.Set(1.0f);
+  EXPECT_TRUE(channel_->SetOptions(options));
+
+  // Capture format HD -> adapt (OnOutputFormatRequest VGA) -> VGA.
+  cricket::VideoCodec codec(100, "VP8", 1280, 720, 30, 0);
+  EXPECT_TRUE(SetOneCodec(codec));
+  codec.width /= 2;
+  codec.height /= 2;
+  EXPECT_TRUE(channel_->SetSendStreamFormat(kSsrc, cricket::VideoFormat(
+      codec.width, codec.height,
+      cricket::VideoFormat::FpsToInterval(codec.framerate),
+      cricket::FOURCC_ANY)));
+  EXPECT_TRUE(SetSend(true));
+  EXPECT_TRUE(channel_->SetRender(true));
+  EXPECT_EQ(0, renderer_.num_rendered_frames());
+  EXPECT_TRUE(SendFrame());
+  EXPECT_FRAME_WAIT(1, codec.width, codec.height, kTimeout);
 }
 
 // TODO(juberti): Fix this test to tolerate missing stats.

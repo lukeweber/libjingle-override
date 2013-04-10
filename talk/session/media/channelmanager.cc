@@ -39,8 +39,12 @@
 #include "talk/base/stringencode.h"
 #include "talk/base/stringutils.h"
 #include "talk/media/base/capturemanager.h"
+// TODO(pthatcher): Once SCTP data engine is in, uncomment this.
+// #include "talk/media/base/hybriddataengine.h"
 #include "talk/media/base/rtpdataengine.h"
 #include "talk/media/base/videocapturer.h"
+// TODO(pthatcher): Once SCTP data engine is in, uncomment this.
+// #include "talk/media/sctp/sctpdataengine.h"
 #include "talk/session/media/soundclip.h"
 
 namespace cricket {
@@ -93,14 +97,29 @@ struct CreationParams : public talk_base::MessageData {
         content_name(content_name),
         rtcp(rtcp),
         voice_channel(voice_channel),
-        video_channel(NULL),
-        data_channel(NULL) {
+        video_channel(NULL) {
   }
   BaseSession* session;
   std::string content_name;
   bool rtcp;
   VoiceChannel* voice_channel;
   VideoChannel* video_channel;
+};
+
+struct DataChannelCreationParams : public talk_base::MessageData {
+  DataChannelCreationParams(
+      BaseSession* session, const std::string& content_name,
+      bool rtcp, const std::string& codec_name)
+      : session(session),
+        content_name(content_name),
+        rtcp(rtcp),
+        codec_name(codec_name),
+        data_channel(NULL) {
+  }
+  BaseSession* session;
+  std::string content_name;
+  bool rtcp;
+  std::string codec_name;
   DataChannel* data_channel;
 };
 
@@ -217,6 +236,8 @@ struct StartCaptureParams  : public talk_base::MessageData {
 #if !defined(DISABLE_MEDIA_ENGINE_FACTORY)
 ChannelManager::ChannelManager(talk_base::Thread* worker_thread) {
   Construct(MediaEngineFactory::Create(),
+            // TODO(pthatcher): Once SCTP data engine is in, use it:
+            // new HybridDataEngine(new RtpDataEngine(), new SctpDataEngine()),
             new RtpDataEngine(),
             cricket::DeviceManagerFactory::Create(),
             new CaptureManager(),
@@ -235,7 +256,13 @@ ChannelManager::ChannelManager(MediaEngineInterface* me,
 ChannelManager::ChannelManager(MediaEngineInterface* me,
                                DeviceManagerInterface* dm,
                                talk_base::Thread* worker_thread) {
-  Construct(me, new RtpDataEngine(), dm, new CaptureManager(), worker_thread);
+  Construct(me,
+            // TODO(pthatcher): Once SCTP data engine is in, use it:
+            // new HybridDataEngine(new RtpDataEngine(), new SctpDataEngine()),
+            new RtpDataEngine(),
+            dm,
+            new CaptureManager(),
+            worker_thread);
 }
 
 void ChannelManager::Construct(MediaEngineInterface* me,
@@ -535,16 +562,25 @@ void ChannelManager::DestroyVideoChannel_w(VideoChannel* video_channel) {
 }
 
 DataChannel* ChannelManager::CreateDataChannel(
-    BaseSession* session, const std::string& content_name, bool rtcp) {
-  CreationParams params(session, content_name, rtcp, NULL);
+    BaseSession* session, const std::string& content_name,
+    bool rtcp, const std::string& codec_name) {
+  DataChannelCreationParams params(session, content_name, rtcp, codec_name);
   return (Send(MSG_CREATEDATACHANNEL, &params)) ? params.data_channel : NULL;
 }
 
 DataChannel* ChannelManager::CreateDataChannel_w(
-    BaseSession* session, const std::string& content_name, bool rtcp) {
+    BaseSession* session, const std::string& content_name,
+    bool rtcp, const std::string& codec_name) {
   // This is ok to alloc from a thread other than the worker thread.
   ASSERT(initialized_);
-  DataMediaChannel* media_channel = data_media_engine_->CreateChannel();
+  DataMediaChannel* media_channel = data_media_engine_->CreateChannel(
+      codec_name);
+  if (!media_channel) {
+    LOG(LS_WARNING) << "Failed to create data channel with codec "
+                    << codec_name;
+    return NULL;
+  }
+
   DataChannel* data_channel = new DataChannel(
       worker_thread_, media_channel,
       session, content_name, rtcp);
@@ -1070,9 +1106,10 @@ void ChannelManager::OnMessage(talk_base::Message* message) {
       break;
     }
     case MSG_CREATEDATACHANNEL: {
-      CreationParams* p = static_cast<CreationParams*>(data);
-      p->data_channel =
-          CreateDataChannel_w(p->session, p->content_name, p->rtcp);
+      DataChannelCreationParams* p =
+          static_cast<DataChannelCreationParams*>(data);
+      p->data_channel = CreateDataChannel_w(
+          p->session, p->content_name, p->rtcp, p->codec_name);
       break;
     }
     case MSG_DESTROYDATACHANNEL: {

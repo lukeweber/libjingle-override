@@ -218,7 +218,8 @@ class WebRtcVoiceEngine
   void Construct();
   void ConstructCodecs();
   bool InitInternal();
-  void ApplyLogging(const std::string& log_filter);
+  void SetTraceFilter(int filter);
+  void SetTraceOptions(const std::string& options);
   // Applies either options or overrides.  Every option that is "set"
   // will be applied.  Every option not "set" will be ignored.  This
   // allows us to selectively turn on and off different options easily
@@ -261,8 +262,8 @@ class WebRtcVoiceEngine
   // The external audio device manager
   webrtc::AudioDeviceModule* adm_;
   webrtc::AudioDeviceModule* adm_sc_;
-  int log_level_;
-  std::string log_filter_;
+  int log_filter_;
+  std::string log_options_;
   bool is_dumping_aec_;
   std::vector<AudioCodec> codecs_;
   std::vector<RtpHeaderExtension> rtp_header_extensions_;

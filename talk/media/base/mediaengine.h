@@ -396,7 +396,9 @@ typedef CompositeMediaEngine<NullVoiceEngine, NullVideoEngine> NullMediaEngine;
 class DataEngineInterface {
  public:
   virtual ~DataEngineInterface() {}
-  virtual DataMediaChannel* CreateChannel() = 0;
+  // codec_name == "" means use the default codec.
+  virtual DataMediaChannel* CreateChannel(
+      const std::string& codec_name) = 0;
   virtual const std::vector<DataCodec>& data_codecs() = 0;
 };
 

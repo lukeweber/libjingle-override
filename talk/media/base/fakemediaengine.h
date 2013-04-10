@@ -930,7 +930,7 @@ inline FakeVideoMediaChannel::~FakeVideoMediaChannel() {
 
 class FakeDataEngine : public DataEngineInterface {
  public:
-  virtual DataMediaChannel* CreateChannel() {
+  virtual DataMediaChannel* CreateChannel(const std::string& codec_name) {
     FakeDataMediaChannel* ch = new FakeDataMediaChannel(this);
     channels_.push_back(ch);
     return ch;

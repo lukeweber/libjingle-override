@@ -106,7 +106,7 @@ class RtpDataMediaChannelTest : public testing::Test {
 
   cricket::RtpDataMediaChannel* CreateChannel(cricket::RtpDataEngine* dme) {
     cricket::RtpDataMediaChannel* channel =
-        static_cast<cricket::RtpDataMediaChannel*>(dme->CreateChannel());
+        static_cast<cricket::RtpDataMediaChannel*>(dme->CreateChannel(""));
     channel->SetInterface(iface_.get());
     channel->SignalDataReceived.connect(
         receiver_.get(), &FakeDataReceiver::OnDataReceived);
@@ -250,7 +250,7 @@ TEST_F(RtpDataMediaChannelTest, SendData) {
 
   cricket::DataCodec codec;
   codec.id = 103;
-  codec.name = cricket::kGoogleDataCodecName;
+  codec.name = cricket::kGoogleRtpDataCodecName;
   std::vector<cricket::DataCodec> codecs;
   codecs.push_back(codec);
   ASSERT_TRUE(dmc->SetSendCodecs(codecs));
@@ -309,7 +309,7 @@ TEST_F(RtpDataMediaChannelTest, SendDataMultipleClocks) {
 
   cricket::DataCodec codec;
   codec.id = 103;
-  codec.name = cricket::kGoogleDataCodecName;
+  codec.name = cricket::kGoogleRtpDataCodecName;
   std::vector<cricket::DataCodec> codecs;
   codecs.push_back(codec);
   ASSERT_TRUE(dmc1->SetSendCodecs(codecs));
@@ -352,7 +352,7 @@ TEST_F(RtpDataMediaChannelTest, SendDataRate) {
 
   cricket::DataCodec codec;
   codec.id = 103;
-  codec.name = cricket::kGoogleDataCodecName;
+  codec.name = cricket::kGoogleRtpDataCodecName;
   std::vector<cricket::DataCodec> codecs;
   codecs.push_back(codec);
   ASSERT_TRUE(dmc->SetSendCodecs(codecs));
@@ -415,7 +415,7 @@ TEST_F(RtpDataMediaChannelTest, ReceiveData) {
 
   cricket::DataCodec codec;
   codec.id = 103;
-  codec.name = cricket::kGoogleDataCodecName;
+  codec.name = cricket::kGoogleRtpDataCodecName;
   std::vector<cricket::DataCodec> codecs;
   codecs.push_back(codec);
   ASSERT_TRUE(dmc->SetRecvCodecs(codecs));

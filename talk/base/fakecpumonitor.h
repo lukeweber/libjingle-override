@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2013, Google Inc.
+ * Copyright 2013 Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,51 +25,25 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.webrtc;
+#ifndef TALK_BASE_FAKECPUMONITOR_H_
+#define TALK_BASE_FAKECPUMONITOR_H_
 
-/** Java version of webrtc::StatsReport. */
-public class StatsReport {
+#include "talk/base/cpumonitor.h"
 
-  /** Java version of webrtc::StatsReport::Value. */
-  public static class Value {
-    public final String name;
-    public final String value;
+namespace talk_base {
 
-    public Value(String name, String value) {
-      this.name = name;
-      this.value = value;
-    }
-
-    public String toString() {
-      StringBuilder builder = new StringBuilder();
-      builder.append("[").append(name).append(": ").append(value).append("]");
-      return builder.toString();
-    }
+class FakeCpuMonitor : public talk_base::CpuMonitor {
+ public:
+  explicit FakeCpuMonitor(Thread* thread)
+      : CpuMonitor(thread) {
+  }
+  ~FakeCpuMonitor() {
   }
 
-  /** Java version of webrtc::StatsReport::kStatsReportType*. */
-  public enum Type { SSRC, BWE };
-
-  public final String id;
-  public final Type type;
-  // Time since 1970-01-01T00:00:00Z in milliseconds.
-  public final double timestamp;
-  public final Value[] values;
-
-  public StatsReport(String id, Type type, double timestamp, Value[] values) {
-    this.id = id;
-    this.type = type;
-    this.timestamp = timestamp;
-    this.values = values;
+  virtual void OnMessage(talk_base::Message* msg) {
   }
+};
 
-  public String toString() {
-    StringBuilder builder = new StringBuilder();
-    builder.append("id: ").append(id).append(", type: ").append(type.name())
-        .append(", timestamp: ").append(timestamp).append(", values: ");
-    for (int i = 0; i < values.length; ++i) {
-      builder.append(values[i].toString()).append(", ");
-    }
-    return builder.toString();
-  }
-}
+}  // namespace talk_base
+
+#endif  // TALK_BASE_FAKECPUMONITOR_H_

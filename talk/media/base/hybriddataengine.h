@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2013, Google Inc.
+ * Copyright 2012 Google Inc, and Robin Seggelmann
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,51 +25,52 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.webrtc;
+#ifndef TALK_MEDIA_SCTP_HYBRIDDATAENGINE_H_
+#define TALK_MEDIA_SCTP_HYBRIDDATAENGINE_H_
 
-/** Java version of webrtc::StatsReport. */
-public class StatsReport {
+#include <string>
+#include <vector>
 
-  /** Java version of webrtc::StatsReport::Value. */
-  public static class Value {
-    public final String name;
-    public final String value;
+#include "talk/base/scoped_ptr.h"
+#include "talk/media/base/codec.h"
+#include "talk/media/base/mediachannel.h"
+#include "talk/media/base/mediaengine.h"
 
-    public Value(String name, String value) {
-      this.name = name;
-      this.value = value;
-    }
+namespace cricket {
 
-    public String toString() {
-      StringBuilder builder = new StringBuilder();
-      builder.append("[").append(name).append(": ").append(value).append("]");
-      return builder.toString();
-    }
+class HybridDataEngine : public DataEngineInterface {
+ public:
+  // Takes ownership.
+  HybridDataEngine(DataEngineInterface* first,
+                   DataEngineInterface* second)
+      : first_(first),
+        second_(second) {
+    codecs_ = first_->data_codecs();
+    codecs_.insert(
+        codecs_.end(),
+        second_->data_codecs().begin(),
+        second_->data_codecs().end());
   }
 
-  /** Java version of webrtc::StatsReport::kStatsReportType*. */
-  public enum Type { SSRC, BWE };
-
-  public final String id;
-  public final Type type;
-  // Time since 1970-01-01T00:00:00Z in milliseconds.
-  public final double timestamp;
-  public final Value[] values;
-
-  public StatsReport(String id, Type type, double timestamp, Value[] values) {
-    this.id = id;
-    this.type = type;
-    this.timestamp = timestamp;
-    this.values = values;
-  }
-
-  public String toString() {
-    StringBuilder builder = new StringBuilder();
-    builder.append("id: ").append(id).append(", type: ").append(type.name())
-        .append(", timestamp: ").append(timestamp).append(", values: ");
-    for (int i = 0; i < values.length; ++i) {
-      builder.append(values[i].toString()).append(", ");
+  virtual DataMediaChannel* CreateChannel(const std::string& codec_name) {
+    DataMediaChannel* channel = NULL;
+    if (first_) {
+      channel = first_->CreateChannel(codec_name);
     }
-    return builder.toString();
+    if (!channel && second_) {
+      channel = second_->CreateChannel(codec_name);
+    }
+    return channel;
   }
-}
+
+  virtual const std::vector<DataCodec>& data_codecs() { return codecs_; }
+
+ private:
+  talk_base::scoped_ptr<DataEngineInterface> first_;
+  talk_base::scoped_ptr<DataEngineInterface> second_;
+  std::vector<DataCodec> codecs_;
+};
+
+}  // namespace cricket
+
+#endif  // TALK_MEDIA_SCTP_HYBRIDDATAENGINE_H_

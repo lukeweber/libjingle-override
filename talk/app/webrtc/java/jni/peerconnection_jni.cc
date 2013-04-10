@@ -85,7 +85,6 @@ using webrtc::PeerConnectionInterface;
 using webrtc::PeerConnectionObserver;
 using webrtc::SessionDescriptionInterface;
 using webrtc::SetSessionDescriptionObserver;
-using webrtc::StatsElement;
 using webrtc::StatsObserver;
 using webrtc::StatsReport;
 using webrtc::VideoRendererInterface;
@@ -166,8 +165,7 @@ class ClassReferenceHolder {
     LoadClass(jni, "org/webrtc/SessionDescription$Type");
     LoadClass(jni, "org/webrtc/StatsReport");
     LoadClass(jni, "org/webrtc/StatsReport$Type");
-    LoadClass(jni, "org/webrtc/StatsReport$Element");
-    LoadClass(jni, "org/webrtc/StatsReport$Element$Value");
+    LoadClass(jni, "org/webrtc/StatsReport$Value");
     LoadClass(jni, "org/webrtc/VideoRenderer$I420Frame");
     LoadClass(jni, "org/webrtc/VideoTrack");
   }
@@ -690,16 +688,10 @@ class StatsObserverWrapper : public StatsObserver {
         j_stats_report_class_(FindClass(jni, "org/webrtc/StatsReport")),
         j_stats_report_ctor_(GetMethodID(
             jni, j_stats_report_class_, "<init>",
-            "(Ljava/lang/String;Lorg/webrtc/StatsReport$Type;"
-            "Lorg/webrtc/StatsReport$Element;"
-            "Lorg/webrtc/StatsReport$Element;)V")),
-        j_element_class_(FindClass(
-            jni, "org/webrtc/StatsReport$Element")),
-        j_element_ctor_(GetMethodID(
-            jni, j_element_class_, "<init>",
-            "(D[Lorg/webrtc/StatsReport$Element$Value;)V")),
+            "(Ljava/lang/String;Lorg/webrtc/StatsReport$Type;D"
+            "[Lorg/webrtc/StatsReport$Value;)V")),
         j_value_class_(FindClass(
-            jni, "org/webrtc/StatsReport$Element$Value")),
+            jni, "org/webrtc/StatsReport$Value")),
         j_value_ctor_(GetMethodID(
             jni, j_value_class_, "<init>",
             "(Ljava/lang/String;Ljava/lang/String;)V")) {
@@ -733,31 +725,30 @@ class StatsObserverWrapper : public StatsObserver {
       CHECK(type_index >= 0, "Unexpected report type: " << report.type);
       ScopedLocalRef<jobject> j_type(jni, JavaEnumFromIndex(
           jni, "StatsReport$Type", type_index));
-      ScopedLocalRef<jobject> j_local(jni, ElementToJava(jni, report.local));
-      ScopedLocalRef<jobject> j_remote(jni, ElementToJava(jni, report.remote));
+      ScopedLocalRef<jobjectArray> j_values(
+          jni, ValuesToJava(jni, report.values));
       ScopedLocalRef<jobject> j_report(jni, jni->NewObject(
           j_stats_report_class_, j_stats_report_ctor_, *j_id, *j_type,
-          *j_local, *j_remote));
+          report.timestamp, *j_values));
       jni->SetObjectArrayElement(reports_array, i, *j_report);
     }
     return reports_array;
   }
 
-  jobject ElementToJava(JNIEnv* jni, const StatsElement& element) {
-    ScopedLocalRef<jobjectArray> j_values(jni, jni->NewObjectArray(
-        element.values.size(), j_value_class_, NULL));
-    for (int i = 0; i < element.values.size(); ++i) {
-      const StatsElement::Value& value = element.values[i];
+  jobjectArray ValuesToJava(JNIEnv* jni, const StatsReport::Values& values) {
+    jobjectArray j_values = jni->NewObjectArray(
+        values.size(), j_value_class_, NULL);
+    for (int i = 0; i < values.size(); ++i) {
+      const StatsReport::Value& value = values[i];
       ScopedLocalRef<jstring> j_name(
           jni, JavaStringFromStdString(jni, value.name));
       ScopedLocalRef<jstring> j_value(
           jni, JavaStringFromStdString(jni, value.value));
       ScopedLocalRef<jobject> j_element_value(jni, jni->NewObject(
           j_value_class_, j_value_ctor_, *j_name, *j_value));
-      jni->SetObjectArrayElement(*j_values, i, *j_element_value);
+      jni->SetObjectArrayElement(j_values, i, *j_element_value);
     }
-    return jni->NewObject(
-        j_element_class_, j_element_ctor_, element.timestamp, *j_values);
+    return j_values;
   }
 
   JNIEnv* jni() {
@@ -768,8 +759,6 @@ class StatsObserverWrapper : public StatsObserver {
   const jclass j_observer_class_;
   const jclass j_stats_report_class_;
   const jmethodID j_stats_report_ctor_;
-  const jclass j_element_class_;
-  const jmethodID j_element_ctor_;
   const jclass j_value_class_;
   const jmethodID j_value_ctor_;
 };

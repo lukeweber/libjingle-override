@@ -564,7 +564,9 @@ struct VideoReceiverInfo {
         frame_height(0),
         framerate_rcvd(0),
         framerate_decoded(0),
-        framerate_output(0) {
+        framerate_output(0),
+        framerate_render_input(0),
+        framerate_render_output(0) {
   }
 
   std::vector<uint32> ssrcs;
@@ -582,6 +584,10 @@ struct VideoReceiverInfo {
   int framerate_rcvd;
   int framerate_decoded;
   int framerate_output;
+  // Framerate as sent to the renderer.
+  int framerate_render_input;
+  // Framerate that the renderer reports.
+  int framerate_render_output;
 };
 
 struct DataSenderInfo {

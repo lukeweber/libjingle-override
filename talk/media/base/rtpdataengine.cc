@@ -46,9 +46,6 @@ static const unsigned char kReservedSpace[] = {
   0x00, 0x00, 0x00, 0x00
 };
 
-const int kGoogleDataCodecId = 101;
-const char* kGoogleDataCodecName = "google-data";
-
 // Amount of overhead SRTP may take.  We need to leave room in the
 // buffer for it, otherwise SRTP will fail later.  If SRTP ever uses
 // more than this, we need to increase this number.
@@ -56,20 +53,24 @@ static const size_t kMaxSrtpHmacOverhead = 16;
 
 RtpDataEngine::RtpDataEngine() {
   data_codecs_.push_back(
-      DataCodec(cricket::kGoogleDataCodecId,
-                cricket::kGoogleDataCodecName, 0));
+      DataCodec(kGoogleRtpDataCodecId,
+                kGoogleRtpDataCodecName, 0));
   SetTiming(new talk_base::Timing());
 }
 
-DataMediaChannel* RtpDataEngine::CreateChannel() {
+DataMediaChannel* RtpDataEngine::CreateChannel(
+    const std::string& codec_name) {
+  if (codec_name != "" && codec_name != kGoogleRtpDataCodecName) {
+    return NULL;
+  }
   return new RtpDataMediaChannel(timing_.get());
 }
 
 // TODO(pthatcher): Should we move these find/get functions somewhere
 // common?
-bool FindCodecById(const std::vector<cricket::DataCodec>& codecs,
-                   int id, cricket::DataCodec* codec_out) {
-  std::vector<cricket::DataCodec>::const_iterator iter;
+bool FindCodecById(const std::vector<DataCodec>& codecs,
+                   int id, DataCodec* codec_out) {
+  std::vector<DataCodec>::const_iterator iter;
   for (iter = codecs.begin(); iter != codecs.end(); ++iter) {
     if (iter->id == id) {
       *codec_out = *iter;
@@ -79,9 +80,9 @@ bool FindCodecById(const std::vector<cricket::DataCodec>& codecs,
   return false;
 }
 
-bool FindCodecByName(const std::vector<cricket::DataCodec>& codecs,
-                     const std::string& name, cricket::DataCodec* codec_out) {
-  std::vector<cricket::DataCodec>::const_iterator iter;
+bool FindCodecByName(const std::vector<DataCodec>& codecs,
+                     const std::string& name, DataCodec* codec_out) {
+  std::vector<DataCodec>::const_iterator iter;
   for (iter = codecs.begin(); iter != codecs.end(); ++iter) {
     if (iter->name == name) {
       *codec_out = *iter;
@@ -123,8 +124,8 @@ void RtpClock::Tick(
 }
 
 const DataCodec* FindUnknownCodec(const std::vector<DataCodec>& codecs) {
-  DataCodec data_codec(kGoogleDataCodecId, kGoogleDataCodecName, 0);
-  std::vector<cricket::DataCodec>::const_iterator iter;
+  DataCodec data_codec(kGoogleRtpDataCodecId, kGoogleRtpDataCodecName, 0);
+  std::vector<DataCodec>::const_iterator iter;
   for (iter = codecs.begin(); iter != codecs.end(); ++iter) {
     if (!iter->Matches(data_codec)) {
       return &(*iter);
@@ -134,8 +135,8 @@ const DataCodec* FindUnknownCodec(const std::vector<DataCodec>& codecs) {
 }
 
 const DataCodec* FindKnownCodec(const std::vector<DataCodec>& codecs) {
-  DataCodec data_codec(kGoogleDataCodecId, kGoogleDataCodecName, 0);
-  std::vector<cricket::DataCodec>::const_iterator iter;
+  DataCodec data_codec(kGoogleRtpDataCodecId, kGoogleRtpDataCodecName, 0);
+  std::vector<DataCodec>::const_iterator iter;
   for (iter = codecs.begin(); iter != codecs.end(); ++iter) {
     if (iter->Matches(data_codec)) {
       return &(*iter);
@@ -311,9 +312,9 @@ bool RtpDataMediaChannel::SendData(
   }
 
   DataCodec found_codec;
-  if (!FindCodecByName(send_codecs_, kGoogleDataCodecName, &found_codec)) {
+  if (!FindCodecByName(send_codecs_, kGoogleRtpDataCodecName, &found_codec)) {
     LOG(LS_WARNING) << "Not sending data because codec is unknown: "
-                    << kGoogleDataCodecName;
+                    << kGoogleRtpDataCodecName;
     return false;
   }
 

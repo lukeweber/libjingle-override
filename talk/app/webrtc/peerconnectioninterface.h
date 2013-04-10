@@ -89,6 +89,7 @@ class WebRtcVideoDecoderFactory;
 
 namespace webrtc {
 class AudioDeviceModule;
+class MediaConstraintsInterface;
 
 // MediaStream container interface.
 class StreamCollectionInterface : public talk_base::RefCountInterface {

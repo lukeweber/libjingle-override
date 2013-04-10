@@ -949,7 +949,7 @@ TEST_F(PeerConnectionInterfaceTest, ReceiveFireFoxOffer) {
   MAYBE_SKIP_TEST(talk_base::SSLStreamAdapter::HaveDtlsSrtp);
   FakeConstraints constraints;
   constraints.AddMandatory(webrtc::MediaConstraintsInterface::kEnableDtlsSrtp,
-                           webrtc::MediaConstraintsInterface::kValueTrue);
+                           true);
   CreatePeerConnection(&constraints);
   AddAudioVideoStream(kStreamLabel1, "audio_label", "video_label");
   SessionDescriptionInterface* desc =

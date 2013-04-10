@@ -48,6 +48,7 @@ const uint32 kStateChange = 0;
 static const int64 kMaxDistance = ~(static_cast<int64>(1) << 63);
 static const int64 kMinDesirableFps = static_cast<int64>(14);
 static const int kYU12Penalty = 16;  // Needs to be higher than MJPG index.
+static const int kDefaultScreencastFps = 5;
 typedef talk_base::TypedMessageData<CaptureState> StateChangeParams;
 
 /////////////////////////////////////////////////////////////////////
@@ -220,7 +221,11 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
 #if defined(HAVE_YUV)
   if (IsScreencast()) {
     int scaled_width, scaled_height;
-    ComputeScale(captured_frame->width, captured_frame->height, 5,
+    int desired_screencast_fps = capture_format_.get() ?
+        VideoFormat::IntervalToFps(capture_format_->interval) :
+        kDefaultScreencastFps;
+    ComputeScale(captured_frame->width, captured_frame->height,
+                 desired_screencast_fps,
                  &scaled_width, &scaled_height);
     if (FOURCC_ARGB == captured_frame->fourcc &&
         (scaled_width != captured_frame->height ||

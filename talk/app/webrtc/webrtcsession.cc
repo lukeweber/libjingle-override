@@ -32,12 +32,13 @@
 
 #include "talk/app/webrtc/jsepicecandidate.h"
 #include "talk/app/webrtc/jsepsessiondescription.h"
-#include "talk/app/webrtc/mediastreaminterface.h"
+#include "talk/app/webrtc/mediaconstraintsinterface.h"
 #include "talk/app/webrtc/mediastreamsignaling.h"
 #include "talk/app/webrtc/peerconnectioninterface.h"
 #include "talk/base/helpers.h"
 #include "talk/base/logging.h"
 #include "talk/base/stringencode.h"
+#include "talk/media/base/constants.h"
 #include "talk/media/base/videocapturer.h"
 #include "talk/session/media/channel.h"
 #include "talk/session/media/channelmanager.h"
@@ -74,9 +75,6 @@ const char MediaConstraintsInterface::kEnableRtpDataChannels[] =
 // Arbitrary constant used as prefix for the identity.
 // Chosen to make the certificates more readable.
 const char kWebRTCIdentityPrefix[] = "WebRTC";
-
-const char MediaConstraintsInterface::kValueTrue[] = "true";
-const char MediaConstraintsInterface::kValueFalse[] = "false";
 
 // Error messages
 const char kCreateChannelFailed[] = "Failed to create channels.";
@@ -255,41 +253,6 @@ static bool GetTrackIdBySsrc(const SessionDescription* session_description,
   return false;
 }
 
-static bool FindConstraint(const MediaConstraintsInterface::Constraints&
-  constraints, const std::string& key, std::string* value) {
-  for (MediaConstraintsInterface::Constraints::const_iterator iter =
-           constraints.begin(); iter != constraints.end(); ++iter) {
-    if (iter->key == key) {
-      if (value)
-        *value = iter->value;
-
-      return true;
-    }
-  }
-
-  return false;
-}
-
-static bool FindConstraint(const MediaConstraintsInterface* constraints,
-  const std::string& key, std::string* value, bool* mandatory) {
-  if (!constraints)
-    return false;
-
-  if (FindConstraint(constraints->GetMandatory(), key, value)) {
-    if (mandatory)
-      *mandatory = true;
-    return true;
-  }
-
-  if (FindConstraint(constraints->GetOptional(), key, value)) {
-    if (mandatory)
-      *mandatory = false;
-    return true;
-  }
-
-  return false;
-}
-
 static bool BadSdp(const std::string& desc, std::string* err_desc) {
   if (err_desc) {
     *err_desc = desc;
@@ -452,9 +415,9 @@ bool WebRtcSession::Initialize(const MediaConstraintsInterface* constraints) {
   set_secure_policy(cricket::SEC_REQUIRED);
 
   // Enable DTLS-SRTP if the constraint is set.
-  std::string value;
+  bool value;
   if (FindConstraint(constraints, MediaConstraintsInterface::kEnableDtlsSrtp,
-      &value, NULL) && value == MediaConstraintsInterface::kValueTrue) {
+      &value, NULL) && value) {
     LOG(LS_INFO) << "DTLS-SRTP enabled; generating identity";
     std::string identity_name = kWebRTCIdentityPrefix +
         talk_base::ToString(talk_base::CreateRandomId());
@@ -470,7 +433,7 @@ bool WebRtcSession::Initialize(const MediaConstraintsInterface* constraints) {
   // Enable creation of RTP data channels if the kEnableRtpDataChannels is set.
   allow_rtp_data_engine_ = FindConstraint(
       constraints, MediaConstraintsInterface::kEnableRtpDataChannels,
-      &value, NULL) && value == MediaConstraintsInterface::kValueTrue;
+      &value, NULL) && value;
   if (allow_rtp_data_engine_)
     mediastream_signaling_->SetDataChannelFactory(this);
 
@@ -558,16 +521,20 @@ SessionDescriptionInterface* WebRtcSession::CreateOffer(
 }
 
 SessionDescriptionInterface* WebRtcSession::CreateAnswer(
-    const MediaConstraintsInterface* constraints,
-    const SessionDescriptionInterface* offer) {
+    const MediaConstraintsInterface* constraints) {
+  if (!remote_description()) {
+    LOG(LS_ERROR) << "CreateAnswer can't be called before"
+                  << " SetRemoteDescription.";
+    return NULL;
+  }
+  if (remote_description()->type() != JsepSessionDescription::kOffer) {
+    LOG(LS_ERROR) << "CreateAnswer failed because remote_description is not an"
+                  << " offer.";
+  }
+
   cricket::MediaSessionOptions options;
   if (!mediastream_signaling_->GetOptionsForAnswer(constraints, &options)) {
     LOG(LS_ERROR) << "CreateAnswer called with invalid constraints.";
-    return NULL;
-  }
-
-  if (!offer) {
-    LOG(LS_ERROR) << "Offer can't be NULL in CreateAnswer.";
     return NULL;
   }
   if (!ValidStreams(options.streams)) {
@@ -581,7 +548,8 @@ SessionDescriptionInterface* WebRtcSession::CreateAnswer(
   options.transport_options.ice_restart =
       ice_restart_latch_->AnswerWithIceRestartLatch();
   SessionDescription* desc(
-      session_desc_factory_.CreateAnswer(offer->description(), options,
+      session_desc_factory_.CreateAnswer(BaseSession::remote_description(),
+                                         options,
                                          BaseSession::local_description()));
   // RFC 3264
   // If the answer is different from the offer in any way (different IP
@@ -1356,8 +1324,10 @@ bool WebRtcSession::CreateVideoChannel(const SessionDescription* desc) {
 
 bool WebRtcSession::CreateDataChannel(const SessionDescription* desc) {
   const cricket::ContentInfo* data = cricket::GetFirstDataContent(desc);
+  // TODO(juberti): Pass down kGoogleSctpDataCodecName depending upon
+  // various flags in Chrome.
   data_channel_.reset(channel_manager_->CreateDataChannel(
-      this, data->name, true));
+      this, data->name, true, cricket::kGoogleRtpDataCodecName));
   if (!data_channel_.get()) {
     return false;
   }

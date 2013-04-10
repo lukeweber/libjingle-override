@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-#include "talk/app/webrtc/mediastreaminterface.h"
+#include "talk/app/webrtc/mediaconstraintsinterface.h"
 #include "talk/base/stringencode.h"
 
 namespace webrtc {
@@ -49,118 +49,59 @@ class FakeConstraints : public webrtc::MediaConstraintsInterface {
     return optional_;
   }
 
-  void AddMandatory(const std::string& key, const std::string& value) {
-    mandatory_.push_back(Constraint(key, value));
+  template <class T>
+  void AddMandatory(const std::string& key, const T& value) {
+    mandatory_.push_back(Constraint(key, talk_base::ToString<T>(value)));
   }
 
-  void AddOptional(const std::string& key, const std::string& value) {
-    optional_.push_back(Constraint(key, value));
+  template <class T>
+  void AddOptional(const std::string& key, const T& value) {
+    optional_.push_back(Constraint(key, talk_base::ToString<T>(value)));
   }
 
   void SetMandatoryMinAspectRatio(double ratio) {
-    AddMandatory(MediaConstraintsInterface::kMinAspectRatio,
-                 talk_base::ToString<double>(ratio));
+    AddMandatory(MediaConstraintsInterface::kMinAspectRatio, ratio);
   }
 
   void SetMandatoryMinWidth(int width) {
-    AddMandatory(MediaConstraintsInterface::kMinWidth,
-                 talk_base::ToString<int>(width));
+    AddMandatory(MediaConstraintsInterface::kMinWidth, width);
   }
 
   void SetMandatoryMinHeight(int height) {
-    AddMandatory(MediaConstraintsInterface::kMinHeight,
-                 talk_base::ToString<int>(height));
+    AddMandatory(MediaConstraintsInterface::kMinHeight, height);
   }
 
   void SetOptionalMaxWidth(int width) {
-    AddOptional(MediaConstraintsInterface::kMaxWidth,
-                talk_base::ToString<int>(width));
+    AddOptional(MediaConstraintsInterface::kMaxWidth, width);
   }
 
   void SetMandatoryMaxFrameRate(int frame_rate) {
-    AddMandatory(MediaConstraintsInterface::kMaxFrameRate,
-                 talk_base::ToString<int>(frame_rate));
+    AddMandatory(MediaConstraintsInterface::kMaxFrameRate, frame_rate);
   }
 
   void SetMandatoryReceiveAudio(bool enable) {
-    if (enable) {
-      AddMandatory(MediaConstraintsInterface::kOfferToReceiveAudio,
-                   MediaConstraintsInterface::kValueTrue);
-    } else {
-      AddMandatory(MediaConstraintsInterface::kOfferToReceiveAudio,
-                   MediaConstraintsInterface::kValueFalse);
-    }
+    AddMandatory(MediaConstraintsInterface::kOfferToReceiveAudio, enable);
   }
 
   void SetMandatoryReceiveVideo(bool enable) {
-    if (enable) {
-      AddMandatory(MediaConstraintsInterface::kOfferToReceiveVideo,
-                   MediaConstraintsInterface::kValueTrue);
-    } else {
-      AddMandatory(MediaConstraintsInterface::kOfferToReceiveVideo,
-                   MediaConstraintsInterface::kValueFalse);
-    }
+    AddMandatory(MediaConstraintsInterface::kOfferToReceiveVideo, enable);
   }
 
   void SetMandatoryUseRtpMux(bool enable) {
-    if (enable) {
-      AddMandatory(MediaConstraintsInterface::kUseRtpMux,
-                   MediaConstraintsInterface::kValueTrue);
-    } else {
-      AddMandatory(MediaConstraintsInterface::kUseRtpMux,
-                   MediaConstraintsInterface::kValueFalse);
-    }
+    AddMandatory(MediaConstraintsInterface::kUseRtpMux, enable);
   }
 
   void SetMandatoryIceRestart(bool enable) {
-    if (enable) {
-      AddMandatory(MediaConstraintsInterface::kIceRestart,
-                   MediaConstraintsInterface::kValueTrue);
-    } else {
-      AddMandatory(MediaConstraintsInterface::kIceRestart,
-                   MediaConstraintsInterface::kValueFalse);
-    }
+    AddMandatory(MediaConstraintsInterface::kIceRestart, enable);
   }
 
   void SetAllowRtpDataChannels() {
-    AddMandatory(MediaConstraintsInterface::kEnableRtpDataChannels,
-                 MediaConstraintsInterface::kValueTrue);
-  }
-
-  bool FindConstraint(const std::string& key, std::string* value,
-                      bool* mandatory) {
-    if (FindConstraint(mandatory_, key, value)) {
-      if (mandatory)
-        *mandatory = true;
-      return true;
-    }
-
-    if (FindConstraint(optional_, key, value)) {
-      if (mandatory)
-        *mandatory = false;
-      return true;
-    }
-    return false;
+    AddMandatory(MediaConstraintsInterface::kEnableRtpDataChannels, true);
   }
 
  private:
-  bool FindConstraint(
-      const MediaConstraintsInterface::Constraints& constraints,
-      const std::string& key, std::string* value) {
-    MediaConstraintsInterface::Constraints::const_iterator iter =
-        constraints.begin();
-    for (; iter != constraints.end(); ++iter) {
-      if (iter->key == key) {
-        if (value)
-          *value = iter->value;
-        return true;
-      }
-    }
-    return false;
-  }
-
-  std::vector<Constraint> mandatory_;
-  std::vector<Constraint> optional_;
+  Constraints mandatory_;
+  Constraints optional_;
 };
 
 }  // namespace webrtc

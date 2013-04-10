@@ -110,6 +110,7 @@ struct TransportDescription {
     transport_options = from.transport_options;
     ice_ufrag = from.ice_ufrag;
     ice_pwd = from.ice_pwd;
+    ice_mode = from.ice_mode;
 
     identity_fingerprint.reset(CopyFingerprint(
         from.identity_fingerprint.get()));

@@ -31,6 +31,7 @@
 
 #include "talk/app/webrtc/audiotrack.h"
 #include "talk/app/webrtc/mediastreamproxy.h"
+#include "talk/app/webrtc/mediaconstraintsinterface.h"
 #include "talk/app/webrtc/mediastreamtrackproxy.h"
 #include "talk/app/webrtc/videotrack.h"
 
@@ -53,44 +54,10 @@ const char MediaConstraintsInterface::kIceRestart[] =
 const char MediaConstraintsInterface::kUseRtpMux[] =
     "googUseRtpMUX";
 
-static bool FindConstraint(
-    const MediaConstraintsInterface::Constraints& constraints,
-    const std::string& key, std::string* value) {
-  for (MediaConstraintsInterface::Constraints::const_iterator iter =
-           constraints.begin(); iter != constraints.end(); ++iter) {
-    if (iter->key == key) {
-      if (value) {
-        *value = iter->value;
-      }
-
-      return true;
-    }
-  }
-  return false;
-}
-
-// Finds a a constraint key and its value. |constraints| can be null..
-// |mandatory_constraints| is increased by one if the constraint is mandatory.
-static bool FindConstraint(const MediaConstraintsInterface* constraints,
-                           const std::string& key, std::string* value,
-                           size_t* mandatory_constraints) {
-  if (!constraints) {
-    return false;
-  }
-  if (FindConstraint(constraints->GetMandatory(), key, value)) {
-    ++*mandatory_constraints;
-    return true;
-  }
-  if (FindConstraint(constraints->GetOptional(), key, value)) {
-    return true;
-  }
-  return false;
-}
-
 static bool ParseConstraints(
     const MediaConstraintsInterface* constraints,
     cricket::MediaSessionOptions* options, bool is_answer) {
-  std::string value;
+  bool value;
   size_t mandatory_constraints_satisfied = 0;
 
   if (FindConstraint(constraints,
@@ -100,10 +67,9 @@ static bool ParseConstraints(
     // true, but never change from true to false. This is to make sure
     // CreateOffer / CreateAnswer doesn't remove a media content
     // description that has been created.
-    options->has_audio |=
-        (value == MediaConstraintsInterface::kValueTrue);
+    options->has_audio |= value;
   } else {
-    // kOfferToReceiveAudio is non mandatory true according to spec.
+    // kOfferToReceiveAudio defaults to true according to spec.
     options->has_audio = true;
   }
 
@@ -114,30 +80,28 @@ static bool ParseConstraints(
     // true, but never change from true to false. This is to make sure
     // CreateOffer / CreateAnswer doesn't remove a media content
     // description that has been created.
-    options->has_video |=
-        (value == MediaConstraintsInterface::kValueTrue);
+    options->has_video |= value;
   } else {
-    // kOfferToReceiveVideo is non mandatory false according to spec. But
+    // kOfferToReceiveVideo defaults to false according to spec. But
     // if it is an answer and video is offered, we should still accept video
     // per default.
-    options->has_video |= is_answer ? true : false;
+    options->has_video |= is_answer;
   }
 
   if (FindConstraint(constraints,
                      MediaConstraintsInterface::kUseRtpMux,
                      &value, &mandatory_constraints_satisfied)) {
-    options->bundle_enabled = (value == MediaConstraintsInterface::kValueTrue);
+    options->bundle_enabled = value;
   } else {
-    // kUseRtpMux is non mandatory true according to spec.
+    // kUseRtpMux defaults to true according to spec.
     options->bundle_enabled = true;
   }
   if (FindConstraint(constraints,
                      MediaConstraintsInterface::kIceRestart,
                      &value, &mandatory_constraints_satisfied)) {
-    options->transport_options.ice_restart =
-        (value == MediaConstraintsInterface::kValueTrue);;
+    options->transport_options.ice_restart = value;
   } else {
-    // kIceRestart is non mandatory false according to spec.
+    // kIceRestart defaults to false according to spec.
     options->transport_options.ice_restart = false;
   }
 

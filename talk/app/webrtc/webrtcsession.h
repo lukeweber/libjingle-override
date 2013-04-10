@@ -133,8 +133,7 @@ class WebRtcSession : public cricket::BaseSession,
       const MediaConstraintsInterface* constraints);
 
   SessionDescriptionInterface* CreateAnswer(
-      const MediaConstraintsInterface* constraints,
-      const SessionDescriptionInterface* offer);
+      const MediaConstraintsInterface* constraints);
 
   bool SetLocalDescription(SessionDescriptionInterface* desc,
                            std::string* err_desc);

@@ -433,23 +433,7 @@ void PeerConnection::CreateAnswer(
     return;
   }
   CreateSessionDescriptionMsg* msg = new CreateSessionDescriptionMsg(observer);
-  // TODO(perkj): This checks should be done by the session. Not here.
-  // Clean this up once the old Jsep API has been removed.
-  const SessionDescriptionInterface* offer = session_->remote_description();
-  std::string error;
-  if (!offer) {
-    msg->error = "CreateAnswer can't be called before SetRemoteDescription.";
-    signaling_thread()->Post(this, MSG_CREATE_SESSIONDESCRIPTION_FAILED, msg);
-    return;
-  }
-  if (offer->type() != JsepSessionDescription::kOffer) {
-    msg->error =
-        "CreateAnswer failed because remote_description is not an offer.";
-    signaling_thread()->Post(this, MSG_CREATE_SESSIONDESCRIPTION_FAILED, msg);
-    return;
-  }
-
-  msg->description.reset(session_->CreateAnswer(constraints, offer));
+  msg->description.reset(session_->CreateAnswer(constraints));
   if (!msg->description) {
     msg->error = "CreateAnswer failed.";
     signaling_thread()->Post(this, MSG_CREATE_SESSIONDESCRIPTION_FAILED, msg);

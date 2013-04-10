@@ -413,7 +413,7 @@ class WebRtcSdpTest : public testing::Test {
     audio_desc_ = CreateAudioContentDescription();
     AudioCodec opus(111, "opus", 48000, 0, 2, 3);
     audio_desc_->AddCodec(opus);
-    audio_desc_->AddCodec(AudioCodec(103, "ISAC", 16000, 0, 1, 2));
+    audio_desc_->AddCodec(AudioCodec(103, "ISAC", 16000, 32000, 1, 2));
     audio_desc_->AddCodec(AudioCodec(104, "CELT", 32000, 0, 2, 1));
     desc_.AddContent(kAudioContentName, NS_JINGLE_RTP, audio_desc_);
 
@@ -1070,12 +1070,13 @@ class WebRtcSdpTest : public testing::Test {
         // description.
         "a=msid-semantic: WMS\r\n"
         // Pl type 111 preferred.
-        "m=audio 1 RTP/SAVPF 111 104 103\r\n"
+        "m=audio 1 RTP/SAVPF 111 104 103 102\r\n"
         // Pltype 111 listed before 103 and 104 in the map.
         "a=rtpmap:111 opus/48000/2\r\n"
         // Pltype 103 listed before 104.
         "a=rtpmap:103 ISAC/16000\r\n"
         "a=rtpmap:104 CELT/32000/2\r\n"
+        "a=rtpmap:102 ISAC/32000/1\r\n"
         "a=fmtp:111 0-15,66,70 ";
     std::ostringstream os;
     os << "minptime=" << params.min_ptime << " stereo=" << params.stereo
@@ -1105,6 +1106,13 @@ class WebRtcSdpTest : public testing::Test {
       cricket::AudioCodec codec = acd->codecs()[i];
       VerifyCodecParameter(codec.params, "ptime", params.ptime);
       VerifyCodecParameter(codec.params, "maxptime", params.max_ptime);
+      if (codec.name == "ISAC") {
+        if (codec.clockrate == 16000) {
+          EXPECT_EQ(32000, codec.bitrate);
+        } else {
+          EXPECT_EQ(56000, codec.bitrate);
+        }
+      }
     }
   }
 
@@ -1385,6 +1393,16 @@ TEST_F(WebRtcSdpTest, DeserializeSessionDescription) {
   EXPECT_TRUE(CompareSessionDescription(jdesc_, jdesc));
 }
 
+TEST_F(WebRtcSdpTest, DeserializeSessionDescriptionWithoutCarriageReturn) {
+  JsepSessionDescription jdesc(kDummyString);
+  std::string sdp_without_carriage_return = kSdpFullString;
+  Replace("\r\n", "\n", &sdp_without_carriage_return);
+  // Deserialize
+  EXPECT_TRUE(SdpDeserialize(sdp_without_carriage_return, &jdesc));
+  // Verify
+  EXPECT_TRUE(CompareSessionDescription(jdesc_, jdesc));
+}
+
 TEST_F(WebRtcSdpTest, DeserializeSessionDescriptionWithoutCandidates) {
   // SessionDescription with desc but without candidates.
   JsepSessionDescription jdesc_no_candidates(kDummyString);
@@ -1417,7 +1435,7 @@ TEST_F(WebRtcSdpTest, DeserializeSessionDescriptionWithoutRtpmap) {
   // The codecs in the AudioContentDescription will be sorted by preference.
   ref_codecs.push_back(AudioCodec(0, "PCMU", 8000, 0, 1, 3));
   ref_codecs.push_back(AudioCodec(18, "G729", 16000, 0, 1, 2));
-  ref_codecs.push_back(AudioCodec(103, "ISAC", 16000, 0, 1, 1));
+  ref_codecs.push_back(AudioCodec(103, "ISAC", 16000, 32000, 1, 1));
   EXPECT_EQ(ref_codecs, audio->codecs());
 }
 

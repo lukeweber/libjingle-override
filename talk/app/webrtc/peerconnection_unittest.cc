@@ -153,8 +153,7 @@ class PeerConnectionTestClientBase
       FakeConstraints constraints;
       // Disable highpass filter so that we can get all the test audio frames.
       constraints.AddMandatory(
-          MediaConstraintsInterface::kHighpassFilter,
-          MediaConstraintsInterface::kValueFalse);
+          MediaConstraintsInterface::kHighpassFilter, false);
       talk_base::scoped_refptr<webrtc::LocalAudioSource> source =
           webrtc::LocalAudioSource::Create(&constraints);
       // TODO(perkj): Test audio source when it is implemented. Currently audio
@@ -449,8 +448,10 @@ class PeerConnectionTestClientBase
     if (!allocator_factory_) {
       return false;
     }
+    audio_thread_.Start();
     fake_audio_capture_module_ = FakeAudioCaptureModule::Create(
-        talk_base::Thread::Current());
+        &audio_thread_);
+
     if (fake_audio_capture_module_ == NULL) {
       return false;
     }
@@ -519,6 +520,13 @@ class PeerConnectionTestClientBase
   }
 
   std::string id_;
+  // Separate thread for executing |fake_audio_capture_module_| tasks. Audio
+  // processing must not be performed on the same thread as signaling due to
+  // signaling time constraints and relative complexity of the audio pipeline.
+  // This is consistent with the video pipeline that us a a separate thread for
+  // encoding and decoding.
+  talk_base::Thread audio_thread_;
+
   talk_base::scoped_refptr<webrtc::PortAllocatorFactoryInterface>
       allocator_factory_;
   talk_base::scoped_refptr<webrtc::PeerConnectionInterface> peer_connection_;
@@ -637,21 +645,21 @@ class JsepTestClient
   }
 
   virtual bool can_receive_audio() {
-    std::string value;
-    if (!session_description_constraints_.FindConstraint(
+    bool value;
+    if (webrtc::FindConstraint(&session_description_constraints_,
         MediaConstraintsInterface::kOfferToReceiveAudio, &value, NULL)) {
-      return true;
+      return value;
     }
-    return value == MediaConstraintsInterface::kValueTrue;
+    return true;
   }
 
   virtual bool can_receive_video() {
-    std::string value;
-    if (!session_description_constraints_.FindConstraint(
+    bool value;
+    if (webrtc::FindConstraint(&session_description_constraints_,
         MediaConstraintsInterface::kOfferToReceiveVideo, &value, NULL)) {
-      return true;
+      return value;
     }
-    return value == MediaConstraintsInterface::kValueTrue;
+    return true;
   }
 
   virtual void OnIceComplete() {
@@ -1023,7 +1031,7 @@ TEST_F(JsepPeerConnectionP2PTestClient, LocalP2PTestDtls) {
   MAYBE_SKIP_TEST(talk_base::SSLStreamAdapter::HaveDtlsSrtp);
   FakeConstraints setup_constraints;
   setup_constraints.AddMandatory(MediaConstraintsInterface::kEnableDtlsSrtp,
-                                 MediaConstraintsInterface::kValueTrue);
+                                 true);
   ASSERT_TRUE(CreateTestClients(&setup_constraints, &setup_constraints));
   LocalP2PTest();
   VerifyRenderedSize(640, 480);
@@ -1036,7 +1044,7 @@ TEST_F(JsepPeerConnectionP2PTestClient, LocalP2PTestOfferDtlsToSdes) {
   MAYBE_SKIP_TEST(talk_base::SSLStreamAdapter::HaveDtlsSrtp);
   FakeConstraints setup_constraints;
   setup_constraints.AddMandatory(MediaConstraintsInterface::kEnableDtlsSrtp,
-                                 MediaConstraintsInterface::kValueTrue);
+                                 true);
   ASSERT_TRUE(CreateTestClients(&setup_constraints, NULL));
   LocalP2PTest();
   VerifyRenderedSize(640, 480);
@@ -1049,7 +1057,7 @@ TEST_F(JsepPeerConnectionP2PTestClient, LocalP2PTestOfferSdesToDtls) {
   MAYBE_SKIP_TEST(talk_base::SSLStreamAdapter::HaveDtlsSrtp);
   FakeConstraints setup_constraints;
   setup_constraints.AddMandatory(MediaConstraintsInterface::kEnableDtlsSrtp,
-                                 MediaConstraintsInterface::kValueTrue);
+                                 true);
   ASSERT_TRUE(CreateTestClients(NULL, &setup_constraints));
   LocalP2PTest();
   VerifyRenderedSize(640, 480);
@@ -1062,7 +1070,7 @@ TEST_F(JsepPeerConnectionP2PTestClient, LocalP2PTestOfferDtlsButNotSdes) {
   MAYBE_SKIP_TEST(talk_base::SSLStreamAdapter::HaveDtlsSrtp);
   FakeConstraints setup_constraints;
   setup_constraints.AddMandatory(MediaConstraintsInterface::kEnableDtlsSrtp,
-                                 MediaConstraintsInterface::kValueTrue);
+                                 true);
   ASSERT_TRUE(CreateTestClients(&setup_constraints, &setup_constraints));
   receiving_client()->RemoveSdesCryptoFromReceivedSdp(true);
   LocalP2PTest();

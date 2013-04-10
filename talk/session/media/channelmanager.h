@@ -117,8 +117,10 @@ class ChannelManager : public talk_base::MessageHandler,
       VoiceChannel* voice_channel);
   // Destroys a video channel created with the Create API.
   void DestroyVideoChannel(VideoChannel* video_channel);
+  // A codec name == "" means the "default" one, which currently is RTP.
   DataChannel* CreateDataChannel(
-      BaseSession* session, const std::string& content_name, bool rtcp);
+      BaseSession* session, const std::string& content_name,
+      bool rtcp, const std::string& codec_name);
   // Destroys a data channel created with the Create API.
   void DestroyDataChannel(DataChannel* data_channel);
 
@@ -241,7 +243,8 @@ class ChannelManager : public talk_base::MessageHandler,
       VoiceChannel* voice_channel);
   void DestroyVideoChannel_w(VideoChannel* video_channel);
   DataChannel* CreateDataChannel_w(
-      BaseSession* session, const std::string& content_name, bool rtcp);
+      BaseSession* session, const std::string& content_name,
+      bool rtcp, const std::string& codec_name);
   void DestroyDataChannel_w(DataChannel* data_channel);
   Soundclip* CreateSoundclip_w();
   void DestroySoundclip_w(Soundclip* soundclip);

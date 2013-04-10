@@ -30,12 +30,14 @@
 #include <string>
 #include <vector>
 
+#include "talk/app/webrtc/test/fakeconstraints.h"
 #include "talk/base/gunit.h"
 #include "talk/media/base/fakemediaengine.h"
 #include "talk/media/base/fakevideorenderer.h"
 #include "talk/media/devices/fakedevicemanager.h"
 #include "talk/session/media/channelmanager.h"
 
+using webrtc::FakeConstraints;
 using webrtc::LocalVideoSource;
 using webrtc::MediaConstraintsInterface;
 using webrtc::MediaSourceInterface;
@@ -103,24 +105,6 @@ class TestVideoCapturer : public cricket::FakeVideoCapturer {
 
  private:
   bool test_without_formats_;
-};
-
-
-class TestConstraints : public MediaConstraintsInterface {
- public:
-  void AddMandatory(const std::string& key, const std::string& value) {
-    mandatory_.push_back(Constraint(key, value));
-  }
-  void AddOptional(const std::string& key, const std::string& value) {
-    optional_.push_back(Constraint(key, value));
-  }
-
-  virtual const Constraints& GetMandatory() const  { return mandatory_; }
-  virtual const Constraints& GetOptional() const { return optional_; }
-
- private:
-  Constraints mandatory_;
-  Constraints optional_;
 };
 
 class StateObserver : public ObserverInterface {
@@ -211,10 +195,10 @@ TEST_F(LocalVideoSourceTest, CameraFailed) {
 // Test that the capture output is CIF if we set max constraints to CIF.
 // and the capture device support CIF.
 TEST_F(LocalVideoSourceTest, MandatoryConstraintCif5Fps) {
-  TestConstraints constraints;
-  constraints.AddMandatory(MediaConstraintsInterface::kMaxWidth, "352");
-  constraints.AddMandatory(MediaConstraintsInterface::kMaxHeight, "288");
-  constraints.AddMandatory(MediaConstraintsInterface::kMaxFrameRate, "5");
+  FakeConstraints constraints;
+  constraints.AddMandatory(MediaConstraintsInterface::kMaxWidth, 352);
+  constraints.AddMandatory(MediaConstraintsInterface::kMaxHeight, 288);
+  constraints.AddMandatory(MediaConstraintsInterface::kMaxFrameRate, 5);
 
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
@@ -229,12 +213,12 @@ TEST_F(LocalVideoSourceTest, MandatoryConstraintCif5Fps) {
 // Test that the capture output is 720P if the camera support it and the
 // optional constraint is set to 720P.
 TEST_F(LocalVideoSourceTest, MandatoryMinVgaOptional720P) {
-  TestConstraints constraints;
-  constraints.AddMandatory(MediaConstraintsInterface::kMinWidth, "640");
-  constraints.AddMandatory(MediaConstraintsInterface::kMinHeight, "480");
-  constraints.AddOptional(MediaConstraintsInterface::kMinWidth, "1280");
+  FakeConstraints constraints;
+  constraints.AddMandatory(MediaConstraintsInterface::kMinWidth, 640);
+  constraints.AddMandatory(MediaConstraintsInterface::kMinHeight, 480);
+  constraints.AddOptional(MediaConstraintsInterface::kMinWidth, 1280);
   constraints.AddOptional(MediaConstraintsInterface::kMinAspectRatio,
-                          talk_base::ToString<double>(1280.0 / 720));
+                          1280.0 / 720);
 
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
@@ -250,12 +234,12 @@ TEST_F(LocalVideoSourceTest, MandatoryMinVgaOptional720P) {
 // require it even if an optional constraint request a higher resolution
 // that don't have this aspect ratio.
 TEST_F(LocalVideoSourceTest, MandatoryAspectRatio4To3) {
-  TestConstraints constraints;
-  constraints.AddMandatory(MediaConstraintsInterface::kMinWidth, "640");
-  constraints.AddMandatory(MediaConstraintsInterface::kMinHeight, "480");
+  FakeConstraints constraints;
+  constraints.AddMandatory(MediaConstraintsInterface::kMinWidth, 640);
+  constraints.AddMandatory(MediaConstraintsInterface::kMinHeight, 480);
   constraints.AddMandatory(MediaConstraintsInterface::kMaxAspectRatio,
-                           talk_base::ToString<double>(640.0 / 480));
-  constraints.AddOptional(MediaConstraintsInterface::kMinWidth, "1280");
+                           640.0 / 480);
+  constraints.AddOptional(MediaConstraintsInterface::kMinWidth, 1280);
 
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
@@ -271,9 +255,8 @@ TEST_F(LocalVideoSourceTest, MandatoryAspectRatio4To3) {
 // Test that the source state transition to kEnded if the mandatory aspect ratio
 // is set higher than supported.
 TEST_F(LocalVideoSourceTest, MandatoryAspectRatioTooHigh) {
-  TestConstraints constraints;
-  constraints.AddMandatory(MediaConstraintsInterface::kMinAspectRatio,
-                           talk_base::ToString<int>(2));
+  FakeConstraints constraints;
+  constraints.AddMandatory(MediaConstraintsInterface::kMinAspectRatio, 2);
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kEnded, state_observer_->state(),
                  kMaxWaitMs);
@@ -282,9 +265,8 @@ TEST_F(LocalVideoSourceTest, MandatoryAspectRatioTooHigh) {
 // Test that the source ignores an optional aspect ratio that is higher than
 // supported.
 TEST_F(LocalVideoSourceTest, OptionalAspectRatioTooHigh) {
-  TestConstraints constraints;
-  constraints.AddOptional(MediaConstraintsInterface::kMinAspectRatio,
-                          talk_base::ToString<int>(2));
+  FakeConstraints constraints;
+  constraints.AddOptional(MediaConstraintsInterface::kMinAspectRatio, 2);
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
                  kMaxWaitMs);
@@ -315,11 +297,11 @@ TEST_F(LocalVideoSourceTest, NoCameraCapability) {
 TEST_F(LocalVideoSourceTest, NoCameraCapability16To9Ratio) {
   capturer_->TestWithoutCameraFormats();
 
-  TestConstraints constraints;
+  FakeConstraints constraints;
   double requested_aspect_ratio = 640.0 / 360;
-  constraints.AddMandatory(MediaConstraintsInterface::kMinWidth, "640");
+  constraints.AddMandatory(MediaConstraintsInterface::kMinWidth, 640);
   constraints.AddMandatory(MediaConstraintsInterface::kMinAspectRatio,
-                           talk_base::ToString<double>(requested_aspect_ratio));
+                           requested_aspect_ratio);
 
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
@@ -332,8 +314,8 @@ TEST_F(LocalVideoSourceTest, NoCameraCapability16To9Ratio) {
 // Test that the source state transitions to kEnded if an unknown mandatory
 // constraint is found.
 TEST_F(LocalVideoSourceTest, InvalidMandatoryConstraint) {
-  TestConstraints constraints;
-  constraints.AddMandatory("weird key", "640");
+  FakeConstraints constraints;
+  constraints.AddMandatory("weird key", 640);
 
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kEnded, state_observer_->state(),
@@ -342,18 +324,19 @@ TEST_F(LocalVideoSourceTest, InvalidMandatoryConstraint) {
 
 // Test that the source ignores an unknown optional constraint.
 TEST_F(LocalVideoSourceTest, InvalidOptionalConstraint) {
-  TestConstraints constraints;
-  constraints.AddOptional("weird key", "640");
+  FakeConstraints constraints;
+  constraints.AddOptional("weird key", 640);
 
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
                  kMaxWaitMs);
 }
 
-TEST_F(LocalVideoSourceTest, SetValidOptions) {
-  TestConstraints constraints;
+TEST_F(LocalVideoSourceTest, SetValidOptionValues) {
+  FakeConstraints constraints;
+  constraints.AddMandatory(MediaConstraintsInterface::kNoiseReduction, "false");
   constraints.AddMandatory(
-      MediaConstraintsInterface::kNoiseReduction, "false");
+      MediaConstraintsInterface::kTemporalLayeredScreencast, "false");
   constraints.AddOptional(
       MediaConstraintsInterface::kLeakyBucket, "true");
 
@@ -362,23 +345,26 @@ TEST_F(LocalVideoSourceTest, SetValidOptions) {
   bool value = true;
   EXPECT_TRUE(local_source_->options()->video_noise_reduction.Get(&value));
   EXPECT_FALSE(value);
+  EXPECT_TRUE(local_source_->options()->
+      video_temporal_layer_screencast.Get(&value));
+  EXPECT_FALSE(value);
   EXPECT_TRUE(local_source_->options()->video_leaky_bucket.Get(&value));
   EXPECT_TRUE(value);
 }
 
 TEST_F(LocalVideoSourceTest, OptionNotSet) {
-  TestConstraints constraints;
+  FakeConstraints constraints;
   CreateLocalVideoSource(&constraints);
   bool value;
   EXPECT_FALSE(local_source_->options()->video_noise_reduction.Get(&value));
 }
 
 TEST_F(LocalVideoSourceTest, MandatoryOptionOverridesOptional) {
-  TestConstraints constraints;
+  FakeConstraints constraints;
   constraints.AddMandatory(
-      MediaConstraintsInterface::kNoiseReduction, "true");
+      MediaConstraintsInterface::kNoiseReduction, true);
   constraints.AddOptional(
-      MediaConstraintsInterface::kNoiseReduction, "false");
+      MediaConstraintsInterface::kNoiseReduction, false);
 
   CreateLocalVideoSource(&constraints);
 
@@ -389,10 +375,10 @@ TEST_F(LocalVideoSourceTest, MandatoryOptionOverridesOptional) {
 }
 
 TEST_F(LocalVideoSourceTest, InvalidOptionKeyOptional) {
-  TestConstraints constraints;
+  FakeConstraints constraints;
   constraints.AddOptional(
-      MediaConstraintsInterface::kNoiseReduction, "false");
-  constraints.AddOptional("invalidKey", "false");
+      MediaConstraintsInterface::kNoiseReduction, false);
+  constraints.AddOptional("invalidKey", false);
 
   CreateLocalVideoSource(&constraints);
 
@@ -404,10 +390,10 @@ TEST_F(LocalVideoSourceTest, InvalidOptionKeyOptional) {
 }
 
 TEST_F(LocalVideoSourceTest, InvalidOptionKeyMandatory) {
-  TestConstraints constraints;
+  FakeConstraints constraints;
   constraints.AddMandatory(
-      MediaConstraintsInterface::kNoiseReduction, "false");
-  constraints.AddMandatory("invalidKey", "false");
+      MediaConstraintsInterface::kNoiseReduction, false);
+  constraints.AddMandatory("invalidKey", false);
 
   CreateLocalVideoSource(&constraints);
 
@@ -418,7 +404,7 @@ TEST_F(LocalVideoSourceTest, InvalidOptionKeyMandatory) {
 }
 
 TEST_F(LocalVideoSourceTest, InvalidOptionValueOptional) {
-  TestConstraints constraints;
+  FakeConstraints constraints;
   constraints.AddOptional(
       MediaConstraintsInterface::kNoiseReduction, "true");
   constraints.AddOptional(
@@ -435,7 +421,7 @@ TEST_F(LocalVideoSourceTest, InvalidOptionValueOptional) {
 }
 
 TEST_F(LocalVideoSourceTest, InvalidOptionValueMandatory) {
-  TestConstraints constraints;
+  FakeConstraints constraints;
   // Optional constraints should be ignored if the mandatory constraints fail.
   constraints.AddOptional(
       MediaConstraintsInterface::kNoiseReduction, "false");
@@ -452,15 +438,15 @@ TEST_F(LocalVideoSourceTest, InvalidOptionValueMandatory) {
 }
 
 TEST_F(LocalVideoSourceTest, MixedOptionsAndConstraints) {
-  TestConstraints constraints;
-  constraints.AddMandatory(MediaConstraintsInterface::kMaxWidth, "352");
-  constraints.AddMandatory(MediaConstraintsInterface::kMaxHeight, "288");
-  constraints.AddOptional(MediaConstraintsInterface::kMaxFrameRate, "5");
+  FakeConstraints constraints;
+  constraints.AddMandatory(MediaConstraintsInterface::kMaxWidth, 352);
+  constraints.AddMandatory(MediaConstraintsInterface::kMaxHeight, 288);
+  constraints.AddOptional(MediaConstraintsInterface::kMaxFrameRate, 5);
 
   constraints.AddMandatory(
-      MediaConstraintsInterface::kNoiseReduction, "false");
+      MediaConstraintsInterface::kNoiseReduction, false);
   constraints.AddOptional(
-      MediaConstraintsInterface::kNoiseReduction, "true");
+      MediaConstraintsInterface::kNoiseReduction, true);
 
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
@@ -496,9 +482,9 @@ TEST_F(LocalVideoSourceTest, ScreencastResolutionNoConstraint) {
 // Tests that the source starts video with the max width and height set by
 // constraints for screencast.
 TEST_F(LocalVideoSourceTest, ScreencastResolutionWithConstraint) {
-  TestConstraints constraints;
-  constraints.AddMandatory(MediaConstraintsInterface::kMaxWidth, "480");
-  constraints.AddMandatory(MediaConstraintsInterface::kMaxHeight, "270");
+  FakeConstraints constraints;
+  constraints.AddMandatory(MediaConstraintsInterface::kMaxWidth, 480);
+  constraints.AddMandatory(MediaConstraintsInterface::kMaxHeight, 270);
 
   capturer_->TestWithoutCameraFormats();
   capturer_->SetScreencast(true);

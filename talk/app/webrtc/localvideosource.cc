@@ -29,6 +29,7 @@
 
 #include <vector>
 
+#include "talk/app/webrtc/mediaconstraintsinterface.h"
 #include "talk/session/media/channelmanager.h"
 
 using cricket::CaptureState;
@@ -51,6 +52,8 @@ const char MediaConstraintsInterface::kMinFrameRate[] = "minFrameRate";
 // Google-specific keys
 const char MediaConstraintsInterface::kNoiseReduction[] = "googNoiseReduction";
 const char MediaConstraintsInterface::kLeakyBucket[] = "googLeakyBucket";
+const char MediaConstraintsInterface::kTemporalLayeredScreencast[] =
+    "googTemporalLayeredScreencast";
 
 }  // namespace webrtc
 
@@ -186,7 +189,9 @@ bool NewFormatWithConstraints(
     const double kRoundingTruncation = 0.0005;
     return  (value >= ratio - kRoundingTruncation);
   } else if (constraint.key == MediaConstraintsInterface::kNoiseReduction ||
-             constraint.key == MediaConstraintsInterface::kLeakyBucket) {
+             constraint.key == MediaConstraintsInterface::kLeakyBucket ||
+             constraint.key ==
+                 MediaConstraintsInterface::kTemporalLayeredScreencast) {
     // These are actually options, not constraints, so they can be satisfied
     // regardless of the format.
     return true;
@@ -268,47 +273,37 @@ const cricket::VideoFormat& GetBestCaptureFormat(
   return *best_it;
 }
 
-// Convert constraint value to a boolean. Return false if the value
-// is invalid.
-bool FromConstraint(const std::string& value, bool* output) {
-  if (value == MediaConstraintsInterface::kValueTrue)
-    *output = true;
-  else if (value == MediaConstraintsInterface::kValueFalse)
-    *output = false;
-  else
-    return false;
-  return true;
+// Set |option| to the highest-priority value of |key| in the constraints.
+// Return false if the key is mandatory, and the value is invalid.
+bool ExtractOption(const MediaConstraintsInterface* all_constraints,
+    const std::string& key, cricket::Settable<bool>* option) {
+  size_t mandatory = 0;
+  bool value;
+  if (FindConstraint(all_constraints, key, &value, &mandatory)) {
+    option->Set(value);
+    return true;
+  }
+
+  return mandatory == 0;
 }
 
-// Search the constraints for video options.  Apply all options that are found
-// with valid values, and return false if any video option was found with an
-// invalid value.
-bool FromConstraints(const MediaConstraintsInterface::Constraints& constraints,
-                     cricket::VideoOptions* options) {
-  MediaConstraintsInterface::Constraints::const_iterator iter;
+// Search |all_constraints| for known video options.  Apply all options that are
+// found with valid values, and return false if any mandatory video option was
+// found with an invalid value.
+bool ExtractVideoOptions(const MediaConstraintsInterface* all_constraints,
+                         cricket::VideoOptions* options) {
   bool all_valid = true;
 
-  for (iter = constraints.begin(); iter != constraints.end(); ++iter) {
-    bool value = false;
-    bool got_value = FromConstraint(iter->value, &value);
-    bool is_option = true;
+  all_valid &= ExtractOption(all_constraints,
+      MediaConstraintsInterface::kNoiseReduction,
+      &(options->video_noise_reduction));
+  all_valid &= ExtractOption(all_constraints,
+      MediaConstraintsInterface::kLeakyBucket,
+      &(options->video_leaky_bucket));
+  all_valid &= ExtractOption(all_constraints,
+      MediaConstraintsInterface::kTemporalLayeredScreencast,
+      &(options->video_temporal_layer_screencast));
 
-    if (iter->key == MediaConstraintsInterface::kNoiseReduction) {
-      if (got_value)
-        options->video_noise_reduction.Set(value);
-    } else if (iter->key == MediaConstraintsInterface::kLeakyBucket) {
-      if (got_value)
-        options->video_leaky_bucket.Set(value);
-    } else {
-      is_option = false;
-    }
-
-    if (is_option && !got_value) {
-      LOG(LS_WARNING) << "Option " << iter->key << " has unexpected value " <<
-          iter->value;
-      all_valid = false;
-    }
-  }
   return all_valid;
 }
 
@@ -377,25 +372,21 @@ void LocalVideoSource::Initialize(
 
     formats = FilterFormats(mandatory_constraints, optional_constraints,
                             formats);
-
-    if (formats.size() > 0) {
-      cricket::VideoOptions options;
-      // Apply optional options first.
-      // They will be overwritten by mandatory options.
-      FromConstraints(optional_constraints, &options);
-
-      if (!FromConstraints(mandatory_constraints, &options)) {
-        LOG(LS_WARNING) << "Could not satisfy mandatory options.";
-        SetState(kEnded);
-        return;
-      }
-      options_.SetAll(options);
-    } else {
-      LOG(LS_WARNING) << "Failed to find a suitable video format.";
-      SetState(kEnded);
-      return;
-    }
   }
+
+  if (formats.size() == 0) {
+    LOG(LS_WARNING) << "Failed to find a suitable video format.";
+    SetState(kEnded);
+    return;
+  }
+
+  cricket::VideoOptions options;
+  if (!ExtractVideoOptions(constraints, &options)) {
+    LOG(LS_WARNING) << "Could not satisfy mandatory options.";
+    SetState(kEnded);
+    return;
+  }
+  options_.SetAll(options);
 
   format_ = GetBestCaptureFormat(formats);
   // Start the camera with our best guess.

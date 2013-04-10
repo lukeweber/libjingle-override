@@ -137,6 +137,22 @@ static void LogMultiline(talk_base::LoggingSeverity sev, char* text) {
   }
 }
 
+// Severity is an integer because it comes is assumed to be from command line.
+static int SeverityToFilter(int severity) {
+  int filter = webrtc::kTraceNone;
+  switch (severity) {
+    case talk_base::LS_VERBOSE:
+      filter |= webrtc::kTraceAll;
+    case talk_base::LS_INFO:
+      filter |= (webrtc::kTraceStateInfo | webrtc::kTraceInfo);
+    case talk_base::LS_WARNING:
+      filter |= (webrtc::kTraceTerseInfo | webrtc::kTraceWarning);
+    case talk_base::LS_ERROR:
+      filter |= (webrtc::kTraceError | webrtc::kTraceCritical);
+  }
+  return filter;
+}
+
 static bool IsCodecMultiRate(const webrtc::CodecInst& codec) {
   for (size_t i = 0; i < ARRAY_SIZE(kCodecPrefs); ++i) {
     if (_stricmp(kCodecPrefs[i].name, codec.plname) == 0 &&
@@ -255,7 +271,7 @@ WebRtcVoiceEngine::WebRtcVoiceEngine()
       tracing_(new VoETraceWrapper()),
       adm_(NULL),
       adm_sc_(NULL),
-      log_level_(kDefaultLogSeverity),
+      log_filter_(SeverityToFilter(kDefaultLogSeverity)),
       is_dumping_aec_(false),
       desired_local_monitor_enable_(false),
       tx_processor_ssrc_(0),
@@ -271,7 +287,7 @@ WebRtcVoiceEngine::WebRtcVoiceEngine(VoEWrapper* voe_wrapper,
       tracing_(tracing),
       adm_(NULL),
       adm_sc_(NULL),
-      log_level_(kDefaultLogSeverity),
+      log_filter_(SeverityToFilter(kDefaultLogSeverity)),
       is_dumping_aec_(false),
       desired_local_monitor_enable_(false),
       tx_processor_ssrc_(0),
@@ -280,9 +296,10 @@ WebRtcVoiceEngine::WebRtcVoiceEngine(VoEWrapper* voe_wrapper,
 }
 
 void WebRtcVoiceEngine::Construct() {
+  SetTraceFilter(log_filter_);
   initialized_ = false;
   LOG(LS_VERBOSE) << "WebRtcVoiceEngine::WebRtcVoiceEngine";
-  ApplyLogging("");
+  SetTraceOptions("");
   if (tracing_->SetTraceCallback(this) == -1) {
     LOG_RTCERR0(SetTraceCallback);
   }
@@ -411,20 +428,20 @@ bool WebRtcVoiceEngine::Init(talk_base::Thread* worker_thread) {
 
 bool WebRtcVoiceEngine::InitInternal() {
   // Temporarily turn logging level up for the Init call
-  int old_level = log_level_;
-  log_level_ = talk_base::_min(log_level_,
-                               static_cast<int>(talk_base::LS_INFO));
-  ApplyLogging("");
+  int old_filter = log_filter_;
+  int extended_filter = log_filter_ | SeverityToFilter(talk_base::LS_INFO);
+  SetTraceFilter(extended_filter);
+  SetTraceOptions("");
 
   // Init WebRtc VoiceEngine.
   if (voe_wrapper_->base()->Init(adm_) == -1) {
     LOG_RTCERR0_EX(Init, voe_wrapper_->error());
+    SetTraceFilter(old_filter);
     return false;
   }
 
-  // Restore the previous log level and apply the log filter.
-  log_level_ = old_level;
-  ApplyLogging(log_filter_);
+  SetTraceFilter(old_filter);
+  SetTraceOptions(log_options_);
 
   // Log the VoiceEngine version info
   char buffer[1024] = "";
@@ -996,14 +1013,19 @@ WebRtcVoiceEngine::rtp_header_extensions() const {
 void WebRtcVoiceEngine::SetLogging(int min_sev, const char* filter) {
   // if min_sev == -1, we keep the current log level.
   if (min_sev >= 0) {
-    log_level_ = min_sev;
+    SetTraceFilter(SeverityToFilter(min_sev));
   }
-  log_filter_ = filter;
-  ApplyLogging(initialized_ ? log_filter_ : "");
+  log_options_ = filter;
+  SetTraceOptions(initialized_ ? log_options_ : "");
 }
 
 int WebRtcVoiceEngine::GetLastEngineError() {
   return voe_wrapper_->error();
+}
+
+void WebRtcVoiceEngine::SetTraceFilter(int filter) {
+  log_filter_ = filter;
+  tracing_->SetTraceFilter(filter);
 }
 
 // We suppport three different logging settings for VoiceEngine:
@@ -1018,25 +1040,10 @@ int WebRtcVoiceEngine::GetLastEngineError() {
 //
 // For more details see: "https://sites.google.com/a/google.com/wavelet/Home/
 //    Magic-Flute--RTC-Engine-/Magic-Flute-Command-Line-Parameters"
-void WebRtcVoiceEngine::ApplyLogging(const std::string& log_filter) {
-  // Set log level.
-  int filter = 0;
-  switch (log_level_) {
-    case talk_base::LS_VERBOSE:
-      filter |= webrtc::kTraceAll;  // fall through
-    case talk_base::LS_INFO:
-      filter |= (webrtc::kTraceStateInfo | webrtc::kTraceInfo);  // fall through
-    case talk_base::LS_WARNING:
-      // fall through
-      filter |= (webrtc::kTraceTerseInfo | webrtc::kTraceWarning);
-    case talk_base::LS_ERROR:
-      filter |= (webrtc::kTraceError | webrtc::kTraceCritical);
-  }
-  tracing_->SetTraceFilter(filter);
-
+void WebRtcVoiceEngine::SetTraceOptions(const std::string& options) {
   // Set encrypted trace file.
   std::vector<std::string> opts;
-  talk_base::tokenize(log_filter, ' ', '"', '"', &opts);
+  talk_base::tokenize(options, ' ', '"', '"', &opts);
   std::vector<std::string>::iterator tracefile =
       std::find(opts.begin(), opts.end(), "tracefile");
   if (tracefile != opts.end() && ++tracefile != opts.end()) {
@@ -1103,26 +1110,22 @@ void WebRtcVoiceEngine::Print(webrtc::TraceLevel level, const char* trace,
   talk_base::LoggingSeverity sev = talk_base::LS_VERBOSE;
   if (level == webrtc::kTraceError || level == webrtc::kTraceCritical)
     sev = talk_base::LS_ERROR;
-  else if (level == webrtc::kTraceWarning || level == webrtc::kTraceTerseInfo)
+  else if (level == webrtc::kTraceWarning)
     sev = talk_base::LS_WARNING;
   else if (level == webrtc::kTraceStateInfo || level == webrtc::kTraceInfo)
     sev = talk_base::LS_INFO;
+  else if (level == webrtc::kTraceTerseInfo)
+    sev = talk_base::LS_INFO;
 
-  if (sev >= log_level_) {
-    if (level == webrtc::kTraceTerseInfo) {
-      // Actually use LS_INFO for TerseInfo.
-      sev = talk_base::LS_INFO;
-    }
-    // Skip past boilerplate prefix text
-    if (length < 72) {
-      std::string msg(trace, length);
-      LOG(LS_ERROR) << "Malformed webrtc log message: ";
-      LOG_V(sev) << msg;
-    } else {
-      std::string msg(trace + 71, length - 72);
-      if (!ShouldIgnoreTrace(msg)) {
-        LOG_V(sev) << "webrtc: " << msg;
-      }
+  // Skip past boilerplate prefix text
+  if (length < 72) {
+    std::string msg(trace, length);
+    LOG(LS_ERROR) << "Malformed webrtc log message: ";
+    LOG_V(sev) << msg;
+  } else {
+    std::string msg(trace + 71, length - 72);
+    if (!ShouldIgnoreTrace(msg)) {
+      LOG_V(sev) << "webrtc: " << msg;
     }
   }
 }
