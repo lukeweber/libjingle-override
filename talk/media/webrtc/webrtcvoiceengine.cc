@@ -2546,8 +2546,13 @@ bool WebRtcVoiceMediaChannel::GetStats(VoiceMediaInfo* info) {
             static_cast<float> (ns.currentExpandRate) / (1 << 14);
       }
       if (engine()->voe()->sync()) {
-        engine()->voe()->sync()->GetDelayEstimate(*it,
-            rinfo.delay_estimate_ms);
+#ifdef USE_WEBRTC_DEV_BRANCH
+        int playout_buffer_delay_ms = 0;
+        engine()->voe()->sync()->GetDelayEstimate(
+            *it, &rinfo.delay_estimate_ms, &playout_buffer_delay_ms);
+#else
+        engine()->voe()->sync()->GetDelayEstimate(*it, rinfo.delay_estimate_ms);
+#endif
       }
 
       // Get speech level.

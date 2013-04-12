@@ -27,25 +27,30 @@
 
 #include "talk/base/systeminfo.h"
 
-#ifdef WIN32
-#include "talk/base/win32.h"  // NOLINT first because it brings in win32 stuff
+#if defined(WIN32)
+#include <winsock2.h>
 #ifndef EXCLUDE_D3D9
 #include <d3d9.h>
 #endif
 #include <intrin.h>  // for __cpuid()
-#include "talk/base/scoped_ptr.h"
 #elif defined(OSX)
 #include <ApplicationServices/ApplicationServices.h>
 #include <CoreServices/CoreServices.h>
-#include <sys/sysctl.h>
-#include "talk/base/macconversion.h"
-#elif defined(IOS)
-#include <sys/sysctl.h>  // NOLINT - lint thinks this is duplicate include
 #elif defined(LINUX) || defined(ANDROID)
 #include <unistd.h>
-#include "talk/base/linux.h"
+#endif
+#if defined(OSX) || defined(IOS)
+#include <sys/sysctl.h>
 #endif
 
+#if defined(WIN32)
+#include "talk/base/scoped_ptr.h"
+#include "talk/base/win32.h"
+#elif defined(OSX)
+#include "talk/base/macconversion.h"
+#elif defined(LINUX) || defined(ANDROID)
+#include "talk/base/linux.h"
+#endif
 #include "talk/base/common.h"
 #include "talk/base/logging.h"
 #include "talk/base/stringutils.h"
@@ -53,12 +58,12 @@
 namespace talk_base {
 
 // See Also: http://msdn.microsoft.com/en-us/library/ms683194(v=vs.85).aspx
-#ifdef WIN32
+#if defined(WIN32)
 typedef BOOL (WINAPI *LPFN_GLPI)(
     PSYSTEM_LOGICAL_PROCESSOR_INFORMATION,
     PDWORD);
 
-static void GetProcessorInformation(int &physical_cpus, int &cache_size) {
+static void GetProcessorInformation(int* physical_cpus, int* cache_size) {
   // GetLogicalProcessorInformation() is available on Windows XP SP3 and beyond.
   LPFN_GLPI glpi = reinterpret_cast<LPFN_GLPI>(GetProcAddress(
       GetModuleHandle(L"kernel32"),
@@ -78,16 +83,16 @@ static void GetProcessorInformation(int &physical_cpus, int &cache_size) {
       return;
     }
   }
-  physical_cpus = 0;
-  cache_size = 0;
+  *physical_cpus = 0;
+  *cache_size = 0;
   for (size_t i = 0;
       i < return_length / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); ++i) {
     if (infos[i].Relationship == RelationProcessorCore) {
-      ++physical_cpus;
+      ++*physical_cpus;
     } else if (infos[i].Relationship == RelationCache) {
       int next_cache_size = static_cast<int>(infos[i].Cache.Size);
-      if (next_cache_size >= cache_size) {
-        cache_size = next_cache_size;
+      if (next_cache_size >= *cache_size) {
+        *cache_size = next_cache_size;
       }
     }
   }
@@ -124,21 +129,21 @@ SystemInfo::SystemInfo()
       cpu_family_(0), cpu_model_(0), cpu_stepping_(0),
       cpu_speed_(0), memory_(0) {
   // Initialize the basic information.
-#if defined(CPU_ARM)
+#if defined(__arm__) || defined(_M_ARM)
   cpu_arch_ = SI_ARCH_ARM;
 #elif defined(__x86_64__) || defined(_M_X64)
   cpu_arch_ = SI_ARCH_X64;
 #elif defined(__i386__) || defined(_M_IX86)
   cpu_arch_ = SI_ARCH_X86;
 #else
-#error "Unknown architecture."
+  cpu_arch_ = SI_ARCH_UNKNOWN;
 #endif
 
 #if defined(WIN32)
   SYSTEM_INFO si;
   GetSystemInfo(&si);
   logical_cpus_ = si.dwNumberOfProcessors;
-  GetProcessorInformation(physical_cpus_, cache_size_);
+  GetProcessorInformation(&physical_cpus_, &cache_size_);
   if (physical_cpus_ <= 0) {
     physical_cpus_ = logical_cpus_;
   }
@@ -180,14 +185,14 @@ SystemInfo::SystemInfo()
   if (!sysctlbyname("machdep.cpu.stepping", &sysctl_value, &length, NULL, 0)) {
     cpu_stepping_ = static_cast<int>(sysctl_value);
   }
-#else // LINUX || ANDROID
+#else  // LINUX || ANDROID
   ProcCpuInfo proc_info;
   if (proc_info.LoadFromSystem()) {
     proc_info.GetNumCpus(&logical_cpus_);
     proc_info.GetNumPhysicalCpus(&physical_cpus_);
     proc_info.GetCpuFamily(&cpu_family_);
-#if !defined(CPU_ARM)
-    // These values aren't found on ARM systems.
+#if defined(CPU_X86)
+    // These values only apply to x86 systems.
     proc_info.GetSectionIntValue(0, "model", &cpu_model_);
     proc_info.GetSectionIntValue(0, "stepping", &cpu_stepping_);
     proc_info.GetSectionIntValue(0, "cpu MHz", &cpu_speed_);
@@ -236,7 +241,7 @@ int SystemInfo::GetMaxPhysicalCpus() {
 // Can be affected by heat.
 int SystemInfo::GetCurCpus() {
   int cur_cpus;
-#ifdef WIN32
+#if defined(WIN32)
   DWORD_PTR process_mask, system_mask;
   ::GetProcessAffinityMask(::GetCurrentProcess(), &process_mask, &system_mask);
   for (cur_cpus = 0; process_mask; ++cur_cpus) {
@@ -349,7 +354,7 @@ int SystemInfo::GetMaxCpuSpeed() {
 // powersaving profiles.  Eventually for windows we want to query WMI for
 // root\WMI::ProcessorPerformance.InstanceName="Processor_Number_0".frequency
 int SystemInfo::GetCurCpuSpeed() {
-#ifdef WIN32
+#if defined(WIN32)
   // TODO(fbarchard): Add WMI check, requires COM initialization
   // NOTE(fbarchard): Testable on Sandy Bridge.
   return GetMaxCpuSpeed();
@@ -358,7 +363,7 @@ int SystemInfo::GetCurCpuSpeed() {
   size_t length = sizeof(sysctl_value);
   int error = sysctlbyname("hw.cpufrequency", &sysctl_value, &length, NULL, 0);
   return !error ? static_cast<int>(sysctl_value/1000000) : GetMaxCpuSpeed();
-#else // LINUX || ANDROID
+#else  // LINUX || ANDROID
   // TODO(fbarchard): Use proc/cpuinfo for Cur speed on Linux.
   return GetMaxCpuSpeed();
 #endif
@@ -371,7 +376,7 @@ int64 SystemInfo::GetMemorySize() {
     return memory_;
   }
 
-#ifdef WIN32
+#if defined(WIN32)
   MEMORYSTATUSEX status = {0};
   status.dwLength = sizeof(status);
 
@@ -388,7 +393,7 @@ int64 SystemInfo::GetMemorySize() {
   if (error || memory_ == 0) {
     memory_ = -1;
   }
-#else
+#else  // LINUX || ANDROID
   memory_ = static_cast<int64>(sysconf(_SC_PHYS_PAGES)) *
       static_cast<int64>(sysconf(_SC_PAGESIZE));
   if (memory_ < 0) {
@@ -522,9 +527,9 @@ bool SystemInfo::GetGpuInfo(GpuInfo *info) {
   GetProperty(display_service_port, CFSTR("device-id"), &info->device_id);
   GetProperty(display_service_port, CFSTR("model"), &info->description);
   return true;
-#else // LINUX || ANDROID
+#else  // LINUX || ANDROID
   // TODO(fbarchard): Implement this on Linux
   return false;
 #endif
 }
-} // namespace talk_base
+}  // namespace talk_base

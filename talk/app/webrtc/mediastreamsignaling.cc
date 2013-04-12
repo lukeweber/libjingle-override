@@ -253,10 +253,11 @@ void RemoteTracks<TI, T, TP>::RejectAllTracks() {
 
 MediaStreamSignaling::MediaStreamSignaling(
     talk_base::Thread* signaling_thread,
-    RemoteMediaStreamObserver* stream_observer)
+    MediaStreamSignalingObserver* stream_observer)
     : signaling_thread_(signaling_thread),
       data_channel_factory_(NULL),
       stream_observer_(stream_observer),
+      local_streams_(StreamCollection::Create()),
       remote_streams_(StreamCollection::Create()),
       remote_audio_tracks_(new RemoteAudioTracks(signaling_thread)),
       remote_video_tracks_(new RemoteVideoTracks(signaling_thread)) {
@@ -265,14 +266,12 @@ MediaStreamSignaling::MediaStreamSignaling(
 }
 
 MediaStreamSignaling::~MediaStreamSignaling() {
+}
+
+void MediaStreamSignaling::TearDown() {
   OnAudioChannelClose();
   OnVideoChannelClose();
   OnDataChannelClose();
-}
-
-void MediaStreamSignaling::SetLocalStreams(
-    StreamCollectionInterface* local_streams) {
-  local_streams_ = local_streams;
 }
 
 bool MediaStreamSignaling::AddDataChannel(DataChannel* data_channel) {
@@ -284,6 +283,51 @@ bool MediaStreamSignaling::AddDataChannel(DataChannel* data_channel) {
   }
   data_channels_[data_channel->label()] = data_channel;
   return true;
+}
+
+bool MediaStreamSignaling::AddLocalStream(MediaStreamInterface* local_stream) {
+  if (local_streams_->find(local_stream->label()) != NULL) {
+    LOG(LS_WARNING) << "MediaStream with label " << local_stream->label()
+                    << "already exist.";
+    return false;
+  }
+  local_streams_->AddStream(local_stream);
+
+  // Find tracks that has already been configured in SDP. This can occur if a
+  // local session description that contains the MSID of these tracks is set
+  // before AddLocalStream is called. It can also occur if the local session
+  // description is not changed and RemoveLocalStream
+  // is called and later AddLocalStream is called again with the same stream.
+  AudioTrackVector audio_tracks = local_stream->GetAudioTracks();
+  for (AudioTrackVector::const_iterator it = audio_tracks.begin();
+       it != audio_tracks.end(); ++it) {
+    LocalTracks::const_iterator track_info_it =
+        local_audio_tracks_.find((*it)->id());
+    if (track_info_it != local_audio_tracks_.end()) {
+      const LocalTrackInfo& info = track_info_it->second;
+      OnLocalTrackSeen(info.stream_label, info.track_id, info.ssrc,
+                       cricket::MEDIA_TYPE_AUDIO);
+    }
+  }
+
+  VideoTrackVector video_tracks = local_stream->GetVideoTracks();
+  for (VideoTrackVector::const_iterator it = video_tracks.begin();
+       it != video_tracks.end(); ++it) {
+    LocalTracks::const_iterator track_info_it =
+        local_video_tracks_.find((*it)->id());
+    if (track_info_it != local_video_tracks_.end()) {
+      const LocalTrackInfo& info = track_info_it->second;
+      OnLocalTrackSeen(info.stream_label, info.track_id, info.ssrc,
+                       cricket::MEDIA_TYPE_VIDEO);
+    }
+  }
+  return true;
+}
+
+void MediaStreamSignaling::RemoveLocalStream(
+    MediaStreamInterface* local_stream) {
+  local_streams_->RemoveStream(local_stream);
+  stream_observer_->OnRemoveLocalStream(local_stream);
 }
 
 bool MediaStreamSignaling::GetOptionsForOffer(
@@ -379,13 +423,26 @@ void MediaStreamSignaling::OnLocalDescriptionChanged(
     const SessionDescriptionInterface* desc) {
   const cricket::ContentInfo* audio_content =
       GetFirstAudioContent(desc->description());
-  if (audio_content && audio_content->rejected) {
-    remote_audio_tracks_->RejectAllTracks();
+  if (audio_content) {
+    if (audio_content->rejected) {
+      remote_audio_tracks_->RejectAllTracks();
+    }
+    const cricket::AudioContentDescription* audio_desc =
+        static_cast<const cricket::AudioContentDescription*>(
+            audio_content->description);
+    UpdateLocalTracks(audio_desc->streams(), audio_desc->type());
   }
+
   const cricket::ContentInfo* video_content =
       GetFirstVideoContent(desc->description());
-  if (video_content && video_content->rejected) {
-    remote_video_tracks_->RejectAllTracks();
+  if (video_content) {
+    if (video_content->rejected) {
+      remote_video_tracks_->RejectAllTracks();
+    }
+    const cricket::VideoContentDescription* video_desc =
+        static_cast<const cricket::VideoContentDescription*>(
+            video_content->description);
+    UpdateLocalTracks(video_desc->streams(), video_desc->type());
   }
 
   const cricket::ContentInfo* data_content =
@@ -557,6 +614,118 @@ MediaStreamSignaling::GetRemoteTracks(cricket::MediaType type) {
     return remote_video_tracks_.get();
   ASSERT(false && "Unknown MediaType");
   return NULL;
+}
+
+MediaStreamSignaling::LocalTracks* MediaStreamSignaling::GetLocalTracks(
+    cricket::MediaType media_type) {
+  ASSERT(media_type == cricket::MEDIA_TYPE_AUDIO ||
+         media_type == cricket::MEDIA_TYPE_VIDEO);
+
+  return (media_type == cricket::MEDIA_TYPE_AUDIO) ?
+      &local_audio_tracks_ : &local_video_tracks_;
+}
+
+void MediaStreamSignaling::UpdateLocalTracks(
+    const std::vector<cricket::StreamParams>& streams,
+    cricket::MediaType media_type) {
+  LocalTracks* current_tracks = GetLocalTracks(media_type);
+
+  // Find removed tracks. Ie tracks where the track id or ssrc don't match the
+  // new StreamParam.
+  LocalTracks::iterator track_it = current_tracks->begin();
+  while (track_it != current_tracks->end()) {
+    LocalTrackInfo info = track_it->second;
+    cricket::StreamParams params;
+    if (!cricket::GetStreamBySsrc(streams, info.ssrc, &params) ||
+        params.id != info.track_id) {
+      OnLocalTrackRemoved(info.stream_label, info.track_id, media_type);
+      current_tracks->erase(track_it);
+      track_it = current_tracks->begin();
+    } else {
+      ++track_it;
+    }
+  }
+
+  // Find new and active tracks.
+  for (cricket::StreamParamsVec::const_iterator it =streams.begin();
+       it != streams.end(); ++it) {
+    // The sync_label is the MediaStream label and the |stream.id| is the
+    // track id.
+    const std::string& stream_label = it->sync_label;
+    const std::string& track_id = it->id;
+    uint32 ssrc = it->first_ssrc();
+    LocalTracks::iterator track_it =  current_tracks->find(track_id);
+    if (track_it == current_tracks->end()) {
+      (*current_tracks)[track_id] =
+          LocalTrackInfo(stream_label, track_id, ssrc);
+      OnLocalTrackSeen(stream_label, track_id, it->first_ssrc(),
+                       media_type);
+    }
+  }
+}
+
+void MediaStreamSignaling::OnLocalTrackSeen(
+    const std::string& stream_label,
+    const std::string& track_id,
+    uint32 ssrc,
+    cricket::MediaType media_type) {
+  MediaStreamInterface* stream = local_streams_->find(stream_label);
+  if (!stream) {
+    LOG(LS_WARNING) << "An unknown local MediaStream with label "
+                    << stream_label <<  " has been configured.";
+    return;
+  }
+
+  if (media_type == cricket::MEDIA_TYPE_AUDIO) {
+    AudioTrackInterface* audio_track = stream->FindAudioTrack(track_id);
+    if (!audio_track) {
+      LOG(LS_WARNING) << "An unknown local AudioTrack with id , "
+                      << track_id <<  " has been configured.";
+      return;
+    }
+    stream_observer_->OnAddLocalAudioTrack(stream, audio_track, ssrc);
+  } else if (media_type == cricket::MEDIA_TYPE_VIDEO) {
+    VideoTrackInterface* video_track = stream->FindVideoTrack(track_id);
+    if (!video_track) {
+      LOG(LS_WARNING) << "An unknown local VideoTrack with id , "
+                      << track_id <<  " has been configured.";
+      return;
+    }
+    stream_observer_->OnAddLocalVideoTrack(stream, video_track, ssrc);
+  } else {
+    ASSERT(false && "Invalid media type");
+  }
+}
+
+void MediaStreamSignaling::OnLocalTrackRemoved(
+    const std::string& stream_label,
+    const std::string& track_id,
+    cricket::MediaType media_type) {
+  MediaStreamInterface* stream = local_streams_->find(stream_label);
+  if (!stream) {
+    // This is the normal case. Ie RemoveLocalStream has been called and the
+    // SessionDescriptions has been renegotiated.
+    return;
+  }
+  // A track has been removed from the SessionDescription but the MediaStream
+  // is still associated with MediaStreamSignaling. This only occurs if the SDP
+  // doesn't match with the calls to AddLocalStream and RemoveLocalStream.
+
+  if (media_type == cricket::MEDIA_TYPE_AUDIO) {
+    AudioTrackInterface* audio_track = stream->FindAudioTrack(track_id);
+    if (!audio_track) {
+      return;
+    }
+    stream_observer_->OnRemoveLocalAudioTrack(stream, audio_track);
+  } else if (media_type == cricket::MEDIA_TYPE_VIDEO) {
+    VideoTrackInterface* video_track = stream->FindVideoTrack(track_id);
+    if (!video_track) {
+      return;
+    }
+    stream_observer_->OnRemoveLocalVideoTrack(stream, video_track);
+  } else {
+    ASSERT(false && "Invalid media type.");
+  }
 }
 
 void MediaStreamSignaling::UpdateLocalDataChannels(

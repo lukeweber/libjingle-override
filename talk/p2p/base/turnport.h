@@ -146,6 +146,7 @@ class TurnPort : public Port {
   TurnEntry* FindEntry(int channel_id) const;
   TurnEntry* CreateEntry(const talk_base::SocketAddress& address);
   void DestroyEntry(const talk_base::SocketAddress& address);
+  void OnConnectionDestroyed(Connection* conn);
 
   talk_base::SocketAddress server_address_;
   RelayCredentials credentials_;

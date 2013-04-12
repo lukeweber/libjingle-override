@@ -312,13 +312,16 @@ class PortAllocatorFactoryInterface : public talk_base::RefCountInterface {
     TurnConfiguration(const std::string& address,
                       int port,
                       const std::string& username,
-                      const std::string& password)
+                      const std::string& password,
+                      const std::string& transport_type)
         : server(address, port),
           username(username),
-          password(password) {}
+          password(password),
+          transport_type(transport_type) {}
     talk_base::SocketAddress server;
     std::string username;
     std::string password;
+    std::string transport_type;
   };
 
   virtual cricket::PortAllocator* CreatePortAllocator(

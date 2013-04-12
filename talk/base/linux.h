@@ -121,9 +121,6 @@ class ProcCpuInfo {
   ConfigParser::MapVector sections_;
 };
 
-// Builds a string containing the info from lsb_release on a single line.
-std::string ReadLinuxLsbRelease();
-
 // Returns the output of "uname".
 std::string ReadLinuxUname();
 

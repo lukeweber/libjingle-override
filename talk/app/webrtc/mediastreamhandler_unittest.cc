@@ -100,7 +100,6 @@ class MediaStreamHandlerTest : public testing::Test {
   }
 
   virtual void SetUp() {
-    collection_ = StreamCollection::Create();
     stream_ = MediaStream::Create(kStreamLabel1);
     talk_base::scoped_refptr<VideoSourceInterface> source(
         FakeVideoSource::Create());
@@ -111,18 +110,29 @@ class MediaStreamHandlerTest : public testing::Test {
     EXPECT_TRUE(stream_->AddTrack(audio_track_));
   }
 
-  void AddLocalStream() {
-    collection_->AddStream(stream_);
+  void AddLocalAudioTrack() {
+    EXPECT_CALL(audio_provider_, SetAudioSend(kAudioTrackId, true, _));
+    handlers_.AddLocalAudioTrack(stream_, stream_->GetAudioTracks()[0], 99);
+  }
+
+  void AddLocalVideoTrack() {
     EXPECT_CALL(video_provider_, SetCaptureDevice(
         kVideoTrackId, video_track_->GetSource()->GetVideoCapturer()));
     EXPECT_CALL(video_provider_, SetVideoSend(kVideoTrackId, true, _));
-    EXPECT_CALL(audio_provider_, SetAudioSend(kAudioTrackId, true, _));
-    handlers_.CommitLocalStreams(collection_);
+    handlers_.AddLocalVideoTrack(stream_, stream_->GetVideoTracks()[0], 98);
+  }
+
+  void AddLocalStream() {
+    AddLocalAudioTrack();
+    AddLocalVideoTrack();
   }
 
   void RemoveLocalStream() {
-    collection_->RemoveStream(stream_);
-    handlers_.CommitLocalStreams(collection_);
+    EXPECT_CALL(video_provider_, SetCaptureDevice(
+            kVideoTrackId, NULL));
+    EXPECT_CALL(video_provider_, SetVideoSend(kVideoTrackId, false, _));
+    EXPECT_CALL(audio_provider_, SetAudioSend(kAudioTrackId, false, _));
+    handlers_.RemoveLocalStream(stream_);
   }
 
   void AddRemoteStream() {
@@ -141,16 +151,63 @@ class MediaStreamHandlerTest : public testing::Test {
  protected:
   MockAudioProvider audio_provider_;
   MockVideoProvider video_provider_;
-  MediaStreamHandlers handlers_;
-  talk_base::scoped_refptr<StreamCollection> collection_;
+  MediaStreamHandlerContainer handlers_;
   talk_base::scoped_refptr<MediaStreamInterface> stream_;
   talk_base::scoped_refptr<VideoTrackInterface> video_track_;
   talk_base::scoped_refptr<AudioTrackInterface> audio_track_;
 };
 
-TEST_F(MediaStreamHandlerTest, AddRemoveLocalMediaStream) {
-  AddLocalStream();
-  RemoveLocalStream();
+// Test that |video_provider_| and |audio_provider_| is notified when an audio
+// and video track is associated with a MediaStreamHandler.
+TEST_F(MediaStreamHandlerTest, AddLocalMediaTracks) {
+  AddLocalAudioTrack();
+  AddLocalVideoTrack();
+
+  EXPECT_CALL(video_provider_, SetCaptureDevice(kVideoTrackId, NULL))
+      .Times(1);
+  EXPECT_CALL(video_provider_, SetVideoSend(kVideoTrackId, false, _))
+      .Times(1);
+  EXPECT_CALL(audio_provider_, SetAudioSend(kAudioTrackId, false, _))
+      .Times(1);
+  handlers_.TearDown();
+}
+
+// Test that |video_provider_| and |audio_provider_| is notified when an audio
+// and video track is disassociated with a MediaStreamHandler by calling
+// RemoveLocalStream.
+TEST_F(MediaStreamHandlerTest, RemoveLocalStream) {
+  AddLocalAudioTrack();
+  AddLocalVideoTrack();
+
+  EXPECT_CALL(video_provider_, SetCaptureDevice(kVideoTrackId, NULL))
+      .Times(1);
+  EXPECT_CALL(video_provider_, SetVideoSend(kVideoTrackId, false, _))
+      .Times(1);
+  EXPECT_CALL(audio_provider_, SetAudioSend(kAudioTrackId, false, _))
+      .Times(1);
+  handlers_.RemoveLocalStream(stream_);
+}
+
+// Test that |video_provider_| is not called if the video track has been
+// disassociated with the |handlers_| before the MediaStream is removed.
+TEST_F(MediaStreamHandlerTest, RemoveLocalVideoTrack) {
+  AddLocalVideoTrack();
+  handlers_.RemoveLocalTrack(stream_, video_track_);
+
+  EXPECT_CALL(video_provider_, SetVideoSend(_, false, _))
+      .Times(0);
+  handlers_.RemoveLocalStream(stream_);
+}
+
+// Test that |audio_provider_| is not called if the audio track track has been
+// disassociated with the |handlers_| before the MediaStream is removed.
+TEST_F(MediaStreamHandlerTest, RemoveLocalAudioTrack) {
+  AddLocalAudioTrack();
+  handlers_.RemoveLocalTrack(stream_, audio_track_);
+
+  EXPECT_CALL(audio_provider_, SetAudioSend(_, false, _))
+      .Times(0);
+  handlers_.RemoveLocalStream(stream_);
 }
 
 TEST_F(MediaStreamHandlerTest, AddRemoveRemoteMediaStream) {

@@ -74,6 +74,7 @@ class TypingMonitor
   VoiceChannel* channel_;
   talk_base::Thread* worker_thread_;
   int mute_period_;
+  int muted_at_;
   bool has_pending_unmute_;
 };
 

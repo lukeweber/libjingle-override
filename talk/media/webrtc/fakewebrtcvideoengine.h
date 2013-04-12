@@ -619,6 +619,7 @@ class FakeWebRtcVideoEngine
 #ifdef USE_WEBRTC_DEV_BRANCH
   WEBRTC_VOID_STUB(SetNetworkTransmissionState, (const int, const bool));
 #endif
+#ifndef USE_WEBRTC_DEV_BRANCH
   WEBRTC_STUB(SetLocalReceiver, (const int, const unsigned short,
       const unsigned short, const char*));
   WEBRTC_STUB(GetLocalReceiver, (const int, unsigned short&,
@@ -652,6 +653,9 @@ class FakeWebRtcVideoEngine
     const unsigned int));
   WEBRTC_STUB(SendUDPPacket, (const int, const void*, const unsigned int,
       int&, bool));
+  WEBRTC_STUB(SetRtxSendPayloadType, (const int, const uint8_t));
+  WEBRTC_STUB(SetRtxReceivePayloadType, (const int, const uint8_t));
+#endif
 
   // webrtc::ViERender
   WEBRTC_STUB(RegisterVideoRenderModule, (webrtc::VideoRender&));
@@ -729,7 +733,9 @@ class FakeWebRtcVideoEngine
     return 0;
   }
   WEBRTC_STUB_CONST(GetRemoteSSRC, (const int, unsigned int&));
-      WEBRTC_STUB_CONST(GetRemoteCSRCs, (const int, unsigned int*));
+  WEBRTC_STUB_CONST(GetRemoteCSRCs, (const int, unsigned int*));
+
+
   WEBRTC_STUB(SetStartSequenceNumber, (const int, unsigned short));
   WEBRTC_FUNC(SetRTCPStatus,
               (const int channel, const webrtc::ViERTCPMode mode)) {

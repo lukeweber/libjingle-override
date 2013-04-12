@@ -756,7 +756,12 @@ class FakeWebRtcVoiceEngine
   WEBRTC_STUB(SetInitSequenceNumber, (int channel, short sequenceNumber));
   WEBRTC_STUB(SetMinimumPlayoutDelay, (int channel, int delayMs));
   WEBRTC_STUB(SetInitialPlayoutDelay, (int channel, int delay_ms));
+#ifdef USE_WEBRTC_DEV_BRANCH
+  WEBRTC_STUB(GetDelayEstimate, (int channel, int* jitter_buffer_delay_ms,
+                                 int* playout_buffer_delay_ms));
+#else
   WEBRTC_STUB(GetDelayEstimate, (int channel, int& delayMs));
+#endif
 
   // webrtc::VoEVolumeControl
   WEBRTC_STUB(SetSpeakerVolume, (unsigned int));

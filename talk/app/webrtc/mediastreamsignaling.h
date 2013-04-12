@@ -47,10 +47,12 @@ namespace webrtc {
 
 class RemoteTracksInterface;
 
-// RemoteMediaStreamObserver is triggered when
-// MediaStreamSignaling::UpdateRemoteStreams is called with a new
-// SessionDescription with a new set of MediaStreams and DataChannels.
-class RemoteMediaStreamObserver {
+
+// A MediaStreamSignalingObserver is notified when events happen to
+// MediaStreams, MediaStreamTracks or DataChannels associated with the observed
+// MediaStreamSignaling object. The notifications identify the stream, track or
+// channel.
+class MediaStreamSignalingObserver {
  public:
   // Triggered when the remote SessionDescription has a new stream.
   virtual void OnAddStream(MediaStreamInterface* stream) = 0;
@@ -61,8 +63,33 @@ class RemoteMediaStreamObserver {
   // Triggered when the remote SessionDescription has a new data channel.
   virtual void OnAddDataChannel(DataChannelInterface* data_channel) = 0;
 
+  // Triggered when the local SessionDescription has a new audio track.
+  virtual void OnAddLocalAudioTrack(MediaStreamInterface* stream,
+                                    AudioTrackInterface* audio_track,
+                                    uint32 ssrc) = 0;
+
+  // Triggered when the local SessionDescription has a new video track.
+  virtual void OnAddLocalVideoTrack(MediaStreamInterface* stream,
+                                    VideoTrackInterface* video_track,
+                                    uint32 ssrc) = 0;
+
+  // Triggered when the local SessionDescription has removed an audio track.
+  virtual void OnRemoveLocalAudioTrack(MediaStreamInterface* stream,
+                                       AudioTrackInterface* audio_track) = 0;
+
+  // Triggered when the local SessionDescription has removed a video track.
+  virtual void OnRemoveLocalVideoTrack(MediaStreamInterface* stream,
+                                       VideoTrackInterface* video_track) = 0;
+
+  // Triggered when RemoveLocalStream is called. |stream| is no longer used
+  // when negotiating and all tracks in |stream| should stop providing data to
+  // this PeerConnection. This doesn't mean that the local session description
+  // has changed and OnRemoveLocalAudioTrack and OnRemoveLocalVideoTrack is not
+  // called for each individual track.
+  virtual void OnRemoveLocalStream(MediaStreamInterface* stream) = 0;
+
  protected:
-  ~RemoteMediaStreamObserver() {}
+  ~MediaStreamSignalingObserver() {}
 };
 
 // MediaStreamSignaling works as a glue between MediaStreams and a cricket
@@ -90,7 +117,7 @@ class RemoteMediaStreamObserver {
 // To setup a DataChannel initialized by the remote end.
 // 1. When remote session description is set, call UpdateRemoteStream with the
 //    session description. If a label and a SSRC of a new DataChannel is found
-//    RemoteMediaStreamObserver::OnAddDataChannel with the label and SSRC is
+//    MediaStreamSignalingObserver::OnAddDataChannel with the label and SSRC is
 //    triggered.
 // 2. Create a DataChannel instance with the label and set the remote SSRC.
 // 3. Call AddDataChannel with this new DataChannel.  GetMediaSessionOptions
@@ -115,8 +142,12 @@ class RemoteMediaStreamObserver {
 class MediaStreamSignaling {
  public:
   MediaStreamSignaling(talk_base::Thread* signaling_thread,
-                       RemoteMediaStreamObserver* stream_observer);
+                       MediaStreamSignalingObserver* stream_observer);
   virtual ~MediaStreamSignaling();
+
+  // Notify all referenced objects that MediaStreamSignaling will be teared
+  // down. This method must be called prior to the dtor.
+  void TearDown();
 
   // Set a factory for creating data channels that are initiated by the remote
   // peer.
@@ -124,12 +155,16 @@ class MediaStreamSignaling {
     data_channel_factory_ = data_channel_factory;
   }
 
-  // Set the collection of local MediaStreams included in the
-  // cricket::MediaSessionOption returned by GetMediaSessionOptions.
-  void SetLocalStreams(StreamCollectionInterface* local_streams);
+  // Adds |local_stream| to the collection of known MediaStreams that will be
+  // offered in a SessionDescription.
+  bool AddLocalStream(MediaStreamInterface* local_stream);
 
-  // Adds |data_channel| to the collection of DataChannels included in the
-  // cricket::MediaSessionOptions returned by GetMediaSessionOptions().
+  // Removes |local_stream| from the collection of known MediaStreams that will
+  // be offered in a SessionDescription.
+  void RemoveLocalStream(MediaStreamInterface* local_stream);
+
+  // Adds |data_channel| to the collection of DataChannels that will be
+  // be offered in a SessionDescription.
   bool AddDataChannel(DataChannel* data_channel);
 
   // Returns a MediaSessionOptions struct with options decided by |constraints|,
@@ -149,12 +184,13 @@ class MediaStreamSignaling {
   // session state.
   // If the remote SessionDescription contain information about a new remote
   // MediaStreams a new remote MediaStream is created and
-  // RemoteMediaStreamObserver::OnAddStream is called.
+  // MediaStreamSignalingObserver::OnAddStream is called.
   // If a remote MediaStream is missing from
-  // the remote SessionDescription RemoteMediaStreamObserver::OnRemoveStream
+  // the remote SessionDescription MediaStreamSignalingObserver::OnRemoveStream
   // is called.
   // If the SessionDescription contains information about a new DataChannel,
-  // RemoteMediaStreamObserver::OnAddDataChannel is called with the DataChannel.
+  // MediaStreamSignalingObserver::OnAddDataChannel is called with the
+  // DataChannel.
   void OnRemoteDescriptionChanged(const SessionDescriptionInterface* desc);
 
   // Called when the local session description has changed. The purpose is to
@@ -175,6 +211,9 @@ class MediaStreamSignaling {
   // Returns the SSRC for a given track.
   bool GetRemoteAudioTrackSsrc(const std::string& track_id, uint32* ssrc) const;
   bool GetRemoteVideoTrackSsrc(const std::string& track_id, uint32* ssrc) const;
+
+  // Returns all current known local MediaStreams.
+  StreamCollectionInterface* local_streams() const { return local_streams_;}
 
   // Returns all current remote MediaStreams.
   StreamCollectionInterface* remote_streams() const {
@@ -218,6 +257,53 @@ class MediaStreamSignaling {
   void MaybeCreateDefaultStream();
   RemoteTracksInterface* GetRemoteTracks(cricket::MediaType type);
 
+  struct LocalTrackInfo {
+    LocalTrackInfo() : ssrc(0) {}
+    LocalTrackInfo(const std::string& stream_label,
+                   const std::string track_id,
+                   uint32 ssrc)
+        : stream_label(stream_label),
+          track_id(track_id),
+          ssrc(ssrc) {
+    }
+    std::string stream_label;
+    std::string track_id;
+    uint32 ssrc;
+  };
+  typedef std::map<std::string, LocalTrackInfo> LocalTracks;
+
+  // Returns a map of currently negotiated LocalTrackInfo of type |type|.
+  LocalTracks* GetLocalTracks(cricket::MediaType type);
+  bool FindLocalTrack(const std::string& track_id, cricket::MediaType type);
+
+  // Loops through the vector of |streams| and finds added and removed
+  // StreamParams since last time this method was called.
+  // For each new or removed StreamParam NotifyLocalTrackAdded or
+  // NotifyLocalTrackRemoved in invoked.
+  void UpdateLocalTracks(const std::vector<cricket::StreamParams>& streams,
+                         cricket::MediaType media_type);
+
+  // Triggered when a local track has been seen for the first time in a local
+  // session description.
+  // This method triggers MediaStreamSignaling::OnAddLocalAudioTrack or
+  // MediaStreamSignaling::OnAddLocalVideoTrack if the rtp streams in the local
+  // SessionDescription can be mapped to a MediaStreamTrack in a MediaStream in
+  // |local_streams_|
+  void OnLocalTrackSeen(const std::string& stream_label,
+                        const std::string& track_id,
+                        uint32 ssrc,
+                        cricket::MediaType media_type);
+
+  // Triggered when a local track has been removed from a local session
+  // description.
+  // This method triggers MediaStreamSignaling::OnRemoveLocalAudioTrack or
+  // MediaStreamSignaling::OnRemoveLocalVideoTrack if a stream has been removed
+  // from the local SessionDescription and the stream can be mapped to a
+  // MediaStreamTrack in a MediaStream in |local_streams_|.
+  void OnLocalTrackRemoved(const std::string& stream_label,
+                           const std::string& track_id,
+                           cricket::MediaType media_type);
+
   void UpdateLocalDataChannels(const cricket::StreamParamsVec& streams);
   void UpdateRemoteDataChannels(const cricket::StreamParamsVec& streams);
   void UpdateClosingDataChannels(
@@ -228,11 +314,15 @@ class MediaStreamSignaling {
   talk_base::Thread* signaling_thread_;
   DataChannelFactory* data_channel_factory_;
   cricket::MediaSessionOptions options_;
-  RemoteMediaStreamObserver* stream_observer_;
-  talk_base::scoped_refptr<StreamCollectionInterface> local_streams_;
+  MediaStreamSignalingObserver* stream_observer_;
+  talk_base::scoped_refptr<StreamCollection> local_streams_;
   talk_base::scoped_refptr<StreamCollection> remote_streams_;
+
   talk_base::scoped_ptr<RemoteTracksInterface> remote_audio_tracks_;
   talk_base::scoped_ptr<RemoteTracksInterface> remote_video_tracks_;
+
+  LocalTracks local_audio_tracks_;
+  LocalTracks local_video_tracks_;
 
   typedef std::map<std::string, talk_base::scoped_refptr<DataChannel> >
       DataChannels;

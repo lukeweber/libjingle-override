@@ -48,10 +48,19 @@ using webrtc::VideoTrackInterface;
 
 namespace {
 
+typedef std::vector<PortAllocatorFactoryInterface::StunConfiguration>
+    StunConfigurations;
+typedef std::vector<PortAllocatorFactoryInterface::TurnConfiguration>
+    TurnConfigurations;
+
 static const char kStunIceServer[] = "stun:stun.l.google.com:19302";
 static const char kTurnIceServer[] = "turn:test%40hello.com@test.com:1234";
+static const char kTurnIceServerWithTransport[] =
+    "turn:test@hello.com?transport=tcp";
+static const char kSecureTurnServerUrl[] = "turns:test@hello.com?transport=tcp";
 static const char kInvalidTurnIceServer[] = "turn:test.com:1234";
 static const char kTurnPassword[] = "turnpassword";
+static const int kDefaultPort = 3478;
 
 class NullPeerConnectionObserver : public PeerConnectionObserver {
  public:
@@ -84,11 +93,41 @@ class PeerConnectionFactoryTest : public testing::Test {
   }
 
  protected:
+  void VerifyStunConfigurations(StunConfigurations stun_config) {
+    webrtc::FakePortAllocatorFactory* allocator =
+        static_cast<webrtc::FakePortAllocatorFactory*>(
+            allocator_factory_.get());
+    ASSERT_TRUE(allocator != NULL);
+    EXPECT_EQ(stun_config.size(), allocator->stun_configs().size());
+    for (size_t i = 0; i < stun_config.size(); ++i) {
+      EXPECT_EQ(stun_config[i].server.ToString(),
+                allocator->stun_configs()[i].server.ToString());
+    }
+  }
+
+  void VerifyTurnConfigurations(TurnConfigurations turn_config) {
+    webrtc::FakePortAllocatorFactory* allocator =
+        static_cast<webrtc::FakePortAllocatorFactory*>(
+            allocator_factory_.get());
+    ASSERT_TRUE(allocator != NULL);
+    EXPECT_EQ(turn_config.size(), allocator->turn_configs().size());
+    for (size_t i = 0; i < turn_config.size(); ++i) {
+      EXPECT_EQ(turn_config[i].server.ToString(),
+                allocator->turn_configs()[i].server.ToString());
+      EXPECT_EQ(turn_config[i].username, allocator->turn_configs()[i].username);
+      EXPECT_EQ(turn_config[i].password, allocator->turn_configs()[i].password);
+      EXPECT_EQ(turn_config[i].transport_type,
+                allocator->turn_configs()[i].transport_type);
+    }
+  }
+
   talk_base::scoped_refptr<PeerConnectionFactoryInterface> factory_;
   NullPeerConnectionObserver observer_;
   talk_base::scoped_refptr<PortAllocatorFactoryInterface> allocator_factory_;
 };
 
+// Verify creation of PeerConnection using internal ADM, video factory and
+// internal libjingle threads.
 TEST(PeerConnectionFactoryTestInternal, CreatePCUsingInternalModules) {
   talk_base::scoped_refptr<PeerConnectionFactoryInterface> factory(
       webrtc::CreatePeerConnectionFactory());
@@ -102,6 +141,8 @@ TEST(PeerConnectionFactoryTestInternal, CreatePCUsingInternalModules) {
   EXPECT_TRUE(pc.get() != NULL);
 }
 
+// This test verifies creation of PeerConnection with valid STUN and TURN
+// configuration. Also verifies the URL's parsed correctly as expected.
 TEST_F(PeerConnectionFactoryTest, CreatePCUsingIceServers) {
   webrtc::PeerConnectionInterface::IceServers ice_servers;
   webrtc::PeerConnectionInterface::IceServer ice_server;
@@ -115,8 +156,48 @@ TEST_F(PeerConnectionFactoryTest, CreatePCUsingIceServers) {
                                      allocator_factory_.get(),
                                      &observer_));
   EXPECT_TRUE(pc.get() != NULL);
+  StunConfigurations stun_configs;
+  webrtc::PortAllocatorFactoryInterface::StunConfiguration stun(
+      "stun.l.google.com", 19302);
+  stun_configs.push_back(stun);
+  webrtc::PortAllocatorFactoryInterface::StunConfiguration stun1(
+        "test.com", 1234);
+  stun_configs.push_back(stun1);
+  VerifyStunConfigurations(stun_configs);
+  TurnConfigurations turn_configs;
+  webrtc::PortAllocatorFactoryInterface::TurnConfiguration turn(
+      "test.com", 1234, "test@hello.com", kTurnPassword, "udp");
+  turn_configs.push_back(turn);
+  VerifyTurnConfigurations(turn_configs);
 }
 
+// This test verifies the PeerConnection created properly with TURN url which
+// has transport parameter in it.
+TEST_F(PeerConnectionFactoryTest, CreatePCUsingTurnUrlWithTransportParam) {
+  webrtc::PeerConnectionInterface::IceServers ice_servers;
+  webrtc::PeerConnectionInterface::IceServer ice_server;
+  ice_server.uri = kTurnIceServerWithTransport;
+  ice_server.password = kTurnPassword;
+  ice_servers.push_back(ice_server);
+  talk_base::scoped_refptr<PeerConnectionInterface> pc(
+      factory_->CreatePeerConnection(ice_servers, NULL,
+                                     allocator_factory_.get(),
+                                     &observer_));
+  EXPECT_TRUE(pc.get() != NULL);
+  TurnConfigurations turn_configs;
+  webrtc::PortAllocatorFactoryInterface::TurnConfiguration turn(
+      "hello.com", kDefaultPort, "test", kTurnPassword, "tcp");
+  turn_configs.push_back(turn);
+  VerifyTurnConfigurations(turn_configs);
+  StunConfigurations stun_configs;
+  webrtc::PortAllocatorFactoryInterface::StunConfiguration stun(
+        "hello.com", kDefaultPort);
+  stun_configs.push_back(stun);
+  VerifyStunConfigurations(stun_configs);
+}
+
+// This test verifies PeerConnection object is not created when an incorrect
+// TURN url provided. In this case TURN url is missing username parameter.
 TEST_F(PeerConnectionFactoryTest, CreatePCUsingInvalidTurnUrl) {
   webrtc::PeerConnectionInterface::IceServers ice_servers;
   webrtc::PeerConnectionInterface::IceServer ice_server;
@@ -128,9 +209,30 @@ TEST_F(PeerConnectionFactoryTest, CreatePCUsingInvalidTurnUrl) {
                                      allocator_factory_.get(),
                                      &observer_));
   EXPECT_TRUE(pc.get() == NULL);
+  TurnConfigurations turn_configs;
+  VerifyTurnConfigurations(turn_configs);
 }
 
+// This test verifies factory failed to create a peerconneciton object when
+// a valid secure TURN url passed. Connecting to a secure TURN server is not
+// supported currently.
+TEST_F(PeerConnectionFactoryTest, CreatePCUsingSecureTurnUrl) {
+  webrtc::PeerConnectionInterface::IceServers ice_servers;
+  webrtc::PeerConnectionInterface::IceServer ice_server;
+  ice_server.uri = kSecureTurnServerUrl;
+  ice_server.password = kTurnPassword;
+  ice_servers.push_back(ice_server);
+  talk_base::scoped_refptr<PeerConnectionInterface> pc(
+      factory_->CreatePeerConnection(ice_servers, NULL,
+                                     allocator_factory_.get(),
+                                     &observer_));
+  EXPECT_TRUE(pc.get() == NULL);
+  TurnConfigurations turn_configs;
+  VerifyTurnConfigurations(turn_configs);
+}
 
+// This test verifies the captured stream is rendered locally using a
+// local video track.
 TEST_F(PeerConnectionFactoryTest, LocalRendering) {
   cricket::FakeVideoCapturer* capturer = new cricket::FakeVideoCapturer();
   // The source take ownership of |capturer|.
@@ -154,4 +256,3 @@ TEST_F(PeerConnectionFactoryTest, LocalRendering) {
   EXPECT_TRUE(capturer->CaptureFrame());
   EXPECT_EQ(2, local_renderer.num_rendered_frames());
 }
-

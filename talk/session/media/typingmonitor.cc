@@ -39,6 +39,7 @@ TypingMonitor::TypingMonitor(VoiceChannel* channel,
     : channel_(channel),
       worker_thread_(worker_thread),
       mute_period_(settings.mute_period),
+      muted_at_(0),
       has_pending_unmute_(false) {
   channel_->media_channel()->SignalMediaError.connect(
       this, &TypingMonitor::OnVoiceChannelError);
@@ -74,11 +75,10 @@ void TypingMonitor::OnVoiceChannelError(uint32 ssrc,
     channel_->MuteStream(0, true);
     SignalMuted(channel_, true);
     has_pending_unmute_ = true;
+    muted_at_ = talk_base::Time();
 
     worker_thread_->PostDelayed(mute_period_, this, 0);
-    LOG(LS_INFO) << "Muted for " << mute_period_ << "ms.";
-    // TODO(thaloun): Either here or in VoiceChannel signal up a mutechanged
-    // type message so that the FE can keep in sync with the actual mute status.
+    LOG(LS_INFO) << "Muting for at least" << mute_period_ << "ms.";
   }
 }
 
@@ -107,14 +107,15 @@ void TypingMonitor::OnMessage(talk_base::Message* msg) {
   int silence_period = channel_->media_channel()->GetTimeSinceLastTyping();
   int expiry_time = mute_period_ - silence_period;
   if (silence_period < 0 || expiry_time < 50) {
-    LOG_F(LS_INFO) << "Mute timeout hit, silent for "
-                   << silence_period << "ms, unmuting.";
+    LOG(LS_INFO) << "Mute timeout hit, last typing " << silence_period
+                 << "ms ago, unmuting after " << talk_base::TimeSince(muted_at_)
+                 << "ms total.";
     has_pending_unmute_ = false;
     channel_->MuteStream(0, false);
     SignalMuted(channel_, false);
   } else {
-    LOG_F(LS_INFO) << "Mute timeout hit, silent for " << silence_period
-                   << "ms, check again in " << expiry_time << "ms.";
+    LOG(LS_INFO) << "Mute timeout hit, last typing " << silence_period
+                 << "ms ago, check again in " << expiry_time << "ms.";
     talk_base::Thread::Current()->PostDelayed(expiry_time, this, 0);
   }
 }

@@ -39,7 +39,7 @@
 #include "talk/base/scoped_ptr.h"
 
 namespace webrtc {
-class MediaStreamHandlers;
+class MediaStreamHandlerContainer;
 
 typedef std::vector<PortAllocatorFactoryInterface::StunConfiguration>
     StunConfigurations;
@@ -50,7 +50,7 @@ typedef std::vector<PortAllocatorFactoryInterface::TurnConfiguration>
 // It uses MediaStreamSignaling and WebRtcSession to implement
 // the PeerConnection functionality.
 class PeerConnection : public PeerConnectionInterface,
-                       public RemoteMediaStreamObserver,
+                       public MediaStreamSignalingObserver,
                        public IceObserver,
                        public talk_base::MessageHandler,
                        public sigslot::has_slots<> {
@@ -108,10 +108,21 @@ class PeerConnection : public PeerConnectionInterface,
   // Implements MessageHandler.
   virtual void OnMessage(talk_base::Message* msg);
 
-  // Implements RemoteMediaStreamObserver.
+  // Implements MediaStreamSignalingObserver.
   virtual void OnAddStream(MediaStreamInterface* stream);
   virtual void OnRemoveStream(MediaStreamInterface* stream);
   virtual void OnAddDataChannel(DataChannelInterface* data_channel);
+  virtual void OnAddLocalAudioTrack(MediaStreamInterface* stream,
+                                    AudioTrackInterface* audio_track,
+                                    uint32 ssrc);
+  virtual void OnAddLocalVideoTrack(MediaStreamInterface* stream,
+                                    VideoTrackInterface* video_track,
+                                    uint32 ssrc);
+  virtual void OnRemoveLocalAudioTrack(MediaStreamInterface* stream,
+                                       AudioTrackInterface* audio_track);
+  virtual void OnRemoveLocalVideoTrack(MediaStreamInterface* stream,
+                                       VideoTrackInterface* video_track);
+  virtual void OnRemoveLocalStream(MediaStreamInterface* stream);
 
   // Implements IceObserver
   virtual void OnIceConnectionChange(IceConnectionState new_state);
@@ -154,12 +165,11 @@ class PeerConnection : public PeerConnectionInterface,
   IceState ice_state_;
   IceConnectionState ice_connection_state_;
   IceGatheringState ice_gathering_state_;
-  talk_base::scoped_refptr<StreamCollection> local_media_streams_;
 
   talk_base::scoped_ptr<cricket::PortAllocator> port_allocator_;
   talk_base::scoped_ptr<WebRtcSession> session_;
   talk_base::scoped_ptr<MediaStreamSignaling> mediastream_signaling_;
-  talk_base::scoped_ptr<MediaStreamHandlers> stream_handler_;
+  talk_base::scoped_ptr<MediaStreamHandlerContainer> stream_handler_container_;
   StatsCollector stats_;
 };
 

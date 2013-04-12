@@ -84,7 +84,8 @@ class TurnRefreshRequest : public StunRequest {
   TurnPort* port_;
 };
 
-class TurnCreatePermissionRequest : public StunRequest {
+class TurnCreatePermissionRequest : public StunRequest,
+                                    public sigslot::has_slots<> {
  public:
   TurnCreatePermissionRequest(TurnPort* port, TurnEntry* entry,
                               const talk_base::SocketAddress& ext_addr);
@@ -94,12 +95,15 @@ class TurnCreatePermissionRequest : public StunRequest {
   virtual void OnTimeout();
 
  private:
+  void OnEntryDestroyed(TurnEntry* entry);
+
   TurnPort* port_;
   TurnEntry* entry_;
   talk_base::SocketAddress ext_addr_;
 };
 
-class TurnChannelBindRequest : public StunRequest {
+class TurnChannelBindRequest : public StunRequest,
+                               public sigslot::has_slots<> {
  public:
   TurnChannelBindRequest(TurnPort* port, TurnEntry* entry, int channel_id,
                          const talk_base::SocketAddress& ext_addr);
@@ -109,6 +113,8 @@ class TurnChannelBindRequest : public StunRequest {
   virtual void OnTimeout();
 
  private:
+  void OnEntryDestroyed(TurnEntry* entry);
+
   TurnPort* port_;
   TurnEntry* entry_;
   int channel_id_;
@@ -140,6 +146,8 @@ class TurnEntry : public sigslot::has_slots<> {
   void OnCreatePermissionError(StunMessage* response, int code);
   void OnChannelBindSuccess();
   void OnChannelBindError(StunMessage* response, int code);
+  // Signal sent when TurnEntry is destroyed.
+  sigslot::signal1<TurnEntry*> SignalDestroyed;
 
  private:
   TurnPort* port_;
@@ -224,6 +232,7 @@ Connection* TurnPort::CreateConnection(const Candidate& address,
   // TODO(juberti): The '0' index will need to change if we start gathering STUN
   // candidates on this port.
   ProxyConnection* conn = new ProxyConnection(this, 0, address);
+  conn->SignalDestroyed.connect(this, &TurnPort::OnConnectionDestroyed);
   AddConnection(conn);
   return conn;
 }
@@ -530,8 +539,14 @@ TurnEntry* TurnPort::CreateEntry(const talk_base::SocketAddress& addr) {
 void TurnPort::DestroyEntry(const talk_base::SocketAddress& addr) {
   TurnEntry* entry = FindEntry(addr);
   ASSERT(entry != NULL);
+  entry->SignalDestroyed(entry);
   entries_.remove(entry);
   delete entry;
+}
+
+void TurnPort::OnConnectionDestroyed(Connection* conn) {
+  // Destroying TurnEntry for the connection, which is already destroyed.
+  DestroyEntry(conn->remote_candidate().address());
 }
 
 TurnAllocateRequest::TurnAllocateRequest(TurnPort* port)
@@ -685,6 +700,8 @@ TurnCreatePermissionRequest::TurnCreatePermissionRequest(
       port_(port),
       entry_(entry),
       ext_addr_(ext_addr) {
+  entry_->SignalDestroyed.connect(
+      this, &TurnCreatePermissionRequest::OnEntryDestroyed);
 }
 
 void TurnCreatePermissionRequest::Prepare(StunMessage* request) {
@@ -696,16 +713,25 @@ void TurnCreatePermissionRequest::Prepare(StunMessage* request) {
 }
 
 void TurnCreatePermissionRequest::OnResponse(StunMessage* response) {
-  entry_->OnCreatePermissionSuccess();
+  if (entry_) {
+    entry_->OnCreatePermissionSuccess();
+  }
 }
 
 void TurnCreatePermissionRequest::OnErrorResponse(StunMessage* response) {
-  const StunErrorCodeAttribute* error_code = response->GetErrorCode();
-  entry_->OnCreatePermissionError(response, error_code->code());
+  if (entry_) {
+    const StunErrorCodeAttribute* error_code = response->GetErrorCode();
+    entry_->OnCreatePermissionError(response, error_code->code());
+  }
 }
 
 void TurnCreatePermissionRequest::OnTimeout() {
   LOG_J(LS_WARNING, port_) << "Create permission timeout";
+}
+
+void TurnCreatePermissionRequest::OnEntryDestroyed(TurnEntry* entry) {
+  ASSERT(entry_ == entry);
+  entry_ = NULL;
 }
 
 TurnChannelBindRequest::TurnChannelBindRequest(
@@ -716,6 +742,8 @@ TurnChannelBindRequest::TurnChannelBindRequest(
       entry_(entry),
       channel_id_(channel_id),
       ext_addr_(ext_addr) {
+  entry_->SignalDestroyed.connect(
+      this, &TurnChannelBindRequest::OnEntryDestroyed);
 }
 
 void TurnChannelBindRequest::Prepare(StunMessage* request) {
@@ -729,21 +757,30 @@ void TurnChannelBindRequest::Prepare(StunMessage* request) {
 }
 
 void TurnChannelBindRequest::OnResponse(StunMessage* response) {
-  entry_->OnChannelBindSuccess();
-  // Refresh the channel binding just under the permission timeout
-  // threshold. The channel binding has a longer lifetime, but
-  // this is the easiest way to keep both the channel and the
-  // permission from expiring.
-  entry_->SendChannelBindRequest(TURN_PERMISSION_TIMEOUT - 60 * 1000);
+  if (entry_) {
+    entry_->OnChannelBindSuccess();
+    // Refresh the channel binding just under the permission timeout
+    // threshold. The channel binding has a longer lifetime, but
+    // this is the easiest way to keep both the channel and the
+    // permission from expiring.
+    entry_->SendChannelBindRequest(TURN_PERMISSION_TIMEOUT - 60 * 1000);
+  }
 }
 
 void TurnChannelBindRequest::OnErrorResponse(StunMessage* response) {
-  const StunErrorCodeAttribute* error_code = response->GetErrorCode();
-  entry_->OnChannelBindError(response, error_code->code());
+  if (entry_) {
+    const StunErrorCodeAttribute* error_code = response->GetErrorCode();
+    entry_->OnChannelBindError(response, error_code->code());
+  }
 }
 
 void TurnChannelBindRequest::OnTimeout() {
   LOG_J(LS_WARNING, port_) << "Channel bind timeout";
+}
+
+void TurnChannelBindRequest::OnEntryDestroyed(TurnEntry* entry) {
+  ASSERT(entry_ == entry);
+  entry_ = NULL;
 }
 
 TurnEntry::TurnEntry(TurnPort* port, int channel_id,

@@ -77,6 +77,7 @@ using webrtc::JsepIceCandidate;
 using webrtc::JsepSessionDescription;
 using webrtc::PeerConnectionInterface;
 using webrtc::SessionDescriptionInterface;
+using webrtc::StreamCollection;
 using webrtc::kMlineMismatch;
 using webrtc::kSdpWithoutCrypto;
 using webrtc::kSessionError;
@@ -198,60 +199,73 @@ class WebRtcSessionForTest : public webrtc::WebRtcSession {
 };
 
 class FakeMediaStreamSignaling : public webrtc::MediaStreamSignaling,
-                                 public webrtc::RemoteMediaStreamObserver {
+                                 public webrtc::MediaStreamSignalingObserver {
  public:
   FakeMediaStreamSignaling() :
     webrtc::MediaStreamSignaling(talk_base::Thread::Current(), this) {
   }
 
   void SendAudioVideoStream1() {
-    talk_base::scoped_refptr<webrtc::StreamCollection> streams(
-        webrtc::StreamCollection::Create());
-    streams->AddStream(CreateStream(kStream1, kAudioTrack1, kVideoTrack1));
-    SetLocalStreams(streams);
+    ClearLocalStreams();
+    AddLocalStream(CreateStream(kStream1, kAudioTrack1, kVideoTrack1));
   }
 
   void SendAudioVideoStream2() {
-    talk_base::scoped_refptr<webrtc::StreamCollection> streams(
-        webrtc::StreamCollection::Create());
-    streams->AddStream(CreateStream(kStream2, kAudioTrack2, kVideoTrack2));
-    SetLocalStreams(streams);
+    ClearLocalStreams();
+    AddLocalStream(CreateStream(kStream2, kAudioTrack2, kVideoTrack2));
   }
 
   void SendAudioVideoStream1And2() {
-    talk_base::scoped_refptr<webrtc::StreamCollection> streams(
-        webrtc::StreamCollection::Create());
-    streams->AddStream(CreateStream(kStream1, kAudioTrack1, kVideoTrack1));
-    streams->AddStream(CreateStream(kStream2, kAudioTrack2, kVideoTrack2));
-    SetLocalStreams(streams);
+    ClearLocalStreams();
+    AddLocalStream(CreateStream(kStream1, kAudioTrack1, kVideoTrack1));
+    AddLocalStream(CreateStream(kStream2, kAudioTrack2, kVideoTrack2));
   }
 
   void SendNothing() {
-    SetLocalStreams(webrtc::StreamCollection::Create());
+    ClearLocalStreams();
   }
 
   void UseOptionsAudioOnly() {
-    talk_base::scoped_refptr<webrtc::StreamCollection> streams(
-        webrtc::StreamCollection::Create());
-    streams->AddStream(CreateStream(kStream2, kAudioTrack2, ""));
-    SetLocalStreams(streams);
+    ClearLocalStreams();
+    AddLocalStream(CreateStream(kStream2, kAudioTrack2, ""));
   }
 
   void UseOptionsVideoOnly() {
-    talk_base::scoped_refptr<webrtc::StreamCollection> streams(
-        webrtc::StreamCollection::Create());
-    streams->AddStream(CreateStream(kStream2, kAudioTrack1, kVideoTrack2));
-    SetLocalStreams(streams);
+    ClearLocalStreams();
+    AddLocalStream(CreateStream(kStream2, kAudioTrack1, kVideoTrack2));
   }
 
-  // Implements RemoteMediaStreamObserver.
+  void ClearLocalStreams() {
+    while (local_streams()->count() != 0) {
+     RemoveLocalStream(local_streams()->at(0));
+    }
+  }
+
+  // Implements MediaStreamSignalingObserver.
   virtual void OnAddStream(webrtc::MediaStreamInterface* stream) {
   }
   virtual void OnRemoveStream(webrtc::MediaStreamInterface* stream) {
   }
   virtual void OnAddDataChannel(webrtc::DataChannelInterface* data_channel) {
   }
-
+  virtual void OnAddLocalAudioTrack(webrtc::MediaStreamInterface* stream,
+                                    webrtc::AudioTrackInterface* audio_track,
+                                    uint32 ssrc) {
+  }
+  virtual void OnAddLocalVideoTrack(webrtc::MediaStreamInterface* stream,
+                                    webrtc::VideoTrackInterface* video_track,
+                                    uint32 ssrc) {
+  }
+  virtual void OnRemoveLocalAudioTrack(
+      webrtc::MediaStreamInterface* stream,
+      webrtc::AudioTrackInterface* audio_track) {
+  }
+  virtual void OnRemoveLocalVideoTrack(
+      webrtc::MediaStreamInterface* stream,
+      webrtc::VideoTrackInterface* video_track) {
+  }
+  virtual void OnRemoveLocalStream(webrtc::MediaStreamInterface* stream) {
+  }
 
  private:
   talk_base::scoped_refptr<webrtc::MediaStreamInterface> CreateStream(

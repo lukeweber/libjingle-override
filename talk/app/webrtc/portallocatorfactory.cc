@@ -74,10 +74,17 @@ cricket::PortAllocator* PortAllocatorFactory::CreatePortAllocator(
   if (turn.size() > 0) {
     cricket::RelayCredentials credentials(turn[0].username, turn[0].password);
     cricket::RelayServerConfig relay_server(cricket::RELAY_TURN);
-    relay_server.ports.push_back(cricket::ProtocolAddress(
-        turn[0].server, cricket::PROTO_UDP));
-    relay_server.credentials = credentials;
-    allocator->AddRelay(relay_server);
+    cricket::ProtocolType protocol;
+    if (cricket::StringToProto(turn[0].transport_type.c_str(), &protocol)) {
+      relay_server.ports.push_back(cricket::ProtocolAddress(
+          turn[0].server, protocol));
+      relay_server.credentials = credentials;
+      allocator->AddRelay(relay_server);
+    } else {
+      LOG(LS_WARNING) << "Ignoring TURN server " << turn[0].server << ". "
+                      << "Reason= Incorrect " << turn[0].transport_type
+                      << " transport parameter.";
+    }
   }
   return allocator.release();
 }

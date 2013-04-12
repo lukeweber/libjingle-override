@@ -35,6 +35,7 @@
 #include "talk/app/webrtc/videotrack.h"
 #include "talk/base/gunit.h"
 #include "talk/base/scoped_ptr.h"
+#include "talk/base/stringutils.h"
 #include "talk/base/thread.h"
 #include "talk/p2p/base/constants.h"
 #include "talk/p2p/base/sessiondescription.h"
@@ -44,8 +45,10 @@ static const char kAudioTracks[][32] = {"audiotrack0", "audiotrack1"};
 static const char kVideoTracks[][32] = {"videotrack0", "videotrack1"};
 
 using webrtc::AudioTrack;
+using webrtc::AudioTrackInterface;
 using webrtc::AudioTrackVector;
 using webrtc::VideoTrack;
+using webrtc::VideoTrackInterface;
 using webrtc::VideoTrackVector;
 using webrtc::DataChannelInterface;
 using webrtc::FakeConstraints;
@@ -230,15 +233,13 @@ static bool CompareStreamCollections(StreamCollectionInterface* s1,
   return true;
 }
 
-// MockRemoteStreamObserver implements functions for listening to
-// callbacks about added and removed remote MediaStreams.
-class MockRemoteStreamObserver : public webrtc::RemoteMediaStreamObserver {
+class MockSignalingObserver : public webrtc::MediaStreamSignalingObserver {
  public:
-  MockRemoteStreamObserver()
+  MockSignalingObserver()
       : remote_media_streams_(StreamCollection::Create()) {
   }
 
-  virtual ~MockRemoteStreamObserver() {
+  virtual ~MockSignalingObserver() {
   }
 
   // New remote stream have been discovered.
@@ -254,6 +255,39 @@ class MockRemoteStreamObserver : public webrtc::RemoteMediaStreamObserver {
   virtual void OnAddDataChannel(DataChannelInterface* data_channel) {
   }
 
+  virtual void OnAddLocalAudioTrack(MediaStreamInterface* stream,
+                                    AudioTrackInterface* audio_track,
+                                    uint32 ssrc) {
+    local_audio_tracks_[audio_track->id()] =
+        TrackInfo(stream->label(), audio_track->id(), ssrc);
+  }
+
+  virtual void OnAddLocalVideoTrack(MediaStreamInterface* stream,
+                                    VideoTrackInterface* video_track,
+                                    uint32 ssrc) {
+    local_video_tracks_[video_track->id()] =
+        TrackInfo(stream->label(), video_track->id(), ssrc);
+  }
+
+  virtual void OnRemoveLocalAudioTrack(MediaStreamInterface* stream,
+                                       AudioTrackInterface* audio_track) {
+    TrackInfos::iterator it = local_audio_tracks_.find(audio_track->id());
+    ASSERT_TRUE(it != local_audio_tracks_.end());
+    ASSERT_EQ(it->second.stream_label, stream->label());
+    local_audio_tracks_.erase(it);
+  }
+
+  virtual void OnRemoveLocalVideoTrack(MediaStreamInterface* stream,
+                                       VideoTrackInterface* video_track) {
+    TrackInfos::iterator it = local_video_tracks_.find(video_track->id());
+    ASSERT_TRUE(it != local_video_tracks_.end());
+    ASSERT_EQ(it->second.stream_label, stream->label());
+    local_video_tracks_.erase(it);
+  }
+
+  virtual void OnRemoveLocalStream(MediaStreamInterface* stream) {
+  }
+
   MediaStreamInterface* RemoteStream(const std::string& label) {
     return remote_media_streams_->find(label);
   }
@@ -262,16 +296,53 @@ class MockRemoteStreamObserver : public webrtc::RemoteMediaStreamObserver {
     return remote_media_streams_;
   }
 
+  size_t NumberOfLocalAudioTracks() { return local_audio_tracks_.size(); }
+  void  VerifyLocalAudioTrack(const std::string& stream_label,
+                              const std::string& track_id,
+                              uint32 ssrc) {
+    TrackInfos::iterator it = local_audio_tracks_.find(track_id);
+    ASSERT_TRUE(it != local_audio_tracks_.end());
+    EXPECT_EQ(stream_label, it->second.stream_label);
+    EXPECT_EQ(ssrc, it->second.ssrc);
+  }
+
+  size_t NumberOfLocalVideoTracks() { return local_video_tracks_.size(); }
+  void  VerifyLocalVideoTrack(const std::string& stream_label,
+                              const std::string& track_id,
+                              uint32 ssrc) {
+    TrackInfos::iterator it = local_video_tracks_.find(track_id);
+    ASSERT_TRUE(it != local_video_tracks_.end());
+    EXPECT_EQ(stream_label, it->second.stream_label);
+    EXPECT_EQ(ssrc, it->second.ssrc);
+  }
+
  private:
+  struct TrackInfo {
+    TrackInfo() {}
+    TrackInfo(const std::string& stream_label, const std::string track_id,
+              uint32 ssrc)
+        : stream_label(stream_label),
+          track_id(track_id),
+          ssrc(ssrc) {
+    }
+    std::string stream_label;
+    std::string track_id;
+    uint32 ssrc;
+  };
+
+  typedef std::map<std::string, TrackInfo> TrackInfos;
+  TrackInfos local_audio_tracks_;
+  TrackInfos local_video_tracks_;
+
   talk_base::scoped_refptr<StreamCollection> remote_media_streams_;
 };
 
 class MediaStreamSignalingForTest : public webrtc::MediaStreamSignaling {
  public:
-  explicit MediaStreamSignalingForTest(MockRemoteStreamObserver* observer)
+  explicit MediaStreamSignalingForTest(MockSignalingObserver* observer)
       : webrtc::MediaStreamSignaling(talk_base::Thread::Current(), observer) {
   };
-  using webrtc::MediaStreamSignaling::SetLocalStreams;
+
   using webrtc::MediaStreamSignaling::GetOptionsForOffer;
   using webrtc::MediaStreamSignaling::GetOptionsForAnswer;
   using webrtc::MediaStreamSignaling::OnRemoteDescriptionChanged;
@@ -281,17 +352,8 @@ class MediaStreamSignalingForTest : public webrtc::MediaStreamSignaling {
 class MediaStreamSignalingTest: public testing::Test {
  protected:
   virtual void SetUp() {
-    observer_.reset(new MockRemoteStreamObserver());
+    observer_.reset(new MockSignalingObserver());
     signaling_.reset(new MediaStreamSignalingForTest(observer_.get()));
-  }
-
-  void TestGetMediaSessionOptionsForOffer(
-      StreamCollectionInterface* streams,
-      const MediaConstraintsInterface* constraints) {
-    signaling_->SetLocalStreams(streams);
-    cricket::MediaSessionOptions options;
-    EXPECT_TRUE(signaling_->GetOptionsForOffer(constraints, &options));
-    VerifyMediaOptions(streams, options);
   }
 
   // Create a collection of streams.
@@ -383,7 +445,7 @@ class MediaStreamSignalingTest: public testing::Test {
   }
 
   talk_base::scoped_refptr<StreamCollection> reference_collection_;
-  talk_base::scoped_ptr<MockRemoteStreamObserver> observer_;
+  talk_base::scoped_ptr<MockSignalingObserver> observer_;
   talk_base::scoped_ptr<MediaStreamSignalingForTest> signaling_;
 };
 
@@ -487,10 +549,16 @@ TEST_F(MediaStreamSignalingTest, GetMediaSessionOptionsWithBadConstraints) {
 TEST_F(MediaStreamSignalingTest, AddTrackToLocalMediaStream) {
   talk_base::scoped_refptr<StreamCollection> local_streams(
       CreateStreamCollection(1));
-  TestGetMediaSessionOptionsForOffer(local_streams, NULL);
+  MediaStreamInterface* local_stream = local_streams->at(0);
+  EXPECT_TRUE(signaling_->AddLocalStream(local_stream));
+  cricket::MediaSessionOptions options;
+  EXPECT_TRUE(signaling_->GetOptionsForOffer(NULL, &options));
+  VerifyMediaOptions(local_streams, options);
 
-  local_streams->at(0)->AddTrack(AudioTrack::Create(kAudioTracks[1], NULL));
-  TestGetMediaSessionOptionsForOffer(local_streams, NULL);
+  cricket::MediaSessionOptions updated_options;
+  local_stream->AddTrack(AudioTrack::Create(kAudioTracks[1], NULL));
+  EXPECT_TRUE(signaling_->GetOptionsForOffer(NULL, &options));
+  VerifyMediaOptions(local_streams, options);
 }
 
 // Test that the MediaConstraints in an answer don't affect if audio and video
@@ -727,3 +795,89 @@ TEST_F(MediaStreamSignalingTest, VerifyDefaultStreamIsNotCreated) {
   signaling_->OnRemoteDescriptionChanged(desc_without_streams.get());
   EXPECT_EQ(0u, observer_->remote_streams()->count());
 }
+
+// This test that the correct MediaStreamSignalingObserver methods are called
+// when MediaStreamSignaling::OnLocalDescriptionChanged is called with an
+// updated local session description.
+TEST_F(MediaStreamSignalingTest, LocalDescriptionChanged) {
+  talk_base::scoped_ptr<SessionDescriptionInterface> desc_1;
+  CreateSessionDescriptionAndReference(2, 2, desc_1.use());
+
+  signaling_->AddLocalStream(reference_collection_->at(0));
+  signaling_->OnLocalDescriptionChanged(desc_1.get());
+  EXPECT_EQ(2u, observer_->NumberOfLocalAudioTracks());
+  EXPECT_EQ(2u, observer_->NumberOfLocalVideoTracks());
+  observer_->VerifyLocalAudioTrack(kStreams[0], kAudioTracks[0], 1);
+  observer_->VerifyLocalVideoTrack(kStreams[0], kVideoTracks[0], 2);
+  observer_->VerifyLocalAudioTrack(kStreams[0], kAudioTracks[1], 3);
+  observer_->VerifyLocalVideoTrack(kStreams[0], kVideoTracks[1], 4);
+
+  // Remove an audio and video track.
+  talk_base::scoped_ptr<SessionDescriptionInterface> desc_2;
+  CreateSessionDescriptionAndReference(1, 1, desc_2.use());
+  signaling_->OnLocalDescriptionChanged(desc_2.get());
+  EXPECT_EQ(1u, observer_->NumberOfLocalAudioTracks());
+  EXPECT_EQ(1u, observer_->NumberOfLocalVideoTracks());
+  observer_->VerifyLocalAudioTrack(kStreams[0], kAudioTracks[0], 1);
+  observer_->VerifyLocalVideoTrack(kStreams[0], kVideoTracks[0], 2);
+}
+
+// This test that the correct MediaStreamSignalingObserver methods are called
+// when MediaStreamSignaling::AddLocalStream is called after
+// MediaStreamSignaling::OnLocalDescriptionChanged is called.
+TEST_F(MediaStreamSignalingTest, AddLocalStreamAfterLocalDescriptionChanged) {
+  talk_base::scoped_ptr<SessionDescriptionInterface> desc_1;
+  CreateSessionDescriptionAndReference(2, 2, desc_1.use());
+
+  signaling_->OnLocalDescriptionChanged(desc_1.get());
+  EXPECT_EQ(0u, observer_->NumberOfLocalAudioTracks());
+  EXPECT_EQ(0u, observer_->NumberOfLocalVideoTracks());
+
+  signaling_->AddLocalStream(reference_collection_->at(0));
+  EXPECT_EQ(2u, observer_->NumberOfLocalAudioTracks());
+  EXPECT_EQ(2u, observer_->NumberOfLocalVideoTracks());
+  observer_->VerifyLocalAudioTrack(kStreams[0], kAudioTracks[0], 1);
+  observer_->VerifyLocalVideoTrack(kStreams[0], kVideoTracks[0], 2);
+  observer_->VerifyLocalAudioTrack(kStreams[0], kAudioTracks[1], 3);
+  observer_->VerifyLocalVideoTrack(kStreams[0], kVideoTracks[1], 4);
+}
+
+// This test that the correct MediaStreamSignalingObserver methods are called
+// if the ssrc on a local track is changed when
+// MediaStreamSignaling::OnLocalDescriptionChanged is called.
+TEST_F(MediaStreamSignalingTest, ChangeSsrcOnTrackInLocalSessionDescription) {
+  talk_base::scoped_ptr<SessionDescriptionInterface> desc;
+  CreateSessionDescriptionAndReference(1, 1, desc.use());
+
+  signaling_->AddLocalStream(reference_collection_->at(0));
+  signaling_->OnLocalDescriptionChanged(desc.get());
+  EXPECT_EQ(1u, observer_->NumberOfLocalAudioTracks());
+  EXPECT_EQ(1u, observer_->NumberOfLocalVideoTracks());
+  observer_->VerifyLocalAudioTrack(kStreams[0], kAudioTracks[0], 1);
+  observer_->VerifyLocalVideoTrack(kStreams[0], kVideoTracks[0], 2);
+
+  // Change the ssrc of the audio and video track.
+  std::string sdp;
+  desc->ToString(&sdp);
+  std::string ssrc_org = "a=ssrc:1";
+  std::string ssrc_to = "a=ssrc:97";
+  talk_base::replace_substrs(ssrc_org.c_str(), ssrc_org.length(),
+                             ssrc_to.c_str(), ssrc_to.length(),
+                             &sdp);
+  ssrc_org = "a=ssrc:2";
+  ssrc_to = "a=ssrc:98";
+  talk_base::replace_substrs(ssrc_org.c_str(), ssrc_org.length(),
+                             ssrc_to.c_str(), ssrc_to.length(),
+                             &sdp);
+  talk_base::scoped_ptr<SessionDescriptionInterface> updated_desc(
+      webrtc::CreateSessionDescription(SessionDescriptionInterface::kOffer,
+                                       sdp, NULL));
+
+  signaling_->OnLocalDescriptionChanged(updated_desc.get());
+  EXPECT_EQ(1u, observer_->NumberOfLocalAudioTracks());
+  EXPECT_EQ(1u, observer_->NumberOfLocalVideoTracks());
+  observer_->VerifyLocalAudioTrack(kStreams[0], kAudioTracks[0], 97);
+  observer_->VerifyLocalVideoTrack(kStreams[0], kVideoTracks[0], 98);
+}
+
+
