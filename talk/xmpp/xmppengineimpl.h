@@ -182,8 +182,11 @@ class XmppEngineImpl : public XmppEngine {
   //! Call this when building iq stanzas, to ensure that each iq
   //! gets its own unique id.
   virtual std::string NextId();
+
+  virtual void AllowGtalkLoginWithUserDomain();
+
 #ifdef IOS_XMPP_FRAMEWORK
-    void SignalBound(const Jid& fullJid);
+  void SignalBound(const Jid& fullJid);
 #endif
  private:
   friend class XmppLoginTask;

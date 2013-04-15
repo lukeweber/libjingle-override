@@ -312,6 +312,9 @@ public:
   //! Call this when building iq stanzas, to ensure that each iq
   //! gets its own unique id.
   virtual std::string NextId() = 0;
+
+  virtual void AllowGtalkLoginWithUserDomain() = 0;
+
 #ifdef IOS_XMPP_FRAMEWORK
   virtual void SignalBound(const Jid& fullJid) = 0;
   virtual void RaiseReset() = 0;

@@ -282,6 +282,10 @@ XmppReturnStatus XmppEngineImpl::Disconnect() {
   return XMPP_RETURN_OK;
 }
 
+void XmppEngineImpl::AllowGtalkLoginWithUserDomain(){
+	login_task_->set_allow_non_google_login(true);
+}
+
 void XmppEngineImpl::IncomingStart(const XmlElement* start) {
   if (HasError() || raised_reset_)
     return;

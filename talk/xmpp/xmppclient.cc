@@ -122,6 +122,9 @@ XmppReturnStatus XmppClient::Connect(
   d_->socket_->SignalClosed.connect(d_.get(), &Private::OnSocketClosed);
 
   d_->engine_.reset(XmppEngine::Create());
+  if (settings.allow_gtalk_username_custom_domain()){
+	  d_->engine_->AllowGtalkLoginWithUserDomain();
+  }
   d_->engine_->SetSessionHandler(d_.get());
   d_->engine_->SetOutputHandler(d_.get());
   if (!settings.resource().empty()) {
