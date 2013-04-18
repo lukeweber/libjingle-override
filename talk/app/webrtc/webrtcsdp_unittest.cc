@@ -1130,6 +1130,7 @@ class WebRtcSdpTest : public testing::Test {
         "m=video 3457 RTP/SAVPF 101\r\n"
         "a=rtpmap:101 VP8/90000\r\n"
         "a=rtcp-fb:101 nack\r\n"
+        "a=rtcp-fb:101 goog-remb\r\n"
         "a=rtcp-fb:101 ccm fir\r\n";
     std::ostringstream os;
     os << "a=rtcp-fb:" << (use_wildcard ? "*" : "101") <<  " ccm fir\r\n";
@@ -1148,6 +1149,9 @@ class WebRtcSdpTest : public testing::Test {
     EXPECT_EQ(101, vp8.id);
     EXPECT_TRUE(vp8.HasFeedbackParam(
         cricket::FeedbackParam(cricket::kRtcpFbParamNack,
+                               cricket::kParamValueEmpty)));
+    EXPECT_TRUE(vp8.HasFeedbackParam(
+        cricket::FeedbackParam(cricket::kRtcpFbParamRemb,
                                cricket::kParamValueEmpty)));
     EXPECT_TRUE(vp8.HasFeedbackParam(
         cricket::FeedbackParam(cricket::kRtcpFbParamCcm,

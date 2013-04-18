@@ -170,8 +170,8 @@ class FakeWebRtcVideoEngine
           rtcp_status_(webrtc::kRtcpNone),
           key_frame_request_method_(webrtc::kViEKeyFrameRequestNone),
           tmmbr_(false),
-          remb_send_(false),
-          remb_receive_(false),
+          remb_contribute_(false),
+          remb_bw_partition_(false),
           rtp_offset_send_id_(0),
           rtp_offset_receive_id_(0),
           sender_target_delay_(0),
@@ -198,8 +198,8 @@ class FakeWebRtcVideoEngine
     webrtc::ViERTCPMode rtcp_status_;
     webrtc::ViEKeyFrameRequestMethod key_frame_request_method_;
     bool tmmbr_;
-    bool remb_send_;  // This channel sends video packets.
-    bool remb_receive_;  // This channel receives video packets.
+    bool remb_contribute_;   // This channel contributes to the remb report.
+    bool remb_bw_partition_; // This channel is allocated part of total bw.
     int rtp_offset_send_id_;
     int rtp_offset_receive_id_;
     int sender_target_delay_;
@@ -329,13 +329,13 @@ class FakeWebRtcVideoEngine
     WEBRTC_ASSERT_CHANNEL(channel);
     return channels_.find(channel)->second->tmmbr_;
   }
-  bool GetRembStatusReceive(int channel) const {
+  bool GetRembStatusBwPartition(int channel) const {
     WEBRTC_ASSERT_CHANNEL(channel);
-    return channels_.find(channel)->second->remb_receive_;
+    return channels_.find(channel)->second->remb_bw_partition_;
   }
-  bool GetRembStatusSend(int channel) const {
+  bool GetRembStatusContribute(int channel) const {
     WEBRTC_ASSERT_CHANNEL(channel);
-    return channels_.find(channel)->second->remb_send_;
+    return channels_.find(channel)->second->remb_contribute_;
   }
   int GetSendRtpTimestampOffsetExtensionId(int channel) {
     WEBRTC_ASSERT_CHANNEL(channel);
@@ -619,7 +619,6 @@ class FakeWebRtcVideoEngine
 #ifdef USE_WEBRTC_DEV_BRANCH
   WEBRTC_VOID_STUB(SetNetworkTransmissionState, (const int, const bool));
 #endif
-#ifndef USE_WEBRTC_DEV_BRANCH
   WEBRTC_STUB(SetLocalReceiver, (const int, const unsigned short,
       const unsigned short, const char*));
   WEBRTC_STUB(GetLocalReceiver, (const int, unsigned short&,
@@ -653,9 +652,6 @@ class FakeWebRtcVideoEngine
     const unsigned int));
   WEBRTC_STUB(SendUDPPacket, (const int, const void*, const unsigned int,
       int&, bool));
-  WEBRTC_STUB(SetRtxSendPayloadType, (const int, const uint8_t));
-  WEBRTC_STUB(SetRtxReceivePayloadType, (const int, const uint8_t));
-#endif
 
   // webrtc::ViERender
   WEBRTC_STUB(RegisterVideoRenderModule, (webrtc::VideoRender&));
@@ -735,6 +731,10 @@ class FakeWebRtcVideoEngine
   WEBRTC_STUB_CONST(GetRemoteSSRC, (const int, unsigned int&));
   WEBRTC_STUB_CONST(GetRemoteCSRCs, (const int, unsigned int*));
 
+#ifdef USE_WEBRTC_DEV_BRANCH
+  WEBRTC_STUB(SetRtxSendPayloadType, (const int, const uint8_t));
+  WEBRTC_STUB(SetRtxReceivePayloadType, (const int, const uint8_t));
+#endif
 
   WEBRTC_STUB(SetStartSequenceNumber, (const int, unsigned short));
   WEBRTC_FUNC(SetRTCPStatus,
@@ -797,10 +797,12 @@ class FakeWebRtcVideoEngine
     channels_[channel]->receiver_target_delay_ = target_delay;
     return 0;
   }
+  // |Send| and |receive| are stored locally in variables that more clearly
+  // explain what they mean.
   WEBRTC_FUNC(SetRembStatus, (int channel, bool send, bool receive)) {
     WEBRTC_CHECK_CHANNEL(channel);
-    channels_[channel]->remb_send_ = send;
-    channels_[channel]->remb_receive_ = receive;
+    channels_[channel]->remb_contribute_ = receive;
+    channels_[channel]->remb_bw_partition_ = send;
     return 0;
   }
   WEBRTC_STUB(SetBandwidthEstimationMode,

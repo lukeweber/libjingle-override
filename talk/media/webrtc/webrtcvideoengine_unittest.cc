@@ -144,7 +144,9 @@ class WebRtcVideoEngineTestFake : public testing::Test {
                           unsigned int min_bitrate = kMinBandwidthKbps,
                           unsigned int start_bitrate = kStartBandwidthKbps,
                           unsigned int fps = 30,
-                          unsigned int max_quantization = 0) {
+                          unsigned int max_quantization = 0,
+                          SimulcastBitrateMode bitrate_mode =
+                              kNormalSimulcastBitrate) {
     webrtc::VideoCodec gcodec;
     EXPECT_EQ(0, vie_.GetSendCodec(channel_num, gcodec));
 
@@ -550,10 +552,10 @@ TEST_F(WebRtcVideoEngineTestFake, RembEnabled) {
   EXPECT_TRUE(channel_->AddSendStream(
       cricket::StreamParams::CreateLegacy(1)));
   EXPECT_TRUE(channel_->SetSendCodecs(engine_.codecs()));
-  EXPECT_TRUE(vie_.GetRembStatusReceive(channel_num));
+  EXPECT_TRUE(vie_.GetRembStatusBwPartition(channel_num));
   EXPECT_TRUE(channel_->SetSend(true));
-  EXPECT_TRUE(vie_.GetRembStatusReceive(channel_num));
-  EXPECT_TRUE(vie_.GetRembStatusSend(channel_num));
+  EXPECT_TRUE(vie_.GetRembStatusBwPartition(channel_num));
+  EXPECT_TRUE(vie_.GetRembStatusContribute(channel_num));
 }
 
 // When in conference mode, test that remb is enabled on a receive channel but
@@ -561,25 +563,24 @@ TEST_F(WebRtcVideoEngineTestFake, RembEnabled) {
 // remb packets.
 TEST_F(WebRtcVideoEngineTestFake, RembEnabledOnReceiveChannels) {
   EXPECT_TRUE(SetupEngine());
-  int channel_num = vie_.GetLastChannel();
+  int default_channel = vie_.GetLastChannel();
   cricket::VideoOptions options;
   options.conference_mode.Set(true);
   EXPECT_TRUE(channel_->SetOptions(options));
   EXPECT_TRUE(channel_->AddSendStream(
       cricket::StreamParams::CreateLegacy(1)));
   EXPECT_TRUE(channel_->SetSendCodecs(engine_.codecs()));
-  EXPECT_TRUE(vie_.GetRembStatusReceive(channel_num));
-  EXPECT_FALSE(vie_.GetRembStatusSend(channel_num));
+  EXPECT_TRUE(vie_.GetRembStatusBwPartition(default_channel));
+  EXPECT_TRUE(vie_.GetRembStatusContribute(default_channel));
   EXPECT_TRUE(channel_->SetSend(true));
-  EXPECT_TRUE(vie_.GetRembStatusSend(channel_num));
   EXPECT_TRUE(channel_->AddRecvStream(cricket::StreamParams::CreateLegacy(1)));
   int new_channel_num = vie_.GetLastChannel();
-  EXPECT_NE(channel_num, new_channel_num);
+  EXPECT_NE(default_channel, new_channel_num);
 
-  EXPECT_FALSE(vie_.GetRembStatusReceive(channel_num));
-  EXPECT_TRUE(vie_.GetRembStatusSend(channel_num));
-  EXPECT_TRUE(vie_.GetRembStatusReceive(new_channel_num));
-  EXPECT_FALSE(vie_.GetRembStatusSend(new_channel_num));
+  EXPECT_TRUE(vie_.GetRembStatusBwPartition(default_channel));
+  EXPECT_TRUE(vie_.GetRembStatusContribute(default_channel));
+  EXPECT_FALSE(vie_.GetRembStatusBwPartition(new_channel_num));
+  EXPECT_TRUE(vie_.GetRembStatusContribute(new_channel_num));
 }
 
 // Test support for RTP timestamp offset header extension.
@@ -711,35 +712,39 @@ TEST_F(WebRtcVideoEngineTestFake, NoRembChangeAfterAddRecvStream) {
   EXPECT_TRUE(channel_->AddSendStream(
       cricket::StreamParams::CreateLegacy(1)));
   EXPECT_TRUE(channel_->SetSendCodecs(engine_.codecs()));
-  EXPECT_TRUE(vie_.GetRembStatusReceive(channel_num));
-  EXPECT_FALSE(vie_.GetRembStatusSend(channel_num));
+  EXPECT_TRUE(vie_.GetRembStatusBwPartition(channel_num));
+  EXPECT_TRUE(vie_.GetRembStatusContribute(channel_num));
   EXPECT_TRUE(channel_->SetSend(true));
   EXPECT_TRUE(channel_->AddRecvStream(cricket::StreamParams::CreateLegacy(1)));
-  EXPECT_TRUE(vie_.GetRembStatusReceive(channel_num));
-  EXPECT_TRUE(vie_.GetRembStatusSend(channel_num));
+  EXPECT_TRUE(vie_.GetRembStatusBwPartition(channel_num));
+  EXPECT_TRUE(vie_.GetRembStatusContribute(channel_num));
 }
 
-// Test remb sending is on after StartSending and off after StopSending.
+// Verify default REMB setting and that it can be turned on and off.
 TEST_F(WebRtcVideoEngineTestFake, RembOnOff) {
   EXPECT_TRUE(SetupEngine());
   int channel_num = vie_.GetLastChannel();
+  // Verify REMB sending is always off by default.
+  EXPECT_FALSE(vie_.GetRembStatusBwPartition(channel_num));
 
-  // Verify remb sending is off before StartSending.
-  EXPECT_TRUE(vie_.GetRembStatusReceive(channel_num));
-  EXPECT_FALSE(vie_.GetRembStatusSend(channel_num));
-
-  // Verify remb sending is on after StartSending.
-  EXPECT_TRUE(channel_->AddSendStream(
-      cricket::StreamParams::CreateLegacy(1)));
+  // Verify that REMB is turned on when setting default codecs since the
+  // default codecs have REMB enabled.
   EXPECT_TRUE(channel_->SetSendCodecs(engine_.codecs()));
-  EXPECT_TRUE(channel_->SetSend(true));
-  EXPECT_TRUE(vie_.GetRembStatusReceive(channel_num));
-  EXPECT_TRUE(vie_.GetRembStatusSend(channel_num));
+  EXPECT_TRUE(vie_.GetRembStatusBwPartition(channel_num));
 
-  // Verify remb sending is off after StopSending.
-  EXPECT_TRUE(channel_->SetSend(false));
-  EXPECT_TRUE(vie_.GetRembStatusReceive(channel_num));
-  EXPECT_FALSE(vie_.GetRembStatusSend(channel_num));
+  // Verify that REMB is turned off when codecs without REMB are set.
+  std::vector<cricket::VideoCodec> codecs = engine_.codecs();
+  // Clearing the codecs' FeedbackParams and setting send codecs should disable
+  // REMB.
+  for (std::vector<cricket::VideoCodec>::iterator iter = codecs.begin();
+       iter != codecs.end(); ++iter) {
+    // Intersecting with empty will clear the FeedbackParams.
+    cricket::FeedbackParams empty_params;
+    iter->feedback_params.Intersect(empty_params);
+    EXPECT_TRUE(iter->feedback_params.params().empty());
+  }
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  EXPECT_FALSE(vie_.GetRembStatusBwPartition(channel_num));
 }
 
 // Test that nack is enabled on the channel if we don't offer red/fec.

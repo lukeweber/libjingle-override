@@ -86,6 +86,9 @@ extern const int kPreferredUseInbandFec;
 
 // rtcp-fb messages according to RFC 4585
 extern const char* kRtcpFbParamNack;
+// rtcp-fb messages according to
+// http://tools.ietf.org/html/draft-alvestrand-rmcat-remb-00
+extern const char* kRtcpFbParamRemb;
 // ccm submessages according to RFC 5104
 extern const char* kRtcpFbParamCcm;
 extern const char* kRtcpFbCcmParamFir;

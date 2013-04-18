@@ -124,10 +124,7 @@ static int SeverityToFilter(int severity) {
 
 static const int kCpuMonitorPeriodMs = 2000;  // 2 seconds.
 
-static const bool kRembNotSending = false;
-static const bool kRembSending = true;
-// static const bool kRembNotReceiving = false;  // Not used for now.
-static const bool kRembReceiving = true;
+static const bool kNotSending = false;
 
 // Extension header for RTP timestamp offset, see RFC 5450 for details:
 // http://tools.ietf.org/html/rfc5450
@@ -137,6 +134,12 @@ static const int kRtpTimeOffsetExtensionId = 2;
 
 static bool IsNackEnabled(const VideoCodec& codec) {
   return codec.HasFeedbackParam(FeedbackParam(kRtcpFbParamNack,
+                                              kParamValueEmpty));
+}
+
+// Returns true if Receiver Estimated Max Bitrate is enabled.
+static bool IsRembEnabled(const VideoCodec& codec) {
+  return codec.HasFeedbackParam(FeedbackParam(kRtcpFbParamRemb,
                                               kParamValueEmpty));
 }
 
@@ -633,7 +636,7 @@ static void UpdateVideoCodec(const cricket::VideoFormat& video_format,
 
 WebRtcVideoEngine::WebRtcVideoEngine() {
   Construct(new ViEWrapper(), new ViETraceWrapper(), NULL,
-      new talk_base::CpuMonitor(talk_base::Thread::Current()));
+      new talk_base::CpuMonitor(NULL));
 }
 
 WebRtcVideoEngine::WebRtcVideoEngine(WebRtcVoiceEngine* voice_engine,
@@ -669,11 +672,6 @@ void WebRtcVideoEngine::Construct(ViEWrapper* vie_wrapper,
   capture_started_ = false;
   decoder_factory_ = NULL;
   cpu_monitor_.reset(cpu_monitor);
-  if (cpu_monitor_->Start(kCpuMonitorPeriodMs)) {
-  } else {
-    LOG(LS_ERROR) << "Failed to start CPU monitor.";
-    cpu_monitor_.reset();
-  }
 
   SetTraceOptions("");
   if (tracing_->SetTraceCallback(this) != 0) {
@@ -716,6 +714,13 @@ bool WebRtcVideoEngine::Init(talk_base::Thread* worker_thread) {
   LOG(LS_INFO) << "WebRtcVideoEngine::Init";
   worker_thread_ = worker_thread;
   ASSERT(worker_thread_ != NULL);
+
+  cpu_monitor_->set_thread(worker_thread_);
+  if (!cpu_monitor_->Start(kCpuMonitorPeriodMs)) {
+    LOG(LS_ERROR) << "Failed to start CPU monitor.";
+    cpu_monitor_.reset();
+  }
+
   bool result = InitVideoEngine();
   if (result) {
     LOG(LS_INFO) << "VideoEngine Init done";
@@ -782,6 +787,7 @@ void WebRtcVideoEngine::Terminate() {
   if (vie_wrapper_->base()->SetVoiceEngine(NULL) != 0) {
     LOG_RTCERR0(SetVoiceEngine);
   }
+  cpu_monitor_->Stop();
 }
 
 int WebRtcVideoEngine::GetCapabilities() {
@@ -1216,6 +1222,8 @@ bool WebRtcVideoEngine::RebuildCodecList(const VideoCodec& in_codec) {
         codec.AddFeedbackParam(kFir);
         const FeedbackParam kNack(kRtcpFbParamNack, kParamValueEmpty);
         codec.AddFeedbackParam(kNack);
+        const FeedbackParam kRemb(kRtcpFbParamRemb, kParamValueEmpty);
+        codec.AddFeedbackParam(kRemb);
       }
       video_codecs_.push_back(codec);
     }
@@ -1359,6 +1367,7 @@ WebRtcVideoMediaChannel::WebRtcVideoMediaChannel(
       voice_channel_(channel),
       vie_channel_(-1),
       nack_enabled_(true),
+      remb_enabled_(false),
       render_started_(false),
       first_receive_ssrc_(0),
       send_red_type_(-1),
@@ -1445,6 +1454,7 @@ bool WebRtcVideoMediaChannel::SetSendCodecs(
       if (engine()->ConvertFromCricketVideoCodec(checked_codec, &wcodec)) {
         if (send_codecs.empty()) {
           nack_enabled_ = IsNackEnabled(checked_codec);
+          remb_enabled_ = IsRembEnabled(checked_codec);
         }
         send_codecs.push_back(wcodec);
       }
@@ -1459,19 +1469,34 @@ bool WebRtcVideoMediaChannel::SetSendCodecs(
     return false;
   }
 
-  // Send protection.
-  for (SendChannelMap::iterator iter = send_channels_.begin();
-       iter != send_channels_.end(); ++iter) {
-    if (!SetNackFec(iter->second->channel_id(), send_red_type_, send_fec_type_,
-                    nack_enabled_)) {
-      return false;
-    }
-  }
   // Recv protection.
   for (RecvChannelMap::iterator it = recv_channels_.begin();
       it != recv_channels_.end(); ++it) {
-    if (!SetNackFec(it->second->channel_id(), send_red_type_, send_fec_type_,
+    int channel_id = it->second->channel_id();
+    if (!SetNackFec(channel_id, send_red_type_, send_fec_type_,
                     nack_enabled_)) {
+      return false;
+    }
+    if (engine_->vie()->rtp()->SetRembStatus(channel_id,
+                                             kNotSending,
+                                             remb_enabled_) != 0) {
+      LOG_RTCERR3(SetRembStatus, channel_id, kNotSending, remb_enabled_);
+      return false;
+    }
+  }
+
+  // Send settings.
+  for (SendChannelMap::iterator iter = send_channels_.begin();
+       iter != send_channels_.end(); ++iter) {
+    int channel_id = iter->second->channel_id();
+    if (!SetNackFec(channel_id, send_red_type_, send_fec_type_,
+                    nack_enabled_)) {
+      return false;
+    }
+    if (engine_->vie()->rtp()->SetRembStatus(channel_id,
+                                             remb_enabled_,
+                                             remb_enabled_) != 0) {
+      LOG_RTCERR3(SetRembStatus, channel_id, remb_enabled_, remb_enabled_);
       return false;
     }
   }
@@ -1836,14 +1861,6 @@ bool WebRtcVideoMediaChannel::StartSend(
     return false;
   }
 
-  const bool remb_receiving = !InConferenceMode() &&
-      IsDefaultChannel(channel_id);
-  if (engine_->vie()->rtp()->SetRembStatus(channel_id,
-                                           kRembSending,
-                                           remb_receiving) != 0) {
-    LOG_RTCERR3(SetRembStatus, channel_id, kRembSending, remb_receiving);
-    return false;
-  }
   send_channel->set_sending(true);
   if (!send_channel->video_capturer()) {
     engine_->IncrementFrameListeners();
@@ -1868,17 +1885,6 @@ bool WebRtcVideoMediaChannel::StopSend(
   const int channel_id = send_channel->channel_id();
   if (engine()->vie()->base()->StopSend(channel_id) != 0) {
     LOG_RTCERR1(StopSend, channel_id);
-    return false;
-  }
-
-  // All send channels are send only, except for the default channel in 1:1
-  // calls. Remb needs to be notified that the channel is still receiving in
-  // that case.
-  const bool receiving = IsDefaultChannel(channel_id) && !InConferenceMode();
-  if (engine_->vie()->rtp()->SetRembStatus(channel_id,
-                                           kRembNotSending,
-                                           receiving) != 0) {
-    LOG_RTCERR3(SetRembStatus, channel_id, kRembNotSending, receiving);
     return false;
   }
   send_channel->set_sending(false);
@@ -2791,6 +2797,9 @@ bool WebRtcVideoMediaChannel::ConfigureChannel(int channel_id,
     // Logged in SetNackFec. Don't spam the logs.
     return false;
   }
+  // Note that receiving must always be configured before sending to ensure
+  // that send and receive channel is configured correctly (ConfigureReceiving
+  // assumes no sending).
   if (receiving) {
     if (!ConfigureReceiving(channel_id, ssrc_key)) {
       return false;
@@ -2841,9 +2850,9 @@ bool WebRtcVideoMediaChannel::ConfigureReceiving(int channel_id,
 
 
   if (engine_->vie()->rtp()->SetRembStatus(channel_id,
-                                           kRembNotSending,
-                                           kRembReceiving) != 0) {
-    LOG_RTCERR3(SetRembStatus, channel_id, kRembNotSending, kRembReceiving);
+                                           kNotSending,
+                                           remb_enabled_) != 0) {
+    LOG_RTCERR3(SetRembStatus, channel_id, kNotSending, remb_enabled_);
     return false;
   }
 
@@ -2980,7 +2989,19 @@ bool WebRtcVideoMediaChannel::ConfigureSending(int channel_id,
       LOG_RTCERR2(SetSenderBufferingMode, channel_id, buffer_latency);
     }
   }
-
+  // The remb status direction correspond to the RTP stream (and not the RTCP
+  // stream). I.e. if send remb is enabled it means it is receiving remote
+  // rembs and should use them to estimate bandwidth. Receive remb mean that
+  // remb packets will be generated and that the channel should be included in
+  // it. If remb is enabled all channels are allowed to contribute to the remb
+  // but only receive channels will ever end up actually contributing. This
+  // keeps the logic simple.
+  if (engine_->vie()->rtp()->SetRembStatus(channel_id,
+                                           remb_enabled_,
+                                           remb_enabled_) != 0) {
+    LOG_RTCERR3(SetRembStatus, channel_id, remb_enabled_, remb_enabled_);
+    return false;
+  }
   if (!SetNackFec(channel_id, send_red_type_, send_fec_type_, nack_enabled_)) {
     // Logged in SetNackFec. Don't spam the logs.
     return false;

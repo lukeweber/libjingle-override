@@ -102,6 +102,53 @@ TEST_F(VideoCapturerTest, CaptureState) {
   EXPECT_EQ(2, num_state_changes());
 }
 
+TEST_F(VideoCapturerTest, TestRestart) {
+  EXPECT_EQ(cricket::CS_RUNNING, capturer_.Start(cricket::VideoFormat(
+      640,
+      480,
+      cricket::VideoFormat::FpsToInterval(30),
+      cricket::FOURCC_I420)));
+  EXPECT_TRUE(capturer_.IsRunning());
+  EXPECT_EQ_WAIT(cricket::CS_RUNNING, capture_state(), kMsCallbackWait);
+  EXPECT_EQ(1, num_state_changes());
+  EXPECT_TRUE(capturer_.Restart(cricket::VideoFormat(
+      320,
+      240,
+      cricket::VideoFormat::FpsToInterval(30),
+      cricket::FOURCC_I420)));
+  EXPECT_EQ_WAIT(cricket::CS_RUNNING, capture_state(), kMsCallbackWait);
+  EXPECT_TRUE(capturer_.IsRunning());
+  EXPECT_GE(1, num_state_changes());
+  capturer_.Stop();
+  talk_base::Thread::Current()->ProcessMessages(100);
+  EXPECT_FALSE(capturer_.IsRunning());
+}
+
+TEST_F(VideoCapturerTest, TestStartingWithRestart) {
+  EXPECT_FALSE(capturer_.IsRunning());
+  EXPECT_TRUE(capturer_.Restart(cricket::VideoFormat(
+      640,
+      480,
+      cricket::VideoFormat::FpsToInterval(30),
+      cricket::FOURCC_I420)));
+  EXPECT_TRUE(capturer_.IsRunning());
+  EXPECT_EQ_WAIT(cricket::CS_RUNNING, capture_state(), kMsCallbackWait);
+}
+
+TEST_F(VideoCapturerTest, TestRestartWithSameFormat) {
+  cricket::VideoFormat format(640, 480,
+                              cricket::VideoFormat::FpsToInterval(30),
+                              cricket::FOURCC_I420);
+  EXPECT_EQ(cricket::CS_RUNNING, capturer_.Start(format));
+  EXPECT_TRUE(capturer_.IsRunning());
+  EXPECT_EQ_WAIT(cricket::CS_RUNNING, capture_state(), kMsCallbackWait);
+  EXPECT_EQ(1, num_state_changes());
+  EXPECT_TRUE(capturer_.Restart(format));
+  EXPECT_EQ(cricket::CS_RUNNING, capture_state());
+  EXPECT_TRUE(capturer_.IsRunning());
+  EXPECT_EQ(1, num_state_changes());
+}
+
 TEST_F(VideoCapturerTest, TestFourccMatch) {
   cricket::VideoFormat desired(640, 480,
                                cricket::VideoFormat::FpsToInterval(30),

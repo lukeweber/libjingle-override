@@ -179,6 +179,8 @@ class SrtpFilter {
   talk_base::scoped_ptr<SrtpSession> recv_session_;
   talk_base::scoped_ptr<SrtpSession> send_rtcp_session_;
   talk_base::scoped_ptr<SrtpSession> recv_rtcp_session_;
+  CryptoParams applied_send_params_;
+  CryptoParams applied_recv_params_;
 };
 
 // Class that wraps a libSRTP session.

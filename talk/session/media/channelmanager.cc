@@ -86,6 +86,7 @@ enum {
   MSG_REMOVEVIDEORENDERER = 32,
   MSG_GETSTARTCAPTUREFORMAT = 33,
   MSG_SETCAPTUREDEVICE = 34,
+  MSG_RESTARTVIDEOCAPTURE = 35,
 };
 
 static const int kNotSetOutputVolume = -1;
@@ -231,6 +232,20 @@ struct VideoCapturerRendererParams : public talk_base::MessageData {
 struct StartCaptureParams  : public talk_base::MessageData {
   StartCaptureParams() : video_format() {}
   VideoFormat video_format;
+};
+
+struct VideoCapturerRestartParams : public talk_base::MessageData {
+  explicit VideoCapturerRestartParams(VideoCapturer* capturer,
+                                      const VideoFormat& previous_format,
+                                      const VideoFormat& desired_format,
+                                      CaptureManager::RestartOptions options)
+      : capturer(capturer), previous_format(previous_format),
+        desired_format(desired_format), options(options), result(false) {}
+  VideoCapturer* capturer;
+  VideoFormat previous_format;
+  VideoFormat desired_format;
+  CaptureManager::RestartOptions options;
+  bool result;
 };
 
 #if !defined(DISABLE_MEDIA_ENGINE_FACTORY)
@@ -1040,6 +1055,27 @@ bool ChannelManager::StopVideoCapture_w(
   return capture_manager_->StopVideoCapture(capturer, video_format);
 }
 
+bool ChannelManager::RestartVideoCapture(
+    VideoCapturer* video_capturer,
+    const VideoFormat& previous_format,
+    const VideoFormat& desired_format,
+    CaptureManager::RestartOptions options) {
+  VideoCapturerRestartParams params(
+      video_capturer, previous_format, desired_format, options);
+  return (Send(MSG_RESTARTVIDEOCAPTURE, &params) && params.result);
+}
+
+bool ChannelManager::RestartVideoCapture_w(
+    VideoCapturer* video_capturer,
+    const VideoFormat& previous_format,
+    const VideoFormat& desired_format,
+    CaptureManager::RestartOptions options) {
+  return capture_manager_->RestartVideoCapture(video_capturer,
+                                               previous_format,
+                                               desired_format,
+                                               options);
+}
+
 bool ChannelManager::AddVideoRenderer(
     VideoCapturer* capturer, VideoRenderer* renderer) {
   VideoCapturerRendererParams params(capturer, renderer);
@@ -1252,6 +1288,15 @@ void ChannelManager::OnMessage(talk_base::Message* message) {
       StartCaptureParams* data =
           static_cast<StartCaptureParams*>(message->pdata);
       data->video_format = GetStartCaptureFormat_w();
+      break;
+    }
+    case MSG_RESTARTVIDEOCAPTURE: {
+      VideoCapturerRestartParams* data =
+          static_cast<VideoCapturerRestartParams*>(message->pdata);
+      data->result = RestartVideoCapture_w(data->capturer,
+                                           data->previous_format,
+                                           data->desired_format,
+                                           data->options);
       break;
     }
   }

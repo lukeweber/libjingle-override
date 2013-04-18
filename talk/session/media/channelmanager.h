@@ -34,13 +34,13 @@
 #include "talk/base/criticalsection.h"
 #include "talk/base/sigslotrepeater.h"
 #include "talk/base/thread.h"
+#include "talk/media/base/capturemanager.h"
 #include "talk/media/base/mediaengine.h"
 #include "talk/p2p/base/session.h"
 #include "talk/session/media/voicechannel.h"
 
 namespace cricket {
 
-class CaptureManager;
 class Soundclip;
 class VideoProcessor;
 class VoiceChannel;
@@ -185,13 +185,19 @@ class ChannelManager : public talk_base::MessageHandler,
                                 VoiceProcessor* processor,
                                 MediaProcessorDirection direction);
   // The following are done in the new "CaptureManager" style that
-  // all local video capturers, processors, and managers should move
-  // to.
-  // TODO(pthatcher): Add more of the CaptureManager interface.
+  // all local video capturers, processors, and managers should move to.
+  // TODO(pthatcher): Make methods nicer by having start return a handle that
+  // can be used for stop and restart, rather than needing to pass around
+  // formats a a pseudo-handle.
   bool StartVideoCapture(VideoCapturer* video_capturer,
                          const VideoFormat& video_format);
   bool StopVideoCapture(VideoCapturer* video_capturer,
                         const VideoFormat& video_format);
+  bool RestartVideoCapture(VideoCapturer* video_capturer,
+                           const VideoFormat& previous_format,
+                           const VideoFormat& desired_format,
+                           CaptureManager::RestartOptions options);
+
   bool AddVideoRenderer(VideoCapturer* capturer, VideoRenderer* renderer);
   bool RemoveVideoRenderer(VideoCapturer* capturer, VideoRenderer* renderer);
 
@@ -273,13 +279,18 @@ class ChannelManager : public talk_base::MessageHandler,
                                   VoiceProcessor* processor,
                                   MediaProcessorDirection direction);
   // The following are done in the new "CaptureManager" style that
-  // all local video capturers, processors, and managers should move
-  // to.
-  // TODO(pthatcher): Add more of the CaptureManager interface.
+  // all local video capturers, processors, and managers should move to.
+  // TODO(pthatcher): Make methods nicer by having start return a handle that
+  // can be used for stop and restart, rather than needing to pass around
+  // formats a a pseudo-handle.
   bool StartVideoCapture_w(VideoCapturer* video_capturer,
                            const VideoFormat& video_format);
   bool StopVideoCapture_w(VideoCapturer* video_capturer,
                           const VideoFormat& video_format);
+  bool RestartVideoCapture_w(VideoCapturer* video_capturer,
+                             const VideoFormat& previous_format,
+                             const VideoFormat& desired_format,
+                             CaptureManager::RestartOptions options);
   bool AddVideoRenderer_w(VideoCapturer* capturer, VideoRenderer* renderer);
   bool RemoveVideoRenderer_w(VideoCapturer* capturer, VideoRenderer* renderer);
   VideoFormat GetStartCaptureFormat_w();

@@ -192,6 +192,9 @@ class VideoCapturer
   virtual void Stop() = 0;
   // Check if the video capturer is running.
   virtual bool IsRunning() = 0;
+  // Restart the video capturer with the new |capture_format|.
+  // Default implementation stops and starts the capturer.
+  virtual bool Restart(const VideoFormat& capture_format);
 
   // Adds a video processor that will be applied on VideoFrames returned by
   // |SignalVideoFrame|. Multiple video processors can be added. The video

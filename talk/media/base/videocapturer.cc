@@ -124,6 +124,20 @@ void VideoCapturer::ClearAspectRatio() {
   ratio_h_ = 0;
 }
 
+bool VideoCapturer::Restart(const VideoFormat& capture_format) {
+  if (!IsRunning()) {
+    return StartCapturing(capture_format);
+  }
+
+  if (GetCaptureFormat() != NULL && *GetCaptureFormat() == capture_format) {
+    // The reqested format is the same; nothing to do.
+    return true;
+  }
+
+  Stop();
+  return StartCapturing(capture_format);
+}
+
 void VideoCapturer::SetSupportedFormats(
     const std::vector<VideoFormat>& formats) {
   supported_formats_ = formats;

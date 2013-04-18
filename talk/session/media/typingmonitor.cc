@@ -78,7 +78,7 @@ void TypingMonitor::OnVoiceChannelError(uint32 ssrc,
     muted_at_ = talk_base::Time();
 
     worker_thread_->PostDelayed(mute_period_, this, 0);
-    LOG(LS_INFO) << "Muting for at least" << mute_period_ << "ms.";
+    LOG(LS_INFO) << "Muting for at least " << mute_period_ << "ms.";
   }
 }
 

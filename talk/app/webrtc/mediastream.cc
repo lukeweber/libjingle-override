@@ -98,6 +98,9 @@ bool MediaStream::AddTrack(TrackVector* tracks, Track* track) {
 template <typename TrackVector>
 bool MediaStream::RemoveTrack(TrackVector* tracks,
                               MediaStreamTrackInterface* track) {
+  ASSERT(tracks != NULL);
+  if (!track)
+    return false;
   typename TrackVector::iterator it = FindTrack(tracks, track->id());
   if (it == tracks->end())
     return false;

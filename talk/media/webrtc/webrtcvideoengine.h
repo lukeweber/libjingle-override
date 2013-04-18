@@ -383,6 +383,8 @@ class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
   VoiceMediaChannel* voice_channel_;
   int vie_channel_;
   bool nack_enabled_;
+  // Receiver Estimated Max Bitrate
+  bool remb_enabled_;
   VideoOptions options_;
 
   // Global recv side state.

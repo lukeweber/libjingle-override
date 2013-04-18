@@ -48,48 +48,22 @@
 
 #include "talk/base/sigslotrepeater.h"
 #include "talk/media/base/capturerenderadapter.h"
-#include "talk/media/base/videocapturer.h"
 #include "talk/media/base/videocommon.h"
 
 namespace cricket {
 
+class VideoCapturer;
 class VideoProcessor;
 class VideoRenderer;
-
-// CaptureManager helper class.
-class VideoCapturerState {
- public:
-  static const VideoFormatPod kDefaultCaptureFormat;
-
-  static VideoCapturerState* Create(VideoCapturer* video_capturer);
-  ~VideoCapturerState() {}
-
-  void AddCaptureResolution(const VideoFormat& desired_format);
-  bool RemoveCaptureResolution(const VideoFormat& format);
-  VideoFormat GetHighestFormat(VideoCapturer* video_capturer) const;
-
-  int IncCaptureStartRef();
-  int DecCaptureStartRef();
-  CaptureRenderAdapter* adapter() { return adapter_.get(); }
-  VideoCapturer* GetVideoCapturer() { return adapter()->video_capturer(); }
-
- private:
-  struct CaptureResolutionInfo {
-    VideoFormat video_format;
-    int format_ref_count;
-  };
-  typedef std::vector<CaptureResolutionInfo> CaptureFormats;
-
-  explicit VideoCapturerState(CaptureRenderAdapter* adapter);
-
-  talk_base::scoped_ptr<CaptureRenderAdapter> adapter_;
-
-  int start_count_;
-  CaptureFormats capture_formats_;
-};
+class VideoCapturerState;
 
 class CaptureManager : public sigslot::has_slots<> {
  public:
+  enum RestartOptions {
+    kRequestRestart,
+    kForceRestart
+  };
+
   CaptureManager() {}
   virtual ~CaptureManager();
 
@@ -97,6 +71,15 @@ class CaptureManager : public sigslot::has_slots<> {
                                  const VideoFormat& desired_format);
   virtual bool StopVideoCapture(VideoCapturer* video_capturer,
                                 const VideoFormat& format);
+
+  // Possibly restarts the capturer. If |options| is set to kRequestRestart,
+  // the CaptureManager chooses whether this request can be handled with the
+  // current state or if a restart is actually needed. If |options| is set to
+  // kForceRestart, the capturer is restarted.
+  virtual bool RestartVideoCapture(VideoCapturer* video_capturer,
+                                   const VideoFormat& previous_format,
+                                   const VideoFormat& desired_format,
+                                   RestartOptions options);
 
   virtual bool AddVideoRenderer(VideoCapturer* video_capturer,
                                 VideoRenderer* video_renderer);
