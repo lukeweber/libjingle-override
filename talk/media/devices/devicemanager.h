@@ -189,9 +189,7 @@ class DeviceManager : public DeviceManagerInterface {
                               Device* out);
   virtual bool GetDefaultVideoCaptureDevice(Device* device);
   bool IsInWhitelist(const std::string& key, VideoFormat* video_format) const;
-  bool IsDeviceWhitelisted(const Device& device,
-                           VideoFormat* video_format) const;
-  virtual void GetMaxFormat(const Device& device,
+  virtual bool GetMaxFormat(const Device& device,
                             VideoFormat* video_format) const;
 
   void set_initialized(bool initialized) { initialized_ = initialized; }

@@ -616,42 +616,18 @@ class FakeWebRtcVideoEngine
   WEBRTC_STUB(DeregisterObserver, (const int));
 
   // webrtc::ViENetwork
-#ifdef USE_WEBRTC_DEV_BRANCH
   WEBRTC_VOID_STUB(SetNetworkTransmissionState, (const int, const bool));
-#endif
-  WEBRTC_STUB(SetLocalReceiver, (const int, const unsigned short,
-      const unsigned short, const char*));
-  WEBRTC_STUB(GetLocalReceiver, (const int, unsigned short&,
-      unsigned short&, char*));
-  WEBRTC_STUB(SetSendDestination, (const int, const char*, const unsigned short,
-      const unsigned short, const unsigned short, const unsigned short));
-  WEBRTC_STUB(GetSendDestination, (const int, char*, unsigned short&,
-      unsigned short&, unsigned short&, unsigned short&));
   WEBRTC_STUB(RegisterSendTransport, (const int, webrtc::Transport&));
   WEBRTC_STUB(DeregisterSendTransport, (const int));
   WEBRTC_STUB(ReceivedRTPPacket, (const int, const void*, const int));
   WEBRTC_STUB(ReceivedRTCPPacket, (const int, const void*, const int));
-  WEBRTC_STUB(GetSourceInfo, (const int, unsigned short&, unsigned short&,
-                              char*, unsigned int));
-  WEBRTC_STUB(GetLocalIP, (char*, bool));
-  WEBRTC_STUB(EnableIPv6, (int));
   // Not using WEBRTC_STUB due to bool return value
   virtual bool IsIPv6Enabled(int channel) { return true; }
-  WEBRTC_STUB(SetSourceFilter, (const int, const unsigned short,
-      const unsigned short, const char*));
-  WEBRTC_STUB(GetSourceFilter, (const int, unsigned short&,
-      unsigned short&, char*));
-  WEBRTC_STUB(SetSendToS, (const int, const int, const bool));
-  WEBRTC_STUB(GetSendToS, (const int, int&, bool&));
-  WEBRTC_STUB(SetSendGQoS, (const int, const bool, const int, const int));
-  WEBRTC_STUB(GetSendGQoS, (const int, bool&, int&, int&));
   WEBRTC_STUB(SetMTU, (int, unsigned int));
   WEBRTC_STUB(SetPacketTimeoutNotification, (const int, bool, int));
   WEBRTC_STUB(RegisterObserver, (const int, webrtc::ViENetworkObserver&));
   WEBRTC_STUB(SetPeriodicDeadOrAliveStatus, (const int, const bool,
     const unsigned int));
-  WEBRTC_STUB(SendUDPPacket, (const int, const void*, const unsigned int,
-      int&, bool));
 
   // webrtc::ViERender
   WEBRTC_STUB(RegisterVideoRenderModule, (webrtc::VideoRender&));
@@ -730,11 +706,6 @@ class FakeWebRtcVideoEngine
   }
   WEBRTC_STUB_CONST(GetRemoteSSRC, (const int, unsigned int&));
   WEBRTC_STUB_CONST(GetRemoteCSRCs, (const int, unsigned int*));
-
-#ifdef USE_WEBRTC_DEV_BRANCH
-  WEBRTC_STUB(SetRtxSendPayloadType, (const int, const uint8_t));
-  WEBRTC_STUB(SetRtxReceivePayloadType, (const int, const uint8_t));
-#endif
 
   WEBRTC_STUB(SetStartSequenceNumber, (const int, unsigned short));
   WEBRTC_FUNC(SetRTCPStatus,

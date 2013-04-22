@@ -1535,6 +1535,17 @@ TEST_F(WebRtcSessionTest, CreateOfferWithConstraints) {
   // The constraints is set to not receive audio or video but a track is added?
 }
 
+// Test that an answer can not be created if the last remote description is not
+// an offer.
+TEST_F(WebRtcSessionTest, CreateAnswerWithoutAnOffer) {
+  WebRtcSessionTest::Init();
+  SessionDescriptionInterface* offer = session_->CreateOffer(NULL);
+  SetLocalDescriptionWithoutError(offer);
+  SessionDescriptionInterface* answer = CreateRemoteAnswer(offer);
+  SetRemoteDescriptionWithoutError(answer);
+  EXPECT_TRUE(session_->CreateAnswer(NULL) == NULL);
+}
+
 // Test that an answer contains the correct media content descriptions when no
 // constraints have been set.
 TEST_F(WebRtcSessionTest, CreateAnswerWithoutConstraintsOrStreams) {

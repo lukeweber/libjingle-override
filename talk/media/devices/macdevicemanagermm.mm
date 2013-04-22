@@ -25,6 +25,11 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+// support GCC compiler
+#ifndef __has_feature
+#  define __has_feature(x) 0
+#endif
+
 #include "talk/media/devices/devicemanager.h"
 
 #import <assert.h>
@@ -59,7 +64,7 @@
 
 - (void)dealloc {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
-#if !defined(__has_feature) || !__has_feature(objc_arc)
+#if !__has_feature(objc_arc)
   [super dealloc];
 #endif
 }
@@ -73,7 +78,7 @@ namespace cricket {
 DeviceWatcherImpl* CreateDeviceWatcherCallback(
     DeviceManagerInterface* manager) {
   DeviceWatcherImpl* impl;
-#if !defined(__has_feature) || !__has_feature(objc_arc)
+#if !__has_feature(objc_arc)
   NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
 #else
   @autoreleasepool
@@ -81,14 +86,14 @@ DeviceWatcherImpl* CreateDeviceWatcherCallback(
   {
     impl = [[DeviceWatcherImpl alloc] init:manager];
   }
-#if !defined(__has_feature) || !__has_feature(objc_arc)
+#if !__has_feature(objc_arc)
   [pool drain];
 #endif
   return impl;
 }
 
 void ReleaseDeviceWatcherCallback(DeviceWatcherImpl* watcher) {
-#if !defined(__has_feature) || !__has_feature(objc_arc)
+#if !__has_feature(objc_arc)
   NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
   [watcher release];
   [pool drain];
@@ -96,7 +101,7 @@ void ReleaseDeviceWatcherCallback(DeviceWatcherImpl* watcher) {
 }
 
 bool GetQTKitVideoDevices(std::vector<Device>* devices) {
-#if !defined(__has_feature) || !__has_feature(objc_arc)
+#if !__has_feature(objc_arc)
   NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
 #else
   @autoreleasepool
@@ -126,7 +131,7 @@ bool GetQTKitVideoDevices(std::vector<Device>* devices) {
              UTF8String]));
     }
   }
-#if !defined(__has_feature) || !__has_feature(objc_arc)
+#if !__has_feature(objc_arc)
   [pool drain];
 #endif
   return true;

@@ -268,16 +268,6 @@ class FakeWebRtcVoiceEngine
     channels_.erase(channel);
     return 0;
   }
-  WEBRTC_STUB(SetLocalReceiver, (int channel, int port, int RTCPport,
-                                 const char ipaddr[64],
-                                 const char multiCastAddr[64]));
-  WEBRTC_STUB(GetLocalReceiver, (int channel, int& port, int& RTCPport,
-                                 char ipaddr[64]));
-  WEBRTC_STUB(SetSendDestination, (int channel, int port,
-                                   const char ipaddr[64],
-                                   int sourcePort, int RTCPport));
-  WEBRTC_STUB(GetSendDestination, (int channel, int& port, char ipaddr[64],
-                                   int& sourcePort, int& RTCPport));
   WEBRTC_STUB(StartReceive, (int channel));
   WEBRTC_FUNC(StartPlayout, (int channel)) {
     if (playout_fail_channel_ != channel) {
@@ -555,7 +545,6 @@ class FakeWebRtcVoiceEngine
 
   // webrtc::VoEHardware
   WEBRTC_STUB(GetCPULoad, (int&));
-  WEBRTC_STUB(GetSystemCPULoad, (int&));
   WEBRTC_FUNC(GetNumOfRecordingDevices, (int& num)) {
     return GetNumDevices(num);
   }
@@ -610,24 +599,7 @@ class FakeWebRtcVoiceEngine
   }
   WEBRTC_STUB(ReceivedRTCPPacket, (int channel, const void* data,
                                    unsigned int length));
-  WEBRTC_STUB(GetSourceInfo, (int channel, int& rtpPort, int& rtcpPort,
-                              char ipaddr[64]));
-  WEBRTC_STUB(GetLocalIP, (char ipaddr[64], bool ipv6));
-  WEBRTC_STUB(EnableIPv6, (int channel));
   // Not using WEBRTC_STUB due to bool return value
-  virtual bool IPv6IsEnabled(int channel) { return true; }
-  WEBRTC_STUB(SetSourceFilter, (int channel, int rtpPort, int rtcpPort,
-                                const char ipaddr[64]));
-  WEBRTC_STUB(GetSourceFilter, (int channel, int& rtpPort, int& rtcpPort,
-                                char ipaddr[64]));
-  WEBRTC_STUB(SetSendTOS, (int channel, int priority,
-                           int DSCP, bool useSetSockopt));
-  WEBRTC_STUB(GetSendTOS, (int channel, int& priority,
-                           int& DSCP, bool& useSetSockopt));
-  WEBRTC_STUB(SetSendGQoS, (int channel, bool enable, int serviceType,
-                            int overrideDSCP));
-  WEBRTC_STUB(GetSendGQoS, (int channel, bool& enabled, int& serviceType,
-                            int& overrideDSCP));
   WEBRTC_STUB(SetPacketTimeoutNotification, (int channel, bool enable,
                                              int timeoutSeconds));
   WEBRTC_STUB(GetPacketTimeoutNotification, (int channel, bool& enable,
@@ -639,9 +611,6 @@ class FakeWebRtcVoiceEngine
                                              int& sampleTimeSeconds));
   WEBRTC_STUB(SetPeriodicDeadOrAliveStatus, (int channel, bool enable,
                                              int sampleTimeSeconds));
-  WEBRTC_STUB(SendUDPPacket, (int channel, const void* data,
-                              unsigned int length, int& transmittedBytes,
-                              bool useRtcpSocket));
 
   // webrtc::VoERTP_RTCP
   WEBRTC_STUB(RegisterRTPObserver, (int channel,
@@ -756,12 +725,8 @@ class FakeWebRtcVoiceEngine
   WEBRTC_STUB(SetInitSequenceNumber, (int channel, short sequenceNumber));
   WEBRTC_STUB(SetMinimumPlayoutDelay, (int channel, int delayMs));
   WEBRTC_STUB(SetInitialPlayoutDelay, (int channel, int delay_ms));
-#ifdef USE_WEBRTC_DEV_BRANCH
   WEBRTC_STUB(GetDelayEstimate, (int channel, int* jitter_buffer_delay_ms,
                                  int* playout_buffer_delay_ms));
-#else
-  WEBRTC_STUB(GetDelayEstimate, (int channel, int& delayMs));
-#endif
 
   // webrtc::VoEVolumeControl
   WEBRTC_STUB(SetSpeakerVolume, (unsigned int));

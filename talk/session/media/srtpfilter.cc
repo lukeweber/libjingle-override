@@ -320,7 +320,10 @@ bool SrtpFilter::DoSetAnswer(const std::vector<CryptoParams>& answer_params,
 
 void SrtpFilter::CreateSrtpSessions() {
   send_session_.reset(new SrtpSession());
+  applied_send_params_ = CryptoParams();
   recv_session_.reset(new SrtpSession());
+  applied_recv_params_ = CryptoParams();
+
   SignalSrtpError.repeat(send_session_->SignalSrtpError);
   SignalSrtpError.repeat(recv_session_->SignalSrtpError);
 

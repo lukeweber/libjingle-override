@@ -390,12 +390,12 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
     return media_channel2_->SendRtcp(rtcp_packet_.c_str(), rtcp_packet_.size());
   }
   // Methods to send custom data.
-  bool SendCustomRtp1(uint32 ssrc) {
-    std::string data(CreateRtpData(ssrc));
+  bool SendCustomRtp1(uint32 ssrc, int sequence_number) {
+    std::string data(CreateRtpData(ssrc, sequence_number));
     return media_channel1_->SendRtp(data.c_str(), data.size());
   }
-  bool SendCustomRtp2(uint32 ssrc) {
-    std::string data(CreateRtpData(ssrc));
+  bool SendCustomRtp2(uint32 ssrc, int sequence_number) {
+    std::string data(CreateRtpData(ssrc, sequence_number));
     return media_channel2_->SendRtp(data.c_str(), data.size());
   }
   bool SendCustomRtcp1(uint32 ssrc) {
@@ -421,12 +421,12 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
                                       rtcp_packet_.size());
   }
   // Methods to check custom data.
-  bool CheckCustomRtp1(uint32 ssrc) {
-    std::string data(CreateRtpData(ssrc));
+  bool CheckCustomRtp1(uint32 ssrc, int sequence_number) {
+    std::string data(CreateRtpData(ssrc, sequence_number));
     return media_channel1_->CheckRtp(data.c_str(), data.size());
   }
-  bool CheckCustomRtp2(uint32 ssrc) {
-    std::string data(CreateRtpData(ssrc));
+  bool CheckCustomRtp2(uint32 ssrc, int sequence_number) {
+    std::string data(CreateRtpData(ssrc, sequence_number));
     return media_channel2_->CheckRtp(data.c_str(), data.size());
   }
   bool CheckCustomRtcp1(uint32 ssrc) {
@@ -437,10 +437,11 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
     std::string data(CreateRtcpData(ssrc));
     return media_channel2_->CheckRtcp(data.c_str(), data.size());
   }
-  std::string CreateRtpData(uint32 ssrc) {
+  std::string CreateRtpData(uint32 ssrc, int sequence_number) {
     std::string data(rtp_packet_);
     // Set SSRC in the rtp packet copy.
     talk_base::SetBE32(const_cast<char*>(data.c_str()) + 8, ssrc);
+    talk_base::SetBE16(const_cast<char*>(data.c_str()) + 2, sequence_number);
     return data;
   }
   std::string CreateRtcpData(uint32 ssrc) {
@@ -879,8 +880,8 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
     EXPECT_TRUE(channel2_->Enable(true));
     EXPECT_EQ(0u, media_channel2_->send_streams().size());
 
-    EXPECT_TRUE(SendCustomRtp1(kSsrc1));
-    EXPECT_TRUE(CheckCustomRtp2(kSsrc1));
+    EXPECT_TRUE(SendCustomRtp1(kSsrc1, 0));
+    EXPECT_TRUE(CheckCustomRtp2(kSsrc1, 0));
 
     // Let channel 2 update the content by sending |stream2| and enable SRTP.
     typename T::Content content3;
@@ -905,8 +906,8 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
 
     EXPECT_TRUE(channel1_->secure());
     EXPECT_TRUE(channel2_->secure());
-    EXPECT_TRUE(SendCustomRtp2(kSsrc2));
-    EXPECT_TRUE(CheckCustomRtp1(kSsrc2));
+    EXPECT_TRUE(SendCustomRtp2(kSsrc2, 0));
+    EXPECT_TRUE(CheckCustomRtp1(kSsrc2, 0));
   }
 
   // Test that we only start playout and sending at the right times.
@@ -1272,6 +1273,8 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
   // Test that we can send and receive early media when a provisional answer is
   // sent and received. The test uses SRTP, RTCP mux and SSRC mux.
   void SendEarlyMediaUsingRtcpMuxSrtp() {
+      int sequence_number1_1 = 0, sequence_number2_2 = 0;
+
       CreateChannels(SSRC_MUX | RTCP | RTCP_MUX | SECURE,
                      SSRC_MUX | RTCP | RTCP_MUX | SECURE);
       EXPECT_TRUE(SendOffer());
@@ -1282,14 +1285,14 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
       EXPECT_EQ(2U, GetTransport2()->channels().size());
       EXPECT_TRUE(SendCustomRtcp1(kSsrc1));
       EXPECT_TRUE(CheckCustomRtcp2(kSsrc1));
-      EXPECT_TRUE(SendCustomRtp1(kSsrc1));
-      EXPECT_TRUE(CheckCustomRtp2(kSsrc1));
+      EXPECT_TRUE(SendCustomRtp1(kSsrc1, ++sequence_number1_1));
+      EXPECT_TRUE(CheckCustomRtp2(kSsrc1, sequence_number1_1));
 
       // Send packets from callee and verify that it is received.
       EXPECT_TRUE(SendCustomRtcp2(kSsrc2));
       EXPECT_TRUE(CheckCustomRtcp1(kSsrc2));
-      EXPECT_TRUE(SendCustomRtp2(kSsrc2));
-      EXPECT_TRUE(CheckCustomRtp1(kSsrc2));
+      EXPECT_TRUE(SendCustomRtp2(kSsrc2, ++sequence_number2_2));
+      EXPECT_TRUE(CheckCustomRtp1(kSsrc2, sequence_number2_2));
 
       // Complete call setup and ensure everything is still OK.
       EXPECT_TRUE(SendFinalAnswer());
@@ -1299,12 +1302,12 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
       EXPECT_TRUE(channel2_->secure());
       EXPECT_TRUE(SendCustomRtcp1(kSsrc1));
       EXPECT_TRUE(CheckCustomRtcp2(kSsrc1));
-      EXPECT_TRUE(SendCustomRtp1(kSsrc1));
-      EXPECT_TRUE(CheckCustomRtp2(kSsrc1));
+      EXPECT_TRUE(SendCustomRtp1(kSsrc1, ++sequence_number1_1));
+      EXPECT_TRUE(CheckCustomRtp2(kSsrc1, sequence_number1_1));
       EXPECT_TRUE(SendCustomRtcp2(kSsrc2));
       EXPECT_TRUE(CheckCustomRtcp1(kSsrc2));
-      EXPECT_TRUE(SendCustomRtp2(kSsrc2));
-      EXPECT_TRUE(CheckCustomRtp1(kSsrc2));
+      EXPECT_TRUE(SendCustomRtp2(kSsrc2, ++sequence_number2_2));
+      EXPECT_TRUE(CheckCustomRtp1(kSsrc2, sequence_number2_2));
   }
 
   // Test that we properly send RTP without SRTP from a thread.
@@ -1426,6 +1429,7 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
   }
 
   void SendSsrcMuxToSsrcMuxWithRtcpMux() {
+    int sequence_number1_1 = 0, sequence_number2_2 = 0;
     CreateChannels(SSRC_MUX | RTCP | RTCP_MUX, SSRC_MUX | RTCP | RTCP_MUX);
     EXPECT_TRUE(SendInitiate());
     EXPECT_EQ(2U, GetTransport1()->channels().size());
@@ -1439,13 +1443,13 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
     EXPECT_TRUE(channel2_->ssrc_filter()->IsActive());
     // channel2 - should have media_content1 as remote. i.e. kSsrc1
     EXPECT_TRUE(channel2_->ssrc_filter()->FindStream(kSsrc1));
-    EXPECT_TRUE(SendCustomRtp1(kSsrc1));
-    EXPECT_TRUE(SendCustomRtp2(kSsrc2));
+    EXPECT_TRUE(SendCustomRtp1(kSsrc1, ++sequence_number1_1));
+    EXPECT_TRUE(SendCustomRtp2(kSsrc2, ++sequence_number2_2));
     EXPECT_TRUE(SendCustomRtcp1(kSsrc1));
     EXPECT_TRUE(SendCustomRtcp2(kSsrc2));
-    EXPECT_TRUE(CheckCustomRtp1(kSsrc2));
+    EXPECT_TRUE(CheckCustomRtp1(kSsrc2, sequence_number2_2));
     EXPECT_TRUE(CheckNoRtp1());
-    EXPECT_TRUE(CheckCustomRtp2(kSsrc1));
+    EXPECT_TRUE(CheckCustomRtp2(kSsrc1, sequence_number1_1));
     EXPECT_TRUE(CheckNoRtp2());
     EXPECT_TRUE(CheckCustomRtcp1(kSsrc2));
     EXPECT_TRUE(CheckNoRtcp1());
@@ -1454,6 +1458,7 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
   }
 
   void SendSsrcMuxToSsrcMux() {
+    int sequence_number1_1 = 0, sequence_number2_2 = 0;
     CreateChannels(SSRC_MUX | RTCP, SSRC_MUX | RTCP);
     EXPECT_TRUE(SendInitiate());
     EXPECT_EQ(2U, GetTransport1()->channels().size());
@@ -1466,14 +1471,14 @@ class ChannelTest : public testing::Test, public sigslot::has_slots<> {
     EXPECT_TRUE(channel1_->ssrc_filter()->FindStream(kSsrc2));
     EXPECT_TRUE(channel2_->ssrc_filter()->IsActive());
     // channel2 - should have media_content1 as remote. i.e. kSsrc1
-    EXPECT_TRUE(SendCustomRtp1(kSsrc1));
-    EXPECT_TRUE(SendCustomRtp2(kSsrc2));
+    EXPECT_TRUE(SendCustomRtp1(kSsrc1, ++sequence_number1_1));
+    EXPECT_TRUE(SendCustomRtp2(kSsrc2, ++sequence_number2_2));
     EXPECT_TRUE(SendCustomRtcp1(kSsrc1));
     EXPECT_TRUE(SendCustomRtcp2(kSsrc2));
-    EXPECT_TRUE(CheckCustomRtp1(kSsrc2));
-    EXPECT_FALSE(CheckCustomRtp1(kSsrc1));
-    EXPECT_TRUE(CheckCustomRtp2(kSsrc1));
-    EXPECT_FALSE(CheckCustomRtp2(kSsrc2));
+    EXPECT_TRUE(CheckCustomRtp1(kSsrc2, sequence_number2_2));
+    EXPECT_FALSE(CheckCustomRtp1(kSsrc1, sequence_number2_2));
+    EXPECT_TRUE(CheckCustomRtp2(kSsrc1, sequence_number1_1));
+    EXPECT_FALSE(CheckCustomRtp2(kSsrc2, sequence_number1_1));
     EXPECT_TRUE(CheckCustomRtcp1(kSsrc2));
     EXPECT_FALSE(CheckCustomRtcp1(kSsrc1));
     EXPECT_TRUE(CheckCustomRtcp2(kSsrc1));

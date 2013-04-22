@@ -34,6 +34,7 @@
 #endif
 #include "talk/base/common.h"
 #include "talk/base/logging.h"
+#include "talk/base/systeminfo.h"
 #include "talk/media/base/videoprocessor.h"
 
 #if defined(HAVE_WEBRTC_VIDEO)
@@ -203,6 +204,7 @@ bool VideoCapturer::RemoveVideoProcessor(VideoProcessor* video_processor) {
 
 void VideoCapturer::ConstrainSupportedFormats(const VideoFormat& max_format) {
   max_format_.reset(new VideoFormat(max_format));
+  LOG(LS_VERBOSE) << " ConstrainSupportedFormats " << max_format.ToString();
   UpdateFilteredSupportedFormats();
 }
 
@@ -238,8 +240,14 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
     int desired_screencast_fps = capture_format_.get() ?
         VideoFormat::IntervalToFps(capture_format_->interval) :
         kDefaultScreencastFps;
+#if defined(HAVE_YUV)
+    talk_base::SystemInfo system_info;
+    int num_cores = system_info.GetMaxPhysicalCpus();
+#else
+    const int num_cores = 4;
+#endif
     ComputeScale(captured_frame->width, captured_frame->height,
-                 desired_screencast_fps,
+                 desired_screencast_fps, num_cores,
                  &scaled_width, &scaled_height);
     if (FOURCC_ARGB == captured_frame->fourcc &&
         (scaled_width != captured_frame->height ||

@@ -28,6 +28,7 @@
 #include "talk/app/webrtc/webrtcsession.h"
 
 #include <algorithm>
+#include <climits>
 #include <vector>
 
 #include "talk/app/webrtc/jsepicecandidate.h"
@@ -370,8 +371,12 @@ WebRtcSession::WebRtcSession(cricket::ChannelManager* channel_manager,
                              cricket::PortAllocator* port_allocator,
                              MediaStreamSignaling* mediastream_signaling)
     : cricket::BaseSession(signaling_thread, worker_thread, port_allocator,
-                           talk_base::ToString(talk_base::CreateRandomId64()),
+                           talk_base::ToString(talk_base::CreateRandomId64() &
+                                               LLONG_MAX),
                            cricket::NS_JINGLE_RTP, false),
+      // RFC 3264: The numeric value of the session id and version in the
+      // o line MUST be representable with a "64 bit signed integer".
+      // Due to this constraint session id |sid_| is max limited to LLONG_MAX.
       channel_manager_(channel_manager),
       session_desc_factory_(channel_manager, &transport_desc_factory_),
       mediastream_signaling_(mediastream_signaling),
@@ -530,6 +535,7 @@ SessionDescriptionInterface* WebRtcSession::CreateAnswer(
   if (remote_description()->type() != JsepSessionDescription::kOffer) {
     LOG(LS_ERROR) << "CreateAnswer failed because remote_description is not an"
                   << " offer.";
+    return NULL;
   }
 
   cricket::MediaSessionOptions options;

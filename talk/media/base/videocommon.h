@@ -130,7 +130,7 @@ inline std::string GetFourccName(uint32 fourcc) {
   return name;
 }
 
-void ComputeScale(int frame_width, int frame_height, int fps,
+void ComputeScale(int frame_width, int frame_height, int fps, int cpus,
                   int* scaled_width, int* scaled_height);
 
 // Compute the frame size that conversion should crop to based on aspect ratio.

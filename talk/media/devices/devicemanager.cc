@@ -205,7 +205,7 @@ VideoCapturer* DeviceManager::CreateVideoCapturer(const Device& device) const {
   LOG_F(LS_ERROR) << " should never be called!";
   return NULL;
 #else
-  // TODO(hellner): throw out the creation of a file video capturer once the
+  // TODO(hellner): Throw out the creation of a file video capturer once the
   // refactoring is completed.
   if (FileVideoCapturer::IsFileVideoCapturerDevice(device)) {
     FileVideoCapturer* capturer = new FileVideoCapturer;
@@ -223,8 +223,11 @@ VideoCapturer* DeviceManager::CreateVideoCapturer(const Device& device) const {
   }
   LOG(LS_INFO) << "Created VideoCapturer for " << device.name;
   VideoFormat video_format;
-  GetMaxFormat(device, &video_format);
-  capturer->ConstrainSupportedFormats(video_format);
+  bool has_max = GetMaxFormat(device, &video_format);
+  capturer->set_enable_camera_list(has_max);
+  if (has_max) {
+    capturer->ConstrainSupportedFormats(video_format);
+  }
   return capturer;
 #endif
 }
@@ -338,25 +341,14 @@ bool DeviceManager::IsInWhitelist(const std::string& key,
   return true;
 }
 
-bool DeviceManager::IsDeviceWhitelisted(const Device& device,
-                                        VideoFormat* video_format) const {
+bool DeviceManager::GetMaxFormat(const Device& device,
+                                 VideoFormat* video_format) const {
   // Match UVC ID if available. Failing that, match device name.
   std::string uvc_id;
   if (GetUsbUvcId(device, &uvc_id) && IsInWhitelist(uvc_id, video_format)) {
       return true;
   }
   return IsInWhitelist(device.name, video_format);
-}
-
-void DeviceManager::GetMaxFormat(const Device& device,
-                                 VideoFormat* video_format) const {
-  if (!IsDeviceWhitelisted(device, video_format)) {
-    // Default capabilities to VGA.
-    *video_format = VideoFormat(640,
-                                480,
-                                cricket::VideoFormat::FpsToInterval(30),
-                                FOURCC_I420);
-  }
 }
 
 bool DeviceManager::ShouldDeviceBeIgnored(const std::string& device_name,
