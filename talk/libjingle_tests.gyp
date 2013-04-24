@@ -78,7 +78,6 @@
         'base/base64_unittest.cc',
         'base/basictypes_unittest.cc',
         'base/bind_unittest.cc',
-        'base/bind_unittest.cc',
         'base/buffer_unittest.cc',
         'base/bytebuffer_unittest.cc',
         'base/byteorder_unittest.cc',

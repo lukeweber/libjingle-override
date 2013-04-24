@@ -841,6 +841,25 @@ static bool CreateMediaContentAnswer(
     return false;  // Something went seriously wrong.
   }
 
+  // Make sure the answer media content direction is per default set as
+  // described in RFC3264 section 6.1.
+  switch (offer->direction()) {
+    case MD_INACTIVE:
+      answer->set_direction(MD_INACTIVE);
+      break;
+    case MD_SENDONLY:
+      answer->set_direction(MD_RECVONLY);
+      break;
+    case MD_RECVONLY:
+      answer->set_direction(MD_SENDONLY);
+      break;
+    case MD_SENDRECV:
+      answer->set_direction(MD_SENDRECV);
+      break;
+    default:
+      break;
+  }
+
   return true;
 }
 

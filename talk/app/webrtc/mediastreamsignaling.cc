@@ -234,6 +234,10 @@ void RemoteTracks<TI, T, TP>::RemoveDisappearedTracks(
        track_id_it != track_ids_to_remove.end(); ++track_id_it) {
     info_it = remote_tracks_.find(*track_id_it);
     TrackInfo& info = info_it->second;
+    // Set enabled to false to give the RemoteVideoTrackHandler a chance to
+    // detach the renderer before the track is removed from the
+    // |remote_tracks_|.
+    info.track->set_enabled(false);
     info.track->set_state(webrtc::MediaStreamTrackInterface::kEnded);
     info.stream->RemoveTrack(info.track);
     remote_tracks_.erase(info_it);

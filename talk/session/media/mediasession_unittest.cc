@@ -357,6 +357,38 @@ class MediaSessionDescriptionFactoryTest : public testing::Test {
     EXPECT_TRUE(found);
   }
 
+  // This test that the audio and video media direction is set to
+  // |expected_direction_in_answer| in an answer if the offer direction is set
+  // to |direction_in_offer|.
+  void TestMediaDirectionInAnswer(
+      cricket::MediaContentDirection direction_in_offer,
+      cricket::MediaContentDirection expected_direction_in_answer) {
+    MediaSessionOptions opts;
+    opts.has_video = true;
+    talk_base::scoped_ptr<SessionDescription> offer(
+        f1_.CreateOffer(opts, NULL));
+    ASSERT_TRUE(offer.get() != NULL);
+    ContentInfo* ac_offer= offer->GetContentByName("audio");
+    ASSERT_TRUE(ac_offer != NULL);
+    AudioContentDescription* acd_offer =
+        static_cast<AudioContentDescription*>(ac_offer->description);
+    acd_offer->set_direction(direction_in_offer);
+    ContentInfo* vc_offer= offer->GetContentByName("video");
+    ASSERT_TRUE(vc_offer != NULL);
+    VideoContentDescription* vcd_offer =
+        static_cast<VideoContentDescription*>(vc_offer->description);
+    vcd_offer->set_direction(direction_in_offer);
+
+    talk_base::scoped_ptr<SessionDescription> answer(
+        f2_.CreateAnswer(offer.get(), opts, NULL));
+    const AudioContentDescription* acd_answer =
+        GetFirstAudioContentDescription(answer.get());
+    EXPECT_EQ(expected_direction_in_answer, acd_answer->direction());
+    const VideoContentDescription* vcd_answer =
+        GetFirstVideoContentDescription(answer.get());
+    EXPECT_EQ(expected_direction_in_answer, vcd_answer->direction());
+  }
+
  protected:
   MediaSessionDescriptionFactory f1_;
   MediaSessionDescriptionFactory f2_;
@@ -643,6 +675,30 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateDataAnswer) {
   EXPECT_TRUE(vcd->rtcp_mux());                 // negotiated rtcp-mux
   ASSERT_CRYPTO(vcd, 1U, CS_AES_CM_128_HMAC_SHA1_80);
   EXPECT_EQ(std::string(cricket::kMediaProtocolSavpf), vcd->protocol());
+}
+
+// This test that the media direction is set to send/receive in an answer if
+// the offer is send receive.
+TEST_F(MediaSessionDescriptionFactoryTest, CreateAnswerToSendReceiveOffer) {
+  TestMediaDirectionInAnswer(cricket::MD_SENDRECV, cricket::MD_SENDRECV);
+}
+
+// This test that the media direction is set to receive only in an answer if
+// the offer is send only.
+TEST_F(MediaSessionDescriptionFactoryTest, CreateAnswerToSendOnlyOffer) {
+  TestMediaDirectionInAnswer(cricket::MD_SENDONLY, cricket::MD_RECVONLY);
+}
+
+// This test that the media direction is set to send only in an answer if
+// the offer is recv only.
+TEST_F(MediaSessionDescriptionFactoryTest, CreateAnswerToRecvOnlyOffer) {
+  TestMediaDirectionInAnswer(cricket::MD_RECVONLY, cricket::MD_SENDONLY);
+}
+
+// This test that the media direction is set to inactive in an answer if
+// the offer is inactive.
+TEST_F(MediaSessionDescriptionFactoryTest, CreateAnswerToInactiveOffer) {
+  TestMediaDirectionInAnswer(cricket::MD_INACTIVE, cricket::MD_INACTIVE);
 }
 
 // Test that a data content with an unknown protocol is rejected in an answer.

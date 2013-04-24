@@ -707,6 +707,9 @@ class FakeWebRtcVideoEngine
   WEBRTC_STUB_CONST(GetRemoteSSRC, (const int, unsigned int&));
   WEBRTC_STUB_CONST(GetRemoteCSRCs, (const int, unsigned int*));
 
+  WEBRTC_STUB(SetRtxSendPayloadType, (const int, const uint8_t));
+  WEBRTC_STUB(SetRtxReceivePayloadType, (const int, const uint8_t));
+
   WEBRTC_STUB(SetStartSequenceNumber, (const int, unsigned short));
   WEBRTC_FUNC(SetRTCPStatus,
               (const int channel, const webrtc::ViERTCPMode mode)) {
