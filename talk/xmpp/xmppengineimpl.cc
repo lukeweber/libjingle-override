@@ -76,6 +76,7 @@ XmppEngineImpl::XmppEngineImpl()
   // Add XMPP namespaces to XML namespaces stack.
   xmlns_stack_.AddXmlns("stream", "http://etherx.jabber.org/streams");
   xmlns_stack_.AddXmlns("", "jabber:client");
+  printf("XMPP ENGINE CREATED");
 }
 
 XmppEngineImpl::~XmppEngineImpl() {
@@ -293,8 +294,10 @@ void XmppEngineImpl::IncomingStart(const XmlElement* start) {
       login_task_.reset();
   }
   else {
+#ifndef IOS_XMPP_FRAMEWORK
     // if not logging in, it's an error to see a start
     SignalError(ERROR_XML, 0);
+#endif
   }
 }
 
