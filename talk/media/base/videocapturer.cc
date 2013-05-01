@@ -92,6 +92,8 @@ void VideoCapturer::Construct() {
   enable_camera_list_ = false;
   capture_state_ = CS_STOPPED;
   SignalFrameCaptured.connect(this, &VideoCapturer::OnFrameCaptured);
+  scaled_width_ = 0;
+  scaled_height_ = 0;
 }
 
 const std::vector<VideoFormat>* VideoCapturer::GetSupportedFormats() const {
@@ -249,6 +251,15 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
     ComputeScale(captured_frame->width, captured_frame->height,
                  desired_screencast_fps, num_cores,
                  &scaled_width, &scaled_height);
+
+    if (scaled_width != scaled_width_ || scaled_height != scaled_height_) {
+      LOG(LS_VERBOSE) << "Scaling Screencast from "
+                      << captured_frame->width << "x"
+                      << captured_frame->height << " to "
+                      << scaled_width << "x" << scaled_height;
+      scaled_width_ = scaled_width;
+      scaled_height_ = scaled_height;
+    }
     if (FOURCC_ARGB == captured_frame->fourcc &&
         (scaled_width != captured_frame->height ||
          scaled_height != captured_frame->height)) {

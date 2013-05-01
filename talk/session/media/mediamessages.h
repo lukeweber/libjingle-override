@@ -40,6 +40,7 @@
 #include <vector>
 
 #include "talk/base/basictypes.h"
+#include "talk/media/base/mediachannel.h"  // For RtpHeaderExtension
 #include "talk/media/base/streamparams.h"
 #include "talk/p2p/base/parsing.h"
 #include "talk/p2p/base/sessiondescription.h"
@@ -150,6 +151,18 @@ bool ParseJingleStreams(const buzz::XmlElement* desc_elem,
 // Write a <streams> element to the parent_elem.
 void WriteJingleStreams(const std::vector<StreamParams>& streams,
                         buzz::XmlElement* parent_elem);
+
+// Parses rtp header extensions from a jingle <description>.  If it
+// fails, returns false and fills an error message.
+bool ParseJingleRtpHeaderExtensions(
+    const buzz::XmlElement* desc_elem,
+    std::vector<RtpHeaderExtension>* hdrexts,
+    ParseError* error);
+
+// Writes <rtp-hdrext> elements to the parent_elem.
+void WriteJingleRtpHeaderExtensions(
+    const std::vector<RtpHeaderExtension>& hdrexts,
+    buzz::XmlElement* parent_elem);
 
 }  // namespace cricket
 

@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "talk/base/basictypes.h"
+#include "talk/base/buffer.h"
 #include "talk/base/logging.h"
 #include "talk/base/sigslot.h"
 #include "talk/base/socket.h"
@@ -414,6 +415,8 @@ class MediaChannel : public sigslot::has_slots<> {
   virtual void OnPacketReceived(talk_base::Buffer* packet) = 0;
   // Called when a RTCP packet is received.
   virtual void OnRtcpReceived(talk_base::Buffer* packet) = 0;
+  // Called when the socket's ability to send has changed.
+  virtual void OnReadyToSend(bool ready) = 0;
   // Creates a new outgoing media stream with SSRCs and CNAME as described
   // by sp.
   virtual bool AddSendStream(const StreamParams& sp) = 0;
@@ -799,22 +802,69 @@ class VideoMediaChannel : public MediaChannel {
   VideoRenderer *renderer_;
 };
 
+enum DataMessageType {
+  // TODO(pthatcher):  Make this enum match the SCTP PPIDs that WebRTC uses?
+  DMT_CONTROL = 0,
+  DMT_BINARY = 1,
+  DMT_TEXT = 2,
+};
+
 // Info about data received in DataMediaChannel.  For use in
 // DataMediaChannel::SignalDataReceived and in all of the signals that
 // signal fires, on up the chain.
 struct ReceiveDataParams {
-  // TODO(pthatcher): Should we change this to non-ssrc for non-rtp
-  // data engines?
+  // The in-packet stream indentifier.
+  // For SCTP, this is really SID, not SSRC.
   uint32 ssrc;
+  // The type of message (binary, text, or control).
+  DataMessageType type;
+  // A per-stream value incremented per packet in the stream.
   int seq_num;
+  // A per-stream value monotonically increasing with time.
   int timestamp;
+
+  ReceiveDataParams() :
+      ssrc(0),
+      type(DMT_TEXT),
+      seq_num(0),
+      timestamp(0) {
+  }
 };
 
 struct SendDataParams {
-  // TODO(pthatcher): Should we change this to non-ssrc for non-rtp
-  // data engines?
+  // The in-packet stream indentifier.
+  // For SCTP, this is really SID, not SSRC.
   uint32 ssrc;
+  // The type of message (binary, text, or control).
+  DataMessageType type;
+
+  // For SCTP, whether to send messages flagged as ordered or not.
+  // If false, messages can be received out of order.
+  bool ordered;
+  // For SCTP, whether the messages are sent reliably or not.
+  // If false, messages may be lost.
+  bool reliable;
+  // For SCTP, if reliable == false, provide partial reliability by
+  // resending up to this many times.  Either count or millis
+  // is supported, not both at the same time.
+  int max_rtx_count;
+  // For SCTP, if reliable == false, provide partial reliability by
+  // resending for up to this many milliseconds.  Either count or millis
+  // is supported, not both at the same time.
+  int max_rtx_ms;
+
+  SendDataParams() :
+      ssrc(0),
+      type(DMT_TEXT),
+      // TODO(pthatcher): Make these true by default?
+      ordered(false),
+      reliable(false),
+      max_rtx_count(0),
+      max_rtx_ms(0) {
+  }
 };
+
+enum SendDataResult { SDR_SUCCESS, SDR_ERROR, SDR_BLOCK };
 
 class DataMediaChannel : public MediaChannel {
  public:
@@ -851,7 +901,9 @@ class DataMediaChannel : public MediaChannel {
   virtual void OnRtcpReceived(talk_base::Buffer* packet) = 0;
 
   virtual bool SendData(
-      const SendDataParams& params, const std::string& data) = 0;
+      const SendDataParams& params,
+      const talk_base::Buffer& payload,
+      SendDataResult* result = NULL) = 0;
   // Signals when data is received (params, data, len)
   sigslot::signal3<const ReceiveDataParams&,
                    const char*,

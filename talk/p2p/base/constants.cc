@@ -115,6 +115,9 @@ const buzz::StaticQName QN_JINGLE_RTP_BANDWIDTH =
     { NS_JINGLE_RTP, LN_BANDWIDTH };
 const buzz::StaticQName QN_JINGLE_RTCP_MUX = { NS_JINGLE_RTP, "rtcp-mux" };
 const buzz::StaticQName QN_PARAMETER = { NS_JINGLE_RTP, "parameter" };
+const buzz::StaticQName QN_JINGLE_RTP_HDREXT =
+    { NS_JINGLE_RTP, "rtp-hdrext" };
+const buzz::StaticQName QN_URI = { NS_EMPTY, "uri" };
 
 const char NS_GINGLE_AUDIO[] = "http://www.google.com/session/phone";
 const buzz::StaticQName QN_GINGLE_AUDIO_CONTENT =

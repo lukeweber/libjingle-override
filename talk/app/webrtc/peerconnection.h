@@ -109,19 +109,33 @@ class PeerConnection : public PeerConnectionInterface,
   virtual void OnMessage(talk_base::Message* msg);
 
   // Implements MediaStreamSignalingObserver.
-  virtual void OnAddStream(MediaStreamInterface* stream);
-  virtual void OnRemoveStream(MediaStreamInterface* stream);
-  virtual void OnAddDataChannel(DataChannelInterface* data_channel);
+  virtual void OnAddRemoteStream(MediaStreamInterface* stream) OVERRIDE;
+  virtual void OnRemoveRemoteStream(MediaStreamInterface* stream) OVERRIDE;
+  virtual void OnAddDataChannel(DataChannelInterface* data_channel) OVERRIDE;
+  virtual void OnAddRemoteAudioTrack(MediaStreamInterface* stream,
+                                     AudioTrackInterface* audio_track,
+                                     uint32 ssrc) OVERRIDE;
+  virtual void OnAddRemoteVideoTrack(MediaStreamInterface* stream,
+                                     VideoTrackInterface* video_track,
+                                     uint32 ssrc) OVERRIDE;
+  virtual void OnRemoveRemoteAudioTrack(
+      MediaStreamInterface* stream,
+      AudioTrackInterface* audio_track) OVERRIDE;
+  virtual void OnRemoveRemoteVideoTrack(
+      MediaStreamInterface* stream,
+      VideoTrackInterface* video_track) OVERRIDE;
   virtual void OnAddLocalAudioTrack(MediaStreamInterface* stream,
                                     AudioTrackInterface* audio_track,
-                                    uint32 ssrc);
+                                    uint32 ssrc) OVERRIDE;
   virtual void OnAddLocalVideoTrack(MediaStreamInterface* stream,
                                     VideoTrackInterface* video_track,
-                                    uint32 ssrc);
-  virtual void OnRemoveLocalAudioTrack(MediaStreamInterface* stream,
-                                       AudioTrackInterface* audio_track);
-  virtual void OnRemoveLocalVideoTrack(MediaStreamInterface* stream,
-                                       VideoTrackInterface* video_track);
+                                    uint32 ssrc) OVERRIDE;
+  virtual void OnRemoveLocalAudioTrack(
+      MediaStreamInterface* stream,
+      AudioTrackInterface* audio_track) OVERRIDE;
+  virtual void OnRemoveLocalVideoTrack(
+      MediaStreamInterface* stream,
+      VideoTrackInterface* video_track) OVERRIDE;
   virtual void OnRemoveLocalStream(MediaStreamInterface* stream);
 
   // Implements IceObserver

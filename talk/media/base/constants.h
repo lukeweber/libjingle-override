@@ -109,6 +109,8 @@ extern const char kGoogleRtpDataCodecName[];
 extern const int kGoogleSctpDataCodecId;
 extern const char kGoogleSctpDataCodecName[];
 
+extern const char kComfortNoiseCodecName[];
+
 }  // namespace cricket
 
 #endif  // TALK_MEDIA_BASE_CONSTANTS_H_

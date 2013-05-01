@@ -74,13 +74,13 @@ deps = {
 
   "third_party/sqlite/":
     Var("chromium_trunk") + "/src/third_party/sqlite@" + Var("chromium_revision"),
- 
+
   "third_party/yasm":
     Var("chromium_trunk") + "/src/third_party/yasm@" + Var("chromium_revision"),
 
   "third_party/yasm/source/patched-yasm":
     From("chromium_deps", "src/third_party/yasm/source/patched-yasm"),
- 
+
   "third_party/webrtc":
     (Var("googlecode_url") % "webrtc") + "/stable/webrtc@" + Var("webrtc_revision"),
 

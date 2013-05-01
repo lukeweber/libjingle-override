@@ -90,6 +90,7 @@ class MediaConstraintsInterface {
   // Specified by the W3C PeerConnection spec
   static const char kOfferToReceiveVideo[];  // OfferToReceiveVideo
   static const char kOfferToReceiveAudio[];  // OfferToReceiveAudio
+  static const char kVoiceActivityDetection[];  // VoiceActivityDetection
   static const char kIceRestart[];  // IceRestart
   // These keys are google specific.
   static const char kUseRtpMux[];  // googUseRtpMUX

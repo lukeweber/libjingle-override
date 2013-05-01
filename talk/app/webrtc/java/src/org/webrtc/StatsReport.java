@@ -47,16 +47,13 @@ public class StatsReport {
     }
   }
 
-  /** Java version of webrtc::StatsReport::kStatsReportType*. */
-  public enum Type { SSRC, BWE };
-
   public final String id;
-  public final Type type;
+  public final String type;
   // Time since 1970-01-01T00:00:00Z in milliseconds.
   public final double timestamp;
   public final Value[] values;
 
-  public StatsReport(String id, Type type, double timestamp, Value[] values) {
+  public StatsReport(String id, String type, double timestamp, Value[] values) {
     this.id = id;
     this.type = type;
     this.timestamp = timestamp;
@@ -65,7 +62,7 @@ public class StatsReport {
 
   public String toString() {
     StringBuilder builder = new StringBuilder();
-    builder.append("id: ").append(id).append(", type: ").append(type.name())
+    builder.append("id: ").append(id).append(", type: ").append(type)
         .append(", timestamp: ").append(timestamp).append(", values: ");
     for (int i = 0; i < values.length; ++i) {
       builder.append(values[i].toString()).append(", ");

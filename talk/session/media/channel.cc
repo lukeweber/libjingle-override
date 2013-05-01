@@ -352,45 +352,6 @@ static bool ValidPacket(bool rtcp, const talk_base::Buffer* packet) {
       packet->length() <= kMaxRtpPacketLen);
 }
 
-
-// Returns true if the |state| requires a action on the current local
-// content description. |action| will contain the necessary action.
-static bool LocalStateChanged(BaseSession::State state,
-                              ContentAction* action) {
-  switch (state) {
-    case Session::STATE_SENTINITIATE:
-      *action = CA_OFFER;
-      return true;
-    case Session::STATE_SENTPRACCEPT:
-      *action = CA_PRANSWER;
-      return true;
-    case Session::STATE_SENTACCEPT:
-      *action = CA_ANSWER;
-      return true;
-    default:
-      return false;
-  }
-}
-
-// Returns true if the |state| requires a action on the current remote content
-// description. |action| will contain the necessary action.
-static bool RemoteStateChanged(BaseSession::State state,
-                               ContentAction* action) {
-  switch (state) {
-    case Session::STATE_RECEIVEDINITIATE:
-      *action = CA_OFFER;
-      return true;
-    case Session::STATE_RECEIVEDPRACCEPT:
-      *action = CA_PRANSWER;
-      return true;
-    case Session::STATE_RECEIVEDACCEPT:
-      *action = CA_ANSWER;
-      return true;
-    default:
-      return false;
-  }
-}
-
 static bool IsReceiveContentDirection(MediaContentDirection direction) {
   return direction == MD_SENDRECV || direction == MD_RECVONLY;
 }
@@ -420,6 +381,8 @@ BaseChannel::BaseChannel(talk_base::Thread* thread,
       rtcp_transport_channel_(NULL),
       enabled_(false),
       writable_(false),
+      rtp_ready_to_send_(false),
+      rtcp_ready_to_send_(false),
       optimistic_data_send_(false),
       was_ever_writable_(false),
       local_content_direction_(MD_INACTIVE),
@@ -465,10 +428,14 @@ bool BaseChannel::Init(TransportChannel* transport_channel,
       this, &BaseChannel::OnWritableState);
   transport_channel_->SignalReadPacket.connect(
       this, &BaseChannel::OnChannelRead);
+  transport_channel_->SignalReadyToSend.connect(
+      this, &BaseChannel::OnReadyToSend);
 
-  session_->SignalState.connect(this, &BaseChannel::OnSessionState);
+  session_->SignalNewLocalDescription.connect(
+      this, &BaseChannel::OnNewLocalDescription);
+  session_->SignalNewRemoteDescription.connect(
+      this, &BaseChannel::OnNewRemoteDescription);
 
-  OnSessionState(session(), session()->state());
   set_rtcp_transport_channel(rtcp_transport_channel);
   return true;
 }
@@ -554,6 +521,8 @@ void BaseChannel::set_rtcp_transport_channel(TransportChannel* channel) {
           this, &BaseChannel::OnWritableState);
       rtcp_transport_channel_->SignalReadPacket.connect(
           this, &BaseChannel::OnChannelRead);
+      rtcp_transport_channel_->SignalReadyToSend.connect(
+          this, &BaseChannel::OnReadyToSend);
     }
   }
 }
@@ -609,6 +578,30 @@ void BaseChannel::OnChannelRead(TransportChannel* channel,
   bool rtcp = PacketIsRtcp(channel, data, len);
   talk_base::Buffer packet(data, len);
   HandlePacket(rtcp, &packet);
+}
+
+void BaseChannel::OnReadyToSend(TransportChannel* channel) {
+  SetReadyToSend(channel, true);
+}
+
+void BaseChannel::SetReadyToSend(TransportChannel* channel, bool ready) {
+  ASSERT(channel == transport_channel_ || channel == rtcp_transport_channel_);
+  if (channel == transport_channel_) {
+    rtp_ready_to_send_ = ready;
+  }
+  if (channel == rtcp_transport_channel_) {
+    rtcp_ready_to_send_ = ready;
+  }
+
+  if (!ready) {
+    // Notify the MediaChannel when either rtp or rtcp channel can't send.
+    media_channel_->OnReadyToSend(false);
+  } else if (rtp_ready_to_send_ &&
+             // In the case of rtcp mux |rtcp_transport_channel_| will be null.
+             (rtcp_ready_to_send_ || !rtcp_transport_channel_)) {
+    // Notify the MediaChannel when both rtp and rtcp channel can send.
+    media_channel_->OnReadyToSend(true);
+  }
 }
 
 bool BaseChannel::PacketIsRtcp(const TransportChannel* channel,
@@ -710,9 +703,16 @@ bool BaseChannel::SendPacket(bool rtcp, talk_base::Buffer* packet) {
   }
 
   // Bon voyage.
-  return (channel->SendPacket(packet->data(), packet->length(),
-      (secure() && secure_dtls()) ? PF_SRTP_BYPASS : 0)
-      == static_cast<int>(packet->length()));
+  int ret = channel->SendPacket(packet->data(), packet->length(),
+      (secure() && secure_dtls()) ? PF_SRTP_BYPASS : 0);
+  if (ret != static_cast<int>(packet->length())) {
+    if (channel->GetError() == EWOULDBLOCK) {
+      LOG(LS_WARNING) << "Got EWOULDBLOCK from socket.";
+      SetReadyToSend(channel, false);
+    }
+    return false;
+  }
+  return true;
 }
 
 void BaseChannel::HandlePacket(bool rtcp, talk_base::Buffer* packet) {
@@ -802,29 +802,29 @@ void BaseChannel::HandlePacket(bool rtcp, talk_base::Buffer* packet) {
   }
 }
 
-
-void BaseChannel::OnSessionState(BaseSession* session,
-                                 BaseSession::State state) {
-  const ContentInfo* content_info = NULL;
-  const MediaContentDescription* content_desc = NULL;
-  ContentAction action;
-  if (LocalStateChanged(state, &action)) {
-    content_info = GetFirstContent(session->local_description());
-    content_desc = GetContentDescription(content_info);
-    if (content_desc && content_info && !content_info->rejected &&
-        !SetLocalContent(content_desc, action)) {
-      LOG(LS_ERROR) << "Failure in SetLocalContent with action " << action;
-      session->SetError(BaseSession::ERROR_CONTENT);
-    }
+void BaseChannel::OnNewLocalDescription(
+    BaseSession* session, ContentAction action) {
+  const ContentInfo* content_info =
+      GetFirstContent(session->local_description());
+  const MediaContentDescription* content_desc =
+      GetContentDescription(content_info);
+  if (content_desc && content_info && !content_info->rejected &&
+      !SetLocalContent(content_desc, action)) {
+    LOG(LS_ERROR) << "Failure in SetLocalContent with action " << action;
+    session->SetError(BaseSession::ERROR_CONTENT);
   }
-  if (RemoteStateChanged(state, &action)) {
-    content_info = GetFirstContent(session->remote_description());
-    content_desc = GetContentDescription(content_info);
-    if (content_desc && content_info && !content_info->rejected &&
-        !SetRemoteContent(content_desc, action)) {
-      LOG(LS_ERROR) << "Failure in SetRemoteContent with  action " << action;
-      session->SetError(BaseSession::ERROR_CONTENT);
-    }
+}
+
+void BaseChannel::OnNewRemoteDescription(
+    BaseSession* session, ContentAction action) {
+  const ContentInfo* content_info =
+      GetFirstContent(session->remote_description());
+  const MediaContentDescription* content_desc =
+      GetContentDescription(content_info);
+  if (content_desc && content_info && !content_info->rejected &&
+      !SetRemoteContent(content_desc, action)) {
+    LOG(LS_ERROR) << "Failure in SetRemoteContent with  action " << action;
+    session->SetError(BaseSession::ERROR_CONTENT);
   }
 }
 
@@ -2377,12 +2377,12 @@ bool DataChannel::Init() {
   return true;
 }
 
-bool DataChannel::SendData(
-    const SendDataParams& params,
-    const std::string& data) {
-  SendDataMessageData message_data(params, data);
+bool DataChannel::SendData(const SendDataParams& params,
+                           const talk_base::Buffer& payload,
+                           SendDataResult* result) {
+  SendDataMessageData message_data(params, &payload, result);
   Send(MSG_SENDDATA, &message_data);
-  return true;
+  return message_data.succeeded;
 }
 
 const ContentInfo* DataChannel::GetFirstContent(
@@ -2493,16 +2493,16 @@ void DataChannel::OnMessage(talk_base::Message *pmsg) {
       break;
     }
     case MSG_SENDDATA: {
-      SendDataMessageData* data =
+      SendDataMessageData* msg =
           static_cast<SendDataMessageData*>(pmsg->pdata);
-      // TODO(pthatcher): use return value?
-      media_channel()->SendData(data->params, data->data);
+      msg->succeeded = media_channel()->SendData(
+          msg->params, *(msg->payload), msg->result);
       break;
     }
     case MSG_DATARECEIVED: {
       DataReceivedMessageData* data =
           static_cast<DataReceivedMessageData*>(pmsg->pdata);
-      SignalDataReceived(this, data->params, data->data);
+      SignalDataReceived(this, data->params, data->payload);
       delete data;
       break;
     }

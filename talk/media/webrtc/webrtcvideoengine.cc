@@ -98,6 +98,8 @@ static const char kFecPayloadName[] = "ulpfec";
 
 static const int kDefaultNumberOfTemporalLayers = 1;  // 1:1
 
+static const int kTimestampDeltaInSecondsForWarning = 2;
+
 static void LogMultiline(talk_base::LoggingSeverity sev, char* text) {
   const char* delim = "\r\n";
   // TODO(fbarchard): Fix strtok lint warning.
@@ -418,8 +420,6 @@ class WebRtcVideoChannelSendInfo  {
         encoder_observer_(channel_id),
         external_capture_(external_capture),
         capturer_updated_(false),
-        reference_timestamp_(0),
-        timestamp_delta_(0),
         interval_(0),
         video_adapter_(new CoordinatedVideoAdapter) {
     // TODO(asapersson):
@@ -459,6 +459,7 @@ class WebRtcVideoChannelSendInfo  {
       interval_ = interval;
     }
   }
+  int64 interval() { return interval_; }
 
   bool AdaptFrame(const VideoFrame* in_frame, const VideoFrame** out_frame) {
     if (!video_adapter_->cpu_adaptation()) {
@@ -516,38 +517,8 @@ class WebRtcVideoChannelSendInfo  {
       video_adapter_->set_high_system_threshold(high);
     }
   }
-  void RecalculateTimestamp(VideoFrame* frame, WebRtc_Word64* clocks) {
-    ASSERT(frame != NULL);
-    ASSERT(clocks != NULL);
-    if (!reference_timestamp_) {
-      // ViE will use the first received timestamp as reference. Do that here
-      // too.
-      reference_timestamp_ = frame->GetTimeStamp();
-      ASSERT(!timestamp_delta_);
-    }
-    // TODO(hellner): compensate for wrapparound.
-    if (capturer_updated_) {
-      capturer_updated_ = false;
-      // A new capturer has been added. The new and old capturer will most
-      // likely have a discrepancy in timestamp. Compensate for this.
-      timestamp_delta_ = reference_timestamp_ - frame->GetTimeStamp();
-    }
-    // Update the reference timestamp as a new frame has arrived.
-    reference_timestamp_ = frame->GetTimeStamp() + timestamp_delta_;
-    frame->SetTimeStamp(reference_timestamp_);
-
-    // It's better to let webrtc estimate the timestamp than trying to do it
-    // here since webrtc knows better how it wants the timestamp to be
-    // estimated.
-    // TODO(hellner): revisit setting *clocks to 0 when BWE is not dependent on
-    // RTP timestamp.
-    *clocks = 0;
-    // Calculate next expected timestamp in case next frame is provided by a new
-    // capturer.
-    reference_timestamp_ += interval_;
-  }
   void ProcessFrame(const VideoFrame& original_frame, bool mute,
-                    VideoFrame** processed_frame, WebRtc_Word64* clocks) {
+                    VideoFrame** processed_frame) {
     if (!mute) {
       *processed_frame = original_frame.Copy();
     } else {
@@ -558,8 +529,6 @@ class WebRtcVideoChannelSendInfo  {
                                original_frame.GetTimeStamp());
       *processed_frame = black_frame;
     }
-
-    RecalculateTimestamp(*processed_frame, clocks);
     local_stream_info_.UpdateFrame(*processed_frame);
   }
 
@@ -580,10 +549,6 @@ class WebRtcVideoChannelSendInfo  {
 
   bool capturer_updated_;
 
-  // To compensate for timestamp jumps when switching capturers.
-  int64 reference_timestamp_;  // The timestamp that ViE is expecting.
-  int64 timestamp_delta_;  // The offset in timestamp between the capturers
-                           // capturers timestamp and |reference_timestamp_|.
   int64 interval_;
 
   talk_base::scoped_ptr<CoordinatedVideoAdapter> video_adapter_;
@@ -2363,6 +2328,10 @@ void WebRtcVideoMediaChannel::OnRtcpReceived(talk_base::Buffer* packet) {
   }
 }
 
+void WebRtcVideoMediaChannel::OnReadyToSend(bool ready) {
+  SetNetworkTransmissionState(ready);
+}
+
 bool WebRtcVideoMediaChannel::MuteStream(uint32 ssrc, bool on) {
   WebRtcVideoChannelSendInfo* send_channel = GetSendChannel(ssrc);
   if (!send_channel) {
@@ -2689,11 +2658,9 @@ bool WebRtcVideoMediaChannel::SendFrame(
   }
   const VideoFrame* frame_out = frame;
   talk_base::scoped_ptr<VideoFrame> processed_frame;
-  WebRtc_Word64 clocks = 0;
   // Disable muting for screencast.
   const bool mute = (send_channel->muted() && !is_screencast);
-  send_channel->ProcessFrame(*frame_out, mute, processed_frame.use(),
-                             &clocks);
+  send_channel->ProcessFrame(*frame_out, mute, processed_frame.use());
   if (processed_frame) {
     frame_out = processed_frame.get();
   }
@@ -2710,8 +2677,25 @@ bool WebRtcVideoMediaChannel::SendFrame(
   frame_i420.width = frame_out->GetWidth();
   frame_i420.height = frame_out->GetHeight();
 
+  int64 timestamp_ntp_ms = 0;
+#ifdef USE_WEBRTC_DEV_BRANCH
+  // If the frame timestamp is 0, we will use the deliver time.
+  const int64 frame_timestamp = frame->GetTimeStamp();
+  if (frame_timestamp != 0) {
+    if (abs(time(NULL) - frame_timestamp / talk_base::kNumNanosecsPerSec) >
+            kTimestampDeltaInSecondsForWarning) {
+      LOG(LS_WARNING) << "Frame timestamp differs by more than "
+                      << kTimestampDeltaInSecondsForWarning << " seconds from "
+                      << "current Unix timestamp.";
+    }
+
+    timestamp_ntp_ms =
+        talk_base::UnixTimestampNanosecsToNtpMillisecs(frame_timestamp);
+  }
+#endif
+
   return send_channel->external_capture()->IncomingFrameI420(
-      frame_i420, clocks) == 0;
+      frame_i420, timestamp_ntp_ms) == 0;
 }
 
 bool WebRtcVideoMediaChannel::CreateChannel(uint32 ssrc_key,
@@ -3387,12 +3371,25 @@ void WebRtcVideoMediaChannel::FlushBlackFrame(uint32 ssrc, int64 timestamp) {
     WebRtcVideoFrame black_frame;
     // Black frame is not screencast.
     const bool screencasting = false;
+    const int64 timestamp_delta = send_channel->interval();
     if (!black_frame.InitToBlack(send_codec_->width, send_codec_->height, 1, 1,
-                                 last_frame_elapsed_time,
-                                 last_frame_time_stamp) ||
+                                 last_frame_elapsed_time + timestamp_delta,
+                                 last_frame_time_stamp + timestamp_delta) ||
         !SendFrame(send_channel, &black_frame, screencasting)) {
       LOG(LS_ERROR) << "Failed to send black frame.";
     }
+  }
+}
+
+void WebRtcVideoMediaChannel::SetNetworkTransmissionState(
+    bool is_transmitting) {
+  LOG(LS_INFO) << "SetNetworkTransmissionState: " << is_transmitting;
+  for (SendChannelMap::iterator iter = send_channels_.begin();
+       iter != send_channels_.end(); ++iter) {
+    WebRtcVideoChannelSendInfo* send_channel = iter->second;
+    int channel_id = send_channel->channel_id();
+    engine_->vie()->network()->SetNetworkTransmissionState(channel_id,
+                                                           is_transmitting);
   }
 }
 

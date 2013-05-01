@@ -80,7 +80,7 @@ class FakeAudioCaptureModule
                           uint32_t& position) const;
   virtual int32_t TimeUntilNextProcess();
   virtual int32_t Process();
-  virtual WebRtc_Word32 ChangeUniqueId(const WebRtc_Word32 id);
+  virtual int32_t ChangeUniqueId(const int32_t id);
 
   virtual int32_t ActiveAudioLayer(AudioLayer* audio_layer) const;
 

@@ -895,6 +895,10 @@ class TestClient : public sigslot::has_slots<> {
     session_created_count = 0;
     session_destroyed_count = 0;
     session_remote_description_update_count = 0;
+    new_local_description = false;
+    new_remote_description = false;
+    last_content_action = cricket::CA_OFFER;
+    last_content_source = cricket::CS_LOCAL;
     last_expected_sent_stanza = NULL;
     session = NULL;
     last_session_state = cricket::BaseSession::STATE_INIT;
@@ -1000,6 +1004,10 @@ class TestClient : public sigslot::has_slots<> {
     session->SignalError.connect(this, &TestClient::OnSessionError);
     session->SignalRemoteDescriptionUpdate.connect(
         this, &TestClient::OnSessionRemoteDescriptionUpdate);
+    session->SignalNewLocalDescription.connect(
+        this, &TestClient::OnNewLocalDescription);
+    session->SignalNewRemoteDescription.connect(
+        this, &TestClient::OnNewRemoteDescription);
 
     CreateChannels();
   }
@@ -1031,6 +1039,20 @@ class TestClient : public sigslot::has_slots<> {
   void OnSessionRemoteDescriptionUpdate(cricket::BaseSession* session,
       const cricket::ContentInfos& contents) {
     session_remote_description_update_count++;
+  }
+
+  void OnNewLocalDescription(cricket::BaseSession* session,
+                             cricket::ContentAction action) {
+    new_local_description = true;
+    last_content_action = action;
+    last_content_source = cricket::CS_LOCAL;
+  }
+
+  void OnNewRemoteDescription(cricket::BaseSession* session,
+                              cricket::ContentAction action) {
+    new_remote_description = true;
+    last_content_action = action;
+    last_content_source = cricket::CS_REMOTE;
   }
 
   void PrepareCandidates() {
@@ -1092,6 +1114,10 @@ class TestClient : public sigslot::has_slots<> {
   uint32 session_created_count;
   uint32 session_destroyed_count;
   uint32 session_remote_description_update_count;
+  bool new_local_description;
+  bool new_remote_description;
+  cricket::ContentAction last_content_action;
+  cricket::ContentSource last_content_source;
   std::deque<buzz::XmlElement*> sent_stanzas;
   buzz::XmlElement* last_expected_sent_stanza;
 
@@ -2147,6 +2173,104 @@ class SessionTest : public testing::Test {
     initiator->ExpectSentStanza(
         IqSet("1", kInitiator, kResponder, description_info_xml));
   }
+
+  void DoTestSignalNewDescription(
+      TestClient* client,
+      cricket::BaseSession::State state,
+      cricket::ContentAction expected_content_action,
+      cricket::ContentSource expected_content_source) {
+    // Clean up before the new test.
+    client->new_local_description = false;
+    client->new_remote_description = false;
+
+    client->SetSessionState(state);
+    EXPECT_EQ((expected_content_source == cricket::CS_LOCAL),
+               client->new_local_description);
+    EXPECT_EQ((expected_content_source == cricket::CS_REMOTE),
+               client->new_remote_description);
+    EXPECT_EQ(expected_content_action, client->last_content_action);
+    EXPECT_EQ(expected_content_source, client->last_content_source);
+  }
+
+  void TestCallerSignalNewDescription() {
+    talk_base::scoped_ptr<cricket::PortAllocator> allocator(
+        new TestPortAllocator());
+    int next_message_id = 0;
+
+    std::string content_name = "content-name";
+    std::string content_type = "content-type";
+    talk_base::scoped_ptr<TestClient> initiator(
+        new TestClient(allocator.get(), &next_message_id,
+                       kInitiator, PROTOCOL_JINGLE,
+                       content_type,
+                       content_name, "",
+                       "",  ""));
+
+    initiator->CreateSession();
+
+    // send offer -> send update offer ->
+    // receive pr answer -> receive update pr answer ->
+    // receive answer
+    DoTestSignalNewDescription(
+        initiator.get(), cricket::BaseSession::STATE_SENTINITIATE,
+        cricket::CA_OFFER, cricket::CS_LOCAL);
+
+    DoTestSignalNewDescription(
+        initiator.get(), cricket::BaseSession::STATE_SENTINITIATE,
+        cricket::CA_OFFER, cricket::CS_LOCAL);
+
+    DoTestSignalNewDescription(
+        initiator.get(), cricket::BaseSession::STATE_RECEIVEDPRACCEPT,
+        cricket::CA_PRANSWER, cricket::CS_REMOTE);
+
+    DoTestSignalNewDescription(
+        initiator.get(), cricket::BaseSession::STATE_RECEIVEDPRACCEPT,
+        cricket::CA_PRANSWER, cricket::CS_REMOTE);
+
+    DoTestSignalNewDescription(
+        initiator.get(), cricket::BaseSession::STATE_RECEIVEDACCEPT,
+        cricket::CA_ANSWER, cricket::CS_REMOTE);
+  }
+
+  void TestCalleeSignalNewDescription() {
+    talk_base::scoped_ptr<cricket::PortAllocator> allocator(
+        new TestPortAllocator());
+    int next_message_id = 0;
+
+    std::string content_name = "content-name";
+    std::string content_type = "content-type";
+    talk_base::scoped_ptr<TestClient> initiator(
+        new TestClient(allocator.get(), &next_message_id,
+                       kInitiator, PROTOCOL_JINGLE,
+                       content_type,
+                       content_name, "",
+                       "",  ""));
+
+    initiator->CreateSession();
+
+    // receive offer -> receive update offer ->
+    // send pr answer -> send update pr answer ->
+    // send answer
+    DoTestSignalNewDescription(
+        initiator.get(), cricket::BaseSession::STATE_RECEIVEDINITIATE,
+        cricket::CA_OFFER, cricket::CS_REMOTE);
+
+    DoTestSignalNewDescription(
+        initiator.get(), cricket::BaseSession::STATE_RECEIVEDINITIATE,
+        cricket::CA_OFFER, cricket::CS_REMOTE);
+
+    DoTestSignalNewDescription(
+        initiator.get(), cricket::BaseSession::STATE_SENTPRACCEPT,
+        cricket::CA_PRANSWER, cricket::CS_LOCAL);
+
+    DoTestSignalNewDescription(
+        initiator.get(), cricket::BaseSession::STATE_SENTPRACCEPT,
+        cricket::CA_PRANSWER, cricket::CS_LOCAL);
+
+    DoTestSignalNewDescription(
+        initiator.get(), cricket::BaseSession::STATE_SENTACCEPT,
+        cricket::CA_ANSWER, cricket::CS_LOCAL);
+  }
 };
 
 // For each of these, "X => Y = Z" means "if a client with protocol X
@@ -2303,4 +2427,12 @@ TEST_F(SessionTest, TestTransportMux) {
 
 TEST_F(SessionTest, TestSendDescriptionInfo) {
   TestSendDescriptionInfo();
+}
+
+TEST_F(SessionTest, TestCallerSignalNewDescription) {
+  TestCallerSignalNewDescription();
+}
+
+TEST_F(SessionTest, TestCalleeSignalNewDescription) {
+  TestCalleeSignalNewDescription();
 }

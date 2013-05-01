@@ -96,6 +96,8 @@ class TransportChannel : public sigslot::has_slots<> {
   bool writable() const { return writable_; }
   sigslot::signal1<TransportChannel*> SignalReadableState;
   sigslot::signal1<TransportChannel*> SignalWritableState;
+  // Emitted when the TransportChannel's ability to send has changed.
+  sigslot::signal1<TransportChannel*> SignalReadyToSend;
 
   // Attempts to send the given packet.  The return value is < 0 on failure.
   // TODO: Remove the default argument once channel code is updated.

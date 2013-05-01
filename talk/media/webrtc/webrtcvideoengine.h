@@ -259,6 +259,7 @@ class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
 
   virtual void OnPacketReceived(talk_base::Buffer* packet);
   virtual void OnRtcpReceived(talk_base::Buffer* packet);
+  virtual void OnReadyToSend(bool ready);
   virtual bool MuteStream(uint32 ssrc, bool on);
   virtual bool SetRecvRtpHeaderExtensions(
       const std::vector<RtpHeaderExtension>& extensions);
@@ -377,6 +378,8 @@ class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
   talk_base::MessageQueue* worker_thread() { return engine_->worker_thread(); }
   void QueueBlackFrame(uint32 ssrc, int64 timestamp, int framerate);
   void FlushBlackFrame(uint32 ssrc, int64 timestamp);
+
+  void SetNetworkTransmissionState(bool is_transmitting);
 
   // Global state.
   WebRtcVideoEngine* engine_;

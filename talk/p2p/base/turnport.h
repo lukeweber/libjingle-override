@@ -88,6 +88,7 @@ class TurnPort : public Port {
   virtual void OnReadPacket(talk_base::AsyncPacketSocket* socket,
                             const char* data, size_t size,
                             const talk_base::SocketAddress& remote_addr);
+  virtual void OnReadyToSend(talk_base::AsyncPacketSocket* socket);
 
   const std::string& hash() const { return hash_; }
   const std::string& nonce() const { return nonce_; }
@@ -162,6 +163,8 @@ class TurnPort : public Port {
 
   int next_channel_number_;
   EntryList entries_;
+
+  bool connected_;
 
   friend class TurnEntry;
   friend class TurnAllocateRequest;

@@ -32,6 +32,7 @@
 #include "talk/base/stream.h"
 #include "talk/media/base/constants.h"
 #include "talk/media/base/fakemediaprocessor.h"
+#include "talk/media/base/fakenetworkinterface.h"
 #include "talk/media/base/mediachannel.h"
 #include "talk/media/base/testutils.h"
 #include "talk/media/base/videoengine_unittest.h"
@@ -120,6 +121,10 @@ class WebRtcVideoEngineTestFake : public testing::Test {
     return true;
   }
   bool SendI420ScreencastFrame(int width, int height) {
+    return SendI420ScreencastFrameWithTimestamp(width, height, 0);
+  }
+  bool SendI420ScreencastFrameWithTimestamp(
+      int width, int height, int64 timestamp) {
     if (NULL == channel_) {
       return false;
     }
@@ -128,7 +133,7 @@ class WebRtcVideoEngineTestFake : public testing::Test {
     talk_base::scoped_array<uint8> pixel(new uint8[size]);
     if (!frame.Init(cricket::FOURCC_I420,
                     width, height, width, height,
-                    pixel.get(), size, 1, 1, 0, 0, 0)) {
+                    pixel.get(), size, 1, 1, 0, timestamp, 0)) {
       return false;
     }
     cricket::FakeVideoCapturer capturer;
@@ -1791,3 +1796,41 @@ TEST_F(WebRtcVideoEngineTestFake, DontRegisterDecoderForNonVP8) {
 
   EXPECT_EQ(0, vie_.GetNumExternalDecoderRegistered(channel_num));
 }
+
+// Tests that OnReadyToSend will be propagated into ViE.
+TEST_F(WebRtcVideoEngineTestFake, OnReadyToSend) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+  EXPECT_TRUE(vie_.GetIsTransmitting(channel_num));
+
+  channel_->OnReadyToSend(false);
+  EXPECT_FALSE(vie_.GetIsTransmitting(channel_num));
+
+  channel_->OnReadyToSend(true);
+  EXPECT_TRUE(vie_.GetIsTransmitting(channel_num));
+}
+
+#ifdef USE_WEBRTC_DEV_BRANCH
+TEST_F(WebRtcVideoEngineTestFake, CaptureFrameTimestampToNtpTimestamp) {
+  EXPECT_TRUE(SetupEngine());
+  int capture_id = vie_.GetCaptureId(vie_.GetLastChannel());
+
+  // Set send codec.
+  cricket::VideoCodec codec(kVP8Codec);
+  std::vector<cricket::VideoCodec> codec_list;
+  codec_list.push_back(codec);
+  EXPECT_TRUE(channel_->AddSendStream(
+      cricket::StreamParams::CreateLegacy(123)));
+  EXPECT_TRUE(channel_->SetSendCodecs(codec_list));
+  EXPECT_TRUE(channel_->SetSend(true));
+
+  int64 timestamp = time(NULL) * talk_base::kNumNanosecsPerSec;
+  SendI420ScreencastFrameWithTimestamp(
+      kVP8Codec.width, kVP8Codec.height, timestamp);
+  EXPECT_EQ(talk_base::UnixTimestampNanosecsToNtpMillisecs(timestamp),
+      vie_.GetCaptureLastTimestamp(capture_id));
+
+  SendI420ScreencastFrameWithTimestamp(kVP8Codec.width, kVP8Codec.height, 0);
+  EXPECT_EQ(0, vie_.GetCaptureLastTimestamp(capture_id));
+}
+#endif

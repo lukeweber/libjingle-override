@@ -88,4 +88,6 @@ const char kGoogleRtpDataCodecName[] = "google-data";
 const int kGoogleSctpDataCodecId = 108;
 const char kGoogleSctpDataCodecName[] = "google-sctp-data";
 
+const char kComfortNoiseCodecName[] = "CN";
+
 }  // namespace cricket

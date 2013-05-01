@@ -99,6 +99,10 @@ class FakeConstraints : public webrtc::MediaConstraintsInterface {
     AddMandatory(MediaConstraintsInterface::kEnableRtpDataChannels, true);
   }
 
+  void SetOptionalVAD(bool enable) {
+    AddOptional(MediaConstraintsInterface::kVoiceActivityDetection, enable);
+  }
+
  private:
   Constraints mandatory_;
   Constraints optional_;

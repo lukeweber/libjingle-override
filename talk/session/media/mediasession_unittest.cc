@@ -87,11 +87,12 @@ using cricket::CS_AES_CM_128_HMAC_SHA1_32;
 using cricket::CS_AES_CM_128_HMAC_SHA1_80;
 
 static const AudioCodec kAudioCodecs1[] = {
-  AudioCodec(103, "ISAC",   16000, -1,    1, 5),
-  AudioCodec(102, "iLBC",   8000,  13300, 1, 4),
-  AudioCodec(0,   "PCMU",   8000,  64000, 1, 3),
-  AudioCodec(8,   "PCMA",   8000,  64000, 1, 2),
-  AudioCodec(117, "red",    8000,  0,     1, 1),
+  AudioCodec(103, "ISAC",   16000, -1,    1, 6),
+  AudioCodec(102, "iLBC",   8000,  13300, 1, 5),
+  AudioCodec(0,   "PCMU",   8000,  64000, 1, 4),
+  AudioCodec(8,   "PCMA",   8000,  64000, 1, 3),
+  AudioCodec(117, "red",    8000,  0,     1, 2),
+  AudioCodec(107, "CN",     48000, 0,     1, 1)
 };
 
 static const AudioCodec kAudioCodecs2[] = {
@@ -387,6 +388,19 @@ class MediaSessionDescriptionFactoryTest : public testing::Test {
     const VideoContentDescription* vcd_answer =
         GetFirstVideoContentDescription(answer.get());
     EXPECT_EQ(expected_direction_in_answer, vcd_answer->direction());
+  }
+
+  bool VerifyNoCNCodecs(const cricket::ContentInfo* content) {
+    const cricket::ContentDescription* description = content->description;
+    ASSERT(description != NULL);
+    const cricket::AudioContentDescription* audio_content_desc =
+        static_cast<const cricket::AudioContentDescription*> (description);
+    ASSERT(audio_content_desc != NULL);
+    for (size_t i = 0; i < audio_content_desc->codecs().size(); ++i) {
+      if (audio_content_desc->codecs()[i].name == "CN")
+        return false;
+    }
+    return true;
   }
 
  protected:
@@ -1862,4 +1876,28 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCryptoOfferDtlsButNotSdes) {
   const cricket::TransportDescription* data_answer_trans_desc =
       answer->GetTransportDescriptionByName("data");
   EXPECT_TRUE(data_answer_trans_desc->identity_fingerprint.get() != NULL);
+}
+
+// Verifies if vad_enabled option is set to false, CN codecs are not present in
+// offer or answer.
+TEST_F(MediaSessionDescriptionFactoryTest, TestVADEnableOption) {
+  MediaSessionOptions options;
+  options.has_audio = true;
+  options.has_video = true;
+  talk_base::scoped_ptr<SessionDescription> offer(
+      f1_.CreateOffer(options, NULL));
+  ASSERT_TRUE(offer.get() != NULL);
+  const ContentInfo* audio_content = offer->GetContentByName("audio");
+  EXPECT_FALSE(VerifyNoCNCodecs(audio_content));
+
+  options.vad_enabled = false;
+  offer.reset(f1_.CreateOffer(options, NULL));
+  ASSERT_TRUE(offer.get() != NULL);
+  audio_content = offer->GetContentByName("audio");
+  EXPECT_TRUE(VerifyNoCNCodecs(audio_content));
+  talk_base::scoped_ptr<SessionDescription> answer(
+      f1_.CreateAnswer(offer.get(), options, NULL));
+  ASSERT_TRUE(answer.get() != NULL);
+  audio_content = answer->GetContentByName("audio");
+  EXPECT_TRUE(VerifyNoCNCodecs(audio_content));
 }

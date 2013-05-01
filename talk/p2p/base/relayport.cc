@@ -158,6 +158,9 @@ class RelayEntry : public talk_base::MessageHandler,
                     const char* data, size_t size,
                     const talk_base::SocketAddress& remote_addr);
 
+  // Called when the socket is currently able to send.
+  void OnReadyToSend(talk_base::AsyncPacketSocket* socket);
+
   // Sends the given data on the socket to the server with no wrapping.  This
   // returns the number of bytes written or -1 if an error occurred.
   int SendPacket(const void* data, size_t size);
@@ -493,6 +496,7 @@ void RelayEntry::Connect() {
 
   // Otherwise, create the new connection and configure any socket options.
   socket->SignalReadPacket.connect(this, &RelayEntry::OnReadPacket);
+  socket->SignalReadyToSend.connect(this, &RelayEntry::OnReadyToSend);
   current_connection_ = new RelayConnection(ra, socket, port()->thread());
   for (size_t i = 0; i < port_->options().size(); ++i) {
     current_connection_->SetSocketOption(port_->options()[i].first,
@@ -730,6 +734,12 @@ void RelayEntry::OnReadPacket(talk_base::AsyncPacketSocket* socket,
   // Process the actual data and remote address in the normal manner.
   port_->OnReadPacket(data_attr->bytes(), data_attr->length(), remote_addr2,
                       PROTO_UDP);
+}
+
+void RelayEntry::OnReadyToSend(talk_base::AsyncPacketSocket* socket) {
+  if (connected()) {
+    port_->OnReadyToSend();
+  }
 }
 
 int RelayEntry::SendPacket(const void* data, size_t size) {

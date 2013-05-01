@@ -315,7 +315,10 @@ public class PeerConnectionTest extends TestCase {
     MediaStream lMS = factory.createLocalMediaStream(streamLabel);
     VideoTrack videoTrack =
         factory.createVideoTrack(videoTrackId, videoSource);
-    videoTrack.addRenderer(createVideoRenderer(observer));
+    assertNotNull(videoTrack);
+    VideoRenderer videoRenderer = createVideoRenderer(observer);
+    assertNotNull(videoRenderer);
+    videoTrack.addRenderer(videoRenderer);
     lMS.addTrack(videoTrack);
     // Just for fun, let's remove and re-add the track.
     lMS.removeTrack(videoTrack);

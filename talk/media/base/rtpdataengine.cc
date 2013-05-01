@@ -297,10 +297,16 @@ bool RtpDataMediaChannel::SetSendBandwidth(bool autobw, int bps) {
 }
 
 bool RtpDataMediaChannel::SendData(
-    const SendDataParams& params, const std::string& data) {
+    const SendDataParams& params,
+    const talk_base::Buffer& payload,
+    SendDataResult* result) {
+  if (result) {
+    // If we return true, we'll set this to SDR_SUCCESS.
+    *result = SDR_ERROR;
+  }
   if (!sending_) {
     LOG(LS_WARNING) << "Not sending packet with ssrc=" << params.ssrc
-                    << " len=" << data.length() << " before SetSend(true).";
+                    << " len=" << payload.length() << " before SetSend(true).";
     return false;
   }
 
@@ -319,7 +325,7 @@ bool RtpDataMediaChannel::SendData(
   }
 
   size_t packet_len = (kMinRtpPacketLen + sizeof(kReservedSpace)
-                       + data.length() + kMaxSrtpHmacOverhead);
+                       + payload.length() + kMaxSrtpHmacOverhead);
   if (packet_len > kDataMaxRtpPacketLen) {
     return false;
   }
@@ -350,7 +356,7 @@ bool RtpDataMediaChannel::SendData(
     return false;
   }
   packet.AppendData(&kReservedSpace, sizeof(kReservedSpace));
-  packet.AppendData(data.data(), data.length());
+  packet.AppendData(payload.data(), payload.length());
 
   // Uncomment this for easy debugging.
   // LOG(LS_INFO) << "Sent packet: "
@@ -361,6 +367,9 @@ bool RtpDataMediaChannel::SendData(
 
   network_interface()->SendPacket(&packet);
   send_limiter_->Use(packet_len, now);
+  if (result) {
+    *result = SDR_SUCCESS;
+  }
   return true;
 }
 

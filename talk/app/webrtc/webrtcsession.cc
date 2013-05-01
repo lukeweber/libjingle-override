@@ -56,14 +56,7 @@ typedef cricket::MediaSessionOptions::Streams Streams;
 
 namespace webrtc {
 
-enum {
-  MSG_CANDIDATE_TIMEOUT = 101,
-};
-
 static const uint64 kInitSessionVersion = 2;
-
-// We allow 30 seconds to establish a connection, otherwise it's an error.
-static const int kCallSetupTimeout = 30 * 1000;
 
 // Supported MediaConstraints.
 // DTLS-SRTP pseudo-constraints.
@@ -190,28 +183,6 @@ static bool GetAudioSsrcByTrackId(
           audio_info->description);
   cricket::StreamParams stream;
   if (!cricket::GetStreamByIds(audio_content->streams(), "", track_id,
-                               &stream)) {
-    return false;
-  }
-  *ssrc = stream.first_ssrc();
-  return true;
-}
-
-static bool GetVideoSsrcByTrackId(
-    const SessionDescription* session_description,
-    const std::string& track_id, uint32 *ssrc) {
-  const cricket::ContentInfo* video_info =
-      cricket::GetFirstVideoContent(session_description);
-  if (!video_info) {
-    LOG(LS_ERROR) << "Video not used in this call";
-    return false;
-  }
-
-  const cricket::MediaContentDescription* video_content =
-      static_cast<const cricket::MediaContentDescription*>(
-          video_info->description);
-  cricket::StreamParams stream;
-  if (!cricket::GetStreamByIds(video_content->streams(), "", track_id,
                                &stream)) {
     return false;
   }
@@ -826,40 +797,39 @@ std::string WebRtcSession::BadStateErrMsg(
   return desc.str();
 }
 
-void WebRtcSession::SetAudioPlayout(const std::string& track_id, bool enable) {
+void WebRtcSession::SetAudioPlayout(uint32 ssrc, bool enable) {
   ASSERT(signaling_thread()->IsCurrent());
   if (!voice_channel_) {
     LOG(LS_ERROR) << "SetAudioPlayout: No audio channel exists.";
     return;
   }
-  uint32 ssrc = 0;
-  if (!VERIFY(mediastream_signaling_->GetRemoteAudioTrackSsrc(
-      track_id, &ssrc))) {
-    LOG(LS_ERROR) << "Trying to enable/disable an unexisting audio SSRC.";
-    return;
+  if (!voice_channel_->SetOutputScaling(ssrc, enable ? 1 : 0, enable ? 1 : 0)) {
+    // Allow that SetOutputScaling fail if |enable| is false but assert
+    // otherwise. This in the normal case when the underlying media channel has
+    // already been deleted.
+    ASSERT(enable == false);
   }
-  voice_channel_->SetOutputScaling(ssrc, enable ? 1 : 0, enable ? 1 : 0);
 }
 
-void WebRtcSession::SetAudioSend(const std::string& track_id, bool enable,
+void WebRtcSession::SetAudioSend(uint32 ssrc, bool enable,
                                  const cricket::AudioOptions& options) {
   ASSERT(signaling_thread()->IsCurrent());
   if (!voice_channel_) {
     LOG(LS_ERROR) << "SetAudioSend: No audio channel exists.";
     return;
   }
-  uint32 ssrc = 0;
-  if (!VERIFY(GetAudioSsrcByTrackId(BaseSession::local_description(),
-                                    track_id, &ssrc))) {
-    LOG(LS_ERROR) << "SetAudioSend: SSRC does not exist.";
+  if (!voice_channel_->MuteStream(ssrc, !enable)) {
+    // Allow that MuteStream fail if |enable| is false but assert otherwise.
+    // This in the normal case when the underlying media channel has already
+    // been deleted.
+    ASSERT(enable == false);
     return;
   }
-  voice_channel_->MuteStream(ssrc, !enable);
   if (enable)
     voice_channel_->SetChannelOptions(options);
 }
 
-bool WebRtcSession::SetCaptureDevice(const std::string& track_id,
+bool WebRtcSession::SetCaptureDevice(uint32 ssrc,
                                      cricket::VideoCapturer* camera) {
   ASSERT(signaling_thread()->IsCurrent());
 
@@ -869,53 +839,46 @@ bool WebRtcSession::SetCaptureDevice(const std::string& track_id,
     LOG(LS_WARNING) << "Video not used in this call.";
     return false;
   }
-  uint32 ssrc = 0;
-  if (!VERIFY(GetVideoSsrcByTrackId(BaseSession::local_description(),
-                                    track_id, &ssrc))) {
-    LOG(LS_ERROR) << "Trying to set camera device on a unknown  SSRC.";
-    return false;
-  }
-
   if (!video_channel_->SetCapturer(ssrc, camera)) {
-    LOG(LS_ERROR) << "Failed to set capture device.";
+    // Allow that SetCapturer fail if |camera| is NULL but assert otherwise.
+    // This in the normal case when the underlying media channel has already
+    // been deleted.
+    ASSERT(camera == NULL);
     return false;
   }
   return true;
 }
 
-void WebRtcSession::SetVideoPlayout(const std::string& track_id,
+void WebRtcSession::SetVideoPlayout(uint32 ssrc,
                                     bool enable,
                                     cricket::VideoRenderer* renderer) {
   ASSERT(signaling_thread()->IsCurrent());
   if (!video_channel_) {
-    LOG(LS_ERROR) << "SetVideoPlayout: No video channel exists.";
+    LOG(LS_WARNING) << "SetVideoPlayout: No video channel exists.";
     return;
   }
-
-  uint32 ssrc = 0;
-  if (mediastream_signaling_->GetRemoteVideoTrackSsrc(track_id, &ssrc)) {
-    video_channel_->SetRenderer(ssrc, enable ? renderer : NULL);
-  } else {
-    // Allow that |track_id| does not exist if renderer is null but assert
-    // otherwise.
-    VERIFY(renderer == NULL);
+  if (!video_channel_->SetRenderer(ssrc, enable ? renderer : NULL)) {
+    // Allow that SetRenderer fail if |renderer| is NULL but assert otherwise.
+    // This in the normal case when the underlying media channel has already
+    // been deleted.
+    ASSERT(renderer == NULL);
   }
 }
 
-void WebRtcSession::SetVideoSend(const std::string& track_id, bool enable,
+void WebRtcSession::SetVideoSend(uint32 ssrc, bool enable,
                                  const cricket::VideoOptions* options) {
   ASSERT(signaling_thread()->IsCurrent());
   if (!video_channel_) {
-    LOG(LS_ERROR) << "SetVideoSend: No video channel exists.";
+    LOG(LS_WARNING) << "SetVideoSend: No video channel exists.";
     return;
   }
-  uint32 ssrc = 0;
-  if (!VERIFY(GetVideoSsrcByTrackId(BaseSession::local_description(),
-                                    track_id, &ssrc))) {
-    LOG(LS_ERROR) << "SetVideoSend: SSRC does not exist.";
+  if (!video_channel_->MuteStream(ssrc, !enable)) {
+    // Allow that MuteStream fail if |enable| is false but assert otherwise.
+    // This in the normal case when the underlying media channel has already
+    // been deleted.
+    ASSERT(enable == false);
     return;
   }
-  video_channel_->MuteStream(ssrc, !enable);
   if (enable && options)
     video_channel_->SetChannelOptions(*options);
 }
@@ -979,18 +942,6 @@ talk_base::scoped_refptr<DataChannel> WebRtcSession::CreateDataChannel(
   if (!mediastream_signaling_->AddDataChannel(channel))
     return NULL;
   return channel;
-}
-
-void WebRtcSession::OnMessage(talk_base::Message* msg) {
-  switch (msg->message_id) {
-    case MSG_CANDIDATE_TIMEOUT:
-      LOG(LS_ERROR) << "Transport is not in writable state.";
-      SignalError();
-      break;
-    default:
-      cricket::BaseSession::OnMessage(msg);
-      break;
-  }
 }
 
 void WebRtcSession::SetIceConnectionState(
@@ -1080,14 +1031,6 @@ void WebRtcSession::OnTransportWritable(cricket::Transport* transport) {
       SetIceConnectionState(
           PeerConnectionInterface::kIceConnectionDisconnected);
     }
-  }
-  // If the transport is not in writable state, start a timer to monitor
-  // the state. If the transport doesn't become writable state in 30 seconds
-  // then we are assuming call can't be continued.
-  signaling_thread()->Clear(this, MSG_CANDIDATE_TIMEOUT);
-  if (transport->HasChannels() && !transport->writable()) {
-    signaling_thread()->PostDelayed(
-        kCallSetupTimeout, this, MSG_CANDIDATE_TIMEOUT);
   }
 }
 

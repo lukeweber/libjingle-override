@@ -190,14 +190,14 @@ bool DeviceManager::GetVideoCaptureDevice(const std::string& name,
 }
 
 void DeviceManager::SetVideoCaptureDeviceMaxFormat(
-    const std::string& uvc_id,
+    const std::string& usb_id,
     const VideoFormat& max_format) {
-  max_formats_[uvc_id] = max_format;
+  max_formats_[usb_id] = max_format;
 }
 
 void DeviceManager::ClearVideoCaptureDeviceMaxFormat(
-    const std::string& uvc_id) {
-  max_formats_.erase(uvc_id);
+    const std::string& usb_id) {
+  max_formats_.erase(usb_id);
 }
 
 VideoCapturer* DeviceManager::CreateVideoCapturer(const Device& device) const {
@@ -343,9 +343,9 @@ bool DeviceManager::IsInWhitelist(const std::string& key,
 
 bool DeviceManager::GetMaxFormat(const Device& device,
                                  VideoFormat* video_format) const {
-  // Match UVC ID if available. Failing that, match device name.
-  std::string uvc_id;
-  if (GetUsbUvcId(device, &uvc_id) && IsInWhitelist(uvc_id, video_format)) {
+  // Match USB ID if available. Failing that, match device name.
+  std::string usb_id;
+  if (GetUsbId(device, &usb_id) && IsInWhitelist(usb_id, video_format)) {
       return true;
   }
   return IsInWhitelist(device.name, video_format);

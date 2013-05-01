@@ -173,7 +173,8 @@ TurnPort::TurnPort(talk_base::Thread* thread,
       resolver_(NULL),
       error_(0),
       request_manager_(thread),
-      next_channel_number_(TURN_CHANNEL_NUMBER_START) {
+      next_channel_number_(TURN_CHANNEL_NUMBER_START),
+      connected_(false) {
   request_manager_.SignalSendPacket.connect(this, &TurnPort::OnSendStunPacket);
 }
 
@@ -192,6 +193,7 @@ bool TurnPort::Init() {
     return false;
   }
   socket_->SignalReadPacket.connect(this, &TurnPort::OnReadPacket);
+  socket_->SignalReadyToSend.connect(this, &TurnPort::OnReadyToSend);
   return true;
 }
 
@@ -315,6 +317,12 @@ void TurnPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
   }
 }
 
+void TurnPort::OnReadyToSend(talk_base::AsyncPacketSocket* socket) {
+  if (connected_) {
+    Port::OnReadyToSend();
+  }
+}
+
 void TurnPort::ResolveTurnAddress() {
   if (resolver_)
     return;
@@ -352,6 +360,7 @@ void TurnPort::OnStunAddress(const talk_base::SocketAddress& address) {
 }
 
 void TurnPort::OnAllocateSuccess(const talk_base::SocketAddress& address) {
+  connected_ = true;
   AddAddress(address, socket_->GetLocalAddress(), "udp",
              RELAY_PORT_TYPE, ICE_TYPE_PREFERENCE_RELAY, true);
 }

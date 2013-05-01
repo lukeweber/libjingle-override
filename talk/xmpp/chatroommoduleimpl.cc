@@ -637,13 +637,16 @@ XmppChatroomModuleImpl::GetEnterFailureFromXml(const XmlElement* presence) {
 XmppChatroomExitedStatus
 XmppChatroomModuleImpl::GetExitFailureFromXml(const XmlElement* presence) {
   XmppChatroomExitedStatus status = XMPP_CHATROOM_EXITED_UNSPECIFIED;
-  const XmlElement* error = presence->FirstNamed(QN_ERROR);
-  if (error != NULL && error->HasAttr(QN_CODE)) {
-    int code = atoi(error->Attr(QN_CODE).c_str());
-    switch (code) {
-      case 307: status = XMPP_CHATROOM_EXITED_KICKED; break;
-      case 322: status = XMPP_CHATROOM_EXITED_NOT_A_MEMBER; break;
-      case 332: status = XMPP_CHATROOM_EXITED_SYSTEM_SHUTDOWN; break;
+  const XmlElement* muc_user = presence->FirstNamed(QN_MUC_USER_X);
+  if (muc_user != NULL) {
+    const XmlElement* user_status = muc_user->FirstNamed(QN_MUC_USER_STATUS);
+    if (user_status != NULL && user_status->HasAttr(QN_CODE)) {
+      int code = atoi(user_status->Attr(QN_CODE).c_str());
+      switch (code) {
+        case 307: status = XMPP_CHATROOM_EXITED_KICKED; break;
+        case 322: status = XMPP_CHATROOM_EXITED_NOT_A_MEMBER; break;
+        case 332: status = XMPP_CHATROOM_EXITED_SYSTEM_SHUTDOWN; break;
+      }
     }
   }
   return status;

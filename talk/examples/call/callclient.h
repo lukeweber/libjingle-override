@@ -242,7 +242,7 @@ class CallClient: public sigslot::has_slots<> {
                          const buzz::XmlElement* stanza);
   void OnDataReceived(cricket::Call*,
                       const cricket::ReceiveDataParams& params,
-                      const std::string& data);
+                      const talk_base::Buffer& payload);
   buzz::Jid GenerateRandomMucJid();
 
   // Depending on |enable|, render (or don't) all the streams in |session|.

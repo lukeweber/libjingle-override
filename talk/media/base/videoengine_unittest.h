@@ -1317,7 +1317,7 @@ class VideoMediaChannelTest : public testing::Test,
       EXPECT_TRUE(channel_->SetCapturer(kSsrc, capturer.get()));
       talk_base::Thread::Current()->ProcessMessages(time_between_send);
       EXPECT_TRUE(capturer->CaptureCustomFrame(format.width, format.height,
-                                             cricket::FOURCC_I420));
+                                               cricket::FOURCC_I420));
       ++captured_frames;
       EXPECT_FRAME_WAIT(captured_frames, format.width, format.height, kTimeout);
       EXPECT_FALSE(renderer_.black_frame());
@@ -1327,6 +1327,13 @@ class VideoMediaChannelTest : public testing::Test,
       ++captured_frames;
       EXPECT_FRAME_WAIT(captured_frames, codec.width, codec.height, kTimeout);
       EXPECT_TRUE(renderer_.black_frame());
+
+      // The black frame has the same timestamp as the next frame since it's
+      // timestamp is set to the last frame's timestamp + interval. WebRTC will
+      // not render a frame with the same timestamp so capture another frame
+      // with the frame capturer to increment the next frame's timestamp.
+      EXPECT_TRUE(capturer->CaptureCustomFrame(format.width, format.height,
+                                               cricket::FOURCC_I420));
     }
   }
 
@@ -1441,6 +1448,8 @@ class VideoMediaChannelTest : public testing::Test,
         capturer->GetSupportedFormats();
     cricket::VideoFormat capture_format = (*formats)[0];
     EXPECT_EQ(cricket::CS_RUNNING, capturer->Start(capture_format));
+    // Capture frame to not get same frame timestamps as previous capturer.
+    capturer->CaptureFrame();
     EXPECT_TRUE(channel_->SetCapturer(kSsrc, capturer.get()));
     EXPECT_TRUE(talk_base::Thread::Current()->ProcessMessages(30));
     EXPECT_TRUE(capturer->CaptureCustomFrame(kWidth, kHeight,

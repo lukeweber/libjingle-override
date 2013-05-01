@@ -151,18 +151,18 @@ class WebRtcSession : public cricket::BaseSession,
   virtual bool GetTrackIdBySsrc(uint32 ssrc, std::string* id);
 
   // AudioMediaProviderInterface implementation.
-  virtual void SetAudioPlayout(const std::string& name, bool enable);
-  virtual void SetAudioSend(const std::string& name, bool enable,
-                            const cricket::AudioOptions& options);
+  virtual void SetAudioPlayout(uint32 ssrc, bool enable) OVERRIDE;
+  virtual void SetAudioSend(uint32 ssrc, bool enable,
+                            const cricket::AudioOptions& options) OVERRIDE;
 
   // Implements VideoMediaProviderInterface.
-  virtual bool SetCaptureDevice(const std::string& name,
-                                cricket::VideoCapturer* camera);
-  virtual void SetVideoPlayout(const std::string& name,
+  virtual bool SetCaptureDevice(uint32 ssrc,
+                                cricket::VideoCapturer* camera) OVERRIDE;
+  virtual void SetVideoPlayout(uint32 ssrc,
                                bool enable,
-                               cricket::VideoRenderer* renderer);
-  virtual void SetVideoSend(const std::string& name, bool enable,
-                            const cricket::VideoOptions* options);
+                               cricket::VideoRenderer* renderer) OVERRIDE;
+  virtual void SetVideoSend(uint32 ssrc, bool enable,
+                            const cricket::VideoOptions* options) OVERRIDE;
 
   // Implements DtmfProviderInterface.
   virtual bool CanInsertDtmf(const std::string& track_id);
@@ -188,8 +188,6 @@ class WebRtcSession : public cricket::BaseSession,
   bool UpdateSessionState(Action action, cricket::ContentSource source,
                           const cricket::SessionDescription* desc);
   static Action GetAction(const std::string& type);
-
-  virtual void OnMessage(talk_base::Message* msg);
 
   // Transport related callbacks, override from cricket::BaseSession.
   virtual void OnTransportRequestSignaling(cricket::Transport* transport);

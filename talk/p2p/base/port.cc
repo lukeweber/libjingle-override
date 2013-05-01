@@ -312,6 +312,13 @@ void Port::OnReadPacket(
   }
 }
 
+void Port::OnReadyToSend() {
+  AddressMap::iterator iter = connections_.begin();
+  for (; iter != connections_.end(); ++iter) {
+    iter->second->OnReadyToSend();
+  }
+}
+
 bool Port::GetStunMessage(const char* data, size_t size,
                           const talk_base::SocketAddress& addr,
                           IceMessage** out_msg, std::string* out_username) {
@@ -998,6 +1005,12 @@ void Connection::OnReadPacket(const char* data, size_t size) {
         ASSERT(false);
         break;
     }
+  }
+}
+
+void Connection::OnReadyToSend() {
+  if (write_state_ == STATE_WRITABLE) {
+    SignalReadyToSend(this);
   }
 }
 

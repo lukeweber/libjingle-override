@@ -90,6 +90,7 @@ class HybridVideoMediaChannel : public VideoMediaChannel {
 
   virtual void OnPacketReceived(talk_base::Buffer* packet);
   virtual void OnRtcpReceived(talk_base::Buffer* packet);
+  virtual void OnReadyToSend(bool ready);
 
   virtual void UpdateAspectRatio(int ratio_w, int ratio_h);
 

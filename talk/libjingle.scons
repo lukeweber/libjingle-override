@@ -77,12 +77,12 @@ if 'NSS_BUILD_PLATFORM' in env['ENV']:
                "third_party/mozilla/dist/" + env['ENV']['NSS_BUILD_PLATFORM']+ "/include"
              ]
              SSL_LIBS = [
-		 "ssl3",
-		 "nss3",
-		 "nssutil3",
-		 "plc4",
-		 "plds4",
-		 "nspr4",
+               "ssl3",
+               "nss3",
+               "nssutil3",
+               "plc4",
+               "plds4",
+               "nspr4",
              ]
 else:
              SSL_INCLUDES = ["third_party/openssl/include"]
@@ -116,6 +116,7 @@ talk.Library(env, name = "jingle",
                  "dl",
                  "pthread",
                  "rt",
+                 "gthread-2.0",
                ],
                'mac_libs': SSL_LIBS,
                'win_libs': [
@@ -283,7 +284,7 @@ talk.Library(env, name = "jingle",
                "media/base/streamparams.cc",
                "media/base/videoadapter.cc",
                "media/base/videocapturer.cc",
-               "media/base/mutevideocapturer.cc",
+               "media/base/mutedvideocapturer.cc",
                "media/base/videocommon.cc",
                "media/base/videoframe.cc",
                "media/devices/devicemanager.cc",
@@ -323,12 +324,16 @@ talk.Library(env, name = "jingle",
                "xmpp/hangoutpubsubclient.cc",
                "xmpp/iqtask.cc",
                "xmpp/jid.cc",
+               "xmpp/jingleinfotask.cc",
                "xmpp/moduleimpl.cc",
                "xmpp/mucroomconfigtask.cc",
                "xmpp/mucroomdiscoverytask.cc",
                "xmpp/mucroomlookuptask.cc",
                "xmpp/mucroomuniquehangoutidtask.cc",
                "xmpp/pingtask.cc",
+               "xmpp/presenceouttask.cc",
+               "xmpp/presencereceivetask.cc",
+               "xmpp/presencestatus.cc",
                "xmpp/pubsubclient.cc",
                "xmpp/pubsub_task.cc",
                "xmpp/pubsubtasks.cc",
@@ -381,20 +386,6 @@ talk.Library(env, name = "jingle",
                "base/natserver_main.cc",
              ],
 )
-talk.Library(env, name = "xmpphelp",
-             libs = [
-               "jingle",
-             ],
-             srcs = [
-               "examples/login/jingleinfotask.cc",
-             ],
-             includedirs = [
-               "third_party/gtest/include",
-             ],
-             cppdefines = [
-               "GTEST_RELATIVE_PATH",
-             ],
-)
 talk.Library(env, name = "videorenderer",
              lin_srcs = [
                "media/devices/gtkvideorenderer.cc",
@@ -428,7 +419,6 @@ talk.App(env, name = "login",
          libs = [
            "jingle",
            "expat",
-           "xmpphelp",
          ],
          srcs = [
            "examples/login/login_main.cc",
@@ -442,7 +432,6 @@ talk.App(env, name = "chat",
          libs = [
            "jingle",
            "expat",
-           "xmpphelp",
          ],
          srcs = [
            "examples/chat/chatapp.cc",
@@ -483,14 +472,12 @@ talk.App(env, name = "call",
            "examples/call/mediaenginefactory.cc",
            "examples/call/mucinviterecvtask.cc",
            "examples/call/mucinvitesendtask.cc",
-           "examples/call/presenceouttask.cc",
            "examples/call/presencepushtask.cc",
          ],
          libs = [
            "jingle",
            "expat",
            "srtp",
-           "xmpphelp",
          ],
 )
 talk.App(env, name = "relayserver",
@@ -507,6 +494,18 @@ talk.App(env, name = "stunserver",
          ],
          srcs = [
            "p2p/base/stunserver_main.cc",
+         ],
+)
+talk.App(env, name = "turnserver",
+         lin_libs = [
+           "crypto",
+           "ssl",
+         ],
+         srcs = [
+           "p2p/base/turnserver_main.cc",
+         ],
+         libs = [
+           "jingle",
          ],
 )
 talk.Unittest(env, name = "base",
@@ -638,6 +637,7 @@ talk.Unittest(env, name = "p2p",
                 "p2p/base/stunserver_unittest.cc",
                 "p2p/base/transport_unittest.cc",
                 "p2p/base/transportdescriptionfactory_unittest.cc",
+                "p2p/base/turnport_unittest.cc",
                 "p2p/client/connectivitychecker_unittest.cc",
                 "p2p/client/portallocator_unittest.cc",
               ],

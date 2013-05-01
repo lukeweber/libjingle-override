@@ -55,6 +55,7 @@ using webrtc::FakeConstraints;
 using webrtc::IceCandidateInterface;
 using webrtc::MediaConstraintsInterface;
 using webrtc::MediaStreamInterface;
+using webrtc::MediaStreamTrackInterface;
 using webrtc::SdpParseError;
 using webrtc::SessionDescriptionInterface;
 using webrtc::StreamCollection;
@@ -243,12 +244,12 @@ class MockSignalingObserver : public webrtc::MediaStreamSignalingObserver {
   }
 
   // New remote stream have been discovered.
-  virtual void OnAddStream(MediaStreamInterface* remote_stream) {
+  virtual void OnAddRemoteStream(MediaStreamInterface* remote_stream) {
     remote_media_streams_->AddStream(remote_stream);
   }
 
   // Remote stream is no longer available.
-  virtual void OnRemoveStream(MediaStreamInterface* remote_stream) {
+  virtual void OnRemoveRemoteStream(MediaStreamInterface* remote_stream) {
     remote_media_streams_->RemoveStream(remote_stream);
   }
 
@@ -258,31 +259,45 @@ class MockSignalingObserver : public webrtc::MediaStreamSignalingObserver {
   virtual void OnAddLocalAudioTrack(MediaStreamInterface* stream,
                                     AudioTrackInterface* audio_track,
                                     uint32 ssrc) {
-    local_audio_tracks_[audio_track->id()] =
-        TrackInfo(stream->label(), audio_track->id(), ssrc);
+    AddTrack(&local_audio_tracks_, stream, audio_track, ssrc);
   }
 
   virtual void OnAddLocalVideoTrack(MediaStreamInterface* stream,
                                     VideoTrackInterface* video_track,
                                     uint32 ssrc) {
-    local_video_tracks_[video_track->id()] =
-        TrackInfo(stream->label(), video_track->id(), ssrc);
+    AddTrack(&local_video_tracks_, stream, video_track, ssrc);
   }
 
   virtual void OnRemoveLocalAudioTrack(MediaStreamInterface* stream,
                                        AudioTrackInterface* audio_track) {
-    TrackInfos::iterator it = local_audio_tracks_.find(audio_track->id());
-    ASSERT_TRUE(it != local_audio_tracks_.end());
-    ASSERT_EQ(it->second.stream_label, stream->label());
-    local_audio_tracks_.erase(it);
+    RemoveTrack(&local_audio_tracks_, stream, audio_track);
   }
 
   virtual void OnRemoveLocalVideoTrack(MediaStreamInterface* stream,
                                        VideoTrackInterface* video_track) {
-    TrackInfos::iterator it = local_video_tracks_.find(video_track->id());
-    ASSERT_TRUE(it != local_video_tracks_.end());
-    ASSERT_EQ(it->second.stream_label, stream->label());
-    local_video_tracks_.erase(it);
+    RemoveTrack(&local_video_tracks_, stream, video_track);
+  }
+
+  virtual void OnAddRemoteAudioTrack(MediaStreamInterface* stream,
+                                     AudioTrackInterface* audio_track,
+                                     uint32 ssrc) {
+    AddTrack(&remote_audio_tracks_, stream, audio_track, ssrc);
+  }
+
+  virtual void OnAddRemoteVideoTrack(MediaStreamInterface* stream,
+                                    VideoTrackInterface* video_track,
+                                    uint32 ssrc) {
+    AddTrack(&remote_video_tracks_, stream, video_track, ssrc);
+  }
+
+  virtual void OnRemoveRemoteAudioTrack(MediaStreamInterface* stream,
+                                       AudioTrackInterface* audio_track) {
+    RemoveTrack(&remote_audio_tracks_, stream, audio_track);
+  }
+
+  virtual void OnRemoveRemoteVideoTrack(MediaStreamInterface* stream,
+                                        VideoTrackInterface* video_track) {
+    RemoveTrack(&remote_video_tracks_, stream, video_track);
   }
 
   virtual void OnRemoveLocalStream(MediaStreamInterface* stream) {
@@ -296,24 +311,35 @@ class MockSignalingObserver : public webrtc::MediaStreamSignalingObserver {
     return remote_media_streams_;
   }
 
+  size_t NumberOfRemoteAudioTracks() { return remote_audio_tracks_.size(); }
+
+  void  VerifyRemoteAudioTrack(const std::string& stream_label,
+                               const std::string& track_id,
+                               uint32 ssrc) {
+    VerifyTrack(remote_audio_tracks_, stream_label, track_id, ssrc);
+  }
+
+  size_t NumberOfRemoteVideoTracks() { return remote_video_tracks_.size(); }
+
+  void  VerifyRemoteVideoTrack(const std::string& stream_label,
+                               const std::string& track_id,
+                               uint32 ssrc) {
+    VerifyTrack(remote_video_tracks_, stream_label, track_id, ssrc);
+  }
+
   size_t NumberOfLocalAudioTracks() { return local_audio_tracks_.size(); }
   void  VerifyLocalAudioTrack(const std::string& stream_label,
                               const std::string& track_id,
                               uint32 ssrc) {
-    TrackInfos::iterator it = local_audio_tracks_.find(track_id);
-    ASSERT_TRUE(it != local_audio_tracks_.end());
-    EXPECT_EQ(stream_label, it->second.stream_label);
-    EXPECT_EQ(ssrc, it->second.ssrc);
+    VerifyTrack(local_audio_tracks_, stream_label, track_id, ssrc);
   }
 
   size_t NumberOfLocalVideoTracks() { return local_video_tracks_.size(); }
+
   void  VerifyLocalVideoTrack(const std::string& stream_label,
                               const std::string& track_id,
                               uint32 ssrc) {
-    TrackInfos::iterator it = local_video_tracks_.find(track_id);
-    ASSERT_TRUE(it != local_video_tracks_.end());
-    EXPECT_EQ(stream_label, it->second.stream_label);
-    EXPECT_EQ(ssrc, it->second.ssrc);
+    VerifyTrack(local_video_tracks_, stream_label, track_id, ssrc);
   }
 
  private:
@@ -329,8 +355,35 @@ class MockSignalingObserver : public webrtc::MediaStreamSignalingObserver {
     std::string track_id;
     uint32 ssrc;
   };
-
   typedef std::map<std::string, TrackInfo> TrackInfos;
+
+  void AddTrack(TrackInfos* track_infos, MediaStreamInterface* stream,
+                MediaStreamTrackInterface* track,
+                uint32 ssrc) {
+    (*track_infos)[track->id()] = TrackInfo(stream->label(), track->id(),
+                                            ssrc);
+  }
+
+  void RemoveTrack(TrackInfos* track_infos, MediaStreamInterface* stream,
+                   MediaStreamTrackInterface* track) {
+    TrackInfos::iterator it = track_infos->find(track->id());
+    ASSERT_TRUE(it != track_infos->end());
+    ASSERT_EQ(it->second.stream_label, stream->label());
+    track_infos->erase(it);
+  }
+
+  void VerifyTrack(const TrackInfos& track_infos,
+                   const std::string& stream_label,
+                   const std::string& track_id,
+                   uint32 ssrc) {
+    TrackInfos::const_iterator it = track_infos.find(track_id);
+    ASSERT_TRUE(it != track_infos.end());
+    EXPECT_EQ(stream_label, it->second.stream_label);
+    EXPECT_EQ(ssrc, it->second.ssrc);
+  }
+
+  TrackInfos remote_audio_tracks_;
+  TrackInfos remote_video_tracks_;
   TrackInfos local_audio_tracks_;
   TrackInfos local_video_tracks_;
 
@@ -631,6 +684,10 @@ TEST_F(MediaStreamSignalingTest, UpdateRemoteStreams) {
                                        reference.get()));
   EXPECT_TRUE(CompareStreamCollections(observer_->remote_streams(),
                                        reference.get()));
+  EXPECT_EQ(1u, observer_->NumberOfRemoteAudioTracks());
+  observer_->VerifyRemoteAudioTrack(kStreams[0], kAudioTracks[0], 1);
+  EXPECT_EQ(1u, observer_->NumberOfRemoteVideoTracks());
+  observer_->VerifyRemoteVideoTrack(kStreams[0], kVideoTracks[0], 2);
 
   // Create a session description based on another SDP with another
   // MediaStream.
@@ -646,6 +703,13 @@ TEST_F(MediaStreamSignalingTest, UpdateRemoteStreams) {
                                        reference2.get()));
   EXPECT_TRUE(CompareStreamCollections(observer_->remote_streams(),
                                        reference2.get()));
+
+  EXPECT_EQ(2u, observer_->NumberOfRemoteAudioTracks());
+  observer_->VerifyRemoteAudioTrack(kStreams[0], kAudioTracks[0], 1);
+  observer_->VerifyRemoteAudioTrack(kStreams[1], kAudioTracks[1], 3);
+  EXPECT_EQ(2u, observer_->NumberOfRemoteVideoTracks());
+  observer_->VerifyRemoteVideoTrack(kStreams[0], kVideoTracks[0], 2);
+  observer_->VerifyRemoteVideoTrack(kStreams[1], kVideoTracks[1], 4);
 }
 
 // This test verifies that the remote MediaStreams corresponding to a received
@@ -743,6 +807,8 @@ TEST_F(MediaStreamSignalingTest, SdpWithoutMsidCreatesDefaultStream) {
   EXPECT_EQ("defaulta0", remote_stream->GetAudioTracks()[0]->id());
   ASSERT_EQ(1u, remote_stream->GetVideoTracks().size());
   EXPECT_EQ("defaultv0", remote_stream->GetVideoTracks()[0]->id());
+  observer_->VerifyRemoteAudioTrack("default", "defaulta0", 0);
+  observer_->VerifyRemoteVideoTrack("default", "defaultv0", 0);
 }
 
 // This tests that a default MediaStream is created if the remote session

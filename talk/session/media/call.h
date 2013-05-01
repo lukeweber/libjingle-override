@@ -84,9 +84,10 @@ class Call : public talk_base::MessageHandler, public sigslot::has_slots<> {
   void StopSpeakerMonitor(Session* session);
   void Mute(bool mute);
   void MuteVideo(bool mute);
-  void SendData(Session* session,
+  bool SendData(Session* session,
                 const SendDataParams& params,
-                const std::string& data);
+                const talk_base::Buffer& payload,
+                SendDataResult* result);
   void PressDTMF(int event);
   bool StartScreencast(Session* session,
                        const std::string& stream_name, uint32 ssrc,
@@ -157,7 +158,7 @@ class Call : public talk_base::MessageHandler, public sigslot::has_slots<> {
                    const MediaStreams&> SignalMediaStreamsUpdate;
   sigslot::signal3<Call*,
                    const ReceiveDataParams&,
-                   const std::string&> SignalDataReceived;
+                   const talk_base::Buffer&> SignalDataReceived;
 
  private:
   void OnMessage(talk_base::Message* message);
@@ -187,7 +188,7 @@ class Call : public talk_base::MessageHandler, public sigslot::has_slots<> {
   void OnMediaMonitor(VideoChannel* channel, const VideoMediaInfo& info);
   void OnDataReceived(DataChannel* channel,
                       const ReceiveDataParams& params,
-                      const std::string& data);
+                      const talk_base::Buffer& payload);
   VoiceChannel* GetVoiceChannel(Session* session) const;
   VideoChannel* GetVideoChannel(Session* session) const;
   DataChannel* GetDataChannel(Session* session) const;

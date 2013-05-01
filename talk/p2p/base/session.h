@@ -319,6 +319,14 @@ class BaseSession : public sigslot::has_slots<>,
   sigslot::signal2<BaseSession* , const ContentInfos&>
       SignalRemoteDescriptionUpdate;
 
+  // Fired when SetState is called (regardless if there's a state change), which
+  // indicates the session description might have be updated.
+  sigslot::signal2<BaseSession*, ContentAction> SignalNewLocalDescription;
+
+  // Fired when SetState is called (regardless if there's a state change), which
+  // indicates the session description might have be updated.
+  sigslot::signal2<BaseSession*, ContentAction> SignalNewRemoteDescription;
+
   // Returns the transport that has been negotiated or NULL if
   // negotiation is still in progress.
   Transport* GetTransport(const std::string& content_name);
@@ -456,6 +464,12 @@ class BaseSession : public sigslot::has_slots<>,
   bool GetTransportDescription(const SessionDescription* description,
                                const std::string& content_name,
                                TransportDescription* info);
+
+  // Fires the new description signal according to the current state.
+  void SignalNewDescription();
+
+  // Gets the ContentAction and ContentSource according to the session state.
+  bool GetContentAction(ContentAction* action, ContentSource* source);
 
   talk_base::Thread* signaling_thread_;
   talk_base::Thread* worker_thread_;

@@ -74,27 +74,27 @@ class FakeWebRtcVideoDecoder : public webrtc::VideoDecoder {
       : num_frames_received_(0) {
   }
 
-  virtual WebRtc_Word32 InitDecode(const webrtc::VideoCodec*, WebRtc_Word32) {
+  virtual int32_t InitDecode(const webrtc::VideoCodec*, int32_t) {
     return WEBRTC_VIDEO_CODEC_OK;
   }
 
-  virtual WebRtc_Word32 Decode(
+  virtual int32_t Decode(
       const webrtc::EncodedImage&, bool, const webrtc::RTPFragmentationHeader*,
-      const webrtc::CodecSpecificInfo*, WebRtc_Word64) {
+      const webrtc::CodecSpecificInfo*, int64_t) {
     num_frames_received_++;
     return WEBRTC_VIDEO_CODEC_OK;
   }
 
-  virtual WebRtc_Word32 RegisterDecodeCompleteCallback(
+  virtual int32_t RegisterDecodeCompleteCallback(
       webrtc::DecodedImageCallback*) {
     return WEBRTC_VIDEO_CODEC_OK;
   }
 
-  virtual WebRtc_Word32 Release() {
+  virtual int32_t Release() {
     return WEBRTC_VIDEO_CODEC_OK;
   }
 
-  virtual WebRtc_Word32 Reset() {
+  virtual int32_t Reset() {
     return WEBRTC_VIDEO_CODEC_OK;
   }
 
@@ -167,6 +167,7 @@ class FakeWebRtcVideoEngine
           render_started_(false),
           send(false),
           receive_(false),
+          can_transmit_(true),
           rtcp_status_(webrtc::kRtcpNone),
           key_frame_request_method_(webrtc::kViEKeyFrameRequestNone),
           tmmbr_(false),
@@ -193,6 +194,7 @@ class FakeWebRtcVideoEngine
     bool render_started_;
     bool send;
     bool receive_;
+    bool can_transmit_;
     std::map<int, int> ssrcs_;
     std::string cname_;
     webrtc::ViERTCPMode rtcp_status_;
@@ -218,11 +220,12 @@ class FakeWebRtcVideoEngine
   };
   class Capturer : public webrtc::ViEExternalCapture {
    public:
-    Capturer() : channel_id_(-1), denoising_(false) { }
+    Capturer() : channel_id_(-1), denoising_(false), last_capture_time_(0) { }
     int channel_id() const { return channel_id_; }
     void set_channel_id(int channel_id) { channel_id_ = channel_id; }
     bool denoising() const { return denoising_; }
     void set_denoising(bool denoising) { denoising_ = denoising; }
+    int64 last_capture_time() { return last_capture_time_; }
 
     // From ViEExternalCapture
     virtual int IncomingFrame(unsigned char* videoFrame,
@@ -236,12 +239,14 @@ class FakeWebRtcVideoEngine
     virtual int IncomingFrameI420(
         const webrtc::ViEVideoFrameI420& video_frame,
         unsigned long long captureTime) {
+      last_capture_time_ = captureTime;
       return 0;
     }
 
    private:
     int channel_id_;
     bool denoising_;
+    int64 last_capture_time_;
   };
 
   FakeWebRtcVideoEngine(const cricket::VideoCodec* const* codecs,
@@ -317,6 +322,10 @@ class FakeWebRtcVideoEngine
     WEBRTC_ASSERT_CAPTURER(capture_id);
     return capturers_.find(capture_id)->second->denoising();
   }
+  int64 GetCaptureLastTimestamp(int capture_id) const {
+    WEBRTC_ASSERT_CAPTURER(capture_id);
+    return capturers_.find(capture_id)->second->last_capture_time();
+  }
   webrtc::ViERTCPMode GetRtcpStatus(int channel) const {
     WEBRTC_ASSERT_CHANNEL(channel);
     return channels_.find(channel)->second->rtcp_status_;
@@ -368,6 +377,10 @@ class FakeWebRtcVideoEngine
   int GetNumSsrcs(int channel) const {
     WEBRTC_ASSERT_CHANNEL(channel);
     return channels_.find(channel)->second->ssrcs_.size();
+  }
+  bool GetIsTransmitting(int channel) const {
+    WEBRTC_ASSERT_CHANNEL(channel);
+    return channels_.find(channel)->second->can_transmit_;
   }
   bool ReceiveCodecRegistered(int channel,
                               const webrtc::VideoCodec& codec) const {
@@ -616,7 +629,11 @@ class FakeWebRtcVideoEngine
   WEBRTC_STUB(DeregisterObserver, (const int));
 
   // webrtc::ViENetwork
-  WEBRTC_VOID_STUB(SetNetworkTransmissionState, (const int, const bool));
+  WEBRTC_VOID_FUNC(SetNetworkTransmissionState, (const int channel,
+                                                 const bool is_transmitting)) {
+    WEBRTC_ASSERT_CHANNEL(channel);
+    channels_[channel]->can_transmit_ = is_transmitting;
+  }
   WEBRTC_STUB(RegisterSendTransport, (const int, webrtc::Transport&));
   WEBRTC_STUB(DeregisterSendTransport, (const int));
   WEBRTC_STUB(ReceivedRTPPacket, (const int, const void*, const int));

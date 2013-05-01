@@ -148,6 +148,7 @@ class P2PTransportChannel : public TransportChannelImpl,
 
   void OnConnectionStateChange(Connection *connection);
   void OnReadPacket(Connection *connection, const char *data, size_t len);
+  void OnReadyToSend(Connection* connection);
   void OnConnectionDestroyed(Connection *connection);
   void OnRoleConflict();
 

@@ -639,13 +639,12 @@ void PeerConnection::OnMessage(talk_base::Message* msg) {
   }
 }
 
-void PeerConnection::OnAddStream(MediaStreamInterface* stream) {
-  stream_handler_container_->AddRemoteStream(stream);
+void PeerConnection::OnAddRemoteStream(MediaStreamInterface* stream) {
   stats_.AddStream(stream);
   observer_->OnAddStream(stream);
 }
 
-void PeerConnection::OnRemoveStream(MediaStreamInterface* stream) {
+void PeerConnection::OnRemoveRemoteStream(MediaStreamInterface* stream) {
   stream_handler_container_->RemoveRemoteStream(stream);
   observer_->OnRemoveStream(stream);
 }
@@ -653,6 +652,30 @@ void PeerConnection::OnRemoveStream(MediaStreamInterface* stream) {
 void PeerConnection::OnAddDataChannel(DataChannelInterface* data_channel) {
   observer_->OnDataChannel(DataChannelProxy::Create(signaling_thread(),
                                                     data_channel));
+}
+
+void PeerConnection::OnAddRemoteAudioTrack(MediaStreamInterface* stream,
+                                           AudioTrackInterface* audio_track,
+                                           uint32 ssrc) {
+  stream_handler_container_->AddRemoteAudioTrack(stream, audio_track, ssrc);
+}
+
+void PeerConnection::OnAddRemoteVideoTrack(MediaStreamInterface* stream,
+                                           VideoTrackInterface* video_track,
+                                           uint32 ssrc) {
+  stream_handler_container_->AddRemoteVideoTrack(stream, video_track, ssrc);
+}
+
+void PeerConnection::OnRemoveRemoteAudioTrack(
+    MediaStreamInterface* stream,
+    AudioTrackInterface* audio_track) {
+  stream_handler_container_->RemoveRemoteTrack(stream, audio_track);
+}
+
+void PeerConnection::OnRemoveRemoteVideoTrack(
+    MediaStreamInterface* stream,
+    VideoTrackInterface* video_track) {
+  stream_handler_container_->RemoveRemoteTrack(stream, video_track);
 }
 void PeerConnection::OnAddLocalAudioTrack(MediaStreamInterface* stream,
                                           AudioTrackInterface* audio_track,

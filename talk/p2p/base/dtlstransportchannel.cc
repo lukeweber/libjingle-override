@@ -109,6 +109,8 @@ DtlsTransportChannelWrapper::DtlsTransportChannelWrapper(
       &DtlsTransportChannelWrapper::OnWritableState);
   channel_->SignalReadPacket.connect(this,
       &DtlsTransportChannelWrapper::OnReadPacket);
+  channel_->SignalReadyToSend.connect(this,
+      &DtlsTransportChannelWrapper::OnReadyToSend);
   channel_->SignalRequestSignaling.connect(this,
       &DtlsTransportChannelWrapper::OnRequestSignaling);
   channel_->SignalCandidateReady.connect(this,
@@ -443,6 +445,12 @@ void DtlsTransportChannelWrapper::OnReadPacket(TransportChannel* channel,
     case STATE_CLOSED:
       // This shouldn't be happening. Drop the packet
       break;
+  }
+}
+
+void DtlsTransportChannelWrapper::OnReadyToSend(TransportChannel* channel) {
+  if (writable()) {
+    SignalReadyToSend(this);
   }
 }
 

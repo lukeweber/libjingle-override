@@ -100,9 +100,9 @@ class DeviceManagerInterface {
   // Note that once a VideoCapturer has been created, calling this API will
   // not affect it.
   virtual void SetVideoCaptureDeviceMaxFormat(
-      const std::string& uvc_id,
+      const std::string& usb_id,
       const VideoFormat& max_format) = 0;
-  virtual void ClearVideoCaptureDeviceMaxFormat(const std::string& uvc_id) = 0;
+  virtual void ClearVideoCaptureDeviceMaxFormat(const std::string& usb_id) = 0;
 
   // Device creation
   virtual VideoCapturer* CreateVideoCapturer(const Device& device) const = 0;
@@ -164,9 +164,9 @@ class DeviceManager : public DeviceManagerInterface {
   virtual bool GetVideoCaptureDevices(std::vector<Device>* devs);
   virtual bool GetVideoCaptureDevice(const std::string& name, Device* out);
 
-  virtual void SetVideoCaptureDeviceMaxFormat(const std::string& uvc_id,
+  virtual void SetVideoCaptureDeviceMaxFormat(const std::string& usb_id,
                                               const VideoFormat& max_format);
-  virtual void ClearVideoCaptureDeviceMaxFormat(const std::string& uvc_id);
+  virtual void ClearVideoCaptureDeviceMaxFormat(const std::string& usb_id);
 
   virtual VideoCapturer* CreateVideoCapturer(const Device& device) const;
 

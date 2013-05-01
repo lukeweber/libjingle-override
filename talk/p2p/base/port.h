@@ -282,6 +282,9 @@ class Port : public PortInterface, public talk_base::MessageHandler,
                             IceMessage* stun_msg,
                             const std::string& remote_ufrag);
 
+  // Called when the socket is currently able to send.
+  void OnReadyToSend();
+
  protected:
   void set_type(const std::string& type) { type_ = type; }
   // Fills in the local address of the port.
@@ -435,8 +438,13 @@ class Connection : public talk_base::MessageHandler,
 
   sigslot::signal3<Connection*, const char*, size_t> SignalReadPacket;
 
+  sigslot::signal1<Connection*> SignalReadyToSend;
+
   // Called when a packet is received on this connection.
   void OnReadPacket(const char* data, size_t size);
+
+  // Called when the socket is currently able to send.
+  void OnReadyToSend();
 
   // Called when a connection is determined to be no longer useful to us.  We
   // still keep it around in case the other side wants to use it.  But we can

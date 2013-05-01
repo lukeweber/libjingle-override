@@ -119,8 +119,11 @@ class RtpDataMediaChannel : public DataMediaChannel {
   }
   virtual void OnPacketReceived(talk_base::Buffer* packet);
   virtual void OnRtcpReceived(talk_base::Buffer* packet) {}
+  virtual void OnReadyToSend(bool ready) {}
   virtual bool SendData(
-      const SendDataParams& params, const std::string& data);
+    const SendDataParams& params,
+    const talk_base::Buffer& payload,
+    SendDataResult* result);
 
  private:
   void Construct(talk_base::Timing* timing);

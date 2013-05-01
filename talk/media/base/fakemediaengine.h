@@ -55,7 +55,8 @@ template <class Base> class RtpHelper : public Base {
         playout_(false),
         fail_set_send_codecs_(false),
         fail_set_recv_codecs_(false),
-        send_ssrc_(0) {}
+        send_ssrc_(0),
+        ready_to_send_(false) {}
   const std::vector<RtpHeaderExtension>& recv_extensions() {
     return recv_extensions_;
   }
@@ -182,6 +183,10 @@ template <class Base> class RtpHelper : public Base {
     return send_streams_[0].cname;
   }
 
+  bool ready_to_send() const {
+    return ready_to_send_;
+  }
+
  protected:
   bool set_sending(bool send) {
     sending_ = send;
@@ -193,6 +198,9 @@ template <class Base> class RtpHelper : public Base {
   }
   virtual void OnRtcpReceived(talk_base::Buffer* packet) {
     rtcp_packets_.push_back(std::string(packet->data(), packet->length()));
+  }
+  virtual void OnReadyToSend(bool ready) {
+    ready_to_send_ = ready;
   }
   bool fail_set_send_codecs() const { return fail_set_send_codecs_; }
   bool fail_set_recv_codecs() const { return fail_set_recv_codecs_; }
@@ -211,6 +219,7 @@ template <class Base> class RtpHelper : public Base {
   bool fail_set_recv_codecs_;
   uint32 send_ssrc_;
   std::string rtcp_cname_;
+  bool ready_to_send_;
 };
 
 class FakeVoiceMediaChannel : public RtpHelper<VoiceMediaChannel> {
@@ -596,9 +605,11 @@ class FakeDataMediaChannel : public RtpHelper<DataMediaChannel> {
     return true;
   }
 
-  virtual bool SendData(const SendDataParams& params, const std::string& data) {
+  virtual bool SendData(const SendDataParams& params,
+                        const talk_base::Buffer& payload,
+                        SendDataResult* result) {
     last_sent_data_params_ = params;
-    last_sent_data_ = data;
+    last_sent_data_ = std::string(payload.data(), payload.length());
     return true;
   }
 

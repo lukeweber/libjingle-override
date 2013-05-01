@@ -117,8 +117,7 @@ int32_t FakeAudioCaptureModule::Process() {
   return 0;
 }
 
-WebRtc_Word32 FakeAudioCaptureModule::ChangeUniqueId(
-    const WebRtc_Word32 /*id*/) {
+int32_t FakeAudioCaptureModule::ChangeUniqueId(const int32_t /*id*/) {
   ASSERT(false);
   return 0;
 }

@@ -221,6 +221,8 @@ public class AppRTCClient {
           ".*\n *Sorry, this room is full\\..*");
       final Pattern pcConfigPattern = Pattern.compile(
           ".*\n *var pc_config = (\\{[^\n]*\\});\n.*");
+      final Pattern requestTurnPattern = Pattern.compile(
+          ".*\n *requestTurn\\('([^\n]*)'\\);\n.*");
 
       String roomHtml =
           drainStream((new URL(url)).openConnection().getInputStream());
@@ -261,8 +263,49 @@ public class AppRTCClient {
         throw new IOException("Too many pc_configs in HTML: " + roomHtml);
       }
 
+      boolean isTurnPresent = false;
+      for (PeerConnection.IceServer server : iceServers) {
+        if (server.uri.startsWith("turn:")) {
+          isTurnPresent = true;
+          break;
+        }
+      }
+      if (!isTurnPresent) {
+        Matcher requestTurnMatcher = requestTurnPattern.matcher(roomHtml);
+        if (!requestTurnMatcher.find()) {
+          throw new IOException("Missing requestTurn() in HTML: " + roomHtml);
+        }
+        String requestTurnUrl = requestTurnMatcher.group(1);
+        PeerConnection.IceServer server = requestTurnServer(requestTurnUrl);
+        iceServers.add(server);
+        if (requestTurnMatcher.find()) {
+          throw new IOException("Too many requestTurn()s in HTML: " + roomHtml);
+        }
+      }
+
       return new AppRTCSignalingParameters(
           iceServers, gaeBaseHref, token, postMessageUrl);
+    }
+
+    // Requests & returns a TURN ICE Server based on a request URL.  Must be run
+    // off the main thread!
+    private PeerConnection.IceServer requestTurnServer(String url) {
+      try {
+        URLConnection connection = (new URL(url)).openConnection();
+        connection.addRequestProperty("user-agent", "Mozilla/5.0");
+        connection.addRequestProperty("origin", "https://apprtc.appspot.com");
+        String response = drainStream(connection.getInputStream());
+        JSONObject responseJSON = new JSONObject(response);
+        String username = responseJSON.getString("username");
+        String turnServer = responseJSON.getString("turn");
+        String password = responseJSON.getString("password");
+        return new PeerConnection.IceServer(
+            "turn:" + username + "@" + turnServer, password);
+      } catch (JSONException e) {
+        throw new RuntimeException(e);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
     }
   }
 

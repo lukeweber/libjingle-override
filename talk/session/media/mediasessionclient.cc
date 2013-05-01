@@ -555,6 +555,12 @@ bool ParseJingleAudioContent(const buzz::XmlElement* content_elem,
 
   audio->set_rtcp_mux(content_elem->FirstNamed(QN_JINGLE_RTCP_MUX) != NULL);
 
+  RtpHeaderExtensions hdrexts;
+  if (!ParseJingleRtpHeaderExtensions(content_elem, &hdrexts, error)) {
+    return false;
+  }
+  audio->set_rtp_header_extensions(hdrexts);
+
   *content = audio;
   return true;
 }
@@ -584,6 +590,12 @@ bool ParseJingleVideoContent(const buzz::XmlElement* content_elem,
   }
 
   video->set_rtcp_mux(content_elem->FirstNamed(QN_JINGLE_RTCP_MUX) != NULL);
+
+  RtpHeaderExtensions hdrexts;
+  if (!ParseJingleRtpHeaderExtensions(content_elem, &hdrexts, error)) {
+    return false;
+  }
+  video->set_rtp_header_extensions(hdrexts);
 
   *content = video;
   return true;
@@ -882,6 +894,8 @@ buzz::XmlElement* CreateJingleAudioContentElem(
     elem->AddElement(new buzz::XmlElement(QN_JINGLE_RTCP_MUX));
   }
 
+  WriteJingleRtpHeaderExtensions(audio->rtp_header_extensions(), elem);
+
   return elem;
 }
 
@@ -911,6 +925,8 @@ buzz::XmlElement* CreateJingleVideoContentElem(
     elem->AddElement(CreateBandwidthElem(QN_JINGLE_RTP_BANDWIDTH,
                                          video->bandwidth()));
   }
+
+  WriteJingleRtpHeaderExtensions(video->rtp_header_extensions(), elem);
 
   return elem;
 }

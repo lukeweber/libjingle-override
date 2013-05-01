@@ -225,19 +225,23 @@ TEST_F(RtpDataMediaChannelTest, SendData) {
 
   cricket::SendDataParams params;
   params.ssrc = 42;
-  std::string data = "food";
+  unsigned char data[] = "food";
+  talk_base::Buffer payload(data, 4);
   unsigned char padded_data[] = {
     0x00, 0x00, 0x00, 0x00,
     'f', 'o', 'o', 'd',
   };
+  cricket::SendDataResult result;
 
   // Not sending
-  EXPECT_FALSE(dmc->SendData(params, data));
+  EXPECT_FALSE(dmc->SendData(params, payload, &result));
+  EXPECT_EQ(cricket::SDR_ERROR, result);
   EXPECT_FALSE(HasSentData(0));
   ASSERT_TRUE(dmc->SetSend(true));
 
   // Unknown stream name.
-  EXPECT_FALSE(dmc->SendData(params, data));
+  EXPECT_FALSE(dmc->SendData(params, payload, &result));
+  EXPECT_EQ(cricket::SDR_ERROR, result);
   EXPECT_FALSE(HasSentData(0));
 
   cricket::StreamParams stream;
@@ -245,7 +249,8 @@ TEST_F(RtpDataMediaChannelTest, SendData) {
   ASSERT_TRUE(dmc->AddSendStream(stream));
 
   // Unknown codec;
-  EXPECT_FALSE(dmc->SendData(params, data));
+  EXPECT_FALSE(dmc->SendData(params, payload, &result));
+  EXPECT_EQ(cricket::SDR_ERROR, result);
   EXPECT_FALSE(HasSentData(0));
 
   cricket::DataCodec codec;
@@ -256,11 +261,15 @@ TEST_F(RtpDataMediaChannelTest, SendData) {
   ASSERT_TRUE(dmc->SetSendCodecs(codecs));
 
   // Length too large;
-  EXPECT_FALSE(dmc->SendData(params, std::string(10000, 'x')));
+  std::string x10000(10000, 'x');
+  EXPECT_FALSE(dmc->SendData(
+      params, talk_base::Buffer(x10000.data(), x10000.length()), &result));
+  EXPECT_EQ(cricket::SDR_ERROR, result);
   EXPECT_FALSE(HasSentData(0));
 
   // Finally works!
-  EXPECT_TRUE(dmc->SendData(params, data));
+  EXPECT_TRUE(dmc->SendData(params, payload, &result));
+  EXPECT_EQ(cricket::SDR_SUCCESS, result);
   ASSERT_TRUE(HasSentData(0));
   EXPECT_EQ(sizeof(padded_data), GetSentData(0).length());
   EXPECT_EQ(0, memcmp(
@@ -274,7 +283,7 @@ TEST_F(RtpDataMediaChannelTest, SendData) {
   // Should bump timestamp by 180000 because the clock rate is 90khz.
   SetNow(2);
 
-  EXPECT_TRUE(dmc->SendData(params, data));
+  EXPECT_TRUE(dmc->SendData(params, payload, &result));
   ASSERT_TRUE(HasSentData(1));
   EXPECT_EQ(sizeof(padded_data), GetSentData(1).length());
   EXPECT_EQ(0, memcmp(
@@ -320,18 +329,20 @@ TEST_F(RtpDataMediaChannelTest, SendDataMultipleClocks) {
   cricket::SendDataParams params2;
   params2.ssrc = 42;
 
-  std::string data = "foo";
+  unsigned char data[] = "foo";
+  talk_base::Buffer payload(data, 3);
+  cricket::SendDataResult result;
 
-  EXPECT_TRUE(dmc1->SendData(params1, data));
-  EXPECT_TRUE(dmc2->SendData(params2, data));
+  EXPECT_TRUE(dmc1->SendData(params1, payload, &result));
+  EXPECT_TRUE(dmc2->SendData(params2, payload, &result));
 
   // Should bump timestamp by 90000 because the clock rate is 90khz.
   timing1->set_now(1);
   // Should bump timestamp by 180000 because the clock rate is 90khz.
   timing2->set_now(2);
 
-  EXPECT_TRUE(dmc1->SendData(params1, data));
-  EXPECT_TRUE(dmc2->SendData(params2, data));
+  EXPECT_TRUE(dmc1->SendData(params1, payload, &result));
+  EXPECT_TRUE(dmc2->SendData(params2, payload, &result));
 
   ASSERT_TRUE(HasSentData(3));
   cricket::RtpHeader header1a = GetSentDataHeader(0);
@@ -363,33 +374,35 @@ TEST_F(RtpDataMediaChannelTest, SendDataRate) {
 
   cricket::SendDataParams params;
   params.ssrc = 42;
-  std::string data = "food";
+  unsigned char data[] = "food";
+  talk_base::Buffer payload(data, 4);
+  cricket::SendDataResult result;
 
   // With rtp overhead of 32 bytes, each one of our packets is 36
   // bytes, or 288 bits.  So, a limit of 872bps will allow 3 packets,
   // but not four.
   dmc->SetSendBandwidth(false, 872);
 
-  EXPECT_TRUE(dmc->SendData(params, data));
-  EXPECT_TRUE(dmc->SendData(params, data));
-  EXPECT_TRUE(dmc->SendData(params, data));
-  EXPECT_FALSE(dmc->SendData(params, data));
-  EXPECT_FALSE(dmc->SendData(params, data));
+  EXPECT_TRUE(dmc->SendData(params, payload, &result));
+  EXPECT_TRUE(dmc->SendData(params, payload, &result));
+  EXPECT_TRUE(dmc->SendData(params, payload, &result));
+  EXPECT_FALSE(dmc->SendData(params, payload, &result));
+  EXPECT_FALSE(dmc->SendData(params, payload, &result));
 
   SetNow(0.9);
-  EXPECT_FALSE(dmc->SendData(params, data));
+  EXPECT_FALSE(dmc->SendData(params, payload, &result));
 
   SetNow(1.1);
-  EXPECT_TRUE(dmc->SendData(params, data));
-  EXPECT_TRUE(dmc->SendData(params, data));
+  EXPECT_TRUE(dmc->SendData(params, payload, &result));
+  EXPECT_TRUE(dmc->SendData(params, payload, &result));
   SetNow(1.9);
-  EXPECT_TRUE(dmc->SendData(params, data));
+  EXPECT_TRUE(dmc->SendData(params, payload, &result));
 
   SetNow(2.2);
-  EXPECT_TRUE(dmc->SendData(params, data));
-  EXPECT_TRUE(dmc->SendData(params, data));
-  EXPECT_TRUE(dmc->SendData(params, data));
-  EXPECT_FALSE(dmc->SendData(params, data));
+  EXPECT_TRUE(dmc->SendData(params, payload, &result));
+  EXPECT_TRUE(dmc->SendData(params, payload, &result));
+  EXPECT_TRUE(dmc->SendData(params, payload, &result));
+  EXPECT_FALSE(dmc->SendData(params, payload, &result));
 }
 
 TEST_F(RtpDataMediaChannelTest, ReceiveData) {

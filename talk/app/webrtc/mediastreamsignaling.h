@@ -45,8 +45,7 @@ class Thread;
 
 namespace webrtc {
 
-class RemoteTracksInterface;
-
+class RemoteMediaStreamFactory;
 
 // A MediaStreamSignalingObserver is notified when events happen to
 // MediaStreams, MediaStreamTracks or DataChannels associated with the observed
@@ -55,13 +54,31 @@ class RemoteTracksInterface;
 class MediaStreamSignalingObserver {
  public:
   // Triggered when the remote SessionDescription has a new stream.
-  virtual void OnAddStream(MediaStreamInterface* stream) = 0;
+  virtual void OnAddRemoteStream(MediaStreamInterface* stream) = 0;
 
   // Triggered when the remote SessionDescription removes a stream.
-  virtual void OnRemoveStream(MediaStreamInterface* stream) = 0;
+  virtual void OnRemoveRemoteStream(MediaStreamInterface* stream) = 0;
 
   // Triggered when the remote SessionDescription has a new data channel.
   virtual void OnAddDataChannel(DataChannelInterface* data_channel) = 0;
+
+  // Triggered when the remote SessionDescription has a new audio track.
+  virtual void OnAddRemoteAudioTrack(MediaStreamInterface* stream,
+                                     AudioTrackInterface* audio_track,
+                                     uint32 ssrc) = 0;
+
+  // Triggered when the remote SessionDescription has a new video track.
+  virtual void OnAddRemoteVideoTrack(MediaStreamInterface* stream,
+                                     VideoTrackInterface* video_track,
+                                     uint32 ssrc) = 0;
+
+  // Triggered when the remote SessionDescription has removed an audio track.
+  virtual void OnRemoveRemoteAudioTrack(MediaStreamInterface* stream,
+                                        AudioTrackInterface* audio_track)  = 0;
+
+  // Triggered when the remote SessionDescription has removed a video track.
+  virtual void OnRemoveRemoteVideoTrack(MediaStreamInterface* stream,
+                                        VideoTrackInterface* video_track) = 0;
 
   // Triggered when the local SessionDescription has a new audio track.
   virtual void OnAddLocalAudioTrack(MediaStreamInterface* stream,
@@ -241,27 +258,12 @@ class MediaStreamSignaling {
           default_video_track_needed);
     }
   };
-  void UpdateSessionOptions();
-  // Makes sure a MediaStream Track is created for each StreamParam in
-  // |streams|. |media_type| is the type of the |streams| and can be either
-  // audio or video.
-  // If a new MediaStream is created it is added to |new_streams|.
-  void UpdateRemoteStreamsList(
-      const std::vector<cricket::StreamParams>& streams,
-      cricket::MediaType media_type,
-      StreamCollection* new_streams);
-  // Finds remote MediaStreams without any tracks and removes them from
-  // |remote_streams_| and notifies the observer that the MediaStream no longer
-  // exist.
-  void UpdateEndedRemoteMediaStreams();
-  void MaybeCreateDefaultStream();
-  RemoteTracksInterface* GetRemoteTracks(cricket::MediaType type);
 
-  struct LocalTrackInfo {
-    LocalTrackInfo() : ssrc(0) {}
-    LocalTrackInfo(const std::string& stream_label,
-                   const std::string track_id,
-                   uint32 ssrc)
+  struct TrackInfo {
+    TrackInfo() : ssrc(0) {}
+    TrackInfo(const std::string& stream_label,
+              const std::string track_id,
+              uint32 ssrc)
         : stream_label(stream_label),
           track_id(track_id),
           ssrc(ssrc) {
@@ -270,10 +272,49 @@ class MediaStreamSignaling {
     std::string track_id;
     uint32 ssrc;
   };
-  typedef std::map<std::string, LocalTrackInfo> LocalTracks;
+  typedef std::map<std::string, TrackInfo> TrackInfos;
+
+  void UpdateSessionOptions();
+
+  // Makes sure a MediaStream Track is created for each StreamParam in
+  // |streams|. |media_type| is the type of the |streams| and can be either
+  // audio or video.
+  // If a new MediaStream is created it is added to |new_streams|.
+  void UpdateRemoteStreamsList(
+      const std::vector<cricket::StreamParams>& streams,
+      cricket::MediaType media_type,
+      StreamCollection* new_streams);
+
+  // Triggered when a remote track has been seen for the first time in a remote
+  // session description. It creates a remote MediaStreamTrackInterface
+  // implementation and triggers MediaStreamSignaling::OnAddRemoteAudioTrack or
+  // MediaStreamSignaling::OnAddRemoteVideoTrack.
+  void OnRemoteTrackSeen(const std::string& stream_label,
+                         const std::string& track_id,
+                         uint32 ssrc,
+                         cricket::MediaType media_type);
+
+  // Triggered when a remote track has been removed from a remote session
+  // description. It removes the remote track with id |track_id| from a remote
+  // MediaStream and triggers MediaStreamSignaling::OnRemoveRemoteAudioTrack or
+  // MediaStreamSignaling::OnRemoveRemoteVideoTrack.
+  void OnRemoteTrackRemoved(const std::string& stream_label,
+                            const std::string& track_id,
+                            cricket::MediaType media_type);
+
+  // Set the MediaStreamTrackInterface::TrackState to |kEnded| on all remote
+  // tracks of type |media_type|.
+  void RejectRemoteTracks(cricket::MediaType media_type);
+
+  // Finds remote MediaStreams without any tracks and removes them from
+  // |remote_streams_| and notifies the observer that the MediaStream no longer
+  // exist.
+  void UpdateEndedRemoteMediaStreams();
+  void MaybeCreateDefaultStream();
+  TrackInfos* GetRemoteTracks(cricket::MediaType type);
 
   // Returns a map of currently negotiated LocalTrackInfo of type |type|.
-  LocalTracks* GetLocalTracks(cricket::MediaType type);
+  TrackInfos* GetLocalTracks(cricket::MediaType type);
   bool FindLocalTrack(const std::string& track_id, cricket::MediaType type);
 
   // Loops through the vector of |streams| and finds added and removed
@@ -317,12 +358,12 @@ class MediaStreamSignaling {
   MediaStreamSignalingObserver* stream_observer_;
   talk_base::scoped_refptr<StreamCollection> local_streams_;
   talk_base::scoped_refptr<StreamCollection> remote_streams_;
+  talk_base::scoped_ptr<RemoteMediaStreamFactory> remote_stream_factory_;
 
-  talk_base::scoped_ptr<RemoteTracksInterface> remote_audio_tracks_;
-  talk_base::scoped_ptr<RemoteTracksInterface> remote_video_tracks_;
-
-  LocalTracks local_audio_tracks_;
-  LocalTracks local_video_tracks_;
+  TrackInfos remote_audio_tracks_;
+  TrackInfos remote_video_tracks_;
+  TrackInfos local_audio_tracks_;
+  TrackInfos local_video_tracks_;
 
   typedef std::map<std::string, talk_base::scoped_refptr<DataChannel> >
       DataChannels;

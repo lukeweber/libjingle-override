@@ -616,6 +616,8 @@ bool P2PTransportChannel::CreateConnection(PortInterface* port,
     connection->set_use_candidate_attr(remote_ice_mode_ == ICEMODE_FULL);
     connection->SignalReadPacket.connect(
         this, &P2PTransportChannel::OnReadPacket);
+    connection->SignalReadyToSend.connect(
+        this, &P2PTransportChannel::OnReadyToSend);
     connection->SignalStateChange.connect(
         this, &P2PTransportChannel::OnConnectionStateChange);
     connection->SignalDestroyed.connect(
@@ -1136,6 +1138,12 @@ void P2PTransportChannel::OnReadPacket(Connection *connection, const char *data,
 
   // Let the client know of an incoming packet
   SignalReadPacket(this, data, len, 0);
+}
+
+void P2PTransportChannel::OnReadyToSend(Connection* connection) {
+  if (connection == best_connection_ && writable()) {
+    SignalReadyToSend(this);
+  }
 }
 
 }  // namespace cricket

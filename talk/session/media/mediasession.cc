@@ -786,6 +786,17 @@ static void NegotiateRtpHeaderExtensions(
   }
 }
 
+static void StripCNCodecs(AudioCodecs* audio_codecs) {
+  AudioCodecs::iterator iter = audio_codecs->begin();
+  while (iter != audio_codecs->end()) {
+    if (stricmp(iter->name.c_str(), kComfortNoiseCodecName) == 0) {
+      iter = audio_codecs->erase(iter);
+    } else {
+      ++iter;
+    }
+  }
+}
+
 // Create a media content to be answered in a session-accept,
 // according to the given options.rtcp_mux, options.streams, codecs,
 // crypto, and streams.  If we don't currently have crypto (in
@@ -940,6 +951,11 @@ SessionDescription* MediaSessionDescriptionFactory::CreateOffer(
   GetCodecsToOffer(current_description, &audio_codecs, &video_codecs,
                    &data_codecs);
 
+  if (!options.vad_enabled) {
+    // If application doesn't want CN codecs in offer.
+    StripCNCodecs(&audio_codecs);
+  }
+
   RtpHeaderExtensions audio_rtp_extensions;
   RtpHeaderExtensions video_rtp_extensions;
   GetRtpHdrExtsToOffer(current_description, &audio_rtp_extensions,
@@ -1073,6 +1089,11 @@ SessionDescription* MediaSessionDescriptionFactory::CreateAnswer(
       return NULL;
     }
 
+    AudioCodecs audio_codecs = audio_codecs_;
+    if (!options.vad_enabled) {
+      StripCNCodecs(&audio_codecs);
+    }
+
     scoped_ptr<AudioContentDescription> audio_answer(
         new AudioContentDescription());
     // Do not require or create SDES cryptos if DTLS is used.
@@ -1082,7 +1103,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateAnswer(
             static_cast<const AudioContentDescription*>(
                 audio_content->description),
             options,
-            audio_codecs_,
+            audio_codecs,
             sdes_policy,
             GetCryptos(GetFirstAudioContentDescription(current_description)),
             audio_rtp_extensions_,

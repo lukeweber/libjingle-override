@@ -69,6 +69,7 @@ void TransportChannelProxy::SetImplementation(TransportChannelImpl* impl) {
   impl_->SignalWritableState.connect(
       this, &TransportChannelProxy::OnWritableState);
   impl_->SignalReadPacket.connect(this, &TransportChannelProxy::OnReadPacket);
+  impl_->SignalReadyToSend.connect(this, &TransportChannelProxy::OnReadyToSend);
   impl_->SignalRouteChange.connect(this, &TransportChannelProxy::OnRouteChange);
   for (OptionList::iterator it = pending_options_.begin();
        it != pending_options_.end();
@@ -189,6 +190,12 @@ void TransportChannelProxy::OnReadPacket(TransportChannel* channel,
   ASSERT(talk_base::Thread::Current() == worker_thread_);
   ASSERT(channel == impl_);
   SignalReadPacket(this, data, size, flags);
+}
+
+void TransportChannelProxy::OnReadyToSend(TransportChannel* channel) {
+  ASSERT(talk_base::Thread::Current() == worker_thread_);
+  ASSERT(channel == impl_);
+  SignalReadyToSend(this);
 }
 
 void TransportChannelProxy::OnRouteChange(TransportChannel* channel,

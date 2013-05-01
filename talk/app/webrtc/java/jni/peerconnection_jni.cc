@@ -58,6 +58,7 @@
 
 #include <map>
 
+#include "talk/app/webrtc/mediaconstraintsinterface.h"
 #include "talk/app/webrtc/peerconnectioninterface.h"
 #include "talk/app/webrtc/videosourceinterface.h"
 #include "talk/base/logging.h"
@@ -164,7 +165,6 @@ class ClassReferenceHolder {
     LoadClass(jni, "org/webrtc/SessionDescription");
     LoadClass(jni, "org/webrtc/SessionDescription$Type");
     LoadClass(jni, "org/webrtc/StatsReport");
-    LoadClass(jni, "org/webrtc/StatsReport$Type");
     LoadClass(jni, "org/webrtc/StatsReport$Value");
     LoadClass(jni, "org/webrtc/VideoRenderer$I420Frame");
     LoadClass(jni, "org/webrtc/VideoTrack");
@@ -688,7 +688,7 @@ class StatsObserverWrapper : public StatsObserver {
         j_stats_report_class_(FindClass(jni, "org/webrtc/StatsReport")),
         j_stats_report_ctor_(GetMethodID(
             jni, j_stats_report_class_, "<init>",
-            "(Ljava/lang/String;Lorg/webrtc/StatsReport$Type;D"
+            "(Ljava/lang/String;Ljava/lang/String;D"
             "[Lorg/webrtc/StatsReport$Value;)V")),
         j_value_class_(FindClass(
             jni, "org/webrtc/StatsReport$Value")),
@@ -720,11 +720,8 @@ class StatsObserverWrapper : public StatsObserver {
       const StatsReport& report = reports[i];
       ScopedLocalRef<jstring> j_id(
           jni, JavaStringFromStdString(jni, report.id));
-      int type_index = report.type == StatsReport::kStatsReportTypeSsrc ? 0 :
-          report.type == StatsReport::kStatsReportTypeBwe ? 1 : -1;
-      CHECK(type_index >= 0, "Unexpected report type: " << report.type);
-      ScopedLocalRef<jobject> j_type(jni, JavaEnumFromIndex(
-          jni, "StatsReport$Type", type_index));
+      ScopedLocalRef<jstring> j_type(
+          jni, JavaStringFromStdString(jni, report.type));
       ScopedLocalRef<jobjectArray> j_values(
           jni, ValuesToJava(jni, report.values));
       ScopedLocalRef<jobject> j_report(jni, jni->NewObject(

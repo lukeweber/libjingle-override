@@ -150,7 +150,7 @@ bool GetUsbProperty(const Device& device, const char* property_name,
   return true;
 }
 
-bool GetUsbUvcId(const Device& device, std::string* uvc_id) {
+bool GetUsbId(const Device& device, std::string* usb_id) {
   std::string id_vendor;
   std::string id_product;
   if (!GetUsbProperty(device, "idVendor", &id_vendor)) {
@@ -159,10 +159,10 @@ bool GetUsbUvcId(const Device& device, std::string* uvc_id) {
   if (!GetUsbProperty(device, "idProduct", &id_product)) {
     return false;
   }
-  uvc_id->clear();
-  uvc_id->append(id_vendor);
-  uvc_id->append(":");
-  uvc_id->append(id_product);
+  usb_id->clear();
+  usb_id->append(id_vendor);
+  usb_id->append(":");
+  usb_id->append(id_product);
   return true;
 }
 

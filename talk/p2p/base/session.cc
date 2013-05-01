@@ -291,8 +291,12 @@ std::string BaseSession::StateToString(State state) {
       return "STATE_SENTINITIATE";
     case Session::STATE_RECEIVEDINITIATE:
       return "STATE_RECEIVEDINITIATE";
+    case Session::STATE_SENTPRACCEPT:
+      return "STATE_SENTPRACCEPT";
     case Session::STATE_SENTACCEPT:
       return "STATE_SENTACCEPT";
+    case Session::STATE_RECEIVEDPRACCEPT:
+      return "STATE_RECEIVEDPRACCEPT";
     case Session::STATE_RECEIVEDACCEPT:
       return "STATE_RECEIVEDACCEPT";
     case Session::STATE_SENTMODIFY:
@@ -529,6 +533,7 @@ void BaseSession::SetState(State state) {
     SignalState(this, state_);
     signaling_thread_->Post(this, MSG_STATE);
   }
+  SignalNewDescription();
 }
 
 void BaseSession::SetError(Error error) {
@@ -722,6 +727,54 @@ bool BaseSession::GetTransportDescription(const SessionDescription* description,
     return false;
   }
   *tdesc = transport_info->description;
+  return true;
+}
+
+void BaseSession::SignalNewDescription() {
+  ContentAction action;
+  ContentSource source;
+  if (!GetContentAction(&action, &source)) {
+    return;
+  }
+  if (source == CS_LOCAL) {
+    SignalNewLocalDescription(this, action);
+  } else {
+    SignalNewRemoteDescription(this, action);
+  }
+}
+
+bool BaseSession::GetContentAction(ContentAction* action,
+                                   ContentSource* source) {
+  switch (state_) {
+    // new local description
+    case STATE_SENTINITIATE:
+      *action = CA_OFFER;
+      *source = CS_LOCAL;
+      break;
+    case STATE_SENTPRACCEPT:
+      *action = CA_PRANSWER;
+      *source = CS_LOCAL;
+      break;
+    case STATE_SENTACCEPT:
+      *action = CA_ANSWER;
+      *source = CS_LOCAL;
+      break;
+    // new remote description
+    case STATE_RECEIVEDINITIATE:
+      *action = CA_OFFER;
+      *source = CS_REMOTE;
+      break;
+    case STATE_RECEIVEDPRACCEPT:
+      *action = CA_PRANSWER;
+      *source = CS_REMOTE;
+      break;
+    case STATE_RECEIVEDACCEPT:
+      *action = CA_ANSWER;
+      *source = CS_REMOTE;
+      break;
+    default:
+      return false;
+  }
   return true;
 }
 

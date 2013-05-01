@@ -176,6 +176,7 @@ void TCPPort::OnNewConnection(talk_base::AsyncPacketSocket* socket,
   incoming.addr = new_socket->GetRemoteAddress();
   incoming.socket = new_socket;
   incoming.socket->SignalReadPacket.connect(this, &TCPPort::OnReadPacket);
+  incoming.socket->SignalReadyToSend.connect(this, &TCPPort::OnReadyToSend);
 
   LOG_J(LS_VERBOSE, this) << "Accepted connection from "
                           << incoming.addr.ToString();
@@ -201,6 +202,10 @@ void TCPPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
                            const char* data, size_t size,
                            const talk_base::SocketAddress& remote_addr) {
   Port::OnReadPacket(data, size, remote_addr, PROTO_TCP);
+}
+
+void TCPPort::OnReadyToSend(talk_base::AsyncPacketSocket* socket) {
+  Port::OnReadyToSend();
 }
 
 void TCPPort::OnAddressReady(talk_base::AsyncPacketSocket* socket,
@@ -238,6 +243,7 @@ TCPConnection::TCPConnection(TCPPort* port, const Candidate& candidate,
 
   if (socket_) {
     socket_->SignalReadPacket.connect(this, &TCPConnection::OnReadPacket);
+    socket_->SignalReadyToSend.connect(this, &TCPConnection::OnReadyToSend);
     socket_->SignalClose.connect(this, &TCPConnection::OnClose);
   }
 }
@@ -289,6 +295,11 @@ void TCPConnection::OnReadPacket(talk_base::AsyncPacketSocket* socket,
                                  const talk_base::SocketAddress& remote_addr) {
   ASSERT(socket == socket_);
   Connection::OnReadPacket(data, size);
+}
+
+void TCPConnection::OnReadyToSend(talk_base::AsyncPacketSocket* socket) {
+  ASSERT(socket == socket_);
+  Connection::OnReadyToSend();
 }
 
 }  // namespace cricket

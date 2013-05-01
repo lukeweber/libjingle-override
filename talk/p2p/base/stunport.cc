@@ -165,6 +165,7 @@ bool UDPPort::Init() {
     }
     socket_->SignalReadPacket.connect(this, &UDPPort::OnReadPacket);
   }
+  socket_->SignalReadyToSend.connect(this, &UDPPort::OnReadyToSend);
   socket_->SignalAddressReady.connect(this, &UDPPort::OnLocalAddressReady);
   requests_.SignalSendPacket.connect(this, &UDPPort::OnSendPacket);
   return true;
@@ -265,6 +266,10 @@ void UDPPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
   } else {
     Port::OnReadPacket(data, size, remote_addr, PROTO_UDP);
   }
+}
+
+void UDPPort::OnReadyToSend(talk_base::AsyncPacketSocket* socket) {
+  Port::OnReadyToSend();
 }
 
 void UDPPort::SendStunBindingRequest() {

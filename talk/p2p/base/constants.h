@@ -130,6 +130,8 @@ extern const buzz::StaticQName QN_SSRC;
 extern const buzz::StaticQName QN_JINGLE_RTP_PAYLOADTYPE;
 extern const buzz::StaticQName QN_JINGLE_RTP_BANDWIDTH;
 extern const buzz::StaticQName QN_JINGLE_RTCP_MUX;
+extern const buzz::StaticQName QN_JINGLE_RTP_HDREXT;
+extern const buzz::StaticQName QN_URI;
 
 extern const char NS_GINGLE_AUDIO[];
 extern const buzz::StaticQName QN_GINGLE_AUDIO_CONTENT;

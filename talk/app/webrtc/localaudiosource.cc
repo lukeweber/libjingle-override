@@ -38,7 +38,7 @@ using webrtc::MediaSourceInterface;
 namespace webrtc {
 
 // Constraint keys.
-// They are declared as static members in mediastreaminterface.h
+// They are declared as static members in mediaconstraintsinterface.h
 const char MediaConstraintsInterface::kEchoCancellation[] =
     "googEchoCancellation";
 const char MediaConstraintsInterface::kAutoGainControl[] =

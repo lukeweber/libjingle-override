@@ -51,7 +51,7 @@ class TrackHandler : public ObserverInterface {
   virtual ~TrackHandler();
   virtual void OnChanged();
   // Stop using |track_| on this PeerConnection.
-  virtual void Stop() {}
+  virtual void Stop() = 0;
 
   MediaStreamTrackInterface*  track() { return track_; }
   uint32 ssrc() const { return ssrc_; }
@@ -94,8 +94,10 @@ class LocalAudioTrackHandler : public TrackHandler {
 class RemoteAudioTrackHandler : public TrackHandler {
  public:
   RemoteAudioTrackHandler(AudioTrackInterface* track,
+                          uint32 ssrc,
                           AudioProviderInterface* provider);
   virtual ~RemoteAudioTrackHandler();
+  virtual void Stop() OVERRIDE;
 
  protected:
   virtual void OnStateChanged() OVERRIDE;
@@ -127,13 +129,15 @@ class LocalVideoTrackHandler : public TrackHandler {
 };
 
 // RemoteVideoTrackHandler listen to events on a remote VideoTrack instance
-// connected to a PeerConnection and orders the |provider| to executes the
-// requested change.
+// connected to a PeerConnection and orders the |provider| to execute
+// requested changes.
 class RemoteVideoTrackHandler : public TrackHandler {
  public:
   RemoteVideoTrackHandler(VideoTrackInterface* track,
+                          uint32 ssrc,
                           VideoProviderInterface* provider);
   virtual ~RemoteVideoTrackHandler();
+  virtual void Stop() OVERRIDE;
 
  protected:
   virtual void OnStateChanged() OVERRIDE;
@@ -155,12 +159,12 @@ class MediaStreamHandler : public ObserverInterface {
 
   virtual void AddAudioTrack(AudioTrackInterface* audio_track, uint32 ssrc) = 0;
   virtual void AddVideoTrack(VideoTrackInterface* video_track, uint32 ssrc) = 0;
-  virtual void RemoveTrack(MediaStreamTrackInterface* track);
 
+  virtual void RemoveTrack(MediaStreamTrackInterface* track);
   virtual void OnChanged() OVERRIDE;
 
  protected:
-  bool FindTrack(MediaStreamTrackInterface* track);
+  TrackHandler* FindTrackHandler(MediaStreamTrackInterface* track);
   talk_base::scoped_refptr<MediaStreamInterface> stream_;
   AudioProviderInterface* audio_provider_;
   VideoProviderInterface* video_provider_;
@@ -205,8 +209,23 @@ class MediaStreamHandlerContainer {
   // destroyed. This method must be called prior to the dtor and prior to the
   // |audio_provider| and |video_provider| is destroyed.
   void TearDown();
-  void AddRemoteStream(MediaStreamInterface* stream);
+
+  // Remove all TrackHandlers for tracks in |stream| and make sure
+  // the audio_provider and video_provider is notified that the tracks has been
+  // removed.
   void RemoveRemoteStream(MediaStreamInterface* stream);
+
+  // Create a RemoteAudioTrackHandler and associate |audio_track| with |ssrc|.
+  void AddRemoteAudioTrack(MediaStreamInterface* stream,
+                           AudioTrackInterface* audio_track,
+                           uint32 ssrc);
+  // Create a RemoteVideoTrackHandler and associate |video_track| with |ssrc|.
+  void AddRemoteVideoTrack(MediaStreamInterface* stream,
+                           VideoTrackInterface* video_track,
+                           uint32 ssrc);
+  // Remove the TrackHandler for |track|.
+  void RemoveRemoteTrack(MediaStreamInterface* stream,
+                         MediaStreamTrackInterface* track);
 
   // Remove all TrackHandlers for tracks in |stream| and make sure
   // the audio_provider and video_provider is notified that the tracks has been
@@ -229,6 +248,7 @@ class MediaStreamHandlerContainer {
   typedef std::list<MediaStreamHandler*> StreamHandlerList;
   MediaStreamHandler* FindStreamHandler(const StreamHandlerList& handlers,
                                         MediaStreamInterface* stream);
+  MediaStreamHandler* CreateRemoteStreamHandler(MediaStreamInterface* stream);
   MediaStreamHandler* CreateLocalStreamHandler(MediaStreamInterface* stream);
   void DeleteStreamHandler(StreamHandlerList* streamhandlers,
                            MediaStreamInterface* stream);

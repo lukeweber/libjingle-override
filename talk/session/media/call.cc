@@ -420,16 +420,17 @@ void Call::MuteVideo(bool mute) {
   }
 }
 
-void Call::SendData(Session* session,
+bool Call::SendData(Session* session,
                     const SendDataParams& params,
-                    const std::string& data) {
+                    const talk_base::Buffer& payload,
+                    SendDataResult* result) {
   DataChannel* data_channel = GetDataChannel(session);
   if (!data_channel) {
     LOG(LS_WARNING) << "Could not send data: no data channel.";
-    return;
+    return false;
   }
 
-  data_channel->SendData(params, data);
+  return data_channel->SendData(params, payload, result);
 }
 
 void Call::PressDTMF(int event) {
@@ -755,8 +756,8 @@ void Call::OnMediaMonitor(VideoChannel* channel, const VideoMediaInfo& info) {
 
 void Call::OnDataReceived(DataChannel* channel,
                           const ReceiveDataParams& params,
-                          const std::string& data) {
-  SignalDataReceived(this, params, data);
+                          const talk_base::Buffer& payload) {
+  SignalDataReceived(this, params, payload);
 }
 
 uint32 Call::id() {

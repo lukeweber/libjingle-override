@@ -766,7 +766,16 @@ void CallClient::SendData(const std::string& streamid,
 
   cricket::SendDataParams params;
   params.ssrc = stream.first_ssrc();
-  call_->SendData(session, params, text);
+  talk_base::Buffer payload(text.data(), text.length());
+  cricket::SendDataResult result;
+  bool sent = call_->SendData(session, params, payload, &result);
+  if (!sent) {
+    if (result == cricket::SDR_BLOCK) {
+      LOG(LS_WARNING) << "Could not send data because it would block.";
+    } else {
+      LOG(LS_WARNING) << "Could not send data for unknown reason.";
+    }
+  }
 }
 
 void CallClient::InviteFriend(const std::string& name) {
@@ -832,7 +841,7 @@ bool CallClient::FindJid(const std::string& name, buzz::Jid* found_jid,
 
 void CallClient::OnDataReceived(cricket::Call*,
                                 const cricket::ReceiveDataParams& params,
-                                const std::string& data) {
+                                const talk_base::Buffer& payload) {
   // TODO(mylesj): Support receiving data on sessions other than the first.
   cricket::Session* session = GetFirstSession();
   if (!session)
@@ -841,15 +850,16 @@ void CallClient::OnDataReceived(cricket::Call*,
   cricket::StreamParams stream;
   const std::vector<cricket::StreamParams>* data_streams =
       call_->GetDataRecvStreams(session);
+  std::string text(payload.data(), payload.length());
   if (data_streams && GetStreamBySsrc(*data_streams, params.ssrc, &stream)) {
     console_->PrintLine(
         "Received data from '%s' on stream '%s' (ssrc=%u): %s",
         stream.groupid.c_str(), stream.id.c_str(),
-        params.ssrc, data.c_str());
+        params.ssrc, text.c_str());
   } else {
     console_->PrintLine(
         "Received data (ssrc=%u): %s",
-        params.ssrc, data.c_str());
+        params.ssrc, text.c_str());
   }
 }
 

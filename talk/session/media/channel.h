@@ -220,6 +220,9 @@ class BaseChannel
   // Used to alert UI when the muted status changes, perhaps autonomously.
   sigslot::repeater2<BaseChannel*, bool> SignalAutoMuted;
 
+  // Made public for easier testing.
+  void SetReadyToSend(TransportChannel* channel, bool ready);
+
  protected:
   MediaEngineInterface* media_engine() const { return media_engine_; }
   virtual MediaChannel* media_channel() const { return media_channel_; }
@@ -254,14 +257,16 @@ class BaseChannel
   void OnWritableState(TransportChannel* channel);
   virtual void OnChannelRead(TransportChannel* channel, const char* data,
                              size_t len, int flags);
+  void OnReadyToSend(TransportChannel* channel);
 
   bool PacketIsRtcp(const TransportChannel* channel, const char* data,
                     size_t len);
   bool SendPacket(bool rtcp, talk_base::Buffer* packet);
   void HandlePacket(bool rtcp, talk_base::Buffer* packet);
 
-  // Setting the send codec based on the remote description.
-  void OnSessionState(BaseSession* session, BaseSession::State state);
+  // Apply the new local/remote session description.
+  void OnNewLocalDescription(BaseSession* session, ContentAction action);
+  void OnNewRemoteDescription(BaseSession* session, ContentAction action);
 
   void EnableMedia_w();
   void DisableMedia_w();
@@ -335,6 +340,8 @@ class BaseChannel
   talk_base::scoped_ptr<SocketMonitor> socket_monitor_;
   bool enabled_;
   bool writable_;
+  bool rtp_ready_to_send_;
+  bool rtcp_ready_to_send_;
   bool optimistic_data_send_;
   bool was_ever_writable_;
   MediaContentDirection local_content_direction_;
@@ -585,7 +592,9 @@ class DataChannel : public BaseChannel {
     return static_cast<DataMediaChannel*>(BaseChannel::media_channel());
   }
 
-  bool SendData(const SendDataParams& params, const std::string& data);
+  bool SendData(const SendDataParams& params,
+                const talk_base::Buffer& payload,
+                SendDataResult* result);
 
   void StartMediaMonitor(int cms);
   void StopMediaMonitor();
@@ -597,7 +606,7 @@ class DataChannel : public BaseChannel {
       SignalMediaError;
   sigslot::signal3<DataChannel*,
                    const ReceiveDataParams&,
-                   const std::string&>
+                   const talk_base::Buffer&>
       SignalDataReceived;
   // Signal for notifying when the channel becomes ready to send data.
   // That occurs when the channel is enabled, the transport is writable and
@@ -607,12 +616,19 @@ class DataChannel : public BaseChannel {
 
  private:
   struct SendDataMessageData : public talk_base::MessageData {
-    SendDataMessageData(const SendDataParams& params, const std::string& data)
+    SendDataMessageData(const SendDataParams& params,
+                        const talk_base::Buffer* payload,
+                        SendDataResult* result)
         : params(params),
-          data(data) {
+          payload(payload),
+          result(result),
+          succeeded(false) {
     }
-    const SendDataParams params;
-    const std::string data;
+
+    const SendDataParams& params;
+    const talk_base::Buffer* payload;
+    SendDataResult* result;
+    bool succeeded;
   };
 
   struct DataReceivedMessageData : public talk_base::MessageData {
@@ -622,10 +638,10 @@ class DataChannel : public BaseChannel {
     DataReceivedMessageData(
         const ReceiveDataParams& params, const char* data, size_t len)
         : params(params),
-          data(data, len) {
+          payload(data, len) {
     }
     const ReceiveDataParams params;
-    const std::string data;
+    const talk_base::Buffer payload;
   };
 
   // overrides from BaseChannel

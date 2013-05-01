@@ -57,6 +57,9 @@
           ],
           'conditions': [
             ['OS=="linux"', {
+              'defines': [
+                'HAVE_GTK',
+              ],
               'include_dirs': [
                 '/usr/local/buildtools/java/jdk7-64/include',
                 '/usr/local/buildtools/java/jdk7-64/include/linux',

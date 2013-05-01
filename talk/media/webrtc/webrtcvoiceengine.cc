@@ -1436,7 +1436,7 @@ bool WebRtcVoiceEngine::UnregisterProcessor(
 // Do not lock mux_channel_cs_ in this callback.
 void WebRtcVoiceEngine::Process(const int channel,
                                 const webrtc::ProcessingTypes type,
-                                WebRtc_Word16 audio10ms[],
+                                int16_t audio10ms[],
                                 const int length,
                                 const int sampling_freq,
                                 const bool is_stereo) {
@@ -1791,6 +1791,7 @@ bool WebRtcVoiceMediaChannel::SetSendRtpHeaderExtensions(
     }
   }
 
+  LOG(LS_INFO) << "Enabling audio level header extension with ID " << id;
 // This api call is not available in iOS version of VoiceEngine currently.
 #if !defined(IOS) && !defined(ANDROID)
   if (engine()->voe()->rtp()->SetRTPAudioLevelIndicationStatus(
@@ -1798,6 +1799,9 @@ bool WebRtcVoiceMediaChannel::SetSendRtpHeaderExtensions(
     LOG_RTCERR3(SetRTPAudioLevelIndicationStatus, voe_channel(), enable, id);
     return false;
   }
+#else
+  LOG(LS_WARNING) << "Not enabling audio level header extension with ID " << id
+                  << " because it's not supported on iOS or Android.";
 #endif
 
   return true;

@@ -45,10 +45,13 @@ struct DataChannelInit {
 };
 
 struct DataBuffer {
-  DataBuffer() : binary(false) {
+  DataBuffer(const talk_base::Buffer& data, bool binary)
+      : data(data),
+        binary(binary) {
   }
-  explicit DataBuffer(const std::string& string_to_send)
-      : data(string_to_send.c_str(), string_to_send.length()),
+  // For convenience for unit tests.
+  explicit DataBuffer(const std::string& text)
+      : data(text.data(), text.length()),
         binary(false) {
   }
   talk_base::Buffer data;

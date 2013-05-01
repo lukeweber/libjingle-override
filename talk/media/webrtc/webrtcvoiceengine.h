@@ -173,7 +173,7 @@ class WebRtcVoiceEngine
   // Method from webrtc::VoEMediaProcess
   virtual void Process(const int channel,
                        const webrtc::ProcessingTypes type,
-                       WebRtc_Word16 audio10ms[],
+                       int16_t audio10ms[],
                        const int length,
                        const int sampling_freq,
                        const bool is_stereo);
@@ -392,6 +392,7 @@ class WebRtcVoiceMediaChannel
 
   virtual void OnPacketReceived(talk_base::Buffer* packet);
   virtual void OnRtcpReceived(talk_base::Buffer* packet);
+  virtual void OnReadyToSend(bool ready) {}
   virtual bool MuteStream(uint32 ssrc, bool on);
   virtual bool SetSendBandwidth(bool autobw, int bps);
   virtual bool GetStats(VoiceMediaInfo* info);

@@ -84,6 +84,7 @@ struct MediaSessionOptions {
       has_video(false),
       has_data(false),
       is_muc(false),
+      vad_enabled(true),  // When disabled, removes all CN codecs from SDP.
       rtcp_mux_enabled(true),
       bundle_enabled(false),
       video_bandwidth(kAutoBandwidth),
@@ -102,6 +103,7 @@ struct MediaSessionOptions {
   bool has_video;
   bool has_data;
   bool is_muc;
+  bool vad_enabled;
   bool rtcp_mux_enabled;
   bool bundle_enabled;
   // bps. -1 == auto.

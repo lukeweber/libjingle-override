@@ -67,7 +67,7 @@ DeviceManagerInterface* DeviceManagerFactory::Create() {
   return new AndroidDeviceManager();
 }
 
-bool GetUsbUvcId(const Device& device, std::string* uvc_id) { return false; }
+bool GetUsbId(const Device& device, std::string* usb_id) { return false; }
 
 bool GetUsbVersion(const Device& device, std::string* usb_version) {
   return false;

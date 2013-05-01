@@ -109,6 +109,8 @@ static const int kIceCandidatesTimeout = 10000;
 
 static const cricket::AudioCodec
     kTelephoneEventCodec(106, "telephone-event", 8000, 0, 1, 0);
+static const cricket::AudioCodec kCNCodec1(102, "CN", 8000, 0, 1, 0);
+static const cricket::AudioCodec kCNCodec2(103, "CN", 16000, 0, 1, 0);
 
 // Add some extra |newlines| to the |message| after |line|.
 static void InjectAfter(const std::string& line,
@@ -232,7 +234,7 @@ class FakeMediaStreamSignaling : public webrtc::MediaStreamSignaling,
 
   void UseOptionsVideoOnly() {
     ClearLocalStreams();
-    AddLocalStream(CreateStream(kStream2, kAudioTrack1, kVideoTrack2));
+    AddLocalStream(CreateStream(kStream2, "", kVideoTrack2));
   }
 
   void ClearLocalStreams() {
@@ -242,9 +244,9 @@ class FakeMediaStreamSignaling : public webrtc::MediaStreamSignaling,
   }
 
   // Implements MediaStreamSignalingObserver.
-  virtual void OnAddStream(webrtc::MediaStreamInterface* stream) {
+  virtual void OnAddRemoteStream(webrtc::MediaStreamInterface* stream) {
   }
-  virtual void OnRemoveStream(webrtc::MediaStreamInterface* stream) {
+  virtual void OnRemoveRemoteStream(webrtc::MediaStreamInterface* stream) {
   }
   virtual void OnAddDataChannel(webrtc::DataChannelInterface* data_channel) {
   }
@@ -256,6 +258,26 @@ class FakeMediaStreamSignaling : public webrtc::MediaStreamSignaling,
                                     webrtc::VideoTrackInterface* video_track,
                                     uint32 ssrc) {
   }
+  virtual void OnAddRemoteAudioTrack(webrtc::MediaStreamInterface* stream,
+                                     webrtc::AudioTrackInterface* audio_track,
+                                     uint32 ssrc) {
+  }
+
+  virtual void OnAddRemoteVideoTrack(webrtc::MediaStreamInterface* stream,
+                                     webrtc::VideoTrackInterface* video_track,
+                                     uint32 ssrc) {
+  }
+
+  virtual void OnRemoveRemoteAudioTrack(
+      webrtc::MediaStreamInterface* stream,
+      webrtc::AudioTrackInterface* audio_track) {
+  }
+
+  virtual void OnRemoveRemoteVideoTrack(
+      webrtc::MediaStreamInterface* stream,
+      webrtc::VideoTrackInterface* video_track) {
+  }
+
   virtual void OnRemoveLocalAudioTrack(
       webrtc::MediaStreamInterface* stream,
       webrtc::AudioTrackInterface* audio_track) {
@@ -793,6 +815,29 @@ class WebRtcSessionTest : public testing::Test {
     const cricket::Transport* transport = session_->GetTransport(content_name);
     ASSERT_TRUE(transport != NULL);
     EXPECT_EQ(protocol, transport->protocol());
+  }
+
+  // Adds CN codecs to FakeMediaEngine and MediaDescriptionFactory.
+  void AddCNCodecs() {
+    // Add kTelephoneEventCodec for dtmf test.
+    std::vector<cricket::AudioCodec> codecs = media_engine_->audio_codecs();;
+    codecs.push_back(kCNCodec1);
+    codecs.push_back(kCNCodec2);
+    media_engine_->SetAudioCodecs(codecs);
+    desc_factory_->set_audio_codecs(codecs);
+  }
+
+  bool VerifyNoCNCodecs(const cricket::ContentInfo* content) {
+    const cricket::ContentDescription* description = content->description;
+    ASSERT(description != NULL);
+    const cricket::AudioContentDescription* audio_content_desc =
+        static_cast<const cricket::AudioContentDescription*> (description);
+    ASSERT(audio_content_desc != NULL);
+    for (size_t i = 0; i < audio_content_desc->codecs().size(); ++i) {
+      if (audio_content_desc->codecs()[i].name == "CN")
+        return false;
+    }
+    return true;
   }
 
   cricket::FakeMediaEngine* media_engine_;
@@ -1663,6 +1708,36 @@ TEST_F(WebRtcSessionTest, CreateAnswerWithConstraints) {
   EXPECT_FALSE(content->rejected);
 }
 
+TEST_F(WebRtcSessionTest, CreateOfferWithoutCNCodecs) {
+  AddCNCodecs();
+  WebRtcSessionTest::Init();
+  webrtc::FakeConstraints constraints;
+  constraints.SetOptionalVAD(false);
+  talk_base::scoped_ptr<SessionDescriptionInterface> offer(
+      session_->CreateOffer(&constraints));
+  const cricket::ContentInfo* content =
+      cricket::GetFirstAudioContent(offer->description());
+  EXPECT_TRUE(content != NULL);
+  EXPECT_TRUE(VerifyNoCNCodecs(content));
+}
+
+TEST_F(WebRtcSessionTest, CreateAnswerWithoutCNCodecs) {
+  AddCNCodecs();
+  WebRtcSessionTest::Init();
+  // Create a remote offer with audio and video content.
+  talk_base::scoped_ptr<JsepSessionDescription> offer(CreateRemoteOffer());
+  SetRemoteDescriptionWithoutError(offer.release());
+
+  webrtc::FakeConstraints constraints;
+  constraints.SetOptionalVAD(false);
+  talk_base::scoped_ptr<SessionDescriptionInterface> answer(
+      session_->CreateAnswer(&constraints));
+  const cricket::ContentInfo* content =
+      cricket::GetFirstAudioContent(answer->description());
+  ASSERT_TRUE(content != NULL);
+  EXPECT_TRUE(VerifyNoCNCodecs(content));
+}
+
 // This test verifies the call setup when remote answer with audio only and
 // later updates with video.
 TEST_F(WebRtcSessionTest, TestAVOfferWithAudioOnlyAnswer) {
@@ -1880,11 +1955,11 @@ TEST_F(WebRtcSessionTest, SetAudioPlayout) {
   EXPECT_TRUE(channel->GetOutputScaling(receive_ssrc, &left_vol, &right_vol));
   EXPECT_EQ(1, left_vol);
   EXPECT_EQ(1, right_vol);
-  session_->SetAudioPlayout(kAudioTrack1, false);
+  session_->SetAudioPlayout(receive_ssrc, false);
   EXPECT_TRUE(channel->GetOutputScaling(receive_ssrc, &left_vol, &right_vol));
   EXPECT_EQ(0, left_vol);
   EXPECT_EQ(0, right_vol);
-  session_->SetAudioPlayout(kAudioTrack1, true);
+  session_->SetAudioPlayout(receive_ssrc, true);
   EXPECT_TRUE(channel->GetOutputScaling(receive_ssrc, &left_vol, &right_vol));
   EXPECT_EQ(1, left_vol);
   EXPECT_EQ(1, right_vol);
@@ -1903,11 +1978,11 @@ TEST_F(WebRtcSessionTest, SetAudioSend) {
   cricket::AudioOptions options;
   options.echo_cancellation.Set(true);
 
-  session_->SetAudioSend(kAudioTrack1, false, options);
+  session_->SetAudioSend(send_ssrc, false, options);
   EXPECT_TRUE(channel->IsStreamMuted(send_ssrc));
   EXPECT_FALSE(channel->options().echo_cancellation.IsSet());
 
-  session_->SetAudioSend(kAudioTrack1, true, options);
+  session_->SetAudioSend(send_ssrc, true, options);
   EXPECT_FALSE(channel->IsStreamMuted(send_ssrc));
   bool value;
   EXPECT_TRUE(channel->options().echo_cancellation.Get(&value));
@@ -1922,10 +1997,12 @@ TEST_F(WebRtcSessionTest, SetVideoPlayout) {
   ASSERT_TRUE(channel != NULL);
   ASSERT_LT(0u, channel->renderers().size());
   EXPECT_TRUE(channel->renderers().begin()->second == NULL);
+  ASSERT_EQ(1u, channel->recv_streams().size());
+  uint32 receive_ssrc  = channel->recv_streams()[0].first_ssrc();
   cricket::FakeVideoRenderer renderer;
-  session_->SetVideoPlayout(kVideoTrack1, true, &renderer);
+  session_->SetVideoPlayout(receive_ssrc, true, &renderer);
   EXPECT_TRUE(channel->renderers().begin()->second == &renderer);
-  session_->SetVideoPlayout(kVideoTrack1, false, &renderer);
+  session_->SetVideoPlayout(receive_ssrc, false, &renderer);
   EXPECT_TRUE(channel->renderers().begin()->second == NULL);
 }
 
@@ -1939,9 +2016,9 @@ TEST_F(WebRtcSessionTest, SetVideoSend) {
   uint32 send_ssrc  = channel->send_streams()[0].first_ssrc();
   EXPECT_FALSE(channel->IsStreamMuted(send_ssrc));
   cricket::VideoOptions* options = NULL;
-  session_->SetVideoSend(kVideoTrack1, false, options);
+  session_->SetVideoSend(send_ssrc, false, options);
   EXPECT_TRUE(channel->IsStreamMuted(send_ssrc));
-  session_->SetVideoSend(kVideoTrack1, true, options);
+  session_->SetVideoSend(send_ssrc, true, options);
   EXPECT_FALSE(channel->IsStreamMuted(send_ssrc));
 }
 

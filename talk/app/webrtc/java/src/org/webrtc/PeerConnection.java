@@ -90,6 +90,10 @@ public class PeerConnection {
       this.uri = uri;
       this.password = password;
     }
+
+    public String toString() {
+      return uri + "[" + password + "]";
+    }
   }
 
   private final List<MediaStream> localStreams;
