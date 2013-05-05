@@ -25,13 +25,47 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "talk/base/messagequeue.h"
+
+#include "talk/base/bind.h"
 #include "talk/base/gunit.h"
 #include "talk/base/logging.h"
+#include "talk/base/thread.h"
 #include "talk/base/timeutils.h"
-#include "talk/base/messagequeue.h"
 #include "talk/base/nullsocketserver.h"
 
 using namespace talk_base;
+
+class MessageQueueTest: public testing::Test, public MessageQueue {
+ public:
+  bool IsLocked_Worker() {
+    if (!crit_.TryEnter()) {
+      return true;
+    }
+    crit_.Leave();
+    return false;
+  }
+  bool IsLocked() {
+    // We have to do this on a worker thread, or else the TryEnter will
+    // succeed, since our critical sections are reentrant.
+    Thread worker;
+    worker.Start();
+    return worker.Invoke<bool>(
+        talk_base::Bind(&MessageQueueTest::IsLocked_Worker, this));
+  }
+};
+
+struct DeletedLockChecker {
+  DeletedLockChecker(MessageQueueTest* test, bool* was_locked, bool* deleted)
+      : test(test), was_locked(was_locked), deleted(deleted) { }
+  ~DeletedLockChecker() {
+    *deleted = true;
+    *was_locked = test->IsLocked();
+  }
+  MessageQueueTest* test;
+  bool* was_locked;
+  bool* deleted;
+};
 
 static void DelayedPostsWithIdenticalTimesAreProcessedInFifoOrder(
     MessageQueue* q) {
@@ -53,10 +87,22 @@ static void DelayedPostsWithIdenticalTimesAreProcessedInFifoOrder(
   EXPECT_FALSE(q->Get(&msg, 0));  // No more messages
 }
 
-TEST(MessageQueue, DelayedPostsWithIdenticalTimesAreProcessedInFifoOrder) {
+TEST_F(MessageQueueTest,
+       DelayedPostsWithIdenticalTimesAreProcessedInFifoOrder) {
   MessageQueue q;
   DelayedPostsWithIdenticalTimesAreProcessedInFifoOrder(&q);
   NullSocketServer nullss;
   MessageQueue q_nullss(&nullss);
   DelayedPostsWithIdenticalTimesAreProcessedInFifoOrder(&q_nullss);
+}
+
+TEST_F(MessageQueueTest, DisposeNotLocked) {
+  bool was_locked = true;
+  bool deleted = false;
+  DeletedLockChecker* d = new DeletedLockChecker(this, &was_locked, &deleted);
+  Dispose(d);
+  Message msg;
+  EXPECT_FALSE(Get(&msg, 0));
+  EXPECT_TRUE(deleted);
+  EXPECT_FALSE(was_locked);
 }

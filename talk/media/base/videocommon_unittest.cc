@@ -147,10 +147,10 @@ TEST(VideoCommonTest, TestComputeScaleWithHighFps) {
   EXPECT_EQ(1024, scaled_width);
   EXPECT_EQ(640, scaled_height);
 
-  // Request too many pixels and too wide and tall. Expect 1/8 size.
-  ComputeScale(16000, 10000, 15, 4, &scaled_width, &scaled_height);
-  EXPECT_EQ(1000, scaled_width);
-  EXPECT_EQ(625, scaled_height);
+  // Request too many pixels and too wide and tall. Expect 1/16 size.
+  ComputeScale(64000, 40000, 15, 4, &scaled_width, &scaled_height);
+  EXPECT_EQ(4000, scaled_width);
+  EXPECT_EQ(2500, scaled_height);
 
   // Request too wide. (two 30 inch monitors). Expect 1/4 size.
   ComputeScale(5120, 1600, 15, 4, &scaled_width, &scaled_height);

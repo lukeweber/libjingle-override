@@ -1086,6 +1086,7 @@ TEST_F(WebRtcVideoEngineTestFake, MultipleSendStreamsDifferentFormats) {
         cricket::FOURCC_I420);
   EXPECT_TRUE(channel_->SetSendStreamFormat(kSsrcs2[1], format));
 
+  SendI420Frame(kVP8Codec.width, kVP8Codec.height);
   VerifyVP8SendCodec(channel0, kVP8Codec.width, kVP8Codec.height, 0,
                      kMaxBandwidthKbps, kMinBandwidthKbps, kStartBandwidthKbps,
                      kVP8Codec.framerate);
@@ -1235,9 +1236,6 @@ TEST_F(WebRtcVideoEngineTestFake, TestAdaptToOutputFormat) {
   cricket::VideoFormat capture_format_hd = (*formats)[0];
   EXPECT_EQ(cricket::CS_RUNNING, video_capturer.Start(capture_format_hd));
   EXPECT_TRUE(channel_->SetCapturer(kSsrcs3[0], &video_capturer));
-  cricket::VideoOptions options;
-  options.adapt_input_to_cpu_usage.Set(true);
-  EXPECT_TRUE(channel_->SetOptions(options));
 
   cricket::VideoCodec send_codec(100, "VP8", 800, 600, 30, 0);
   cricket::VideoFormat vga_format(640, 360,
@@ -1322,7 +1320,7 @@ TEST_F(WebRtcVideoEngineTestFake, TestAdaptToCpuLoadDisabled) {
   EXPECT_TRUE(channel_->SetOptions(options));
   cpu_monitor_->SignalUpdate(1, 1, 0.1f, 0.85f);
 
-  cricket::VideoCodec send_codec(100, "VP8", 640, 480, 30, 0);
+  cricket::VideoCodec send_codec(100, "VP8", 800, 600, 30, 0);
   std::vector<cricket::VideoCodec> codecs;
   codecs.push_back(send_codec);
   EXPECT_TRUE(channel_->SetSendCodecs(codecs));
@@ -1336,7 +1334,8 @@ TEST_F(WebRtcVideoEngineTestFake, TestAdaptToCpuLoadDisabled) {
   EXPECT_TRUE(video_capturer.CaptureFrame());
   const int channel0 = vie_.GetChannelFromLocalSsrc(kSsrcs3[0]);
   ASSERT_NE(-1, channel0);
-  VerifyVP8SendCodec(channel0, send_codec.width, send_codec.height, 0,
+  VerifyVP8SendCodec(channel0, capture_format_vga.width,
+                     capture_format_vga.height, 0,
                      kMaxBandwidthKbps, kMinBandwidthKbps, kStartBandwidthKbps,
                      send_codec.framerate);
   EXPECT_TRUE(channel_->SetCapturer(kSsrcs3[0], NULL));
@@ -1500,14 +1499,6 @@ TEST_F(WebRtcVideoMediaChannelTest, SendVp8HdAndReceiveAdaptedVp8Vga) {
   cricket::VideoFormat capture_format_hd = (*formats)[0];
   EXPECT_EQ(cricket::CS_RUNNING, video_capturer_->Start(capture_format_hd));
   EXPECT_TRUE(channel_->SetCapturer(kSsrc, video_capturer_.get()));
-  // TODO(asapersson): Remove if the cpu_adaptation() check in
-  // WebRtcVideoChannelSendInfo::AdaptFrame is removed.
-  // Make sure that a cpu load update does not trigger any change.
-  cricket::VideoOptions options;
-  options.adapt_input_to_cpu_usage.Set(true);
-  options.system_low_adaptation_threshhold.Set(0.0f);
-  options.system_high_adaptation_threshhold.Set(1.0f);
-  EXPECT_TRUE(channel_->SetOptions(options));
 
   // Capture format HD -> adapt (OnOutputFormatRequest VGA) -> VGA.
   cricket::VideoCodec codec(100, "VP8", 1280, 720, 30, 0);

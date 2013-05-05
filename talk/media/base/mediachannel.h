@@ -532,7 +532,8 @@ struct VideoSenderInfo {
         framerate_input(0),
         framerate_sent(0),
         nominal_bitrate(0),
-        preferred_bitrate(0) {
+        preferred_bitrate(0),
+        adapt_reason(0) {
   }
 
   std::vector<uint32> ssrcs;
@@ -552,6 +553,7 @@ struct VideoSenderInfo {
   int framerate_sent;
   int nominal_bitrate;
   int preferred_bitrate;
+  int adapt_reason;
 };
 
 struct VideoReceiverInfo {

@@ -195,18 +195,18 @@ bool ParseIceServers(const PeerConnectionInterface::IceServers& configuration,
         stun_config->push_back(StunConfiguration(address, port));
         break;
       case TURN: {
-        // Turn url example from the spec |url:"turn:user@turn.example.org"|.
-        std::vector<std::string> turn_tokens;
-        talk_base::tokenize(address, '@', &turn_tokens);
-        if (turn_tokens.size() != kTurnHostTokensNum) {
-          LOG(LS_ERROR) << "Invalid TURN configuration : "
-                        << address << " can't proceed.";
-          return false;
+        if (server.username.empty()) {
+          // Turn url example from the spec |url:"turn:user@turn.example.org"|.
+          std::vector<std::string> turn_tokens;
+          talk_base::tokenize(address, '@', &turn_tokens);
+          if (turn_tokens.size() == kTurnHostTokensNum) {
+            server.username = talk_base::s_url_decode(turn_tokens[0]);
+            address = turn_tokens[1];
+          }
         }
-        std::string username = talk_base::s_url_decode(turn_tokens[0]);
-        address = turn_tokens[1];
         turn_config->push_back(TurnConfiguration(address, port,
-                                                 username, server.password,
+                                                 server.username,
+                                                 server.password,
                                                  turn_transport_type));
         // STUN functionality is part of TURN.
         stun_config->push_back(StunConfiguration(address, port));

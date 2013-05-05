@@ -57,10 +57,13 @@ static const char kStunIceServer[] = "stun:stun.l.google.com:19302";
 static const char kTurnIceServer[] = "turn:test%40hello.com@test.com:1234";
 static const char kTurnIceServerWithTransport[] =
     "turn:test@hello.com?transport=tcp";
-static const char kSecureTurnServerUrl[] = "turns:test@hello.com?transport=tcp";
-static const char kInvalidTurnIceServer[] = "turn:test.com:1234";
+static const char kSecureTurnIceServer[] =
+    "turns:test@hello.com?transport=tcp";
+static const char kTurnIceServerWithNoUsernameInUri[] =
+    "turn:test.com:1234";
 static const char kTurnPassword[] = "turnpassword";
 static const int kDefaultPort = 3478;
+static const char kTurnUsername[] = "test";
 
 class NullPeerConnectionObserver : public PeerConnectionObserver {
  public:
@@ -171,6 +174,27 @@ TEST_F(PeerConnectionFactoryTest, CreatePCUsingIceServers) {
   VerifyTurnConfigurations(turn_configs);
 }
 
+TEST_F(PeerConnectionFactoryTest, CreatePCUsingNoUsernameInUri) {
+  webrtc::PeerConnectionInterface::IceServers ice_servers;
+  webrtc::PeerConnectionInterface::IceServer ice_server;
+  ice_server.uri = kStunIceServer;
+  ice_servers.push_back(ice_server);
+  ice_server.uri = kTurnIceServerWithNoUsernameInUri;
+  ice_server.username = kTurnUsername;
+  ice_server.password = kTurnPassword;
+  ice_servers.push_back(ice_server);
+  talk_base::scoped_refptr<PeerConnectionInterface> pc(
+      factory_->CreatePeerConnection(ice_servers, NULL,
+                                     allocator_factory_.get(),
+                                     &observer_));
+  EXPECT_TRUE(pc.get() != NULL);
+  TurnConfigurations turn_configs;
+  webrtc::PortAllocatorFactoryInterface::TurnConfiguration turn(
+      "test.com", 1234, kTurnUsername, kTurnPassword, "udp");
+  turn_configs.push_back(turn);
+  VerifyTurnConfigurations(turn_configs);
+}
+
 // This test verifies the PeerConnection created properly with TURN url which
 // has transport parameter in it.
 TEST_F(PeerConnectionFactoryTest, CreatePCUsingTurnUrlWithTransportParam) {
@@ -196,30 +220,13 @@ TEST_F(PeerConnectionFactoryTest, CreatePCUsingTurnUrlWithTransportParam) {
   VerifyStunConfigurations(stun_configs);
 }
 
-// This test verifies PeerConnection object is not created when an incorrect
-// TURN url provided. In this case TURN url is missing username parameter.
-TEST_F(PeerConnectionFactoryTest, CreatePCUsingInvalidTurnUrl) {
-  webrtc::PeerConnectionInterface::IceServers ice_servers;
-  webrtc::PeerConnectionInterface::IceServer ice_server;
-  ice_server.uri = kInvalidTurnIceServer;
-  ice_server.password = kTurnPassword;
-  ice_servers.push_back(ice_server);
-  talk_base::scoped_refptr<PeerConnectionInterface> pc(
-      factory_->CreatePeerConnection(ice_servers, NULL,
-                                     allocator_factory_.get(),
-                                     &observer_));
-  EXPECT_TRUE(pc.get() == NULL);
-  TurnConfigurations turn_configs;
-  VerifyTurnConfigurations(turn_configs);
-}
-
 // This test verifies factory failed to create a peerconneciton object when
 // a valid secure TURN url passed. Connecting to a secure TURN server is not
 // supported currently.
 TEST_F(PeerConnectionFactoryTest, CreatePCUsingSecureTurnUrl) {
   webrtc::PeerConnectionInterface::IceServers ice_servers;
   webrtc::PeerConnectionInterface::IceServer ice_server;
-  ice_server.uri = kSecureTurnServerUrl;
+  ice_server.uri = kSecureTurnIceServer;
   ice_server.password = kTurnPassword;
   ice_servers.push_back(ice_server);
   talk_base::scoped_refptr<PeerConnectionInterface> pc(

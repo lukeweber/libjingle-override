@@ -481,7 +481,6 @@ class BaseSession : public sigslot::has_slots<>,
   talk_base::SSLIdentity* identity_;
   const SessionDescription* local_description_;
   SessionDescription* remote_description_;
-  bool transport_muxed_;
   uint64 ice_tiebreaker_;
   // This flag will be set to true after the first role switch. This flag
   // will enable us to stop any role switch during the call.

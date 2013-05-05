@@ -461,15 +461,20 @@ class WebRtcVideoChannelSendInfo  {
   }
   int64 interval() { return interval_; }
 
-  bool AdaptFrame(const VideoFrame* in_frame, const VideoFrame** out_frame) {
-    if (!video_adapter_->cpu_adaptation()) {
-      // Skip adapting frame (to make it possible to turn off cpu adaptation in
-      // case of a problem and skip calling the video_adapter).
-      *out_frame = in_frame;
-      return true;
+  void InitializeAdapterOutputFormat(const webrtc::VideoCodec& codec) {
+    VideoFormat format(codec.width, codec.height,
+                       VideoFormat::FpsToInterval(codec.maxFramerate),
+                       FOURCC_I420);
+    if (video_adapter_->output_format().IsSize0x0()) {
+      video_adapter_->SetOutputFormat(format);
     }
+  }
+  bool AdaptFrame(const VideoFrame* in_frame, const VideoFrame** out_frame) {
     *out_frame = NULL;
     return video_adapter_->AdaptFrame(in_frame, out_frame);
+  }
+  int CurrentAdaptReason() const {
+    return video_adapter_->adapt_reason();
   }
 
   StreamParams* stream_params() { return stream_params_.get(); }
@@ -949,7 +954,7 @@ bool WebRtcVideoEngine::FindCodec(const VideoCodec& in) {
     const VideoFormat fmt(kVideoFormats[i]);
     if ((in.width == 0 && in.height == 0) ||
         (fmt.width == in.width && fmt.height == in.height)) {
-      for (int j = 0; j < ARRAY_SIZE(kVideoCodecPrefs); ++j) {
+      for (size_t j = 0; j < ARRAY_SIZE(kVideoCodecPrefs); ++j) {
         VideoCodec codec(kVideoCodecPrefs[j].payload_type,
                          kVideoCodecPrefs[j].name, 0, 0, 0, 0);
         if (codec.Matches(in)) {
@@ -1474,6 +1479,12 @@ bool WebRtcVideoMediaChannel::SetSendCodecs(
     return false;
   }
 
+  for (SendChannelMap::iterator iter = send_channels_.begin();
+       iter != send_channels_.end(); ++iter) {
+    WebRtcVideoChannelSendInfo* send_channel = iter->second;
+    send_channel->InitializeAdapterOutputFormat(codec);
+  }
+
   LogSendCodecChange("SetSendCodecs()");
 
   return true;
@@ -1498,21 +1509,7 @@ bool WebRtcVideoMediaChannel::SetSendStreamFormat(uint32 ssrc,
     LOG(LS_ERROR) << "The specified ssrc " << ssrc << " is not in use.";
     return false;
   }
-
-  const VideoFormat old_format = send_channel->video_format();
-  // The video format must be called before SetSendCodec since it will use the
-  // registered format to set the resolution.
   send_channel->set_video_format(format);
-
-  const bool ret_val = SetSendCodec(send_channel, *send_codec_.get(),
-                                    send_min_bitrate_, send_start_bitrate_,
-                                    send_max_bitrate_);
-  if (!ret_val) {
-    // Rollback
-    send_channel->set_video_format(old_format);
-    return false;
-  }
-  LogSendCodecChange("SetSendStreamFormat()");
   return true;
 }
 
@@ -2098,6 +2095,7 @@ bool WebRtcVideoMediaChannel::GetStats(VideoMediaInfo* info) {
       sinfo.framerate_sent = send_channel->encoder_observer()->framerate();
       sinfo.nominal_bitrate = send_channel->encoder_observer()->bitrate();
       sinfo.preferred_bitrate = send_max_bitrate_;
+      sinfo.adapt_reason = send_channel->CurrentAdaptReason();
 
       // Get received RTCP statistics for the sender, if available.
       // It's not a fatal error if we can't, since RTCP may not have arrived

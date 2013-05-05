@@ -64,6 +64,10 @@ void TransportChannelProxy::SetImplementation(TransportChannelImpl* impl) {
 
   // Adopt the supplied impl, and connect to its signals.
   impl_ = impl;
+
+  if (impl_ == NULL)
+    return;
+
   impl_->SignalReadableState.connect(
       this, &TransportChannelProxy::OnReadableState);
   impl_->SignalWritableState.connect(

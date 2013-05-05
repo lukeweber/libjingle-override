@@ -159,6 +159,7 @@ class PeerConnectionInterface : public talk_base::RefCountInterface {
 
   struct IceServer {
     std::string uri;
+    std::string username;
     std::string password;
   };
   typedef std::vector<IceServer> IceServers;

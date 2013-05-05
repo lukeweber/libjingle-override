@@ -64,23 +64,24 @@ uint32 CanonicalFourCC(uint32 fourcc) {
 }
 
 static float kScaleFactors[] = {
-  1.f,  // full size
-  1.f / 2.f,  // 1/2 scale
-  1.f / 4.f,  // 1/4 scale
-  1.f / 8.f,  // 1/8 scale
-  1.f / 16.f  // 1/16 scale
+  1.f / 1.f,  // Full size.
+  1.f / 2.f,  // 1/2 scale.
+  1.f / 4.f,  // 1/4 scale.
+  1.f / 8.f,  // 1/8 scale.
+  1.f / 16.f  // 1/16 scale.
 };
+
+static const int kNumScaleFactors = ARRAY_SIZE(kScaleFactors);
 
 // Finds the scale factor that, when applied to width and height, produces
 // fewer than num_pixels.
-static float FindLowerScale(int width, int height,
-                            int target_num_pixels) {
+static float FindLowerScale(int width, int height, int target_num_pixels) {
   if (!target_num_pixels) {
     return 0.f;
   }
   int best_distance = INT_MAX;
-  int best_index = 0;  // Default to unscaled.
-  for (size_t i = 0u; i < ARRAY_SIZE(kScaleFactors); ++i) {
+  int best_index = kNumScaleFactors - 1;  // Default to max scale.
+  for (int i = 0; i < kNumScaleFactors; ++i) {
     int test_num_pixels = static_cast<int>(width * kScaleFactors[i] *
                                            height * kScaleFactors[i]);
     int diff = target_num_pixels - test_num_pixels;

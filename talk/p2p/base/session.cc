@@ -215,16 +215,21 @@ bool TransportProxy::SetupMux(TransportProxy* target) {
     return true;
   }
 
-  // Replace the impl for all the TransportProxyChannels with the channels
-  // from |target|'s transport. Fail if there's not an exact match.
+  // Run through all channels and remove any non-rtp transport channels before
+  // setting target transport channels.
   for (ChannelMap::const_iterator iter = channels_.begin();
        iter != channels_.end(); ++iter) {
     if (!target->transport_->get()->HasChannel(iter->first)) {
-      return false;
+      // Remove if channel doesn't exist in |transport_|.
+      iter->second->SetImplementation(NULL);
+    } else {
+      // Replace the impl for all the TransportProxyChannels with the channels
+      // from |target|'s transport. Fail if there's not an exact match.
+      iter->second->SetImplementation(
+          target->transport_->get()->CreateChannel(iter->first));
     }
-    iter->second->SetImplementation(
-        target->transport_->get()->CreateChannel(iter->first));
   }
+
   // Now replace our transport. Must happen afterwards because
   // it deletes all impls as a side effect.
   transport_ = target->transport_;
@@ -652,7 +657,6 @@ bool BaseSession::SetSelectedProxy(const std::string& content_name,
       return false;
     }
   }
-
   return true;
 }
 
