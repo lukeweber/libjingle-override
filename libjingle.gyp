@@ -146,7 +146,7 @@
         'defines': [
           'IOS',
           # Add this back with xmppframework branch
-          #'IOS_XMPP_FRAMEWORK=1',
+          'IOS_XMPP_FRAMEWORK=1',
           'CARBON_DEPRECATED',
         ],
       }],
