@@ -56,6 +56,17 @@ inline bool IsTurnChannelData(uint16 msg_type) {
   return ((msg_type & 0xC000) == 0x4000);  // MSB are 0b01
 }
 
+static int GetRelayPreference(cricket::ProtocolType proto) {
+  int relay_preference = ICE_TYPE_PREFERENCE_RELAY;
+  if (proto == cricket::PROTO_TCP)
+    relay_preference -= 1;
+  else if (proto == cricket::PROTO_SSLTCP)
+    relay_preference -= 2;
+
+  ASSERT(relay_preference >= 0);
+  return relay_preference;
+}
+
 class TurnAllocateRequest : public StunRequest {
  public:
   explicit TurnAllocateRequest(TurnPort* port);
@@ -163,9 +174,9 @@ TurnPort::TurnPort(talk_base::Thread* thread,
                    int min_port, int max_port,
                    const std::string& username,
                    const std::string& password,
-                   const talk_base::SocketAddress& server_address,
+                   const ProtocolAddress& server_address,
                    const RelayCredentials& credentials)
-    : Port(thread, RELAY_PORT_TYPE, ICE_TYPE_PREFERENCE_RELAY,
+    : Port(thread, RELAY_PORT_TYPE, GetRelayPreference(server_address.proto),
            factory, network, ip, min_port, max_port,
            username, password),
       server_address_(server_address),
@@ -185,18 +196,6 @@ TurnPort::~TurnPort() {
   }
 }
 
-bool TurnPort::Init() {
-  socket_.reset(socket_factory()->CreateUdpSocket(
-      talk_base::SocketAddress(ip(), 0), min_port(), max_port()));
-  if (!socket_) {
-    LOG_J(LS_WARNING, this) << "UDP socket creation failed";
-    return false;
-  }
-  socket_->SignalReadPacket.connect(this, &TurnPort::OnReadPacket);
-  socket_->SignalReadyToSend.connect(this, &TurnPort::OnReadyToSend);
-  return true;
-}
-
 void TurnPort::PrepareAddress() {
   if (credentials_.username.empty() ||
       credentials_.password.empty()) {
@@ -206,15 +205,53 @@ void TurnPort::PrepareAddress() {
     return;
   }
 
-  if (!server_address_.port()) {
-    server_address_.SetPort(TURN_DEFAULT_PORT);
+  if (!server_address_.address.port()) {
+    // We will set default TURN port, if no port is set in the address.
+    server_address_.address.SetPort(TURN_DEFAULT_PORT);
   }
 
-  if (server_address_.IsUnresolved()) {
-    ResolveTurnAddress();
+  if (server_address_.address.IsUnresolved()) {
+    ResolveTurnAddress(server_address_.address);
   } else {
-    SendRequest(new TurnAllocateRequest(this), 0);
+    LOG_J(LS_INFO, this) << "Trying to connect to TURN server via "
+                         << ProtoToString(server_address_.proto)
+                         << " @ " << server_address_.address.ToString();
+    if (server_address_.proto == PROTO_UDP) {
+      socket_.reset(socket_factory()->CreateUdpSocket(
+          talk_base::SocketAddress(ip(), 0), min_port(), max_port()));
+    } else if (server_address_.proto == PROTO_TCP) {
+      socket_.reset(socket_factory()->CreateClientTcpSocket(
+          talk_base::SocketAddress(ip(), 0), server_address_.address,
+          proxy(), user_agent(), talk_base::PacketSocketFactory::OPT_STUN));
+    }
+
+    if (!socket_) {
+      SignalAddressError(this);
+      return;
+    }
+
+    socket_->SignalReadPacket.connect(this, &TurnPort::OnReadPacket);
+    socket_->SignalReadyToSend.connect(this, &TurnPort::OnReadyToSend);
+
+    if (server_address_.proto == PROTO_TCP) {
+      socket_->SignalConnect.connect(this, &TurnPort::OnSocketConnect);
+      socket_->SignalClose.connect(this, &TurnPort::OnSocketClose);
+    } else {
+      // If its UDP, send AllocateRequest now.
+      // For TCP and TLS AllcateRequest will be sent by OnSocketConnect.
+      SendRequest(new TurnAllocateRequest(this), 0);
+    }
   }
+}
+
+void TurnPort::OnSocketConnect(talk_base::AsyncPacketSocket* socket) {
+  LOG(LS_INFO) << "TurnPort connected to " << socket->GetRemoteAddress()
+               << " using tcp.";
+  SendRequest(new TurnAllocateRequest(this), 0);
+}
+
+void TurnPort::OnSocketClose(talk_base::AsyncPacketSocket* socket, int error) {
+  LOG_J(LS_WARNING, this) << "Connection with server failed, error=" << error;
 }
 
 Connection* TurnPort::CreateConnection(const Candidate& address,
@@ -261,17 +298,10 @@ int TurnPort::SendTo(const void* data, size_t size,
     return 0;
   }
 
-  // TODO(juberti): Wire this up once we support sending over connected
-  // transports (e.g. TCP or TLS)
-  // If the entry is connected, then we can send on it (though wrapping may
-  // still be necessary).  Otherwise, we can't yet use this connection, so we
-  // default to the first one.
-  /*
   if (!connected()) {
     error_ = EWOULDBLOCK;
     return SOCKET_ERROR;
   }
-  */
 
   // Send the actual contents to the server using the usual mechanism.
   int sent = entry->Send(data, size, payload);
@@ -288,7 +318,7 @@ void TurnPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
                            const char* data, size_t size,
                            const talk_base::SocketAddress& remote_addr) {
   ASSERT(socket == socket_.get());
-  ASSERT(remote_addr == server_address_);
+  ASSERT(remote_addr == server_address_.address);
 
   // The message must be at least the size of a channel header.
   if (size < TURN_CHANNEL_HEADER_SIZE) {
@@ -323,13 +353,13 @@ void TurnPort::OnReadyToSend(talk_base::AsyncPacketSocket* socket) {
   }
 }
 
-void TurnPort::ResolveTurnAddress() {
+void TurnPort::ResolveTurnAddress(const talk_base::SocketAddress& address) {
   if (resolver_)
     return;
 
   resolver_ = new talk_base::AsyncResolver();
   resolver_->SignalWorkDone.connect(this, &TurnPort::OnResolveResult);
-  resolver_->set_address(server_address_);
+  resolver_->set_address(address);
   resolver_->Start();
 }
 
@@ -342,7 +372,7 @@ void TurnPort::OnResolveResult(talk_base::SignalThread* signal_thread) {
     return;
   }
 
-  server_address_ = resolver_->address();
+  server_address_.address = resolver_->address();
   PrepareAddress();
 }
 
@@ -366,6 +396,10 @@ void TurnPort::OnAllocateSuccess(const talk_base::SocketAddress& address) {
 }
 
 void TurnPort::OnAllocateError() {
+  SignalAddressError(this);
+}
+
+void TurnPort::OnAllocateRequestTimeout() {
   SignalAddressError(this);
 }
 
@@ -480,7 +514,7 @@ void TurnPort::AddRequestAuthInfo(StunMessage* msg) {
 }
 
 int TurnPort::Send(const void* data, size_t len) {
-  return socket_->SendTo(data, len, server_address_);
+  return socket_->SendTo(data, len, server_address_.address);
 }
 
 void TurnPort::UpdateHash() {
@@ -603,7 +637,6 @@ void TurnAllocateRequest::OnResponse(StunMessage* response) {
                              << "allocate success response";
     return;
   }
-
   // Notify the port the allocate succeeded, and schedule a refresh request.
   port_->OnAllocateSuccess(relayed_attr->GetAddress());
   port_->ScheduleRefresh(lifetime_attr->value());
@@ -624,7 +657,8 @@ void TurnAllocateRequest::OnErrorResponse(StunMessage* response) {
 }
 
 void TurnAllocateRequest::OnTimeout() {
-  LOG_J(LS_WARNING, port_) << "Allocate response timeout";
+  LOG_J(LS_WARNING, port_) << "Allocate request timeout";
+  port_->OnAllocateRequestTimeout();
 }
 
 void TurnAllocateRequest::OnAuthChallenge(StunMessage* response, int code) {

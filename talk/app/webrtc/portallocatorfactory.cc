@@ -29,8 +29,8 @@
 
 #include "talk/base/logging.h"
 #include "talk/base/network.h"
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/thread.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/client/httpportallocator.h"
 
 static const char kUserAgent[] = "PeerConnection User Agent";

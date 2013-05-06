@@ -25,42 +25,41 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_BASE_BASICPACKETSOCKETFACTORY_H_
-#define TALK_BASE_BASICPACKETSOCKETFACTORY_H_
+#ifndef TALK_BASE_PACKETSOCKETFACTORY_H_
+#define TALK_BASE_PACKETSOCKETFACTORY_H_
 
-#include "talk/base/packetsocketfactory.h"
+#include "talk/base/proxyinfo.h"
 
 namespace talk_base {
 
-class AsyncSocket;
-class SocketFactory;
-class Thread;
+class AsyncPacketSocket;
 
-class BasicPacketSocketFactory : public PacketSocketFactory {
+class PacketSocketFactory {
  public:
-  BasicPacketSocketFactory();
-  explicit BasicPacketSocketFactory(Thread* thread);
-  explicit BasicPacketSocketFactory(SocketFactory* socket_factory);
-  virtual ~BasicPacketSocketFactory();
+  enum Options {
+    OPT_SSLTCP = 0x01,
+    OPT_STUN = 0x02,
+  };
+
+  PacketSocketFactory() { }
+  virtual ~PacketSocketFactory() { }
 
   virtual AsyncPacketSocket* CreateUdpSocket(
-      const SocketAddress& local_address, int min_port, int max_port);
+      const SocketAddress& address, int min_port, int max_port) = 0;
   virtual AsyncPacketSocket* CreateServerTcpSocket(
-      const SocketAddress& local_address, int min_port, int max_port, bool ssl);
+      const SocketAddress& local_address, int min_port, int max_port,
+      int opts) = 0;
+
+  // TODO: |proxy_info| and |user_agent| should be set
+  // per-factory and not when socket is created.
   virtual AsyncPacketSocket* CreateClientTcpSocket(
       const SocketAddress& local_address, const SocketAddress& remote_address,
-      const ProxyInfo& proxy_info, const std::string& user_agent, bool ssl);
+      const ProxyInfo& proxy_info, const std::string& user_agent, int opts) = 0;
 
  private:
-  int BindSocket(AsyncSocket* socket, const SocketAddress& local_address,
-                 int min_port, int max_port);
-
-  SocketFactory* socket_factory();
-
-  Thread* thread_;
-  SocketFactory* socket_factory_;
+  DISALLOW_EVIL_CONSTRUCTORS(PacketSocketFactory);
 };
 
 }  // namespace talk_base
 
-#endif  // TALK_BASE_BASICPACKETSOCKETFACTORY_H_
+#endif  // TALK_BASE_PACKETSOCKETFACTORY_H_

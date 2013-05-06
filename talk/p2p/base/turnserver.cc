@@ -27,15 +27,16 @@
 
 #include "talk/p2p/base/turnserver.h"
 
-#include "talk/base/asyncpacketsocket.h"
 #include "talk/base/bytebuffer.h"
 #include "talk/base/helpers.h"
 #include "talk/base/logging.h"
 #include "talk/base/messagedigest.h"
-#include "talk/base/packetsocketfactory.h"
+#include "talk/base/socketadapters.h"
 #include "talk/base/stringencode.h"
 #include "talk/base/thread.h"
+#include "talk/p2p/base/asyncstuntcpsocket.h"
 #include "talk/p2p/base/common.h"
+#include "talk/p2p/base/packetsocketfactory.h"
 #include "talk/p2p/base/stun.h"
 
 namespace cricket {
@@ -54,6 +55,9 @@ static const size_t kNonceKeySize = 16;
 static const size_t kNonceSize = 40;
 
 static const size_t TURN_CHANNEL_HEADER_SIZE = 4U;
+
+// TODO(mallinath) - Move these to a common place.
+static const size_t kMaxPacketSize = 64 * 1024;
 
 inline bool IsTurnChannelData(uint16 msg_type) {
   // The first two bits of a channel data message are 0b01.
@@ -79,7 +83,7 @@ class TurnServer::Allocation : public talk_base::MessageHandler,
              const std::string& key);
   virtual ~Allocation();
 
-  const Connection& conn() const { return conn_; }
+  Connection* conn() { return &conn_; }
   const std::string& key() const { return key_; }
   const std::string& transaction_id() const { return transaction_id_; }
   const std::string& username() const { return username_; }
@@ -213,12 +217,33 @@ TurnServer::~TurnServer() {
        it != allocations_.end(); ++it) {
     delete it->second;
   }
+
+  for (InternalSocketMap::iterator it = server_sockets_.begin();
+       it != server_sockets_.end(); ++it) {
+    talk_base::AsyncPacketSocket* socket = it->first;
+    delete socket;
+  }
+
+  for (ServerSocketMap::iterator it = server_listen_sockets_.begin();
+       it != server_listen_sockets_.end(); ++it) {
+    talk_base::AsyncSocket* socket = it->first;
+    delete socket;
+  }
 }
 
-void TurnServer::AddInternalServerSocket(talk_base::AsyncPacketSocket* socket) {
-  ASSERT(server_socket_ == NULL);
-  server_socket_.reset(socket);
+void TurnServer::AddInternalSocket(talk_base::AsyncPacketSocket* socket,
+                                   ProtocolType proto) {
+  ASSERT(server_sockets_.end() == server_sockets_.find(socket));
+  server_sockets_[socket] = proto;
   socket->SignalReadPacket.connect(this, &TurnServer::OnInternalPacket);
+}
+
+void TurnServer::AddInternalServerSocket(talk_base::AsyncSocket* socket,
+                                         ProtocolType proto) {
+  ASSERT(server_listen_sockets_.end() ==
+      server_listen_sockets_.find(socket));
+  server_listen_sockets_[socket] = proto;
+  socket->SignalReadEvent.connect(this, &TurnServer::OnNewInternalConnection);
 }
 
 void TurnServer::SetExternalSocketFactory(
@@ -228,6 +253,34 @@ void TurnServer::SetExternalSocketFactory(
   external_addr_ = external_addr;
 }
 
+void TurnServer::OnNewInternalConnection(talk_base::AsyncSocket* socket) {
+  ASSERT(server_listen_sockets_.find(socket) != server_listen_sockets_.end());
+  AcceptConnection(socket);
+}
+
+void TurnServer::AcceptConnection(talk_base::AsyncSocket* server_socket) {
+  // Check if someone is trying to connect to us.
+  talk_base::SocketAddress accept_addr;
+  talk_base::AsyncSocket* accepted_socket = server_socket->Accept(&accept_addr);
+  if (accepted_socket != NULL) {
+    ProtocolType proto = server_listen_sockets_[server_socket];
+    if (proto == PROTO_SSLTCP) {
+      accepted_socket = new talk_base::AsyncSSLServerSocket(accepted_socket);
+    }
+    cricket::AsyncStunTCPSocket* tcp_socket =
+        new cricket::AsyncStunTCPSocket(accepted_socket, false);
+
+    tcp_socket->SignalClose.connect(this, &TurnServer::OnInternalSocketClose);
+    // Finally add the socket so it can start communicating with the client.
+    AddInternalSocket(tcp_socket, proto);
+  }
+}
+
+void TurnServer::OnInternalSocketClose(talk_base::AsyncPacketSocket* socket,
+                                       int err) {
+  DestroyInternalSocket(socket);
+}
+
 void TurnServer::OnInternalPacket(talk_base::AsyncPacketSocket* socket,
                                   const char* data, size_t size,
                                   const talk_base::SocketAddress& addr) {
@@ -235,22 +288,23 @@ void TurnServer::OnInternalPacket(talk_base::AsyncPacketSocket* socket,
   if (size < TURN_CHANNEL_HEADER_SIZE) {
    return;
   }
-
-  Connection conn(addr, socket->GetLocalAddress(), TURNPROTO_UDP);
+  InternalSocketMap::iterator iter = server_sockets_.find(socket);
+  ASSERT(iter != server_sockets_.end());
+  Connection conn(addr, iter->second, socket);
   uint16 msg_type = talk_base::GetBE16(data);
   if (!IsTurnChannelData(msg_type)) {
     // This is a STUN message.
-    HandleStunMessage(conn, data, size);
+    HandleStunMessage(&conn, data, size);
   } else {
     // This is a channel message; let the allocation handle it.
-    Allocation* allocation = FindAllocation(conn);
+    Allocation* allocation = FindAllocation(&conn);
     if (allocation) {
       allocation->HandleChannelData(data, size);
     }
   }
 }
 
-void TurnServer::HandleStunMessage(const Connection& conn, const char* data,
+void TurnServer::HandleStunMessage(Connection* conn, const char* data,
                                    size_t size) {
   TurnMessage msg;
   talk_base::ByteBuffer buf(data, size);
@@ -316,7 +370,7 @@ bool TurnServer::GetKey(const StunMessage* msg, std::string* key) {
   return (auth_hook_ != NULL && auth_hook_->GetKey(username, realm_, key));
 }
 
-bool TurnServer::CheckAuthorization(const Connection& conn,
+bool TurnServer::CheckAuthorization(Connection* conn,
                                     const StunMessage* msg,
                                     const char* data, size_t size,
                                     const std::string& key) {
@@ -376,7 +430,7 @@ bool TurnServer::CheckAuthorization(const Connection& conn,
   return true;
 }
 
-void TurnServer::HandleBindingRequest(const Connection& conn,
+void TurnServer::HandleBindingRequest(Connection* conn,
                                       const StunMessage* req) {
   StunMessage response;
   InitResponse(req, &response);
@@ -384,13 +438,13 @@ void TurnServer::HandleBindingRequest(const Connection& conn,
   // Tell the user the address that we received their request from.
   StunAddressAttribute* mapped_addr_attr;
   mapped_addr_attr = new StunXorAddressAttribute(
-      STUN_ATTR_XOR_MAPPED_ADDRESS, conn.src());
+      STUN_ATTR_XOR_MAPPED_ADDRESS, conn->src());
   VERIFY(response.AddAttribute(mapped_addr_attr));
 
   SendStun(conn, &response);
 }
 
-void TurnServer::HandleAllocateRequest(const Connection& conn,
+void TurnServer::HandleAllocateRequest(Connection* conn,
                                        const TurnMessage* msg,
                                        const std::string& key) {
   // Check the parameters in the request.
@@ -456,12 +510,12 @@ bool TurnServer::ValidateNonce(const std::string& nonce) const {
   return talk_base::TimeSince(then) < kNonceTimeout;
 }
 
-TurnServer::Allocation* TurnServer::FindAllocation(const Connection& conn) {
-  AllocationMap::const_iterator it = allocations_.find(conn);
+TurnServer::Allocation* TurnServer::FindAllocation(Connection* conn) {
+  AllocationMap::const_iterator it = allocations_.find(*conn);
   return (it != allocations_.end()) ? it->second : NULL;
 }
 
-TurnServer::Allocation* TurnServer::CreateAllocation(const Connection& conn,
+TurnServer::Allocation* TurnServer::CreateAllocation(Connection* conn,
                                                      int proto,
                                                      const std::string& key) {
   talk_base::AsyncPacketSocket* external_socket = (external_socket_factory_) ?
@@ -472,13 +526,13 @@ TurnServer::Allocation* TurnServer::CreateAllocation(const Connection& conn,
 
   // The Allocation takes ownership of the socket.
   Allocation* allocation = new Allocation(this,
-      thread_, conn, external_socket, key);
+      thread_, *conn, external_socket, key);
   allocation->SignalDestroyed.connect(this, &TurnServer::OnAllocationDestroyed);
-  allocations_[conn] = allocation;
+  allocations_[*conn] = allocation;
   return allocation;
 }
 
-void TurnServer::SendErrorResponse(const Connection& conn,
+void TurnServer::SendErrorResponse(Connection* conn,
                                    const StunMessage* req,
                                    int code, const std::string& reason) {
   TurnMessage resp;
@@ -489,7 +543,7 @@ void TurnServer::SendErrorResponse(const Connection& conn,
 }
 
 void TurnServer::SendErrorResponseWithRealmAndNonce(
-    const Connection& conn, const StunMessage* msg,
+    Connection* conn, const StunMessage* msg,
     int code, const std::string& reason) {
   TurnMessage resp;
   InitErrorResponse(msg, code, reason, &resp);
@@ -500,7 +554,7 @@ void TurnServer::SendErrorResponseWithRealmAndNonce(
   SendStun(conn, &resp);
 }
 
-void TurnServer::SendStun(const Connection& conn, StunMessage* msg) {
+void TurnServer::SendStun(Connection* conn, StunMessage* msg) {
   talk_base::ByteBuffer buf;
   // Add a SOFTWARE attribute if one is set.
   if (!software_.empty()) {
@@ -511,22 +565,43 @@ void TurnServer::SendStun(const Connection& conn, StunMessage* msg) {
   Send(conn, buf);
 }
 
-void TurnServer::Send(const Connection& conn,
+void TurnServer::Send(Connection* conn,
                       const talk_base::ByteBuffer& buf) {
-  // TODO(juberti): Pick which socket to send on, once we have TCP support.
-  server_socket_->SendTo(buf.Data(), buf.Length(), conn.src());
+  conn->socket()->SendTo(buf.Data(), buf.Length(), conn->src());
 }
 
 void TurnServer::OnAllocationDestroyed(Allocation* allocation) {
-  AllocationMap::iterator it = allocations_.find(allocation->conn());
+  // Removing the internal socket if the connection is not udp.
+  talk_base::AsyncPacketSocket* socket = allocation->conn()->socket();
+  InternalSocketMap::iterator iter = server_sockets_.find(socket);
+  ASSERT(iter != server_sockets_.end());
+  // Skip if the socket serving this allocation is UDP, as this will be shared
+  // by all allocations.
+  if (iter->second != cricket::PROTO_UDP) {
+    DestroyInternalSocket(socket);
+  }
+
+  AllocationMap::iterator it = allocations_.find(*(allocation->conn()));
   if (it != allocations_.end())
     allocations_.erase(it);
 }
 
+void TurnServer::DestroyInternalSocket(talk_base::AsyncPacketSocket* socket) {
+  InternalSocketMap::iterator iter = server_sockets_.find(socket);
+  if (iter != server_sockets_.end()) {
+    talk_base::AsyncPacketSocket* socket = iter->first;
+    delete socket;
+    server_sockets_.erase(iter);
+  }
+}
+
 TurnServer::Connection::Connection(const talk_base::SocketAddress& src,
-                                   const talk_base::SocketAddress& dst,
-                                   ProtocolType proto)
-    : src_(src), dst_(dst), proto_(proto) {
+                                   ProtocolType proto,
+                                   talk_base::AsyncPacketSocket* socket)
+    : src_(src),
+      dst_(socket->GetRemoteAddress()),
+      proto_(proto),
+      socket_(socket) {
 }
 
 bool TurnServer::Connection::operator==(const Connection& c) const {
@@ -774,7 +849,7 @@ void TurnServer::Allocation::OnExternalPacket(
     buf.WriteUInt16(channel->id());
     buf.WriteUInt16(size);
     buf.WriteBytes(data, size);
-    server_->Send(conn_, buf);
+    server_->Send(&conn_, buf);
   } else if (HasPermission(addr.ipaddr())) {
     // No channel, but a permission exists. Send as a data indication.
     TurnMessage msg;
@@ -785,7 +860,7 @@ void TurnServer::Allocation::OnExternalPacket(
         STUN_ATTR_XOR_PEER_ADDRESS, addr)));
     VERIFY(msg.AddAttribute(new StunByteStringAttribute(
         STUN_ATTR_DATA, data, size)));
-    server_->SendStun(conn_, &msg);
+    server_->SendStun(&conn_, &msg);
   } else {
     LOG_J(LS_WARNING, this) << "Received external packet without permission, "
                             << "peer=" << addr;
@@ -850,7 +925,7 @@ TurnServer::Channel* TurnServer::Allocation::FindChannel(
 void TurnServer::Allocation::SendResponse(TurnMessage* msg) {
   // Success responses always have M-I.
   msg->AddMessageIntegrity(key_);
-  server_->SendStun(conn_, msg);
+  server_->SendStun(&conn_, msg);
 }
 
 void TurnServer::Allocation::SendBadRequestResponse(const TurnMessage* req) {
@@ -859,7 +934,7 @@ void TurnServer::Allocation::SendBadRequestResponse(const TurnMessage* req) {
 
 void TurnServer::Allocation::SendErrorResponse(const TurnMessage* req, int code,
                                        const std::string& reason) {
-  server_->SendErrorResponse(conn_, req, code, reason);
+  server_->SendErrorResponse(&conn_, req, code, reason);
 }
 
 void TurnServer::Allocation::SendExternal(const void* data, size_t size,

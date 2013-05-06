@@ -33,13 +33,13 @@
 #include <map>
 
 #include "talk/base/network.h"
-#include "talk/base/packetsocketfactory.h"
 #include "talk/base/proxyinfo.h"
 #include "talk/base/ratetracker.h"
 #include "talk/base/sigslot.h"
 #include "talk/base/socketaddress.h"
 #include "talk/base/thread.h"
 #include "talk/p2p/base/candidate.h"
+#include "talk/p2p/base/packetsocketfactory.h"
 #include "talk/p2p/base/portinterface.h"
 #include "talk/p2p/base/stun.h"
 #include "talk/p2p/base/stunrequest.h"
@@ -79,7 +79,14 @@ enum RelayType {
 };
 
 enum IcePriorityValue {
-  ICE_TYPE_PREFERENCE_RELAY = 0,
+  // The reason we are choosing Relay preference 2 is because, we can run
+  // Relay from client to server on UDP/TCP/TLS. To distinguish the transport
+  // protocol, we prefer UDP over TCP over TLS.
+  // For UDP ICE_TYPE_PREFERENCE_RELAY will be 2.
+  // For TCP ICE_TYPE_PREFERENCE_RELAY will be 1.
+  // For TLS ICE_TYPE_PREFERENCE_RELAY will be 0.
+  // Check turnport.cc for setting these values.
+  ICE_TYPE_PREFERENCE_RELAY = 2,
   ICE_TYPE_PREFERENCE_HOST_TCP = 90,
   ICE_TYPE_PREFERENCE_SRFLX = 100,
   ICE_TYPE_PREFERENCE_PRFLX = 110,

@@ -37,20 +37,19 @@ namespace talk_base {
 // Simulates UDP semantics over TCP.  Send and Recv packet sizes
 // are preserved, and drops packets silently on Send, rather than
 // buffer them in user space.
-class AsyncTCPSocket : public AsyncPacketSocket {
+class AsyncTCPSocketBase : public AsyncPacketSocket {
  public:
-  // Binds and connects |socket| and creates AsyncTCPSocket for
-  // it. Takes ownership of |socket|. Returns NULL if bind() or
-  // connect() fail (|socket| is destroyed in that case).
-  static AsyncTCPSocket* Create(AsyncSocket* socket,
-                                const SocketAddress& bind_address,
-                                const SocketAddress& remote_address);
-  explicit AsyncTCPSocket(AsyncSocket* socket, bool listen);
-  virtual ~AsyncTCPSocket();
+  AsyncTCPSocketBase(AsyncSocket* socket, bool listen, size_t max_packet_size);
+  virtual ~AsyncTCPSocketBase();
+
+  // Pure virtual methods to send and recv data.
+  virtual int Send(const void *pv, size_t cb) = 0;
+  virtual void ProcessInput(char* data, size_t* len) = 0;
+  // Signals incoming connection.
+  virtual void HandleIncomingConnection(AsyncSocket* socket) = 0;
 
   virtual SocketAddress GetLocalAddress() const;
   virtual SocketAddress GetRemoteAddress() const;
-  virtual int Send(const void *pv, size_t cb);
   virtual int SendTo(const void *pv, size_t cb, const SocketAddress& addr);
   virtual int Close();
 
@@ -61,12 +60,22 @@ class AsyncTCPSocket : public AsyncPacketSocket {
   virtual void SetError(int error);
 
  protected:
-  int SendRaw(const void* pv, size_t cb);
-  virtual void ProcessInput(char* data, size_t& len);
+  // Binds and connects |socket| and creates AsyncTCPSocket for
+  // it. Takes ownership of |socket|. Returns NULL if bind() or
+  // connect() fail (|socket| is destroyed in that case).
+  static AsyncSocket* ConnectSocket(AsyncSocket* socket,
+                                    const SocketAddress& bind_address,
+                                    const SocketAddress& remote_address);
+  virtual int SendRaw(const void* pv, size_t cb);
+  int FlushOutBuffer();
+  // Add data to |outbuf_|.
+  void AppendToOutBuffer(const void* pv, size_t cb);
+
+  // Helper methods for |outpos_|.
+  bool IsOutBufferEmpty() const { return outpos_ == 0; }
+  void ClearOutBuffer() { outpos_ = 0; }
 
  private:
-  int Flush();
-
   // Called by the underlying socket
   void OnConnectEvent(AsyncSocket* socket);
   void OnReadEvent(AsyncSocket* socket);
@@ -78,6 +87,25 @@ class AsyncTCPSocket : public AsyncPacketSocket {
   char* inbuf_, * outbuf_;
   size_t insize_, inpos_, outsize_, outpos_;
 
+  DISALLOW_EVIL_CONSTRUCTORS(AsyncTCPSocketBase);
+};
+
+class AsyncTCPSocket : public AsyncTCPSocketBase {
+ public:
+  // Binds and connects |socket| and creates AsyncTCPSocket for
+  // it. Takes ownership of |socket|. Returns NULL if bind() or
+  // connect() fail (|socket| is destroyed in that case).
+  static AsyncTCPSocket* Create(AsyncSocket* socket,
+                                const SocketAddress& bind_address,
+                                const SocketAddress& remote_address);
+  AsyncTCPSocket(AsyncSocket* socket, bool listen);
+  virtual ~AsyncTCPSocket() {}
+
+  virtual int Send(const void* pv, size_t cb);
+  virtual void ProcessInput(char* data, size_t* len);
+  virtual void HandleIncomingConnection(AsyncSocket* socket);
+
+ private:
   DISALLOW_EVIL_CONSTRUCTORS(AsyncTCPSocket);
 };
 

@@ -8,13 +8,13 @@
 #include <string>
 
 #include "talk/base/network.h"
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/basictypes.h"
 #include "talk/base/messagehandler.h"
 #include "talk/base/proxyinfo.h"
 #include "talk/base/scoped_ptr.h"
 #include "talk/base/sigslot.h"
 #include "talk/base/socketaddress.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/client/httpportallocator.h"
 
 namespace talk_base {

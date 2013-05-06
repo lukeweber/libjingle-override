@@ -31,7 +31,6 @@
 #include <map>
 
 #include "talk/base/base64.h"
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/common.h"
 #include "talk/base/gunit.h"
 #include "talk/base/helpers.h"
@@ -40,6 +39,7 @@
 #include "talk/base/natserver.h"
 #include "talk/base/natsocketfactory.h"
 #include "talk/base/stringencode.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/constants.h"
 #include "talk/p2p/base/parsing.h"
 #include "talk/p2p/base/portallocator.h"

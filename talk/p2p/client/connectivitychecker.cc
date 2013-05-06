@@ -7,7 +7,6 @@
 
 #include "talk/base/asynchttprequest.h"
 #include "talk/base/autodetectproxy.h"
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/helpers.h"
 #include "talk/base/httpcommon.h"
 #include "talk/base/httpcommon-inl.h"

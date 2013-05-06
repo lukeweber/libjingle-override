@@ -199,7 +199,7 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
   void DisableEquivalentPhases(talk_base::Network* network,
                                PortConfiguration* config, uint32* flags);
   void AddAllocatedPort(Port* port, AllocationSequence* seq,
-                        bool prepare_address = true);
+                        bool prepare_address);
   void OnCandidateReady(Port* port, const Candidate& c);
   void OnPortReady(Port* port);
   void OnProtocolEnabled(AllocationSequence* seq, ProtocolType proto);

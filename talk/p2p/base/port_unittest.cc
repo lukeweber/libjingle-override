@@ -25,7 +25,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/crc32.h"
 #include "talk/base/gunit.h"
 #include "talk/base/helpers.h"
@@ -39,6 +38,7 @@
 #include "talk/base/stringutils.h"
 #include "talk/base/thread.h"
 #include "talk/base/virtualsocketserver.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/portproxy.h"
 #include "talk/p2p/base/relayport.h"
 #include "talk/p2p/base/stunport.h"
@@ -449,7 +449,8 @@ class PortTest : public testing::Test, public sigslot::has_slots<> {
                            ProtocolType int_proto, ProtocolType ext_proto) {
     TurnPort* port = TurnPort::Create(main_, socket_factory, &network_,
                                       addr.ipaddr(), 0, 0,
-                                      username_, password_, kTurnUdpIntAddr,
+                                      username_, password_, ProtocolAddress(
+                                          kTurnUdpIntAddr, PROTO_UDP),
                                       kRelayCredentials);
     port->SetIceProtocolType(ice_protocol_);
     return port;
@@ -729,7 +730,7 @@ class FakePacketSocketFactory : public talk_base::PacketSocketFactory {
 
   virtual AsyncPacketSocket* CreateServerTcpSocket(
       const SocketAddress& local_address, int min_port, int max_port,
-      bool ssl) {
+      int opts) {
     EXPECT_TRUE(next_server_tcp_socket_ != NULL);
     AsyncPacketSocket* result = next_server_tcp_socket_;
     next_server_tcp_socket_ = NULL;
@@ -741,7 +742,7 @@ class FakePacketSocketFactory : public talk_base::PacketSocketFactory {
   virtual AsyncPacketSocket* CreateClientTcpSocket(
       const SocketAddress& local_address, const SocketAddress& remote_address,
       const talk_base::ProxyInfo& proxy_info,
-      const std::string& user_agent, bool ssl) {
+      const std::string& user_agent, int opts) {
     EXPECT_TRUE(next_client_tcp_socket_ != NULL);
     AsyncPacketSocket* result = next_client_tcp_socket_;
     next_client_tcp_socket_ = NULL;
@@ -2064,7 +2065,7 @@ TEST_F(PortTest, TestConnectionPriority) {
   rport->AddCandidateAddress(SocketAddress("10.1.1.100", 1234));
 
   EXPECT_EQ(0x7E001E85U, lport->Candidates()[0].priority());
-  EXPECT_EQ(0x1EE9U, rport->Candidates()[0].priority());
+  EXPECT_EQ(0x2001EE9U, rport->Candidates()[0].priority());
 
   // RFC 5245
   // pair priority = 2^32*MIN(G,D) + 2*MAX(G,D) + (G>D?1:0)
@@ -2073,9 +2074,9 @@ TEST_F(PortTest, TestConnectionPriority) {
   Connection* lconn = lport->CreateConnection(
       rport->Candidates()[0], Port::ORIGIN_MESSAGE);
 #if defined(WIN32)
-  EXPECT_EQ(0x1EE9FC003D0BU, lconn->priority());
+  EXPECT_EQ(0x2001EE9FC003D0BU, lconn->priority());
 #else
-  EXPECT_EQ(0x1EE9FC003D0BLLU, lconn->priority());
+  EXPECT_EQ(0x2001EE9FC003D0BLLU, lconn->priority());
 #endif
 
   lport->SetRole(cricket::ROLE_CONTROLLED);
@@ -2083,9 +2084,9 @@ TEST_F(PortTest, TestConnectionPriority) {
   Connection* rconn = rport->CreateConnection(
       lport->Candidates()[0], Port::ORIGIN_MESSAGE);
 #if defined(WIN32)
-  EXPECT_EQ(0x1EE9FC003D0AU, rconn->priority());
+  EXPECT_EQ(0x2001EE9FC003D0AU, rconn->priority());
 #else
-  EXPECT_EQ(0x1EE9FC003D0ALLU, rconn->priority());
+  EXPECT_EQ(0x2001EE9FC003D0ALLU, rconn->priority());
 #endif
 }
 

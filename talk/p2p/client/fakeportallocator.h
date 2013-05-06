@@ -6,8 +6,8 @@
 #define TALK_P2P_CLIENT_FAKEPORTALLOCATOR_H_
 
 #include <string>
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/scoped_ptr.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/portallocator.h"
 #include "talk/p2p/base/udpport.h"
 

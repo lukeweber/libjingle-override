@@ -56,24 +56,17 @@ class TurnPort : public Port {
                           int min_port, int max_port,
                           const std::string& username,  // ice username.
                           const std::string& password,  // ice password.
-                          const talk_base::SocketAddress& server_address,
+                          const ProtocolAddress& server_address,
                           const RelayCredentials& credentials) {
-    TurnPort* port = new TurnPort(thread, factory, network,
-                                  ip, min_port, max_port,
-                                  username, password,
-                                  server_address, credentials);
-    if (!port->Init()) {
-      delete port;
-      port = NULL;
-    }
-    return port;
+    return new TurnPort(thread, factory, network, ip, min_port, max_port,
+                        username, password, server_address, credentials);
   }
 
   virtual ~TurnPort();
 
-  const talk_base::SocketAddress& server_address() const {
-    return server_address_;
-  }
+  const ProtocolAddress& server_address() const { return server_address_; }
+
+  bool connected() const { return connected_; }
   const RelayCredentials& credentials() const { return credentials_; }
 
   virtual void PrepareAddress();
@@ -90,6 +83,10 @@ class TurnPort : public Port {
                             const talk_base::SocketAddress& remote_addr);
   virtual void OnReadyToSend(talk_base::AsyncPacketSocket* socket);
 
+  void OnSocketConnect(talk_base::AsyncPacketSocket* socket);
+  void OnSocketClose(talk_base::AsyncPacketSocket* socket, int error);
+
+
   const std::string& hash() const { return hash_; }
   const std::string& nonce() const { return nonce_; }
 
@@ -105,13 +102,12 @@ class TurnPort : public Port {
            int min_port, int max_port,
            const std::string& username,
            const std::string& password,
-           const talk_base::SocketAddress& server_address,
+           const ProtocolAddress& server_address,
            const RelayCredentials& credentials);
-
-  bool Init();
 
  private:
   typedef std::list<TurnEntry*> EntryList;
+
   void set_nonce(const std::string& nonce) { nonce_ = nonce; }
   void set_realm(const std::string& realm) {
     if (realm != realm_) {
@@ -120,7 +116,7 @@ class TurnPort : public Port {
     }
   }
 
-  void ResolveTurnAddress();
+  void ResolveTurnAddress(const talk_base::SocketAddress& address);
   void OnResolveResult(talk_base::SignalThread* signal_thread);
 
   void AddRequestAuthInfo(StunMessage* msg);
@@ -130,6 +126,7 @@ class TurnPort : public Port {
   void OnStunAddress(const talk_base::SocketAddress& address);
   void OnAllocateSuccess(const talk_base::SocketAddress& address);
   void OnAllocateError();
+  void OnAllocateRequestTimeout();
 
   void HandleDataIndication(const char* data, size_t size);
   void HandleChannelData(int channel_id, const char* data, size_t size);
@@ -149,7 +146,7 @@ class TurnPort : public Port {
   void DestroyEntry(const talk_base::SocketAddress& address);
   void OnConnectionDestroyed(Connection* conn);
 
-  talk_base::SocketAddress server_address_;
+  ProtocolAddress server_address_;
   RelayCredentials credentials_;
 
   talk_base::scoped_ptr<talk_base::AsyncPacketSocket> socket_;

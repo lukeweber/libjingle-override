@@ -30,11 +30,11 @@
 #include <string>
 #include <vector>
 
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/common.h"
 #include "talk/base/helpers.h"
 #include "talk/base/host.h"
 #include "talk/base/logging.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/common.h"
 #include "talk/p2p/base/port.h"
 #include "talk/p2p/base/relayport.h"
@@ -969,7 +969,7 @@ void AllocationSequence::CreateUDPPorts() {
       port->set_server_addr(config_->stun_address);
     }
 
-    session_->AddAllocatedPort(port, this);
+    session_->AddAllocatedPort(port, this, true);
     port->SignalDestroyed.connect(this, &AllocationSequence::OnPortDestroyed);
   }
 }
@@ -988,7 +988,7 @@ void AllocationSequence::CreateTCPPorts() {
                                session_->username(), session_->password(),
                                session_->allocator()->allow_tcp_listen());
   if (port) {
-    session_->AddAllocatedPort(port, this);
+    session_->AddAllocatedPort(port, this, true);
     // Since TCPPort is not created using shared socket, |port| will not be
     // added to the dequeue.
   }
@@ -1023,7 +1023,7 @@ void AllocationSequence::CreateStunPorts() {
                                 session_->username(), session_->password(),
                                 config_->stun_address);
   if (port) {
-    session_->AddAllocatedPort(port, this);
+    session_->AddAllocatedPort(port, this, true);
     // Since StunPort is not created using shared socket, |port| will not be
     // added to the dequeue.
   }
@@ -1092,23 +1092,16 @@ void AllocationSequence::CreateTurnPort(const RelayServerConfig& config) {
   PortList::const_iterator relay_port;
   for (relay_port = config.ports.begin();
        relay_port != config.ports.end(); ++relay_port) {
-    if (relay_port->proto == PROTO_UDP) {
-      TurnPort* port = TurnPort::Create(session_->network_thread(),
-                                        session_->socket_factory(),
-                                        network_, ip_,
-                                        session_->allocator()->min_port(),
-                                        session_->allocator()->max_port(),
-                                        session_->username(),
-                                        session_->password(),
-                                        relay_port->address,
-                                        config.credentials);
-      if (port) {
-        session_->AddAllocatedPort(port, this);
-      }
-    } else {
-      LOG(LS_WARNING) << ProtoToString(relay_port->proto)
-                      << " server address: " << relay_port->address.ToString()
-                      << " is not currently supported.";
+    TurnPort* port = TurnPort::Create(session_->network_thread(),
+                                      session_->socket_factory(),
+                                      network_, ip_,
+                                      session_->allocator()->min_port(),
+                                      session_->allocator()->max_port(),
+                                      session_->username(),
+                                      session_->password(),
+                                      *relay_port, config.credentials);
+    if (port) {
+      session_->AddAllocatedPort(port, this, true);
     }
   }
 }

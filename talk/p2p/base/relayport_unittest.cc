@@ -25,7 +25,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/logging.h"
 #include "talk/base/gunit.h"
 #include "talk/base/helpers.h"
@@ -35,6 +34,7 @@
 #include "talk/base/socketaddress.h"
 #include "talk/base/thread.h"
 #include "talk/base/virtualsocketserver.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/relayport.h"
 #include "talk/p2p/base/relayserver.h"
 

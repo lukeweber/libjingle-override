@@ -28,10 +28,10 @@
 #include <iostream>  // NOLINT
 
 #include "talk/base/asyncudpsocket.h"
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/optionsfile.h"
 #include "talk/base/thread.h"
 #include "talk/base/stringencode.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/turnserver.h"
 
 static const char kSoftware[] = "libjingle TurnServer";
@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
   server.set_realm(argv[3]);
   server.set_software(kSoftware);
   server.set_auth_hook(&auth);
-  server.AddInternalServerSocket(int_socket);
+  server.AddInternalSocket(int_socket, cricket::PROTO_UDP);
   server.SetExternalSocketFactory(new talk_base::BasicPacketSocketFactory(),
                                   talk_base::SocketAddress(ext_addr, 0));
 

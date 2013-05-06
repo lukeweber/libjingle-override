@@ -27,10 +27,10 @@
 
 #include <vector>
 
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/fakenetwork.h"
 #include "talk/base/gunit.h"
 #include "talk/base/thread.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/portallocatorsessionproxy.h"
 #include "talk/p2p/client/basicportallocator.h"
 #include "talk/p2p/client/fakeportallocator.h"

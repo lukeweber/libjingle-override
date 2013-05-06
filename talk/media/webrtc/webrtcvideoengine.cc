@@ -3098,6 +3098,17 @@ bool WebRtcVideoMediaChannel::SetSendCodec(
     target_codec.startBitrate = talk_base::_min(target_codec.startBitrate,
                                                 target_codec.maxBitrate);
 
+    // Avoid setting codec if it's the same as the current one.
+    // Note that this method might compare them as unequal even though they
+    // are semantically equivalent. This is because the webrtc::VideoCodec
+    // struct can contain a non-NULL pointer, and contains a union. This
+    // comparison is best-effort, and seems to work well in practice.
+    webrtc::VideoCodec current_codec;
+    if (engine()->vie()->codec()->GetSendCodec(channel_id, current_codec) == 0
+        && memcmp(&current_codec, &target_codec, sizeof(current_codec)) == 0) {
+      return true;
+    }
+
     if (0 != engine()->vie()->codec()->SetSendCodec(channel_id, target_codec)) {
       LOG_RTCERR2(SetSendCodec, channel_id, target_codec.plName);
       return false;
