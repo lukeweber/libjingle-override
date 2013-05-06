@@ -39,6 +39,7 @@
 
 // Defined by "usrsctplib/usrsctp.h"
 struct sockaddr_conn;
+struct sctp_assoc_change;
 // Defined by <sys/socket.h>
 struct socket;
 
@@ -184,8 +185,7 @@ class SctpDataMediaChannel : public DataMediaChannel,
   void OnDataFromSctpToChannel(const ReceiveDataParams& params,
                                talk_base::Buffer* buffer);
   void OnNotificationFromSctp(talk_base::Buffer* buffer);
-  // Note: OnPacketFromChannelToSctp is the |SendData| method and has to be
-  // public as the channel/worker thread will call it.
+  void OnNotificationAssocChange(const sctp_assoc_change& change);
 
   // Responsible for marshalling incoming data to the channels listeners, and
   // outgoing data to the network interface.

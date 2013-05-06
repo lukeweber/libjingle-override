@@ -161,7 +161,7 @@ SctpDataEngine::SctpDataEngine() {
     // usrsctp_sysctl_set_sctp_debug_on(SCTP_DEBUG_ALL);
 
     // TODO(ldixon): Consider turning this on/off.
-    // usrsctp_sysctl_set_sctp_ecn_enable(0);
+    usrsctp_sysctl_set_sctp_ecn_enable(0);
 
     // TODO(ldixon): Consider turning this on/off.
     // This is not needed right now (we don't do dynamic address changes):
@@ -265,6 +265,23 @@ bool SctpDataMediaChannel::OpenSctpSocket() {
     return false;
   }
 
+  // Subscribe to SCTP event notifications.
+  int event_types[] = {SCTP_ASSOC_CHANGE,
+                       SCTP_PEER_ADDR_CHANGE,
+                       SCTP_SEND_FAILED_EVENT};
+  struct sctp_event event = {0};
+  event.se_assoc_id = SCTP_ALL_ASSOC;
+  event.se_on = 1;
+  for (size_t i = 0; i < ARRAY_SIZE(event_types); i++) {
+    event.se_type = event_types[i];
+    if (usrsctp_setsockopt(sock_, IPPROTO_SCTP, SCTP_EVENT, &event,
+                           sizeof(event)) < 0) {
+      LOG_ERRNO(LS_ERROR) << debug_name_ << "Failed to set SCTP_EVENT type: "
+                          << event.se_type;
+      return false;
+    }
+  }
+
   // Register this class as an address for usrsctp. This is used by SCTP to
   // direct the packets received (by the created socket) to this class.
   usrsctp_register_address(this);
@@ -305,8 +322,8 @@ bool SctpDataMediaChannel::Connect() {
   sockaddr_conn local_sconn = GetSctpSockAddr(local_port_);
   if (usrsctp_bind(sock_, reinterpret_cast<sockaddr *>(&local_sconn),
                    sizeof(local_sconn)) < 0) {
-    LOG_ERRNO(LS_ERROR) << debug_name_ << "->SetReceive(...): "
-                        << ("Failed usrsctp_bind.");
+    LOG_ERRNO(LS_ERROR) << debug_name_ << "->Connect(): "
+                        << ("Failed usrsctp_bind");
     CloseSctpSocket();
     return false;
   }
@@ -316,7 +333,7 @@ bool SctpDataMediaChannel::Connect() {
   int connect_result = usrsctp_connect(
       sock_, reinterpret_cast<sockaddr *>(&remote_sconn), sizeof(remote_sconn));
   if (connect_result < 0 && errno != EINPROGRESS) {
-    LOG_ERRNO(LS_ERROR) << debug_name_ << "Failed usrsctp_connect.";
+    LOG_ERRNO(LS_ERROR) << debug_name_ << "Failed usrsctp_connect";
     CloseSctpSocket();
     return false;
   }
@@ -476,14 +493,26 @@ bool SctpDataMediaChannel::SendData(
 // Called by network interface when a packet has been received.
 void SctpDataMediaChannel::OnPacketReceived(talk_base::Buffer* packet) {
   LOG(LS_VERBOSE) << debug_name_ << "->OnPacketReceived(...): "
-                  << "length=" << packet->length() << "; data="
+                  << " length=" << packet->length() << "; data="
                   << SctpDataToDebugString(packet->data(), packet->length(),
                                            SCTP_DUMP_INBOUND);
-
-  // Pass received packet to SCTP stack. Once processed by usrsctp, the data
-  // will be will be given to the global OnSctpInboundData, and then,
-  // marshalled by a Post and handling with OnMessage.
-  usrsctp_conninput(this, packet->data(), packet->length(), 0);
+  // Only give receiving packets to usrsctp after if connected. This enables two
+  // peers to each make a connect call, but for them not to receive an INIT
+  // packet before they have called connect; least the last receiver of the INIT
+  // packet will have called connect, and a connection will be established.
+  if (sending_) {
+    LOG(LS_VERBOSE) << debug_name_ << "->OnPacketReceived(...):"
+                    << " Passed packet to sctp.";
+    // Pass received packet to SCTP stack. Once processed by usrsctp, the data
+    // will be will be given to the global OnSctpInboundData, and then,
+    // marshalled by a Post and handled with OnMessage.
+    usrsctp_conninput(this, packet->data(), packet->length(), 0);
+  } else {
+    // TODO(ldixon): Consider caching the packet for very slightly better
+    // reliability.
+    LOG(LS_INFO) << debug_name_ << "->OnPacketReceived(...):"
+                    << " Threw packet (probably an INIT) away.";
+  }
 }
 
 void SctpDataMediaChannel::OnInboundPacketFromSctpToChannel(
@@ -532,58 +561,83 @@ void SctpDataMediaChannel::OnDataFromSctpToChannel(
 
 void SctpDataMediaChannel::OnNotificationFromSctp(
     talk_base::Buffer* buffer) {
-  if (buffer->length() != sizeof(sctp_notification)) {
-    LOG(LS_WARNING) << "Bad sctp_notification: wrong size.";
-    return;
-  }
+  const sctp_notification& notification =
+      reinterpret_cast<const sctp_notification&>(*buffer->data());
+  ASSERT(notification.sn_header.sn_length == buffer->length());
 
   // TODO(ldixon): handle notifications appropriately.
-  const sctp_notification& note =
-      reinterpret_cast<const sctp_notification&>(*buffer->data());
-  switch (note.sn_header.sn_type) {
+  switch (notification.sn_header.sn_type) {
     case SCTP_ASSOC_CHANGE:
-      LOG(LS_INFO) << "SCTP_ASSOC_CHANGE";
-      return;
+      LOG(LS_VERBOSE) << "SCTP_ASSOC_CHANGE";
+      OnNotificationAssocChange(notification.sn_assoc_change);
+      break;
     case SCTP_REMOTE_ERROR:
       LOG(LS_INFO) << "SCTP_REMOTE_ERROR";
-      return;
+      break;
     case SCTP_SHUTDOWN_EVENT:
       LOG(LS_INFO) << "SCTP_SHUTDOWN_EVENT";
-      return;
+      break;
     case SCTP_ADAPTATION_INDICATION:
       LOG(LS_INFO) << "SCTP_ADAPTATION_INIDICATION";
-      return;
+      break;
     case SCTP_PARTIAL_DELIVERY_EVENT:
       LOG(LS_INFO) << "SCTP_PARTIAL_DELIVERY_EVENT";
-      return;
+      break;
     case SCTP_AUTHENTICATION_EVENT:
       LOG(LS_INFO) << "SCTP_AUTHENTICATION_EVENT";
-      return;
+      break;
     case SCTP_SENDER_DRY_EVENT:
       LOG(LS_INFO) << "SCTP_SENDER_DRY_EVENT";
-      return;
+      break;
     // TODO(ldixon): Unblock after congestion.
     case SCTP_NOTIFICATIONS_STOPPED_EVENT:
       LOG(LS_INFO) << "SCTP_NOTIFICATIONS_STOPPED_EVENT";
-      return;
+      break;
     case SCTP_SEND_FAILED_EVENT:
       LOG(LS_INFO) << "SCTP_SEND_FAILED_EVENT";
-      return;
+      break;
     case SCTP_STREAM_RESET_EVENT:
       LOG(LS_INFO) << "SCTP_STREAM_RESET_EVENT";
       // TODO(ldixon): Notify up to channel that stream resent has happened,
       // and write unit test for this case.
-      return;
+      break;
     case SCTP_ASSOC_RESET_EVENT:
       LOG(LS_INFO) << "SCTP_ASSOC_RESET_EVENT";
-      return;
+      break;
     case SCTP_STREAM_CHANGE_EVENT:
       LOG(LS_INFO) << "SCTP_STREAM_CHANGE_EVENT";
-      return;
+      break;
+    default:
+      LOG(LS_WARNING) << "Unknown SCTP event: "
+                      << notification.sn_header.sn_type;
+      break;
   }
-
-  LOG(LS_WARNING) << "Unknown SCTP event: " << note.sn_header.sn_type;
 }
+
+void SctpDataMediaChannel::OnNotificationAssocChange(
+    const sctp_assoc_change& change) {
+  switch (change.sac_state) {
+    case SCTP_COMM_UP:
+      LOG(LS_VERBOSE) << "Association change SCTP_COMM_UP";
+      break;
+    case SCTP_COMM_LOST:
+      LOG(LS_INFO) << "Association change SCTP_COMM_LOST";
+      break;
+    case SCTP_RESTART:
+      LOG(LS_INFO) << "Association change SCTP_RESTART";
+      break;
+    case SCTP_SHUTDOWN_COMP:
+      LOG(LS_INFO) << "Association change SCTP_SHUTDOWN_COMP";
+      break;
+    case SCTP_CANT_STR_ASSOC:
+      LOG(LS_INFO) << "Association change SCTP_CANT_STR_ASSOC";
+      break;
+    default:
+      LOG(LS_INFO) << "Association change UNKNOWN";
+      break;
+  }
+}
+
 
 void SctpDataMediaChannel::OnPacketFromSctpToNetwork(
     talk_base::Buffer* buffer) {

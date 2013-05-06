@@ -170,6 +170,17 @@ class SctpDataMediaChannelTest : public testing::Test {
             recv->last_data() == msg);
   }
 
+  bool ProcessMessagesUntilIdle() {
+    talk_base::Thread* thread = talk_base::Thread::Current();
+    while (!thread->empty()) {
+      talk_base::Message msg;
+      if (thread->Get(&msg, talk_base::kForever)) {
+        thread->Dispatch(&msg);
+      }
+    }
+    return !thread->IsQuitting();
+  }
+
  private:
   talk_base::scoped_ptr<cricket::SctpDataEngine> engine_;
 };
@@ -211,6 +222,10 @@ TEST_F(SctpDataMediaChannelTest, SendData) {
   // chan2 accepts the offer, chan2 connects to chan1 with the following.
   chan2->SetReceive(true);
   chan2->SetSend(true);
+  // Makes sure that network packets are delivered and simulates a
+  // deterministic and realistic small timing delay between the SetSend calls.
+  ProcessMessagesUntilIdle();
+
   // chan1 and chan2 are now connected so chan1 enables sending to complete
   // the creation of the connection.
   chan1->SetSend(true);
