@@ -171,7 +171,6 @@
         'base/autodetectproxy.cc',
         'base/bandwidthsmoother.cc',
         'base/base64.cc',
-        'base/basicpacketsocketfactory.cc',
         'base/bytebuffer.cc',
         'base/checks.cc',
         'base/common.cc',
@@ -570,6 +569,8 @@
         ],
       },
       'sources': [
+        'p2p/base/asyncstuntcppacket.cc',
+        'p2p/base/basicpacketsocketfactory.cc',
         'p2p/base/constants.cc',
         'p2p/base/dtlstransportchannel.cc',
         'p2p/base/p2ptransport.cc',
