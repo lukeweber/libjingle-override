@@ -569,7 +569,7 @@
         ],
       },
       'sources': [
-        'p2p/base/asyncstuntcppacket.cc',
+        'p2p/base/asyncstuntcpsocket.cc',
         'p2p/base/basicpacketsocketfactory.cc',
         'p2p/base/constants.cc',
         'p2p/base/dtlstransportchannel.cc',
