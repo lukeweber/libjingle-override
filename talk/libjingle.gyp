@@ -61,8 +61,8 @@
                 'HAVE_GTK',
               ],
               'include_dirs': [
-                '/usr/local/buildtools/java/jdk7-64/include',
-                '/usr/local/buildtools/java/jdk7-64/include/linux',
+                '<!(/bin/echo -n ${JAVA_HOME})/include',
+                '<!(/bin/echo -n ${JAVA_HOME})/include/linux',
               ],
               'link_settings': {
                 'libraries': [
@@ -446,6 +446,11 @@
         'libjingle',
         'libjingle_sound',
       ],
+      'direct_dependent_settings': {
+        'include_dirs': [
+          '<(DEPTH)/third_party/libyuv/include',
+        ],
+      },
       'sources': [
         'media/base/capturemanager.cc',
         'media/base/capturerenderadapter.cc',
@@ -471,6 +476,7 @@
         'media/webrtc/webrtcvideocapturer.cc',
         'media/webrtc/webrtcvideocapturer.h',
         'media/webrtc/webrtcvideodecoderfactory.h',
+        'media/webrtc/webrtcvideoencoderfactory.h',
         'media/webrtc/webrtcvideoengine.cc',
         'media/webrtc/webrtcvideoengine.h',
         'media/webrtc/webrtcvideoframe.cc',

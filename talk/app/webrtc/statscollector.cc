@@ -80,13 +80,17 @@ const char StatsReport::kStatsValueNameTransmitBitrate[] =
     "googTransmitBitrate";
 const char StatsReport::kStatsValueNameTransportId[] = "transportId";
 const char StatsReport::kStatsValueNameTransportType[] = "googTransportType";
+const char StatsReport::kStatsValueNameTrackId[] = "googTrackId";
+const char StatsReport::kStatsValueNameSsrc[] = "ssrc";
 
 const char StatsReport::kStatsReportTypeSession[] = "googLibjingleSession";
 const char StatsReport::kStatsReportTypeBwe[] = "VideoBwe";
 const char StatsReport::kStatsReportTypeSsrc[] = "ssrc";
+const char StatsReport::kStatsReportTypeTrack[] = "googTrack";
 const char StatsReport::kStatsReportTypeIceCandidate[] = "iceCandidate";
 const char StatsReport::kStatsReportTypeTransport[] = "googTransport";
 
+const char StatsReport::kStatsReportVideoBweId[] = "bweforvideo";
 
 // Implementations of functions in statstypes.h
 void StatsReport::AddValue(const std::string& name, const std::string& value) {
@@ -101,22 +105,37 @@ void StatsReport::AddValue(const std::string& name, int64 value) {
 }
 
 namespace {
+typedef std::map<std::string, StatsReport> StatsMap;
 
-typedef std::map<std::string, webrtc::StatsReport> ReportsMap;
+std::string StatsId(const std::string& type, const std::string& id) {
+  return type + "_" + id;
+}
 
-void AddEmptyReport(const std::string& label, ReportsMap* reports) {
-  reports->insert(std::pair<std::string, webrtc::StatsReport>(
-      label, webrtc::StatsReport()));
+bool ExtractValueFromReport(
+    const StatsReport& report,
+    const std::string& name,
+    std::string* value) {
+  StatsReport::Values::const_iterator it = report.values.begin();
+  for (; it != report.values.end(); ++it) {
+    if (it->name == name) {
+      *value = it->value;
+      return true;
+    }
+  }
+  return false;
 }
 
 template <class TrackVector>
-void CreateTrackReports(const TrackVector& tracks, ReportsMap* reports) {
+void CreateTrackReports(const TrackVector& tracks, StatsMap* reports) {
   for (size_t j = 0; j < tracks.size(); ++j) {
     webrtc::MediaStreamTrackInterface* track = tracks[j];
-    // If there is no previous report for this track, add one.
-    if (reports->find(track->id()) == reports->end()) {
-      AddEmptyReport(track->id(), reports);
-    }
+    // Adds an empty track report.
+    StatsReport report;
+    report.type = StatsReport::kStatsReportTypeTrack;
+    report.id = StatsId(StatsReport::kStatsReportTypeTrack, track->id());
+    report.AddValue(StatsReport::kStatsValueNameTrackId,
+                    track->id());
+    (*reports)[report.id] = report;
   }
 }
 
@@ -199,8 +218,8 @@ void ExtractStats(const cricket::VideoSenderInfo& info, StatsReport* report) {
 void ExtractStats(const cricket::BandwidthEstimationInfo& info,
                   double stats_gathering_started,
                   StatsReport* report) {
-  report->id = "bweforvideo";
-  report->type = webrtc::StatsReport::kStatsReportTypeBwe;
+  report->id = StatsReport::kStatsReportVideoBweId;
+  report->type = StatsReport::kStatsReportTypeBwe;
 
   // Clear out stats from previous GatherStats calls if any.
   if (report->timestamp != stats_gathering_started) {
@@ -249,12 +268,7 @@ void ExtractStatsFromList(const std::vector<T>& data,
   for (; it != data.end(); ++it) {
     std::string id;
     uint32 ssrc = ExtractSsrc(*it);
-    if (!collector->session()->GetTrackIdBySsrc(ssrc, &id)) {
-      LOG(LS_ERROR) << "The SSRC " << ssrc
-                    << " is not associated with a track";
-      continue;
-    }
-    StatsReport* report = collector->PrepareReport(id, ssrc);
+    StatsReport* report = collector->PrepareReport(ssrc);
     if (!report) {
       continue;
     }
@@ -274,9 +288,9 @@ void StatsCollector::AddStream(MediaStreamInterface* stream) {
   ASSERT(stream != NULL);
 
   CreateTrackReports<AudioTrackVector>(stream->GetAudioTracks(),
-                                       &track_reports_);
+                                       &reports_);
   CreateTrackReports<VideoTrackVector>(stream->GetVideoTracks(),
-                                       &track_reports_);
+                                       &reports_);
 }
 
 bool StatsCollector::GetStats(MediaStreamTrackInterface* track,
@@ -284,29 +298,41 @@ bool StatsCollector::GetStats(MediaStreamTrackInterface* track,
   ASSERT(reports != NULL);
   reports->clear();
 
-  if (session_report_.timestamp > 0) {
-    reports->push_back(session_report_);
-  }
-
-  if (track) {
-    ReportsMap::const_iterator it = track_reports_.find(track->id());
-    if (it == track_reports_.end()) {
-      LOG(LS_WARNING) << "No StatsReport is available for "<< track->id();
-      return false;
+  StatsMap::iterator it;
+  if (!track) {
+    for (it = reports_.begin(); it != reports_.end(); ++it) {
+      reports->push_back(it->second);
     }
-    reports->push_back(it->second);
     return true;
   }
 
-  if (bandwidth_estimation_report_.timestamp > 0) {
-    reports->push_back(bandwidth_estimation_report_);
+  it = reports_.find(StatsId(StatsReport::kStatsReportTypeSession,
+                             session_->id()));
+  if (it != reports_.end()) {
+    reports->push_back(it->second);
   }
 
-  // If no selector given, add all Stats to |reports|.
-  ReportsMap::const_iterator it = track_reports_.begin();
-  for (; it != track_reports_.end(); ++it) {
-    if (!it->second.type.empty())
-      reports->push_back(it->second);
+  it = reports_.find(StatsId(StatsReport::kStatsReportTypeTrack, track->id()));
+
+  if (it == reports_.end()) {
+    LOG(LS_WARNING) << "No StatsReport is available for "<< track->id();
+    return false;
+  }
+
+  reports->push_back(it->second);
+
+  std::string track_id;
+  for (it = reports_.begin(); it != reports_.end(); ++it) {
+    if (it->second.type != StatsReport::kStatsReportTypeSsrc) {
+      continue;
+    }
+    if (ExtractValueFromReport(it->second,
+                               StatsReport::kStatsValueNameTrackId,
+                               &track_id)) {
+      if (track_id == track->id()) {
+        reports->push_back(it->second);
+      }
+    }
   }
 
   return true;
@@ -329,36 +355,54 @@ void StatsCollector::UpdateStats() {
   }
 }
 
-StatsReport* StatsCollector::PrepareReport(const std::string& id,
-                                           uint32 ssrc) {
-  std::map<std::string, webrtc::StatsReport>::iterator it =
-      track_reports_.find(id);
-  if (it == track_reports_.end()) {
-    return NULL;
+StatsReport* StatsCollector::PrepareReport(uint32 ssrc) {
+  std::string ssrc_id = talk_base::ToString<uint32>(ssrc);
+  StatsMap::iterator it = reports_.find(StatsId(
+      StatsReport::kStatsReportTypeSsrc, ssrc_id));
+
+  std::string track_id;
+  if (it == reports_.end()) {
+    if (!session()->GetTrackIdBySsrc(ssrc, &track_id)) {
+      LOG(LS_ERROR) << "The SSRC " << ssrc
+                    << " is not associated with a track";
+      return NULL;
+    }
+  } else {
+    // Keeps the old track id since we want to report the stats for inactive
+    // tracks.
+    ExtractValueFromReport(it->second,
+                           StatsReport::kStatsValueNameTrackId,
+                           &track_id);
   }
 
-  StatsReport* report= &(it->second);
-
-  report->id = talk_base::ToString<uint32>(ssrc);
-  report->type = webrtc::StatsReport::kStatsReportTypeSsrc;
+  StatsReport* report = &reports_[
+      StatsId(StatsReport::kStatsReportTypeSsrc, ssrc_id)];
+  report->id = StatsId(StatsReport::kStatsReportTypeSsrc, ssrc_id);
+  report->type = StatsReport::kStatsReportTypeSsrc;
 
   // Clear out stats from previous GatherStats calls if any.
   if (report->timestamp != stats_gathering_started_) {
     report->values.clear();
     report->timestamp = stats_gathering_started_;
   }
+
+  report->AddValue(StatsReport::kStatsValueNameSsrc, ssrc_id);
+  report->AddValue(StatsReport::kStatsValueNameTrackId, track_id);
   // TODO(hta): Add a StatsReport::kStatsvalueNameTransportId for the transport.
   return report;
 }
 
 void StatsCollector::ExtractSessionInfo() {
   // Extract information from the base session.
-  session_report_.id = session_->id();
-  session_report_.type = StatsReport::kStatsReportTypeSession;
-  session_report_.timestamp = stats_gathering_started_;
-  session_report_.values.clear();
-  session_report_.AddValue(StatsReport::kStatsValueNameInitiator,
-                           session_->initiator()?"true":"false");
+  StatsReport report;
+  report.id = StatsId(StatsReport::kStatsReportTypeSession, session_->id());
+  report.type = StatsReport::kStatsReportTypeSession;
+  report.timestamp = stats_gathering_started_;
+  report.values.clear();
+  report.AddValue(StatsReport::kStatsValueNameInitiator,
+                  session_->initiator()?"true":"false");
+
+  reports_[report.id] = report;
 
   // TODO(hta): Add transport information.
   // Transport info should come from GetStats() on each Transport
@@ -398,9 +442,9 @@ void StatsCollector::ExtractVideoInfo() {
   if (video_info.bw_estimations.size() != 1) {
     LOG(LS_ERROR) << "BWEs count: " << video_info.bw_estimations.size();
   } else {
-    ExtractStats(video_info.bw_estimations[0],
-                 stats_gathering_started_,
-                 &bandwidth_estimation_report_);
+    StatsReport* report = &reports_[StatsReport::kStatsReportVideoBweId];
+    ExtractStats(
+        video_info.bw_estimations[0], stats_gathering_started_, report);
   }
 }
 

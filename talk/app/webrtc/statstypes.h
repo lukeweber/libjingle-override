@@ -77,9 +77,16 @@ class StatsReport {
   // The |id| field is the SSRC in decimal form of the rtp stream.
   static const char kStatsReportTypeSsrc[];
 
+  // StatsReport of |type| = "googTrack" is statistics for a specific media
+  // track. The |id| field is the track id.
+  static const char kStatsReportTypeTrack[];
+
   // StatsReport of |type| = "iceCandidate" is statistics on a specific
   // ICE Candidate. It links to its transport.
   static const char kStatsReportTypeIceCandidate[];
+
+  // The id of StatsReport of type VideoBWE.
+  static const char kStatsReportVideoBweId[];
 
   // StatsValue names
   static const char kStatsValueNameAudioOutputLevel[];
@@ -117,6 +124,8 @@ class StatsReport {
   static const char kStatsValueNameBucketDelay[];
   static const char kStatsValueNameInitiator[];
   static const char kStatsValueNameTransportType[];
+  static const char kStatsValueNameTrackId[];
+  static const char kStatsValueNameSsrc[];
 
 };
 

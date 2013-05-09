@@ -33,6 +33,7 @@
 #endif
 
 #include <math.h>
+#include <set>
 
 #include "talk/base/basictypes.h"
 #include "talk/base/buffer.h"
@@ -51,6 +52,7 @@
 #include "talk/media/base/videorenderer.h"
 #include "talk/media/devices/filevideocapturer.h"
 #include "talk/media/webrtc/webrtcvideodecoderfactory.h"
+#include "talk/media/webrtc/webrtcvideoencoderfactory.h"
 #include "talk/media/webrtc/webrtcpassthroughrender.h"
 #include "talk/media/webrtc/webrtcvideocapturer.h"
 #include "talk/media/webrtc/webrtcvideoframe.h"
@@ -67,8 +69,10 @@
 WRME_EXPORT
 cricket::MediaEngineInterface* CreateWebRtcMediaEngine(
     webrtc::AudioDeviceModule* adm, webrtc::AudioDeviceModule* adm_sc,
+    cricket::WebRtcVideoEncoderFactory* encoder_factory,
     cricket::WebRtcVideoDecoderFactory* decoder_factory) {
-  return new cricket::WebRtcMediaEngine(adm, adm_sc, decoder_factory);
+  return new cricket::WebRtcMediaEngine(adm, adm_sc, encoder_factory,
+                                        decoder_factory);
 }
 
 WRME_EXPORT
@@ -99,6 +103,15 @@ static const char kFecPayloadName[] = "ulpfec";
 static const int kDefaultNumberOfTemporalLayers = 1;  // 1:1
 
 static const int kTimestampDeltaInSecondsForWarning = 2;
+
+static const int kMaxExternalVideoCodecs = 8;
+static const int kExternalVideoPayloadTypeBase = 120;
+
+// Static allocation of payload type values for external video codec.
+static int GetExternalVideoPayloadType(int index) {
+  ASSERT(index >= 0 && index < kMaxExternalVideoCodecs);
+  return kExternalVideoPayloadTypeBase + index;
+}
 
 static void LogMultiline(talk_base::LoggingSeverity sev, char* text) {
   const char* delim = "\r\n";
@@ -398,6 +411,9 @@ class WebRtcVideoChannelRecvInfo  {
   const DecoderMap& registered_decoders() {
     return registered_decoders_;
   }
+  void ClearRegisteredDecoders() {
+    registered_decoders_.clear();
+  }
 
  private:
   int channel_id_;  // Webrtc video channel number.
@@ -409,6 +425,7 @@ class WebRtcVideoChannelRecvInfo  {
 
 class WebRtcVideoChannelSendInfo  {
  public:
+  typedef std::map<int, webrtc::VideoEncoder*> EncoderMap;  // key: payload type
   WebRtcVideoChannelSendInfo(int channel_id, int capture_id,
                              webrtc::ViEExternalCapture* external_capture,
                              talk_base::CpuMonitor* cpu_monitor)
@@ -534,6 +551,19 @@ class WebRtcVideoChannelSendInfo  {
     }
     local_stream_info_.UpdateFrame(*processed_frame);
   }
+  void RegisterEncoder(int pl_type, webrtc::VideoEncoder* encoder) {
+    ASSERT(!IsEncoderRegistered(pl_type));
+    registered_encoders_[pl_type] = encoder;
+  }
+  bool IsEncoderRegistered(int pl_type) {
+    return registered_encoders_.count(pl_type) != 0;
+  }
+  const EncoderMap& registered_encoders() {
+    return registered_encoders_;
+  }
+  void ClearRegisteredEncoders() {
+    registered_encoders_.clear();
+  }
 
  private:
   int channel_id_;
@@ -543,6 +573,7 @@ class WebRtcVideoChannelSendInfo  {
   VideoCapturer* video_capturer_;
   WebRtcEncoderObserver encoder_observer_;
   webrtc::ViEExternalCapture* external_capture_;
+  EncoderMap registered_encoders_;
 
   VideoFormat video_format_;
 
@@ -639,6 +670,7 @@ void WebRtcVideoEngine::Construct(ViEWrapper* vie_wrapper,
   frame_listeners_ = 0;
   capture_started_ = false;
   decoder_factory_ = NULL;
+  encoder_factory_ = NULL;
   cpu_monitor_.reset(cpu_monitor);
 
   SetTraceOptions("");
@@ -952,6 +984,16 @@ bool WebRtcVideoEngine::FindCodec(const VideoCodec& in) {
     const VideoFormat fmt(kVideoFormats[i]);
     if ((in.width == 0 && in.height == 0) ||
         (fmt.width == in.width && fmt.height == in.height)) {
+      if (encoder_factory_) {
+        const std::vector<WebRtcVideoEncoderFactory::VideoCodec>& codecs =
+            encoder_factory_->codecs();
+        for (size_t j = 0; j < codecs.size(); ++j) {
+          VideoCodec codec(GetExternalVideoPayloadType(j),
+                           codecs[j].name, 0, 0, 0, 0);
+          if (codec.Matches(in))
+            return true;
+        }
+      }
       for (size_t j = 0; j < ARRAY_SIZE(kVideoCodecPrefs); ++j) {
         VideoCodec codec(kVideoCodecPrefs[j].payload_type,
                          kVideoCodecPrefs[j].name, 0, 0, 0, 0);
@@ -1071,6 +1113,22 @@ bool WebRtcVideoEngine::ConvertFromCricketVideoCodec(
     }
   }
 
+  // If not found, check if this is supported by external encoder factory.
+  if (!found && encoder_factory_) {
+    const std::vector<WebRtcVideoEncoderFactory::VideoCodec>& codecs =
+        encoder_factory_->codecs();
+    for (size_t i = 0; i < codecs.size(); ++i) {
+      if (_stricmp(in_codec.name.c_str(), codecs[i].name.c_str()) == 0) {
+        out_codec->codecType = codecs[i].type;
+        out_codec->plType = GetExternalVideoPayloadType(i);
+        talk_base::strcpyn(out_codec->plName, sizeof(out_codec->plName),
+                           codecs[i].name.c_str(), codecs[i].name.length());
+        found = true;
+        break;
+      }
+    }
+  }
+
   if (!found) {
     LOG(LS_ERROR) << "invalid codec type";
     return false;
@@ -1177,11 +1235,30 @@ bool WebRtcVideoEngine::RebuildCodecList(const VideoCodec& in_codec) {
   video_codecs_.clear();
 
   bool found = false;
+  std::set<std::string> external_codec_names;
+  if (encoder_factory_) {
+    const std::vector<WebRtcVideoEncoderFactory::VideoCodec>& codecs =
+        encoder_factory_->codecs();
+    for (size_t i = 0; i < codecs.size(); ++i) {
+      if (!found)
+        found = (in_codec.name == codecs[i].name);
+      VideoCodec codec(GetExternalVideoPayloadType(i),
+                       codecs[i].name,
+                       codecs[i].max_width,
+                       codecs[i].max_height,
+                       codecs[i].max_fps,
+                       codecs.size() + ARRAY_SIZE(kVideoCodecPrefs) - i);
+      video_codecs_.push_back(codec);
+      external_codec_names.insert(codecs[i].name);
+    }
+  }
   for (size_t i = 0; i < ARRAY_SIZE(kVideoCodecPrefs); ++i) {
     const VideoCodecPref& pref(kVideoCodecPrefs[i]);
     if (!found)
       found = (in_codec.name == pref.name);
-    if (found) {
+    bool is_external_codec = external_codec_names.find(pref.name) !=
+        external_codec_names.end();
+    if (found && !is_external_codec) {
       VideoCodec codec(pref.payload_type, pref.name,
                        in_codec.width, in_codec.height, in_codec.framerate,
                        ARRAY_SIZE(kVideoCodecPrefs) - i);
@@ -1308,13 +1385,39 @@ webrtc::VideoDecoder* WebRtcVideoEngine::CreateExternalDecoder(
 }
 
 void WebRtcVideoEngine::DestroyExternalDecoder(webrtc::VideoDecoder* decoder) {
-  if (decoder != NULL) {
-    ASSERT(decoder_factory_ != NULL);
-  }
-  if (decoder_factory_ == NULL) {
+  ASSERT(decoder_factory_ != NULL);
+  if (decoder_factory_ == NULL)
     return;
-  }
   decoder_factory_->DestroyVideoDecoder(decoder);
+}
+
+webrtc::VideoEncoder* WebRtcVideoEngine::CreateExternalEncoder(
+    webrtc::VideoCodecType type) {
+  if (encoder_factory_ == NULL) {
+    return NULL;
+  }
+  return encoder_factory_->CreateVideoEncoder(type);
+}
+
+void WebRtcVideoEngine::DestroyExternalEncoder(webrtc::VideoEncoder* encoder) {
+  ASSERT(encoder_factory_ != NULL);
+  if (encoder_factory_ == NULL)
+    return;
+  encoder_factory_->DestroyVideoEncoder(encoder);
+}
+
+bool WebRtcVideoEngine::IsExternalEncoderCodecType(
+    webrtc::VideoCodecType type) const {
+  if (!encoder_factory_)
+    return false;
+  const std::vector<WebRtcVideoEncoderFactory::VideoCodec>& codecs =
+      encoder_factory_->codecs();
+  std::vector<WebRtcVideoEncoderFactory::VideoCodec>::const_iterator it;
+  for (it = codecs.begin(); it != codecs.end(); ++it) {
+    if (it->type == type)
+      return true;
+  }
+  return false;
 }
 
 void WebRtcVideoEngine::ClearCapturer() {
@@ -1324,6 +1427,23 @@ void WebRtcVideoEngine::ClearCapturer() {
 void WebRtcVideoEngine::SetExternalDecoderFactory(
     WebRtcVideoDecoderFactory* decoder_factory) {
   decoder_factory_ = decoder_factory;
+}
+
+void WebRtcVideoEngine::SetExternalEncoderFactory(
+    WebRtcVideoEncoderFactory* encoder_factory) {
+  encoder_factory_ = encoder_factory;
+  if (encoder_factory_) {
+    // Rebuild codec list while reapplying the current default codec format.
+    VideoCodec max_codec(kVideoCodecPrefs[0].payload_type,
+                         kVideoCodecPrefs[0].name,
+                         video_codecs_[0].width,
+                         video_codecs_[0].height,
+                         video_codecs_[0].framerate,
+                         0);
+    if (!RebuildCodecList(max_codec)) {
+      LOG(LS_ERROR) << "Failed to initialize list of supported codec types";
+    }
+  }
 }
 
 // WebRtcVideoMediaChannel
@@ -1671,6 +1791,19 @@ bool WebRtcVideoMediaChannel::RemoveSendStream(uint32 ssrc) {
   if (sending_) {
     StopSend(send_channel);
   }
+
+  const WebRtcVideoChannelSendInfo::EncoderMap& encoder_map =
+      send_channel->registered_encoders();
+  for (WebRtcVideoChannelSendInfo::EncoderMap::const_iterator it =
+      encoder_map.begin(); it != encoder_map.end(); ++it) {
+    if (engine()->vie()->ext_codec()->DeRegisterExternalSendCodec(
+        channel_id, it->first) != 0) {
+      LOG_RTCERR1(DeregisterEncoderObserver, channel_id);
+    }
+    engine()->DestroyExternalEncoder(it->second);
+  }
+  send_channel->ClearRegisteredEncoders();
+
   // The receive channels depend on the default channel, recycle it instead.
   if (IsDefaultChannel(channel_id)) {
     SetCapturer(GetDefaultChannelSsrc(), NULL);
@@ -1792,6 +1925,7 @@ bool WebRtcVideoMediaChannel::RemoveRecvStream(uint32 ssrc) {
     }
     engine()->DestroyExternalDecoder(it->second);
   }
+  info->ClearRegisteredDecoders();
 
   LOG(LS_INFO) << "Removing video stream " << ssrc
                << " with VideoEngine channel #"
@@ -2682,7 +2816,9 @@ bool WebRtcVideoMediaChannel::SendFrame(
   frame_i420.height = frame_out->GetHeight();
 
   int64 timestamp_ntp_ms = 0;
-#ifdef USE_WEBRTC_DEV_BRANCH
+  // TODO(justinlin): Reenable after Windows issues with clock drift are fixed.
+  // Currently reverted to old behavior of discarding capture timestamp.
+#if 0
   // If the frame timestamp is 0, we will use the deliver time.
   const int64 frame_timestamp = frame->GetTimeStamp();
   if (frame_timestamp != 0) {
@@ -3083,6 +3219,22 @@ bool WebRtcVideoMediaChannel::SetSendCodec(
     bool enable_denoising =
         options_.video_noise_reduction.GetWithDefaultIfUnset(false);
     target_codec.codecSpecific.VP8.denoisingOn = enable_denoising;
+  }
+
+  // Register external encoder if codec type is supported by encoder factory.
+  if (engine()->IsExternalEncoderCodecType(codec.codecType) &&
+      !send_channel->IsEncoderRegistered(target_codec.plType)) {
+    webrtc::VideoEncoder* encoder =
+        engine()->CreateExternalEncoder(codec.codecType);
+    if (encoder) {
+      if (engine()->vie()->ext_codec()->RegisterExternalSendCodec(
+          channel_id, target_codec.plType, encoder, false) == 0) {
+        send_channel->RegisterEncoder(target_codec.plType, encoder);
+      } else {
+        LOG_RTCERR2(RegisterExternalSendCodec, channel_id, target_codec.plName);
+        engine()->DestroyExternalEncoder(encoder);
+      }
+    }
   }
 
   // Resolution and framerate may vary for different send channels.

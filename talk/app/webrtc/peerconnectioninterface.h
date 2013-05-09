@@ -85,6 +85,7 @@ class Thread;
 namespace cricket {
 class PortAllocator;
 class WebRtcVideoDecoderFactory;
+class WebRtcVideoEncoderFactory;
 }
 
 namespace webrtc {
@@ -394,16 +395,15 @@ talk_base::scoped_refptr<PeerConnectionFactoryInterface>
 CreatePeerConnectionFactory();
 
 // Create a new instance of PeerConnectionFactoryInterface.
-// Ownership of |factory|, |default_adm|, and |decoder_factory| is transferred
-// to the returned factory.
-// TODO(dwkang): To prevent build break the default value is added for
-// |decoder_factory|. Remove it once Chrome has a value for that.
+// Ownership of |factory|, |default_adm|, and optionally |encoder_factory| and
+// |decoder_factory| transferred to the returned factory.
 talk_base::scoped_refptr<PeerConnectionFactoryInterface>
 CreatePeerConnectionFactory(
     talk_base::Thread* worker_thread,
     talk_base::Thread* signaling_thread,
     AudioDeviceModule* default_adm,
-    cricket::WebRtcVideoDecoderFactory* decoder_factory = NULL);
+    cricket::WebRtcVideoEncoderFactory* encoder_factory,
+    cricket::WebRtcVideoDecoderFactory* decoder_factory);
 
 }  // namespace webrtc
 

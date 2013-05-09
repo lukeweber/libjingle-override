@@ -89,6 +89,7 @@ class PeerConnectionFactoryTest : public testing::Test {
     factory_ = webrtc::CreatePeerConnectionFactory(talk_base::Thread::Current(),
                                                    talk_base::Thread::Current(),
                                                    NULL,
+                                                   NULL,
                                                    NULL);
 
     ASSERT_TRUE(factory_.get() != NULL);

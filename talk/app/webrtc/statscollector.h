@@ -66,8 +66,8 @@ class StatsCollector {
   bool GetStats(MediaStreamTrackInterface* track, StatsReports* reports);
 
   WebRtcSession* session() { return session_; }
-  // Prepare an SSRC report for the given id and ssrc. Used internally.
-  StatsReport* PrepareReport(const std::string& id, uint32 ssrc);
+  // Prepare an SSRC report for the given ssrc. Used internally.
+  StatsReport* PrepareReport(uint32 ssrc);
 
  private:
   bool CopySelectedReports(const std::string& selector, StatsReports* reports);
@@ -77,13 +77,8 @@ class StatsCollector {
   void ExtractVideoInfo();
   double GetTimeNow();
 
-  // The |session_report_| contains global stats for the whole PeerConnection.
-  webrtc::StatsReport session_report_;
-  // |track_reports_| contain the last gathered stats for all tracks.
-  // The reason for this is so that GetStats can return statistics about a track
-  // even if it no longer is active.
-  std::map<std::string, webrtc::StatsReport> track_reports_;
-  webrtc::StatsReport bandwidth_estimation_report_;
+  // A map from the report id to the report.
+  std::map<std::string, webrtc::StatsReport> reports_;
   // Raw pointer to the session the statistics are gathered from.
   WebRtcSession* session_;
   double stats_gathering_started_;

@@ -570,6 +570,8 @@ bool CoordinatedVideoAdapter::AdaptToMinimumFormat(int* new_width,
                   << " GD: " << encoder_desired_num_pixels_
                   << " CPU: " << cpu_desired_num_pixels_
                   << " Pixels: " << min_num_pixels
+                  << " Input: " << input.width
+                  << "x" << input.height
                   << " Scale: " << scale
                   << " Resolution: " << new_output.width
                   << "x" << new_output.height

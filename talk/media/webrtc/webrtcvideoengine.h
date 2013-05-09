@@ -47,6 +47,7 @@
 namespace webrtc {
 class VideoCaptureModule;
 class VideoDecoder;
+class VideoEncoder;
 class VideoRender;
 class ViEExternalCapture;
 }
@@ -71,6 +72,7 @@ class WebRtcRenderAdapter;
 class WebRtcVideoChannelRecvInfo;
 class WebRtcVideoChannelSendInfo;
 class WebRtcVideoDecoderFactory;
+class WebRtcVideoEncoderFactory;
 class WebRtcVideoMediaChannel;
 class WebRtcVoiceEngine;
 
@@ -125,6 +127,10 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   // not take the ownership of |decoder_factory|. The caller needs to make sure
   // that |decoder_factory| outlives the video engine.
   void SetExternalDecoderFactory(WebRtcVideoDecoderFactory* decoder_factory);
+  // Set a WebRtcVideoEncoderFactory for external encoding. Video engine does
+  // not take the ownership of |encoder_factory|. The caller needs to make sure
+  // that |encoder_factory| outlives the video engine.
+  void SetExternalEncoderFactory(WebRtcVideoEncoderFactory* encoder_factory);
   // Enable the render module with timing control.
   bool EnableTimedRender();
 
@@ -137,6 +143,16 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   webrtc::VideoDecoder* CreateExternalDecoder(webrtc::VideoCodecType type);
   // Releases the decoder instance created by CreateExternalDecoder().
   void DestroyExternalDecoder(webrtc::VideoDecoder* decoder);
+
+  // Returns an external encoder for the given codec type. The return value
+  // can be NULL if encoder factory is not given or it does not support the
+  // codec type. The caller takes the ownership of the returned object.
+  webrtc::VideoEncoder* CreateExternalEncoder(webrtc::VideoCodecType type);
+  // Releases the encoder instance created by CreateExternalEncoder().
+  void DestroyExternalEncoder(webrtc::VideoEncoder* encoder);
+
+  // Returns true if the codec type is supported by the external encoder.
+  bool IsExternalEncoderCodecType(webrtc::VideoCodecType type) const;
 
   // Functions called by WebRtcVideoMediaChannel.
   talk_base::Thread* worker_thread() { return worker_thread_; }
@@ -202,6 +218,7 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   talk_base::scoped_ptr<ViETraceWrapper> tracing_;
   WebRtcVoiceEngine* voice_engine_;
   talk_base::scoped_ptr<webrtc::VideoRender> render_module_;
+  WebRtcVideoEncoderFactory* encoder_factory_;
   WebRtcVideoDecoderFactory* decoder_factory_;
   std::vector<VideoCodec> video_codecs_;
   std::vector<RtpHeaderExtension> rtp_header_extensions_;

@@ -227,7 +227,8 @@ class PeerConnectionInterfaceTest : public testing::Test {
  protected:
   virtual void SetUp() {
     pc_factory_ = webrtc::CreatePeerConnectionFactory(
-        talk_base::Thread::Current(), talk_base::Thread::Current(), NULL, NULL);
+        talk_base::Thread::Current(), talk_base::Thread::Current(), NULL, NULL,
+        NULL);
     ASSERT_TRUE(pc_factory_.get() != NULL);
   }
 

@@ -234,6 +234,12 @@
         # 'media/devices/devicemanager_unittest.cc',
         'media/devices/dummydevicemanager_unittest.cc',
         'media/devices/filevideocapturer_unittest.cc',
+        'media/webrtc/webrtcpassthroughrender_unittest.cc',
+        'media/webrtc/webrtcvideocapturer_unittest.cc',
+        'media/webrtc/webrtcvideoengine_unittest.cc',
+        # Omitted because depends on non-open-source testdata files.
+        # 'media/webrtc/webrtcvideoframe_unittest.cc',
+        'media/webrtc/webrtcvoiceengine_unittest.cc',
       ],
       'conditions': [
         ['OS=="win"', {

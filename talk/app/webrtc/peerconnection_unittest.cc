@@ -63,6 +63,8 @@
 using cricket::ContentInfo;
 using cricket::FakeWebRtcVideoDecoder;
 using cricket::FakeWebRtcVideoDecoderFactory;
+using cricket::FakeWebRtcVideoEncoder;
+using cricket::FakeWebRtcVideoEncoderFactory;
 using cricket::MediaContentDescription;
 using webrtc::DataBuffer;
 using webrtc::DataChannelInterface;
@@ -438,6 +440,7 @@ class PeerConnectionTestClientBase
       : id_(id),
         expect_ice_restart_(false),
         fake_video_decoder_factory_(NULL),
+        fake_video_encoder_factory_(NULL),
         video_decoder_factory_enabled_(false),
         signaling_message_receiver_(NULL) {
   }
@@ -456,9 +459,11 @@ class PeerConnectionTestClientBase
       return false;
     }
     fake_video_decoder_factory_ = new FakeWebRtcVideoDecoderFactory();
+    fake_video_encoder_factory_ = new FakeWebRtcVideoEncoderFactory();
     peer_connection_factory_ = webrtc::CreatePeerConnectionFactory(
         talk_base::Thread::Current(), talk_base::Thread::Current(),
-        fake_audio_capture_module_, fake_video_decoder_factory_);
+        fake_audio_capture_module_, fake_video_encoder_factory_,
+        fake_video_decoder_factory_);
     if (!peer_connection_factory_) {
       return false;
     }
@@ -545,6 +550,7 @@ class PeerConnectionTestClientBase
   // Needed to keep track of number of frames received when external decoder
   // used.
   FakeWebRtcVideoDecoderFactory* fake_video_decoder_factory_;
+  FakeWebRtcVideoEncoderFactory* fake_video_encoder_factory_;
   bool video_decoder_factory_enabled_;
   webrtc::FakeConstraints video_constraints_;
 

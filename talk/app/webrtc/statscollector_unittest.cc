@@ -70,7 +70,7 @@ class MockVideoMediaChannel : public cricket::FakeVideoMediaChannel {
   MOCK_METHOD1(GetStats, bool(cricket::VideoMediaInfo*));
 };
 
-std::string ExtractStatsValue(std::string type,
+std::string ExtractStatsValue(const std::string& type,
                               webrtc::StatsReports reports,
                               const std::string name) {
   if (reports.empty()) {
@@ -91,24 +91,29 @@ std::string ExtractStatsValue(std::string type,
   return "NOT FOUND";
 }
 
-const webrtc::StatsReport* FindFirstReportByType(webrtc::StatsReports reports,
-                                            std::string type) {
+// Finds the |n|-th report of type |type| in |reports|.
+// |n| starts from 1 for finding the first report.
+const webrtc::StatsReport* FindNthReportByType(webrtc::StatsReports reports,
+                                               const std::string& type,
+                                               int n) {
   for (size_t i = 0; i < reports.size(); ++i) {
     if (reports[i].type == type) {
-      return &reports[i];
+      n--;
+      if (n == 0)
+        return &reports[i];
     }
   }
   return NULL;
 }
 
 std::string ExtractSsrcStatsValue(webrtc::StatsReports reports,
-                                  const std::string name) {
+                                  const std::string& name) {
   return ExtractStatsValue(
       webrtc::StatsReport::kStatsReportTypeSsrc, reports, name);
 }
 
 std::string ExtractBweStatsValue(webrtc::StatsReports reports,
-                                  const std::string name) {
+                                  const std::string& name) {
   return ExtractStatsValue(
       webrtc::StatsReport::kStatsReportTypeBwe, reports, name);
 }
@@ -227,9 +232,126 @@ TEST_F(StatsCollectorTest, SessionObjectExists) {
     .WillRepeatedly(ReturnNull());
   stats.UpdateStats();
   stats.GetStats(NULL, &reports);
-  const webrtc::StatsReport* session_report = FindFirstReportByType(
-      reports, webrtc::StatsReport::kStatsReportTypeSession);
+  const webrtc::StatsReport* session_report = FindNthReportByType(
+      reports, webrtc::StatsReport::kStatsReportTypeSession, 1);
   EXPECT_FALSE(session_report == NULL);
+}
+
+// This test verifies that only one object of type "googSession" exists
+// in the returned stats.
+TEST_F(StatsCollectorTest, OnlyOneSessionObjectExists) {
+  webrtc::StatsCollector stats;  // Implementation under test.
+  webrtc::StatsReports reports;  // returned values.
+  stats.set_session(&session_);
+  EXPECT_CALL(session_, video_channel())
+    .WillRepeatedly(ReturnNull());
+  stats.UpdateStats();
+  stats.UpdateStats();
+  stats.GetStats(NULL, &reports);
+  const webrtc::StatsReport* session_report = FindNthReportByType(
+      reports, webrtc::StatsReport::kStatsReportTypeSession, 1);
+  EXPECT_FALSE(session_report == NULL);
+  session_report = FindNthReportByType(
+      reports, webrtc::StatsReport::kStatsReportTypeSession, 2);
+  EXPECT_EQ(NULL, session_report);
+}
+
+// This test verifies that the empty track report exists in the returned stats
+// without calling StatsCollector::UpdateStats.
+TEST_F(StatsCollectorTest, TrackObjectExistsWithoutUpdateStats) {
+  webrtc::StatsCollector stats;  // Implementation under test.
+  MockVideoMediaChannel* media_channel = new MockVideoMediaChannel;
+  cricket::VideoChannel video_channel(talk_base::Thread::Current(),
+      media_engine_, media_channel, &session_, "", false, NULL);
+  const std::string kTrackId("somename");
+  talk_base::scoped_refptr<webrtc::MediaStream> stream(
+      webrtc::MediaStream::Create("streamlabel"));
+  talk_base::scoped_refptr<webrtc::VideoTrack> track =
+      webrtc::VideoTrack::Create(kTrackId, NULL);
+  stream->AddTrack(track);
+  stats.AddStream(stream);
+
+  stats.set_session(&session_);
+
+  webrtc::StatsReports reports;
+
+  // Verfies the existence of the track report.
+  stats.GetStats(NULL, &reports);
+  EXPECT_EQ((size_t)1, reports.size());
+  EXPECT_EQ(std::string(webrtc::StatsReport::kStatsReportTypeTrack),
+            reports[0].type);
+
+  std::string trackValue =
+      ExtractStatsValue(webrtc::StatsReport::kStatsReportTypeTrack,
+                        reports,
+                        webrtc::StatsReport::kStatsValueNameTrackId);
+  EXPECT_EQ(kTrackId, trackValue);
+}
+
+// This test verifies that the empty track report exists in the returned stats
+// when StastCollector::UpdateStats is called with ssrc stats.
+TEST_F(StatsCollectorTest, TrackAndSsrcObjectExistAfterUpdateSsrcStats) {
+  webrtc::StatsCollector stats;  // Implementation under test.
+  MockVideoMediaChannel* media_channel = new MockVideoMediaChannel;
+  cricket::VideoChannel video_channel(talk_base::Thread::Current(),
+      media_engine_, media_channel, &session_, "", false, NULL);
+  const std::string kTrackId("somename");
+  talk_base::scoped_refptr<webrtc::MediaStream> stream(
+      webrtc::MediaStream::Create("streamlabel"));
+  talk_base::scoped_refptr<webrtc::VideoTrack> track =
+      webrtc::VideoTrack::Create(kTrackId, NULL);
+  stream->AddTrack(track);
+  stats.AddStream(stream);
+
+  stats.set_session(&session_);
+
+  webrtc::StatsReports reports;
+
+  // Constructs an ssrc stats update.
+  cricket::VideoSenderInfo video_sender_info;
+  cricket::VideoMediaInfo stats_read;
+  const uint32 kSsrcOfTrack = 1234;
+  const int64 kBytesSent = 12345678901234LL;
+  const std::string kBytesSentString("12345678901234");
+
+  // Construct a stats value to read.
+  video_sender_info.ssrcs.push_back(1234);
+  video_sender_info.bytes_sent = kBytesSent;
+  stats_read.senders.push_back(video_sender_info);
+
+  EXPECT_CALL(session_, video_channel())
+    .WillRepeatedly(Return(&video_channel));
+  EXPECT_CALL(*media_channel, GetStats(_))
+    .WillOnce(DoAll(SetArgPointee<0>(stats_read),
+                    Return(true)));
+  EXPECT_CALL(session_, GetTrackIdBySsrc(kSsrcOfTrack, _))
+    .WillOnce(DoAll(SetArgPointee<1>(kTrackId),
+                    Return(true)));
+
+  stats.UpdateStats();
+  stats.GetStats(NULL, &reports);
+  // |reports| should contain one session report, one track report, and one ssrc
+  // report.
+  EXPECT_EQ((size_t)3, reports.size());
+  const webrtc::StatsReport* track_report = FindNthReportByType(
+      reports, webrtc::StatsReport::kStatsReportTypeTrack, 1);
+  EXPECT_FALSE(track_report == NULL);
+
+  stats.GetStats(track, &reports);
+  // |reports| should contain one session report, one track report, and one ssrc
+  // report.
+  EXPECT_EQ((size_t)3, reports.size());
+  track_report = FindNthReportByType(
+      reports, webrtc::StatsReport::kStatsReportTypeTrack, 1);
+  EXPECT_FALSE(track_report == NULL);
+
+  std::string ssrc_id = ExtractSsrcStatsValue(
+      reports, webrtc::StatsReport::kStatsValueNameSsrc);
+  EXPECT_EQ(talk_base::ToString<uint32>(kSsrcOfTrack), ssrc_id);
+
+  std::string track_id = ExtractSsrcStatsValue(
+      reports, webrtc::StatsReport::kStatsValueNameTrackId);
+  EXPECT_EQ(kTrackId, track_id);
 }
 
 }  // namespace
