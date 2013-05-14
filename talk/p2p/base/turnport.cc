@@ -768,7 +768,7 @@ void TurnEntry::OnCreatePermissionError() {
 void TurnEntry::OnChannelBindSuccess() {
   LOG_J(LS_INFO, port_) << "Channel bind for " << ext_addr_.ToString()
                         << " succeeded";
-  ASSERT(state_ == STATE_BINDING);
+  ASSERT(state_ == STATE_BINDING || state_ == STATE_BOUND);
   state_ = STATE_BOUND;
 }
 
