@@ -94,6 +94,9 @@ void VideoCapturer::Construct() {
   SignalFrameCaptured.connect(this, &VideoCapturer::OnFrameCaptured);
   scaled_width_ = 0;
   scaled_height_ = 0;
+  // TODO(fbarchard): Consider removing cores as a factor for scaling.
+  talk_base::SystemInfo system_info;
+  num_cores_ = system_info.GetMaxPhysicalCpus();
 }
 
 const std::vector<VideoFormat>* VideoCapturer::GetSupportedFormats() const {
@@ -242,14 +245,8 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
     int desired_screencast_fps = capture_format_.get() ?
         VideoFormat::IntervalToFps(capture_format_->interval) :
         kDefaultScreencastFps;
-#if defined(HAVE_YUV)
-    talk_base::SystemInfo system_info;
-    int num_cores = system_info.GetMaxPhysicalCpus();
-#else
-    const int num_cores = 4;
-#endif
     ComputeScale(captured_frame->width, captured_frame->height,
-                 desired_screencast_fps, num_cores,
+                 desired_screencast_fps, num_cores_,
                  &scaled_width, &scaled_height);
 
     if (scaled_width != scaled_width_ || scaled_height != scaled_height_) {

@@ -143,7 +143,6 @@ Port::Port(talk_base::Thread* thread, talk_base::Network* network,
            const std::string& username_fragment, const std::string& password)
     : thread_(thread),
       factory_(NULL),
-      type_preference_(0),
       send_retransmit_count_attribute_(false),
       network_(network),
       ip_(ip),
@@ -163,14 +162,13 @@ Port::Port(talk_base::Thread* thread, talk_base::Network* network,
 }
 
 Port::Port(talk_base::Thread* thread, const std::string& type,
-           const uint32 preference, talk_base::PacketSocketFactory* factory,
+           talk_base::PacketSocketFactory* factory,
            talk_base::Network* network, const talk_base::IPAddress& ip,
            int min_port, int max_port, const std::string& username_fragment,
            const std::string& password)
     : thread_(thread),
       factory_(factory),
       type_(type),
-      type_preference_(preference),
       send_retransmit_count_attribute_(false),
       network_(network),
       ip_(ip),
@@ -262,7 +260,7 @@ void Port::AddAddress(const talk_base::SocketAddress& address,
   SignalCandidateReady(this, c);
 
   if (final) {
-    SignalAddressReady(this);
+    SignalPortComplete(this);
   }
 }
 

@@ -1130,8 +1130,12 @@ void WebRtcVoiceEngine::Print(webrtc::TraceLevel level, const char* trace,
   }
 }
 
+#ifdef USE_WEBRTC_DEV_BRANCH
+void WebRtcVoiceEngine::CallbackOnError(int channel_num, int err_code) {
+#else
 void WebRtcVoiceEngine::CallbackOnError(const int channel_num,
                                         const int err_code) {
+#endif
   talk_base::CritScope lock(&channels_cs_);
   WebRtcVoiceMediaChannel* channel = NULL;
   uint32 ssrc = 0;
@@ -1434,12 +1438,21 @@ bool WebRtcVoiceEngine::UnregisterProcessor(
 
 // Implementing method from WebRtc VoEMediaProcess interface
 // Do not lock mux_channel_cs_ in this callback.
+#ifdef USE_WEBRTC_DEV_BRANCH
+void WebRtcVoiceEngine::Process(int channel,
+                                webrtc::ProcessingTypes type,
+                                int16_t audio10ms[],
+                                int length,
+                                int sampling_freq,
+                                bool is_stereo) {
+#else
 void WebRtcVoiceEngine::Process(const int channel,
                                 const webrtc::ProcessingTypes type,
                                 int16_t audio10ms[],
                                 const int length,
                                 const int sampling_freq,
                                 const bool is_stereo) {
+#endif
     talk_base::CritScope cs(&signal_media_critical_);
     AudioFrame frame(audio10ms, length, sampling_freq, is_stereo);
     if (type == webrtc::kPlaybackAllChannelsMixed) {

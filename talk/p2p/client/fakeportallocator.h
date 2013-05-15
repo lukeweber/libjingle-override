@@ -60,12 +60,12 @@ class FakePortAllocatorSession : public PortAllocatorSession {
   void AddPort(cricket::Port* port) {
     port->set_component(component_);
     port->set_generation(0);
-    port->SignalAddressReady.connect(
-        this, &FakePortAllocatorSession::OnAddressReady);
+    port->SignalPortComplete.connect(
+        this, &FakePortAllocatorSession::OnPortComplete);
     port->PrepareAddress();
     SignalPortReady(this, port);
   }
-  void OnAddressReady(cricket::Port* port) {
+  void OnPortComplete(cricket::Port* port) {
     SignalCandidatesReady(this, port->Candidates());
     SignalCandidatesAllocationDone(this);
   }

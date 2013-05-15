@@ -769,6 +769,8 @@ bool WebRtcVideoEngine::InitVideoEngine() {
     return false;
   }
 
+#ifndef USE_WEBRTC_DEV_BRANCH
+#endif
 
   initialized_ = true;
   return true;
@@ -1496,6 +1498,9 @@ WebRtcVideoMediaChannel::~WebRtcVideoMediaChannel() {
 
   // Unregister the channel from the engine.
   engine()->UnregisterChannel(this);
+  if (worker_thread()) {
+    worker_thread()->Clear(this);
+  }
 }
 
 bool WebRtcVideoMediaChannel::SetRecvCodecs(

@@ -287,6 +287,7 @@ class PhysicalSocket : public AsyncSocket, public sigslot::has_slots<> {
 #endif
         );
     UpdateLastError();
+    MaybeRemapSendError();
     // We have seen minidumps where this may be false.
     ASSERT(sent <= static_cast<int>(cb));
     if ((sent < 0) && IsBlockingError(error_)) {
@@ -308,6 +309,7 @@ class PhysicalSocket : public AsyncSocket, public sigslot::has_slots<> {
 #endif
         reinterpret_cast<sockaddr*>(&saddr), static_cast<int>(len));
     UpdateLastError();
+    MaybeRemapSendError();
     // We have seen minidumps where this may be false.
     ASSERT(sent <= static_cast<int>(length));
     if ((sent < 0) && IsBlockingError(error_)) {
@@ -486,6 +488,19 @@ class PhysicalSocket : public AsyncSocket, public sigslot::has_slots<> {
 
   void UpdateLastError() {
     error_ = LAST_SYSTEM_ERROR;
+  }
+
+  void MaybeRemapSendError() {
+#if defined(OSX)
+    // https://developer.apple.com/library/mac/documentation/Darwin/
+    // Reference/ManPages/man2/sendto.2.html
+    // ENOBUFS - The output queue for a network interface is full.
+    // This generally indicates that the interface has stopped sending,
+    // but may be caused by transient congestion.
+    if (error_ == ENOBUFS) {
+      error_ = EWOULDBLOCK;
+    }
+#endif
   }
 
   static int TranslateOption(Option opt, int* slevel, int* sopt) {

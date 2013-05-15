@@ -644,8 +644,8 @@ class TestPortAllocatorSession : public cricket::PortAllocatorSession {
     port->set_generation(0);
     port->SignalDestroyed.connect(
         this, &TestPortAllocatorSession::OnPortDestroyed);
-    port->SignalAddressReady.connect(
-        this, &TestPortAllocatorSession::OnAddressReady);
+    port->SignalPortComplete.connect(
+        this, &TestPortAllocatorSession::OnPortComplete);
     port->PrepareAddress();
     SignalPortReady(this, port);
   }
@@ -657,7 +657,7 @@ class TestPortAllocatorSession : public cricket::PortAllocatorSession {
     }
   }
 
-  void OnAddressReady(cricket::Port* port) {
+  void OnPortComplete(cricket::Port* port) {
     SignalCandidatesReady(this, port->Candidates());
   }
 
@@ -2271,6 +2271,28 @@ class SessionTest : public testing::Test {
         initiator.get(), cricket::BaseSession::STATE_SENTACCEPT,
         cricket::CA_ANSWER, cricket::CS_LOCAL);
   }
+
+  void TestGetTransportStats() {
+    talk_base::scoped_ptr<cricket::PortAllocator> allocator(
+        new TestPortAllocator());
+    int next_message_id = 0;
+
+    std::string content_name = "content-name";
+    std::string content_type = "content-type";
+    talk_base::scoped_ptr<TestClient> initiator(
+        new TestClient(allocator.get(), &next_message_id,
+                       kInitiator, PROTOCOL_JINGLE,
+                       content_type,
+                       content_name, "",
+                       "",  ""));
+    initiator->CreateSession();
+
+    cricket::SessionStats stats;
+    EXPECT_TRUE(initiator->session->GetStats(&stats));
+    // At initiation, there are 2 transports.
+    EXPECT_EQ(2ul, stats.proxy_to_transport.size());
+    EXPECT_EQ(2ul, stats.transport_stats.size());
+  }
 };
 
 // For each of these, "X => Y = Z" means "if a client with protocol X
@@ -2435,4 +2457,8 @@ TEST_F(SessionTest, TestCallerSignalNewDescription) {
 
 TEST_F(SessionTest, TestCalleeSignalNewDescription) {
   TestCalleeSignalNewDescription();
+}
+
+TEST_F(SessionTest, TestGetTransportStats) {
+  TestGetTransportStats();
 }

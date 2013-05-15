@@ -53,6 +53,7 @@ class StatsReport {
 
   void AddValue(const std::string& name, const std::string& value);
   void AddValue(const std::string& name, int64 value);
+  void AddBoolean(const std::string& name, bool value);
 
   double timestamp;  // Time since 1970-01-01T00:00:00Z in milliseconds.
   typedef std::vector<Value> Values;
@@ -67,6 +68,16 @@ class StatsReport {
   // A StatsReport of |type| = "googTransport" contains information
   // about a libjingle "transport".
   static const char kStatsReportTypeTransport[];
+
+  // A StatsReport of |type| = "googComponent" contains information
+  // about a libjingle "channel" (typically, RTP or RTCP for a transport).
+  // This is intended to be the same thing as an ICE "Component".
+  static const char kStatsReportTypeComponent[];
+
+  // A StatsReport of |type| = "googCandidatePair" contains information
+  // about a libjingle "connection" - a single source/destination port pair.
+  // This is intended to be the same thing as an ICE "candidate pair".
+  static const char kStatsReportTypeCandidatePair[];
 
   // StatsReport of |type| = "VideoBWE" is statistics for video Bandwidth
   // Estimation, which is global per-session.  The |id| field is "bweforvideo"
@@ -97,9 +108,19 @@ class StatsReport {
   static const char kStatsValueNamePacketsReceived[];
   static const char kStatsValueNamePacketsLost[];
   static const char kStatsValueNameTransportId[];
-  static const char kStatsValueNameCandidateAddress[];
+  static const char kStatsValueNameLocalAddress[];
+  static const char kStatsValueNameRemoteAddress[];
+  static const char kStatsValueNameWritable[];
+  static const char kStatsValueNameReadable[];
+  static const char kStatsValueNameActiveConnection[];
+
 
   // Internal StatsValue names
+  static const char kStatsValueNameEchoCancellationQualityMin[];
+  static const char kStatsValueNameEchoDelayMedian[];
+  static const char kStatsValueNameEchoDelayStdDev[];
+  static const char kStatsValueNameEchoReturnLoss[];
+  static const char kStatsValueNameEchoReturnLossEnhancement[];
   static const char kStatsValueNameFirsReceived[];
   static const char kStatsValueNameFirsSent[];
   static const char kStatsValueNameFrameHeightReceived[];
@@ -124,9 +145,11 @@ class StatsReport {
   static const char kStatsValueNameBucketDelay[];
   static const char kStatsValueNameInitiator[];
   static const char kStatsValueNameTransportType[];
+  static const char kStatsValueNameContentName[];
+  static const char kStatsValueNameComponent[];
+  static const char kStatsValueNameChannelId[];
   static const char kStatsValueNameTrackId[];
   static const char kStatsValueNameSsrc[];
-
 };
 
 typedef std::vector<StatsReport> StatsReports;

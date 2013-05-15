@@ -299,6 +299,7 @@ class VideoCapturer
   bool enable_camera_list_;
   int scaled_width_;  // Current output size from ComputeScale.
   int scaled_height_;
+  int num_cores_;  // Number of physical cores.
 
   talk_base::CriticalSection crit_;
   VideoProcessors video_processors_;

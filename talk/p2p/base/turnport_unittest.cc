@@ -90,10 +90,10 @@ class TurnPortTest : public testing::Test,
     network_.AddIP(talk_base::IPAddress(INADDR_ANY));
   }
 
-  void OnTurnAddressReady(Port* port) {
+  void OnTurnPortComplete(Port* port) {
     turn_ready_ = true;
   }
-  void OnTurnAddressError(Port* port) {
+  void OnTurnPortError(Port* port) {
     turn_error_ = true;
   }
   void OnTurnUnknownAddress(PortInterface* port, const SocketAddress& addr,
@@ -112,7 +112,7 @@ class TurnPortTest : public testing::Test,
   void OnTurnReadPacket(Connection* conn, const char* data, size_t size) {
     turn_packets_.push_back(talk_base::Buffer(data, size));
   }
-  void OnUdpAddressReady(Port* port) {
+  void OnUdpPortComplete(Port* port) {
     udp_ready_ = true;
   }
   void OnUdpReadPacket(Connection* conn, const char* data, size_t size) {
@@ -134,10 +134,10 @@ class TurnPortTest : public testing::Test,
                                  kLocalAddr1.ipaddr(), 0, 0,
                                  kIceUfrag1, kIcePwd1,
                                  server_address, credentials));
-    turn_port_->SignalAddressReady.connect(this,
-        &TurnPortTest::OnTurnAddressReady);
-    turn_port_->SignalAddressError.connect(this,
-        &TurnPortTest::OnTurnAddressError);
+    turn_port_->SignalPortComplete.connect(this,
+        &TurnPortTest::OnTurnPortComplete);
+    turn_port_->SignalPortError.connect(this,
+        &TurnPortTest::OnTurnPortError);
     turn_port_->SignalUnknownAddress.connect(this,
         &TurnPortTest::OnTurnUnknownAddress);
     turn_port_->SignalCreatePermissionResult.connect(this,
@@ -147,8 +147,8 @@ class TurnPortTest : public testing::Test,
     udp_port_.reset(UDPPort::Create(main_, &socket_factory_, &network_,
                                     kLocalAddr2.ipaddr(), 0, 0,
                                     kIceUfrag2, kIcePwd2));
-    udp_port_->SignalAddressReady.connect(
-        this, &TurnPortTest::OnUdpAddressReady);
+    udp_port_->SignalPortComplete.connect(
+        this, &TurnPortTest::OnUdpPortComplete);
   }
 
   void TestTurnConnection() {

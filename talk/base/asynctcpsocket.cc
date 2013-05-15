@@ -235,6 +235,10 @@ void AsyncTCPSocketBase::OnWriteEvent(AsyncSocket* socket) {
   if (outpos_ > 0) {
     FlushOutBuffer();
   }
+
+  if (outpos_ == 0) {
+    SignalReadyToSend(this);
+  }
 }
 
 void AsyncTCPSocketBase::OnCloseEvent(AsyncSocket* socket, int error) {

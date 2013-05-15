@@ -143,8 +143,7 @@ UDPPort::UDPPort(talk_base::Thread* thread,
                    talk_base::Network* network,
                    const talk_base::IPAddress& ip, int min_port, int max_port,
                    const std::string& username, const std::string& password)
-    : Port(thread, LOCAL_PORT_TYPE, ICE_TYPE_PREFERENCE_HOST,
-           factory, network, ip, min_port, max_port,
+    : Port(thread, LOCAL_PORT_TYPE, factory, network, ip, min_port, max_port,
            username, password),
       requests_(thread),
       socket_(NULL),
@@ -338,9 +337,9 @@ void UDPPort::SetResult(bool success) {
   // Setting ready status.
   ready_ = true;
   if (success) {
-    SignalAddressReady(this);
+    SignalPortComplete(this);
   } else {
-    SignalAddressError(this);
+    SignalPortError(this);
   }
 }
 

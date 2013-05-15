@@ -100,7 +100,7 @@ class FakeDeviceManager : public DeviceManagerInterface {
   virtual bool GetWindows(
       std::vector<talk_base::WindowDescription>* descriptions) {
     descriptions->clear();
-    const int id = 1;  // Note that 0 is not a valid ID.
+    const uint32_t id = 1u;  // Note that 0 is not a valid ID.
     const talk_base::WindowId window_id =
         talk_base::WindowId::Cast(id);
     std::string title = "FakeWindow";

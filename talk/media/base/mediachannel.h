@@ -464,6 +464,7 @@ struct VoiceSenderInfo {
         rtt_ms(0),
         jitter_ms(0),
         audio_level(0),
+        aec_quality_min(0.0),
         echo_delay_median_ms(0),
         echo_delay_std_ms(0),
         echo_return_loss(0),
@@ -480,6 +481,7 @@ struct VoiceSenderInfo {
   int rtt_ms;
   int jitter_ms;
   int audio_level;
+  float aec_quality_min;
   int echo_delay_median_ms;
   int echo_delay_std_ms;
   int echo_return_loss;

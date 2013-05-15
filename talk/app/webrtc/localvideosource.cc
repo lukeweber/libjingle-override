@@ -72,8 +72,9 @@ enum {
 static const cricket::VideoFormatPod kDefaultResolution =
     {640, 480, FPS_TO_INTERVAL(30), cricket::FOURCC_ANY};
 
-// List of formats used if the camera don't support capability enumeration.
+// List of formats used if the camera doesn't support capability enumeration.
 static const cricket::VideoFormatPod kVideoFormats[] = {
+  {1920, 1080, FPS_TO_INTERVAL(30), cricket::FOURCC_ANY},
   {1280, 720, FPS_TO_INTERVAL(30), cricket::FOURCC_ANY},
   {960, 720, FPS_TO_INTERVAL(30), cricket::FOURCC_ANY},
   {640, 360, FPS_TO_INTERVAL(30), cricket::FOURCC_ANY},

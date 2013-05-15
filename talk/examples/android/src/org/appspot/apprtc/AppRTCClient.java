@@ -118,19 +118,26 @@ public class AppRTCClient {
     requestQueueDrainInBackground();
   }
 
+  public boolean isInitiator() {
+    return appRTCSignalingParameters.initiator;
+  }
+
   // Struct holding the signaling parameters of an AppRTC room.
   private class AppRTCSignalingParameters {
     public final List<PeerConnection.IceServer> iceServers;
     public final String gaeBaseHref;
     public final String channelToken;
     public final String postMessageUrl;
+    public final boolean initiator;
     public AppRTCSignalingParameters(
         List<PeerConnection.IceServer> iceServers,
-        String gaeBaseHref, String channelToken, String postMessageUrl) {
+        String gaeBaseHref, String channelToken, String postMessageUrl,
+        boolean initiator) {
       this.iceServers = iceServers;
       this.gaeBaseHref = gaeBaseHref;
       this.channelToken = channelToken;
       this.postMessageUrl = postMessageUrl;
+      this.initiator = initiator;
     }
   }
 
@@ -223,6 +230,8 @@ public class AppRTCClient {
           ".*\n *var pc_config = (\\{[^\n]*\\});\n.*");
       final Pattern requestTurnPattern = Pattern.compile(
           ".*\n *requestTurn\\('([^\n]*)'\\);\n.*");
+      final Pattern initiatorPattern = Pattern.compile(
+          ".*\n *var initiator = ([01]);\n.*");
 
       String roomHtml =
           drainStream((new URL(url)).openConnection().getInputStream());
@@ -283,8 +292,17 @@ public class AppRTCClient {
         }
       }
 
+      Matcher initiatorMatcher = initiatorPattern.matcher(roomHtml);
+      if (!initiatorMatcher.find()) {
+        throw new IOException("Missing initiator in HTML: " + roomHtml);
+      }
+      boolean initiator = initiatorMatcher.group(1).equals("1");
+      if (initiatorMatcher.find()) {
+        throw new IOException("Too many initiators in HTML: " + roomHtml);
+      }
+
       return new AppRTCSignalingParameters(
-          iceServers, gaeBaseHref, token, postMessageUrl);
+          iceServers, gaeBaseHref, token, postMessageUrl, initiator);
     }
 
     // Requests & returns a TURN ICE Server based on a request URL.  Must be run

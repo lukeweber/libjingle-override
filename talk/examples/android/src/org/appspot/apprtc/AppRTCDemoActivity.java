@@ -75,6 +75,7 @@ public class AppRTCDemoActivity extends Activity
       new LinkedList<IceCandidate>();
   // Synchronize on quit[0] to avoid teardown-related crashes.
   private final Boolean[] quit = new Boolean[] { false };
+  private MediaConstraints sdpMediaConstraints;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
@@ -102,10 +103,12 @@ public class AppRTCDemoActivity extends Activity
     ((AudioManager) getSystemService(AUDIO_SERVICE)).setMode(
         AudioManager.MODE_IN_COMMUNICATION);
 
-    // TODO(fischman): allow this client to act as a room-creator, handing out
-    // the new room URL and acting as a JSEP "answerer".  ATM this only acts as
-    // an offerer and on already-existing rooms with a single present user.
-    // TODO(fischman): also, support &debug=loopback
+    sdpMediaConstraints = new MediaConstraints();
+    sdpMediaConstraints.mandatory.add(new MediaConstraints.KeyValuePair(
+        "OfferToReceiveAudio", "true"));
+    sdpMediaConstraints.mandatory.add(new MediaConstraints.KeyValuePair(
+        "OfferToReceiveVideo", "true"));
+
     final Intent intent = getIntent();
     if (!intent.getAction().equals("android.intent.action.VIEW")) {
       logAndToast("AppRTC must be launched via an intent opening a room URL " +
@@ -290,11 +293,11 @@ public class AppRTCDemoActivity extends Activity
       runOnUiThread(new Runnable() {
           public void run() {
             logAndToast("Sending " + sdp.type);
-            pc.setLocalDescription(sdpObserver, sdp);
             JSONObject json = new JSONObject();
             jsonPut(json, "type", sdp.type.canonicalForm());
             jsonPut(json, "sdp", sdp.description);
             sendMessage(json);
+            pc.setLocalDescription(sdpObserver, sdp);
           }
         });
     }
@@ -302,11 +305,22 @@ public class AppRTCDemoActivity extends Activity
     @Override public void onSuccess() {
       runOnUiThread(new Runnable() {
           public void run() {
-            if (pc.getRemoteDescription() != null) {
-              for (IceCandidate candidate : queuedRemoteCandidates) {
-                pc.addIceCandidate(candidate);
+            if (appRtcClient.isInitiator()) {
+              if (pc.getRemoteDescription() != null) {
+                // We've set our local offer and received & set the remote
+                // answer, so drain candidates.
+                drainRemoteCandidates();
               }
-              queuedRemoteCandidates = null;
+            } else {
+              if (pc.getLocalDescription() == null) {
+                // We just set the remote offer, time to create our answer.
+                logAndToast("Creating answer");
+                pc.createAnswer(SDPObserver.this, sdpMediaConstraints);
+              } else {
+                // Sent our answer and set it as local description; drain
+                // candidates.
+                drainRemoteCandidates();
+              }
             }
           }
         });
@@ -319,19 +333,24 @@ public class AppRTCDemoActivity extends Activity
           }
         });
     }
+
+    private void drainRemoteCandidates() {
+      for (IceCandidate candidate : queuedRemoteCandidates) {
+        pc.addIceCandidate(candidate);
+      }
+      queuedRemoteCandidates = null;
+    }
   }
 
   // Implementation detail: handler for receiving GAE messages and dispatching
   // them appropriately.
   private class GAEHandler implements GAEChannelClient.MessageHandler {
     @JavascriptInterface public void onOpen() {
+      if (!appRtcClient.isInitiator()) {
+        return;
+      }
       logAndToast("Creating offer...");
-      MediaConstraints constraints = new MediaConstraints();
-      constraints.mandatory.add(new MediaConstraints.KeyValuePair(
-          "OfferToReceiveAudio", "true"));
-      constraints.mandatory.add(new MediaConstraints.KeyValuePair(
-          "OfferToReceiveVideo", "true"));
-      pc.createOffer(sdpObserver, constraints);
+      pc.createOffer(sdpObserver, sdpMediaConstraints);
     }
 
     @JavascriptInterface public void onMessage(String data) {
@@ -348,11 +367,11 @@ public class AppRTCDemoActivity extends Activity
           } else {
             pc.addIceCandidate(candidate);
           }
-        } else if (type.equals("answer")) {
-          SessionDescription answer = new SessionDescription(
+        } else if (type.equals("answer") || type.equals("offer")) {
+          SessionDescription sdp = new SessionDescription(
               SessionDescription.Type.fromCanonicalForm(type),
               (String) json.get("sdp"));
-          pc.setRemoteDescription(sdpObserver, answer);
+          pc.setRemoteDescription(sdpObserver, sdp);
         } else if (type.equals("bye")) {
           logAndToast("Remote end hung up; dropping PeerConnection");
           disconnectAndExit();

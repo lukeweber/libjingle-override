@@ -186,6 +186,14 @@ class TransportProxy : public sigslot::has_slots<>,
 
 typedef std::map<std::string, TransportProxy*> TransportMap;
 
+// Statistics for all the transports of this session.
+typedef std::map<std::string, TransportStats> TransportStatsMap;
+
+struct SessionStats {
+  std::map<std::string, std::string> proxy_to_transport;
+  TransportStatsMap transport_stats;
+};
+
 // A BaseSession manages general session state. This includes negotiation
 // of both the application-level and network-level protocols:  the former
 // defines what will be sent and the latter defines how it will be sent.  Each
@@ -352,6 +360,9 @@ class BaseSession : public sigslot::has_slots<>,
   virtual void DestroyChannel(const std::string& content_name,
                               int component);
 
+  // Returns stats for all channels of all transports.
+  // This avoids exposing the internal structures used to track them.
+  virtual bool GetStats(SessionStats* stats);
  protected:
   bool PushdownTransportDescription(ContentSource source,
                                     ContentAction action);

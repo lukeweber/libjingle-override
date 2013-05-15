@@ -63,6 +63,9 @@ class FakeAdmTest : public testing::Test,
                                           const uint32_t totalDelayMS,
                                           const int32_t clockDrift,
                                           const uint32_t currentMicLevel,
+#ifdef USE_WEBRTC_DEV_BRANCH
+                                          const bool keyPressed,
+#endif
                                           uint32_t& newMicLevel) {
     rec_buffer_bytes_ = nSamples * nBytesPerSample;
     if ((rec_buffer_bytes_ <= 0) ||

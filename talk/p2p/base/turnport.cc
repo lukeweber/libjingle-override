@@ -176,8 +176,7 @@ TurnPort::TurnPort(talk_base::Thread* thread,
                    const std::string& password,
                    const ProtocolAddress& server_address,
                    const RelayCredentials& credentials)
-    : Port(thread, RELAY_PORT_TYPE, GetRelayPreference(server_address.proto),
-           factory, network, ip, min_port, max_port,
+    : Port(thread, RELAY_PORT_TYPE, factory, network, ip, min_port, max_port,
            username, password),
       server_address_(server_address),
       credentials_(credentials),
@@ -201,7 +200,7 @@ void TurnPort::PrepareAddress() {
       credentials_.password.empty()) {
     LOG(LS_ERROR) << "Allocation can't be started without setting the"
                   << " TURN server credentials for the user.";
-    SignalAddressError(this);
+    OnAllocateError();
     return;
   }
 
@@ -226,7 +225,7 @@ void TurnPort::PrepareAddress() {
     }
 
     if (!socket_) {
-      SignalAddressError(this);
+      OnAllocateError();
       return;
     }
 
@@ -252,6 +251,9 @@ void TurnPort::OnSocketConnect(talk_base::AsyncPacketSocket* socket) {
 
 void TurnPort::OnSocketClose(talk_base::AsyncPacketSocket* socket, int error) {
   LOG_J(LS_WARNING, this) << "Connection with server failed, error=" << error;
+  if (!connected_) {
+    OnAllocateError();
+  }
 }
 
 Connection* TurnPort::CreateConnection(const Candidate& address,
@@ -368,7 +370,7 @@ void TurnPort::OnResolveResult(talk_base::SignalThread* signal_thread) {
   if (resolver_->error() != 0) {
     LOG_J(LS_WARNING, this) << "TURN host lookup received error "
                             << resolver_->error();
-    SignalAddressError(this);
+    OnAllocateError();
     return;
   }
 
@@ -392,15 +394,15 @@ void TurnPort::OnStunAddress(const talk_base::SocketAddress& address) {
 void TurnPort::OnAllocateSuccess(const talk_base::SocketAddress& address) {
   connected_ = true;
   AddAddress(address, socket_->GetLocalAddress(), "udp",
-             RELAY_PORT_TYPE, ICE_TYPE_PREFERENCE_RELAY, true);
+             RELAY_PORT_TYPE, GetRelayPreference(server_address_.proto), true);
 }
 
 void TurnPort::OnAllocateError() {
-  SignalAddressError(this);
+  SignalPortError(this);
 }
 
 void TurnPort::OnAllocateRequestTimeout() {
-  SignalAddressError(this);
+  OnAllocateError();
 }
 
 void TurnPort::HandleDataIndication(const char* data, size_t size) {
@@ -897,7 +899,7 @@ void TurnEntry::OnCreatePermissionError(StunMessage* response, int code) {
 void TurnEntry::OnChannelBindSuccess() {
   LOG_J(LS_INFO, port_) << "Channel bind for " << ext_addr_.ToString()
                         << " succeeded";
-  ASSERT(state_ == STATE_BINDING);
+  ASSERT(state_ == STATE_BINDING || state_ == STATE_BOUND);
   state_ = STATE_BOUND;
 }
 

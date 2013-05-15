@@ -171,12 +171,21 @@ class WebRtcVoiceEngine
                            MediaProcessorDirection direction);
 
   // Method from webrtc::VoEMediaProcess
+#ifdef USE_WEBRTC_DEV_BRANCH
+  virtual void Process(int channel,
+                       webrtc::ProcessingTypes type,
+                       int16_t audio10ms[],
+                       int length,
+                       int sampling_freq,
+                       bool is_stereo);
+#else
   virtual void Process(const int channel,
                        const webrtc::ProcessingTypes type,
                        int16_t audio10ms[],
                        const int length,
                        const int sampling_freq,
                        const bool is_stereo);
+#endif
 
   // For tracking WebRtc channels. Needed because we have to pause them
   // all when switching devices.
@@ -226,7 +235,11 @@ class WebRtcVoiceEngine
   // at any time.
   bool ApplyOptions(const AudioOptions& options);
   virtual void Print(webrtc::TraceLevel level, const char* trace, int length);
+#ifdef USE_WEBRTC_DEV_BRANCH
+  virtual void CallbackOnError(int channel, int errCode);
+#else
   virtual void CallbackOnError(const int channel, const int errCode);
+#endif
   // Given the device type, name, and id, find device id. Return true and
   // set the output parameter rtc_id if successful.
   bool FindWebRtcAudioDeviceId(

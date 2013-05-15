@@ -56,11 +56,19 @@ class WindowId {
   typedef unsigned int WindowT;
 #endif
 
-  static WindowId Cast(int id) {
+  static WindowId Cast(uint64 id) {
 #if defined(WIN32)
     return WindowId(reinterpret_cast<WindowId::WindowT>(id));
 #else
     return WindowId(static_cast<WindowId::WindowT>(id));
+#endif
+  }
+
+  static uint64 Format(const WindowT& id) {
+#if defined(WIN32)
+    return static_cast<uint64>(reinterpret_cast<uintptr_t>(id));
+#else
+    return static_cast<uint64>(id);
 #endif
   }
 

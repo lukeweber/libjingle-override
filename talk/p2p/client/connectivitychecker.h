@@ -239,10 +239,10 @@ class ConnectivityChecker
   void CleanUp();
 
   void OnRequestDone(talk_base::AsyncHttpRequest* request);
-  void OnRelayAddressReady(Port* port);
-  void OnStunAddressReady(Port* port);
-  void OnRelayAddressError(Port* port);
-  void OnStunAddressError(Port* port);
+  void OnRelayPortComplete(Port* port);
+  void OnStunPortComplete(Port* port);
+  void OnRelayPortError(Port* port);
+  void OnStunPortError(Port* port);
   void OnNetworksChanged();
   void OnProxyDetect(talk_base::SignalThread* thread);
   void OnConfigReady(

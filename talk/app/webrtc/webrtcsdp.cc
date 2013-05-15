@@ -1197,7 +1197,7 @@ void BuildMediaDescription(const ContentInfo* content_info,
       InitAttrLine(kAttributeFingerprint, &os);
       os << kSdpDelimiterColon
          << fp->algorithm << kSdpDelimiterSpace
-         << fp->GetRfc4752Fingerprint();
+         << fp->GetRfc4572Fingerprint();
 
       AddLine(os.str(), message);
     }

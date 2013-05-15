@@ -172,17 +172,25 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
     bool ready() const { return state_ == STATE_READY; }
     bool complete() const {
       // Returns true if candidate allocation has completed one way or another.
-      return ((state_ == STATE_READY) || (state_ == STATE_ERROR));
+      return ((state_ == STATE_COMPLETE) || (state_ == STATE_ERROR));
     }
 
     void set_ready() { ASSERT(state_ == STATE_INIT); state_ = STATE_READY; }
-    void set_error() { ASSERT(state_ == STATE_INIT); state_ = STATE_ERROR; }
-    
+    void set_complete() {
+      ASSERT(state_ == STATE_READY);
+      state_ = STATE_COMPLETE;
+    }
+    void set_error() {
+      ASSERT(state_ == STATE_INIT || state_ == STATE_READY);
+      state_ = STATE_ERROR;
+    }
+
    private:
     enum State {
-      STATE_INIT,   // No candidates allocated yet.
-      STATE_READY,  // All candidates allocated and ready for process.
-      STATE_ERROR   // Error in gathering candidates.
+      STATE_INIT,      // No candidates allocated yet.
+      STATE_READY,     // At least one candidate is ready for process.
+      STATE_COMPLETE,  // All candidates allocated and ready for process.
+      STATE_ERROR      // Error in gathering candidates.
     };
     Port* port_;
     AllocationSequence* sequence_;
@@ -201,10 +209,10 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
   void AddAllocatedPort(Port* port, AllocationSequence* seq,
                         bool prepare_address);
   void OnCandidateReady(Port* port, const Candidate& c);
-  void OnPortReady(Port* port);
+  void OnPortComplete(Port* port);
+  void OnPortError(Port* port);
   void OnProtocolEnabled(AllocationSequence* seq, ProtocolType proto);
   void OnPortDestroyed(PortInterface* port);
-  void OnAddressError(Port* port);
   void OnConnectionCreated(Port* port, Connection* conn);
   void OnConnectionStateChange(Connection* conn);
   void OnShake();

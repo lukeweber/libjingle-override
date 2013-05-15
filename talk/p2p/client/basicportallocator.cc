@@ -564,14 +564,14 @@ void BasicPortAllocatorSession::AddAllocatedPort(Port* port,
 
   port->SignalCandidateReady.connect(
       this, &BasicPortAllocatorSession::OnCandidateReady);
-  port->SignalAddressReady.connect(this,
-      &BasicPortAllocatorSession::OnPortReady);
+  port->SignalPortComplete.connect(this,
+      &BasicPortAllocatorSession::OnPortComplete);
   port->SignalConnectionCreated.connect(this,
       &BasicPortAllocatorSession::OnConnectionCreated);
   port->SignalDestroyed.connect(this,
       &BasicPortAllocatorSession::OnPortDestroyed);
-  port->SignalAddressError.connect(
-      this, &BasicPortAllocatorSession::OnAddressError);
+  port->SignalPortError.connect(
+      this, &BasicPortAllocatorSession::OnPortError);
   LOG_J(LS_INFO, port) << "Added port to allocator";
 
   if (prepare_address)
@@ -607,30 +607,41 @@ void BasicPortAllocatorSession::OnCandidateReady(
   if (!candidates.empty()) {
     SignalCandidatesReady(this, candidates);
   }
+
+  // Moving to READY state as we have atleast one candidate from the port.
+  // Since this port has atleast one candidate we should forward this port
+  // to listners, to allow connections from this port.
+  if (!data->ready()) {
+    data->set_ready();
+    SignalPortReady(this, port);
+  }
 }
 
-void BasicPortAllocatorSession::OnPortReady(Port* port) {
+void BasicPortAllocatorSession::OnPortComplete(Port* port) {
   ASSERT(talk_base::Thread::Current() == network_thread_);
   PortData* data = FindPort(port);
   ASSERT(data != NULL);
+  ASSERT(data->ready());
   // Ignore any late signals.
   if (data->complete())
     return;
-  data->set_ready();
-  SignalPortReady(this, port);
+
+  // Moving to COMPLETE state.
+  data->set_complete();
   // Send candidate allocation complete signal if this was the last port.
   MaybeSignalCandidatesAllocationDone();
 }
 
-void BasicPortAllocatorSession::OnAddressError(Port* port) {
+void BasicPortAllocatorSession::OnPortError(Port* port) {
   ASSERT(talk_base::Thread::Current() == network_thread_);
   PortData* data = FindPort(port);
   ASSERT(data != NULL);
   // We might have already given up on this port and stopped it.
   if (data->complete())
     return;
-  // SignalAddressError is currently sent from StunPort. But this signal
-  // itself is generic.
+
+  // SignalAddressError is currently sent from StunPort/TurnPort.
+  // But this signal itself is generic.
   data->set_error();
   // Send candidate allocation complete signal if this was the last port.
   MaybeSignalCandidatesAllocationDone();
@@ -679,7 +690,7 @@ void BasicPortAllocatorSession::MaybeSignalCandidatesAllocationDone() {
       return;
   }
 
-  // If all allocated ports are in ready state, session must have got all
+  // If all allocated ports are in complete state, session must have got all
   // expected candidates. Session will trigger candidates allocation complete
   // signal.
   for (std::vector<PortData>::iterator it = ports_.begin();

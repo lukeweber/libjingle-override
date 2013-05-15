@@ -143,6 +143,43 @@ enum TransportState {
   TRANSPORT_STATE_ALL
 };
 
+// Stats that we can return about the connections for a transport channel.
+// TODO(hta): Rename to ConnectionStats
+struct ConnectionInfo {
+  bool best_connection;        // Is this the best connection we have?
+  bool writable;               // Has this connection received a STUN response?
+  bool readable;               // Has this connection received a STUN request?
+  bool timeout;                // Has this connection timed out?
+  bool new_connection;         // Is this a newly created connection?
+  size_t rtt;                  // The STUN RTT for this connection.
+  size_t sent_total_bytes;     // Total bytes sent on this connection.
+  size_t sent_bytes_second;    // Bps over the last measurement interval.
+  size_t recv_total_bytes;     // Total bytes received on this connection.
+  size_t recv_bytes_second;    // Bps over the last measurement interval.
+  Candidate local_candidate;   // The local candidate for this connection.
+  Candidate remote_candidate;  // The remote candidate for this connection.
+  void* key;                   // A static value that identifies this conn.
+};
+
+// Information about all the connections of a channel.
+typedef std::vector<ConnectionInfo> ConnectionInfos;
+
+// Information about a specific channel
+struct TransportChannelStats {
+  int component;
+  ConnectionInfos connection_infos;
+};
+
+// Information about all the channels of a transport.
+// TODO(hta): Consider if a simple vector is as good as a map.
+typedef std::vector<TransportChannelStats> TransportChannelStatsList;
+
+// Information about the stats of a transport.
+struct TransportStats {
+  std::string content_name;
+  TransportChannelStatsList channel_stats;
+};
+
 class Transport : public talk_base::MessageHandler,
                   public sigslot::has_slots<> {
  public:
@@ -234,6 +271,8 @@ class Transport : public talk_base::MessageHandler,
 
   // Destroys every channel created so far.
   void DestroyAllChannels();
+
+  bool GetStats(TransportStats* stats);
 
   // Before any stanza is sent, the manager will request signaling.  Once
   // signaling is available, the client should call OnSignalingReady.  Once
@@ -404,6 +443,7 @@ class Transport : public talk_base::MessageHandler,
                                       ContentAction action);
   bool SetRemoteTransportDescription_w(const TransportDescription& desc,
                                        ContentAction action);
+  bool GetStats_w(TransportStats* infos);
 
   talk_base::Thread* signaling_thread_;
   talk_base::Thread* worker_thread_;

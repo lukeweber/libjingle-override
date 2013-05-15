@@ -35,6 +35,8 @@
 namespace webrtc {
 
 // The items below are in alphabetical order.
+const char StatsReport::kStatsValueNameActiveConnection[] =
+    "googActiveConnection";
 const char StatsReport::kStatsValueNameActualEncBitrate[] =
     "googActualEncBitrate";
 const char StatsReport::kStatsValueNameAudioOutputLevel[] = "audioOutputLevel";
@@ -46,14 +48,27 @@ const char StatsReport::kStatsValueNameAvailableSendBandwidth[] =
 const char StatsReport::kStatsValueNameBucketDelay[] = "googBucketDelay";
 const char StatsReport::kStatsValueNameBytesReceived[] = "bytesReceived";
 const char StatsReport::kStatsValueNameBytesSent[] = "bytesSent";
-const char StatsReport::kStatsValueNameCandidateAddress[] = "candidateAddress";
+const char StatsReport::kStatsValueNameChannelId[] = "googChannelId";
+const char StatsReport::kStatsValueNameComponent[] = "googComponent";
+const char StatsReport::kStatsValueNameContentName[] = "googContentName";
+// Echo metrics from the audio processing module.
+const char StatsReport::kStatsValueNameEchoCancellationQualityMin[] =
+    "googEchoCancellationQualityMin";
+const char StatsReport::kStatsValueNameEchoDelayMedian[] =
+    "googEchoCancellationEchoDelayMedian";
+const char StatsReport::kStatsValueNameEchoDelayStdDev[] =
+    "googEchoCancellationEchoDelayStdDev";
+const char StatsReport::kStatsValueNameEchoReturnLoss[] =
+    "googEchoCancellationReturnLoss";
+const char StatsReport::kStatsValueNameEchoReturnLossEnhancement[] =
+    "googEchoCancellationReturnLossEnhancement";
+
 const char StatsReport::kStatsValueNameFirsReceived[] = "googFirsReceived";
 const char StatsReport::kStatsValueNameFirsSent[] = "googFirsSent";
 const char StatsReport::kStatsValueNameFrameHeightReceived[] =
     "googFrameHeightReceived";
 const char StatsReport::kStatsValueNameFrameHeightSent[] =
     "googFrameHeightSent";
-const char StatsReport::kStatsValueNameInitiator[] = "googInitiator";
 const char StatsReport::kStatsValueNameFrameRateReceived[] =
     "googFrameRateReceived";
 const char StatsReport::kStatsValueNameFrameRateDecoded[] =
@@ -65,12 +80,16 @@ const char StatsReport::kStatsValueNameFrameRateSent[] = "googFrameRateSent";
 const char StatsReport::kStatsValueNameFrameWidthReceived[] =
     "googFrameWidthReceived";
 const char StatsReport::kStatsValueNameFrameWidthSent[] = "googFrameWidthSent";
+const char StatsReport::kStatsValueNameInitiator[] = "googInitiator";
 const char StatsReport::kStatsValueNameJitterReceived[] = "googJitterReceived";
+const char StatsReport::kStatsValueNameLocalAddress[] = "googLocalAddress";
 const char StatsReport::kStatsValueNameNacksReceived[] = "googNacksReceived";
 const char StatsReport::kStatsValueNameNacksSent[] = "googNacksSent";
 const char StatsReport::kStatsValueNamePacketsReceived[] = "packetsReceived";
 const char StatsReport::kStatsValueNamePacketsSent[] = "packetsSent";
 const char StatsReport::kStatsValueNamePacketsLost[] = "packetsLost";
+const char StatsReport::kStatsValueNameReadable[] = "googReadable";
+const char StatsReport::kStatsValueNameRemoteAddress[] = "googRemoteAddress";
 const char StatsReport::kStatsValueNameRetransmitBitrate[] =
     "googRetransmitBitrate";
 const char StatsReport::kStatsValueNameRtt[] = "googRtt";
@@ -82,6 +101,7 @@ const char StatsReport::kStatsValueNameTransportId[] = "transportId";
 const char StatsReport::kStatsValueNameTransportType[] = "googTransportType";
 const char StatsReport::kStatsValueNameTrackId[] = "googTrackId";
 const char StatsReport::kStatsValueNameSsrc[] = "ssrc";
+const char StatsReport::kStatsValueNameWritable[] = "googWritable";
 
 const char StatsReport::kStatsReportTypeSession[] = "googLibjingleSession";
 const char StatsReport::kStatsReportTypeBwe[] = "VideoBwe";
@@ -89,6 +109,8 @@ const char StatsReport::kStatsReportTypeSsrc[] = "ssrc";
 const char StatsReport::kStatsReportTypeTrack[] = "googTrack";
 const char StatsReport::kStatsReportTypeIceCandidate[] = "iceCandidate";
 const char StatsReport::kStatsReportTypeTransport[] = "googTransport";
+const char StatsReport::kStatsReportTypeComponent[] = "googComponent";
+const char StatsReport::kStatsReportTypeCandidatePair[] = "googCandidatePair";
 
 const char StatsReport::kStatsReportVideoBweId[] = "bweforvideo";
 
@@ -102,6 +124,10 @@ void StatsReport::AddValue(const std::string& name, const std::string& value) {
 
 void StatsReport::AddValue(const std::string& name, int64 value) {
   AddValue(name, talk_base::ToString<int64>(value));
+}
+
+void StatsReport::AddBoolean(const std::string& name, bool value) {
+  AddValue(name, value ? "true" : "false");
 }
 
 namespace {
@@ -159,12 +185,19 @@ void ExtractStats(const cricket::VoiceSenderInfo& info, StatsReport* report) {
                    info.bytes_sent);
   report->AddValue(StatsReport::kStatsValueNamePacketsSent,
                    info.packets_sent);
-
-  // TODO(jiayl): Move the remote stuff into a separate function to extract them to
-  // a different stats element for v2.
   report->AddValue(StatsReport::kStatsValueNameJitterReceived,
                    info.jitter_ms);
   report->AddValue(StatsReport::kStatsValueNameRtt, info.rtt_ms);
+  report->AddValue(StatsReport::kStatsValueNameEchoCancellationQualityMin,
+                   talk_base::ToString<float>(info.aec_quality_min));
+  report->AddValue(StatsReport::kStatsValueNameEchoDelayMedian,
+                   info.echo_delay_median_ms);
+  report->AddValue(StatsReport::kStatsValueNameEchoDelayStdDev,
+                   info.echo_delay_std_ms);
+  report->AddValue(StatsReport::kStatsValueNameEchoReturnLoss,
+                   info.echo_return_loss);
+  report->AddValue(StatsReport::kStatsValueNameEchoReturnLossEnhancement,
+                   info.echo_return_loss_enhancement);
 }
 
 void ExtractStats(const cricket::VideoReceiverInfo& info, StatsReport* report) {
@@ -209,9 +242,6 @@ void ExtractStats(const cricket::VideoSenderInfo& info, StatsReport* report) {
                    info.framerate_input);
   report->AddValue(StatsReport::kStatsValueNameFrameRateSent,
                    info.framerate_sent);
-
-  // TODO(jiayl): Move the remote stuff into a separate function to extract them to
-  // a different stats element for v2.
   report->AddValue(StatsReport::kStatsValueNameRtt, info.rtt_ms);
 }
 
@@ -399,8 +429,8 @@ void StatsCollector::ExtractSessionInfo() {
   report.type = StatsReport::kStatsReportTypeSession;
   report.timestamp = stats_gathering_started_;
   report.values.clear();
-  report.AddValue(StatsReport::kStatsValueNameInitiator,
-                  session_->initiator()?"true":"false");
+  report.AddBoolean(StatsReport::kStatsValueNameInitiator,
+                    session_->initiator());
 
   reports_[report.id] = report;
 
@@ -413,6 +443,61 @@ void StatsCollector::ExtractSessionInfo() {
   // cricket::P2PTransportChannel::connections_ (of type cricket::Connection)
   // It exports a GetStats call that returns a vector of ConnectionInfo
   // declared in transportchannel.h that has the information we want.
+  cricket::SessionStats stats;
+  if (session_->GetStats(&stats)) {
+    // TODO(hta): Report on the proxy (M-line) to transport mapping when needed.
+    for (cricket::TransportStatsMap::iterator transport_iter
+             = stats.transport_stats.begin();
+         transport_iter != stats.transport_stats.end(); ++transport_iter) {
+      // TODO(hta): Report on transports when we want to have some info here.
+      for (cricket::TransportChannelStatsList::iterator channel_iter
+               = transport_iter->second.channel_stats.begin();
+           channel_iter != transport_iter->second.channel_stats.end();
+           ++channel_iter) {
+        StatsReport channel_report;
+        std::ostringstream ostc;
+        ostc << "Channel-" << transport_iter->second.content_name
+             << "-" << channel_iter->component;
+        channel_report.id = ostc.str();
+        channel_report.type = StatsReport::kStatsReportTypeComponent;
+        channel_report.timestamp = stats_gathering_started_;
+        channel_report.AddValue(StatsReport::kStatsValueNameComponent,
+                                channel_iter->component);
+        reports_[channel_report.id] = channel_report;
+        for (size_t i = 0;
+             i < channel_iter->connection_infos.size();
+             ++i) {
+          StatsReport report;
+          const cricket::ConnectionInfo& info
+              = channel_iter->connection_infos[i];
+          std::ostringstream ost;
+          ost << "Conn-" << transport_iter->first << "-"
+              << channel_iter->component << "-" << i;
+          report.id = ost.str();
+          report.type = StatsReport::kStatsReportTypeCandidatePair;
+          report.timestamp = stats_gathering_started_;
+          // Link from connection to its containing channel.
+          report.AddValue(StatsReport::kStatsValueNameChannelId,
+                          channel_report.id);
+          report.AddValue(StatsReport::kStatsValueNameBytesSent,
+                          info.sent_total_bytes);
+          report.AddValue(StatsReport::kStatsValueNameBytesReceived,
+                          info.recv_total_bytes);
+          report.AddBoolean(StatsReport::kStatsValueNameWritable,
+                            info.writable);
+          report.AddBoolean(StatsReport::kStatsValueNameReadable,
+                            info.readable);
+          report.AddBoolean(StatsReport::kStatsValueNameActiveConnection,
+                            info.best_connection);
+          report.AddValue(StatsReport::kStatsValueNameLocalAddress,
+                          info.local_candidate.address().ToString());
+          report.AddValue(StatsReport::kStatsValueNameRemoteAddress,
+                          info.remote_candidate.address().ToString());
+          reports_[report.id] = report;
+        }
+      }
+    }
+  }
 }
 
 void StatsCollector::ExtractVoiceInfo() {

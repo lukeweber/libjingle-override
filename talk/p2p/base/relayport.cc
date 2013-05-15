@@ -191,8 +191,7 @@ RelayPort::RelayPort(
     talk_base::Network* network, const talk_base::IPAddress& ip,
     int min_port, int max_port, const std::string& username,
     const std::string& password)
-    : Port(thread, RELAY_PORT_TYPE, ICE_TYPE_PREFERENCE_RELAY,
-           factory, network, ip, min_port, max_port,
+    : Port(thread, RELAY_PORT_TYPE, factory, network, ip, min_port, max_port,
            username, password),
       ready_(false),
       error_(0) {
@@ -242,7 +241,7 @@ void RelayPort::SetReady() {
                  RELAY_PORT_TYPE, ICE_TYPE_PREFERENCE_RELAY, false);
     }
     ready_ = true;
-    SignalAddressReady(this);
+    SignalPortComplete(this);
   }
 }
 

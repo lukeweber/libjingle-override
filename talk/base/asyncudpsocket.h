@@ -65,6 +65,8 @@ class AsyncUDPSocket : public AsyncPacketSocket {
  private:
   // Called when the underlying socket is ready to be read from.
   void OnReadEvent(AsyncSocket* socket);
+  // Called when the underlying socket is ready to send.
+  void OnWriteEvent(AsyncSocket* socket);
 
   scoped_ptr<AsyncSocket> socket_;
   char* buf_;
