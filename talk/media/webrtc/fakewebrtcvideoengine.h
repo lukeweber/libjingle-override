@@ -906,8 +906,10 @@ class FakeWebRtcVideoEngine
     channels_[channel]->remb_bw_partition_ = send;
     return 0;
   }
+#ifndef USE_WEBRTC_DEV_BRANCH
   WEBRTC_STUB(SetBandwidthEstimationMode,
               (webrtc::BandwidthEstimationMode mode));
+#endif
   WEBRTC_FUNC(SetTMMBRStatus, (const int channel, const bool enable)) {
     WEBRTC_CHECK_CHANNEL(channel);
     channels_[channel]->tmmbr_ = enable;
