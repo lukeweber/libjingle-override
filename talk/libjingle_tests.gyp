@@ -102,7 +102,6 @@
         'base/nullsocketserver_unittest.cc',
         'base/optionsfile_unittest.cc',
         'base/pathutils_unittest.cc',
-        'base/physicalsocketserver_unittest.cc',
         'base/proxy_unittest.cc',
         'base/proxydetect_unittest.cc',
         'base/ratelimiter_unittest.cc',
@@ -116,6 +115,7 @@
         # TODO(ronghuawu): Fix TestUdpReadyToSendIPv6 on windows build bot
         # then reenable this test.
         # 'base/socket_unittest.cc',
+        # 'base/physicalsocketserver_unittest.cc',
         'base/socketaddress_unittest.cc',
         'base/stream_unittest.cc',
         'base/stringencode_unittest.cc',
