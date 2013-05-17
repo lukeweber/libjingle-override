@@ -102,6 +102,7 @@
         'base/nullsocketserver_unittest.cc',
         'base/optionsfile_unittest.cc',
         'base/pathutils_unittest.cc',
+        'base/physicalsocketserver_unittest.cc',
         'base/proxy_unittest.cc',
         'base/proxydetect_unittest.cc',
         'base/ratelimiter_unittest.cc',
@@ -112,10 +113,7 @@
         'base/sharedexclusivelock_unittest.cc',
         'base/signalthread_unittest.cc',
         'base/sigslot_unittest.cc',
-        # TODO(ronghuawu): Fix TestUdpReadyToSendIPv6 on windows build bot
-        # then reenable this test.
-        # 'base/socket_unittest.cc',
-        # 'base/physicalsocketserver_unittest.cc',
+        'base/socket_unittest.cc',
         'base/socketaddress_unittest.cc',
         'base/stream_unittest.cc',
         'base/stringencode_unittest.cc',
@@ -164,12 +162,18 @@
           'sources': [
             'base/win32_unittest.cc',
             'base/win32regkey_unittest.cc',
-            'base/win32socketserver_unittest.cc',
             'base/win32toolhelp_unittest.cc',
             'base/win32window_unittest.cc',
-            # TODO(ronghuawu): Reenable this test.
-            # 'base/win32windowpicker_unittest.cc',
             'base/winfirewall_unittest.cc',
+            # TODO(ronghuawu): Reenable this test.
+            # 'base/win32socketserver_unittest.cc',
+            # 'base/win32windowpicker_unittest.cc',
+          ],
+          'sources!': [
+            # TODO(ronghuawu): Fix TestUdpReadyToSendIPv6 on windows bot
+            # then reenable this test.
+            'base/physicalsocketserver_unittest.cc',
+            'base/socket_unittest.cc',
           ],
         }],
         ['OS=="mac"', {
