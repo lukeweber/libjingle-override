@@ -353,6 +353,9 @@ class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
   bool MaybeResetVieSendCodec(WebRtcVideoChannelSendInfo* send_channel,
                               int new_width, int new_height, bool is_screencast,
                               bool* reset);
+  // Checks the current bitrate estimate and modifies the start bitrate
+  // accordingly.
+  void MaybeChangeStartBitrate(int channel_id, webrtc::VideoCodec* video_codec);
   // Helper function for starting the sending of media on all channels or
   // |channel_id|. Note that these two function do not change |sending_|.
   bool StartSend();

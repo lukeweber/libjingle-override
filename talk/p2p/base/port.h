@@ -401,6 +401,7 @@ class Connection : public talk_base::MessageHandler,
   };
 
   ReadState read_state() const { return read_state_; }
+  bool readable() const { return read_state_ == STATE_READABLE; }
 
   enum WriteState {
     STATE_WRITABLE          = 0,  // we have received ping responses recently
@@ -410,6 +411,7 @@ class Connection : public talk_base::MessageHandler,
   };
 
   WriteState write_state() const { return write_state_; }
+  bool writable() const { return write_state_ == STATE_WRITABLE; }
 
   // Determines whether the connection has finished connecting.  This can only
   // be false for TCP connections.

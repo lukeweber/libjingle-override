@@ -3251,21 +3251,7 @@ bool WebRtcVideoMediaChannel::SetSendCodec(
     LOG(LS_INFO) << "0x0 resolution selected. Captured frames will be dropped "
                  << "for ssrc: " << ssrc << ".";
   } else {
-    // Make sure startBitrate is less or equal to maxBitrate;
-    target_codec.startBitrate = talk_base::_min(target_codec.startBitrate,
-                                                target_codec.maxBitrate);
-
-    // Avoid setting codec if it's the same as the current one.
-    // Note that this method might compare them as unequal even though they
-    // are semantically equivalent. This is because the webrtc::VideoCodec
-    // struct can contain a non-NULL pointer, and contains a union. This
-    // comparison is best-effort, and seems to work well in practice.
-    webrtc::VideoCodec current_codec;
-    if (engine()->vie()->codec()->GetSendCodec(channel_id, current_codec) == 0
-        && memcmp(&current_codec, &target_codec, sizeof(current_codec)) == 0) {
-      return true;
-    }
-
+    MaybeChangeStartBitrate(channel_id, &target_codec);
     if (0 != engine()->vie()->codec()->SetSendCodec(channel_id, target_codec)) {
       LOG_RTCERR2(SetSendCodec, channel_id, target_codec.plName);
       return false;
@@ -3464,10 +3450,10 @@ bool WebRtcVideoMediaChannel::MaybeResetVieSendCodec(
     vie_codec.codecSpecific.VP8.automaticResizeOn = automatic_resize;
     vie_codec.codecSpecific.VP8.denoisingOn = denoising;
     vie_codec.codecSpecific.VP8.frameDroppingOn = vp8_frame_dropping;
-
-    // Make sure startBitrate is less or equal to maxBitrate;
-    vie_codec.startBitrate = talk_base::_min(vie_codec.startBitrate,
-                                             vie_codec.maxBitrate);
+    // TODO(mflodman): Remove 'is_screencast' check when screen cast settings
+    // are treated correctly in WebRTC.
+    if (!is_screencast)
+      MaybeChangeStartBitrate(channel_id, &vie_codec);
 
     if (engine()->vie()->codec()->SetSendCodec(channel_id, vie_codec) != 0) {
       LOG_RTCERR1(SetSendCodec, channel_id);
@@ -3480,6 +3466,29 @@ bool WebRtcVideoMediaChannel::MaybeResetVieSendCodec(
   }
 
   return true;
+}
+
+void WebRtcVideoMediaChannel::MaybeChangeStartBitrate(
+  int channel_id, webrtc::VideoCodec* video_codec) {
+  if (video_codec->startBitrate < video_codec->minBitrate) {
+    video_codec->startBitrate = video_codec->minBitrate;
+  } else if (video_codec->startBitrate > video_codec->maxBitrate) {
+    video_codec->startBitrate = video_codec->maxBitrate;
+  }
+
+  // Use a previous target bitrate, if there is one.
+  unsigned int current_target_bitrate = 0;
+  if (engine()->vie()->codec()->GetCodecTargetBitrate(
+      channel_id, &current_target_bitrate) == 0) {
+    // Convert to kbps.
+    current_target_bitrate /= 1000;
+    if (current_target_bitrate > video_codec->maxBitrate) {
+      current_target_bitrate = video_codec->maxBitrate;
+    }
+    if (current_target_bitrate > video_codec->startBitrate) {
+      video_codec->startBitrate = current_target_bitrate;
+    }
+  }
 }
 
 void WebRtcVideoMediaChannel::OnMessage(talk_base::Message* msg) {

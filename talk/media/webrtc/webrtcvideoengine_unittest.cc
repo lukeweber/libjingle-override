@@ -396,6 +396,49 @@ TEST_F(WebRtcVideoEngineTestFake, MaxBitrateResetWithConferenceMode) {
       kMaxBandwidthKbps, 10, 20);
 }
 
+// Verify the current send bitrate is used as start bitrate when reconfiguring
+// the send codec.
+TEST_F(WebRtcVideoEngineTestFake, StartSendBitrate) {
+  EXPECT_TRUE(SetupEngine());
+  EXPECT_TRUE(channel_->AddSendStream(
+      cricket::StreamParams::CreateLegacy(1)));
+  int send_channel = vie_.GetLastChannel();
+  cricket::VideoCodec codec(kVP8Codec);
+  std::vector<cricket::VideoCodec> codec_list;
+  codec_list.push_back(codec);
+  EXPECT_TRUE(channel_->SetSendCodecs(codec_list));
+  const unsigned int kVideoMaxSendBitrateKbps = 2000;
+  const unsigned int kVideoMinSendBitrateKbps = 50;
+  const unsigned int kVideoDefaultStartSendBitrateKbps = 300;
+  VerifyVP8SendCodec(send_channel, kVP8Codec.width, kVP8Codec.height, 0,
+                     kVideoMaxSendBitrateKbps, kVideoMinSendBitrateKbps,
+                     kVideoDefaultStartSendBitrateKbps);
+  EXPECT_EQ(0, vie_.StartSend(send_channel));
+
+  // Increase the send bitrate and verify it is used as start bitrate.
+  const unsigned int kVideoSendBitrateBps = 768000;
+  vie_.SetSendBitrates(send_channel, kVideoSendBitrateBps, 0, 0);
+  EXPECT_TRUE(channel_->SetSendCodecs(codec_list));
+  VerifyVP8SendCodec(send_channel, kVP8Codec.width, kVP8Codec.height, 0,
+                     kVideoMaxSendBitrateKbps, kVideoMinSendBitrateKbps,
+                     kVideoSendBitrateBps / 1000);
+
+  // Never set a start bitrate higher than the max bitrate.
+  vie_.SetSendBitrates(send_channel, kVideoMaxSendBitrateKbps + 500, 0, 0);
+  EXPECT_TRUE(channel_->SetSendCodecs(codec_list));
+  VerifyVP8SendCodec(send_channel, kVP8Codec.width, kVP8Codec.height, 0,
+                     kVideoMaxSendBitrateKbps, kVideoMinSendBitrateKbps,
+                     kVideoDefaultStartSendBitrateKbps);
+
+  // Use the default start bitrate if the send bitrate is lower.
+  vie_.SetSendBitrates(send_channel, kVideoDefaultStartSendBitrateKbps - 50, 0,
+                       0);
+  EXPECT_TRUE(channel_->SetSendCodecs(codec_list));
+  VerifyVP8SendCodec(send_channel, kVP8Codec.width, kVP8Codec.height, 0,
+                     kVideoMaxSendBitrateKbps, kVideoMinSendBitrateKbps,
+                     kVideoDefaultStartSendBitrateKbps);
+}
+
 
 // Test that we constrain send codecs properly.
 TEST_F(WebRtcVideoEngineTestFake, ConstrainSendCodecs) {

@@ -166,6 +166,7 @@ class TestPort : public Port {
                                        CandidateOrigin origin) {
     Connection* conn = new ProxyConnection(this, 0, remote_candidate);
     AddConnection(conn);
+    conn->set_use_candidate_attr(true);
     return conn;
   }
   virtual int SendTo(
@@ -1458,6 +1459,7 @@ TEST_F(PortTest, TestUseCandidateAttribute) {
   ASSERT_FALSE(rport->Candidates().empty());
   Connection* lconn = lport->CreateConnection(
       rport->Candidates()[0], Port::ORIGIN_MESSAGE);
+  lconn->set_use_candidate_attr(true);
   lconn->Ping(0);
   ASSERT_TRUE_WAIT(lport->last_stun_msg() != NULL, 1000);
   IceMessage* msg = lport->last_stun_msg();

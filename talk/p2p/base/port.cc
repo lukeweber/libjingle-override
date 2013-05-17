@@ -794,7 +794,6 @@ class ConnectionRequest : public StunRequest {
 
  private:
   Connection* connection_;
-  bool use_candidate_;
 };
 
 //
@@ -806,7 +805,7 @@ Connection::Connection(Port* port, size_t index,
   : port_(port), local_candidate_index_(index),
     remote_candidate_(remote_candidate), read_state_(STATE_READ_INIT),
     write_state_(STATE_WRITE_INIT), connected_(true), pruned_(false),
-    use_candidate_attr_(true), remote_ice_mode_(ICEMODE_FULL),
+    use_candidate_attr_(false), remote_ice_mode_(ICEMODE_FULL),
     requests_(port->thread()), rtt_(DEFAULT_RTT), last_ping_sent_(0),
     last_ping_received_(0), last_data_received_(0),
     last_ping_response_received_(0), reported_(false), state_(STATE_WAITING) {
