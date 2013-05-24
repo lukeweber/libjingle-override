@@ -70,9 +70,6 @@ const int kNumPhases = 4;
 const int kLargeSocketSendBufferSize = 128 * 1024;
 const int kNormalSocketSendBufferSize = 64 * 1024;
 
-
-const char UDP_PROTOCOL_NAME[] = "udp";
-
 // Returns the phase in which a given local candidate (or rather, the port that
 // gave rise to that local candidate) would have been created.
 int LocalCandidateToPhase(const cricket::Candidate& candidate) {

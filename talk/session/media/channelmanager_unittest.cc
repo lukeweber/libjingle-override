@@ -140,7 +140,7 @@ TEST_F(ChannelManagerTest, CreateDestroyChannels) {
   EXPECT_TRUE(video_channel != NULL);
   cricket::DataChannel* data_channel =
       cm_->CreateDataChannel(session_, cricket::CN_DATA,
-                             false, "");
+                             false, cricket::DCT_RTP);
   EXPECT_TRUE(data_channel != NULL);
   cm_->DestroyVideoChannel(video_channel);
   cm_->DestroyVoiceChannel(voice_channel);
@@ -162,7 +162,7 @@ TEST_F(ChannelManagerTest, CreateDestroyChannelsOnThread) {
   EXPECT_TRUE(video_channel != NULL);
   cricket::DataChannel* data_channel =
       cm_->CreateDataChannel(session_, cricket::CN_DATA,
-                             false, "");
+                             false, cricket::DCT_RTP);
   EXPECT_TRUE(data_channel != NULL);
   cm_->DestroyVideoChannel(video_channel);
   cm_->DestroyVoiceChannel(voice_channel);
@@ -189,7 +189,7 @@ TEST_F(ChannelManagerTest, NoTransportChannelTest) {
   EXPECT_TRUE(video_channel == NULL);
   cricket::DataChannel* data_channel =
       cm_->CreateDataChannel(session_, cricket::CN_DATA,
-                             false, "");
+                             false, cricket::DCT_RTP);
   EXPECT_TRUE(data_channel == NULL);
   cm_->Terminate();
 }

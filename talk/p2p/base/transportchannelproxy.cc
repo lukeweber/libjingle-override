@@ -65,27 +65,29 @@ void TransportChannelProxy::SetImplementation(TransportChannelImpl* impl) {
   // Adopt the supplied impl, and connect to its signals.
   impl_ = impl;
 
-  if (impl_ == NULL)
-    return;
+  if (impl_) {
+    impl_->SignalReadableState.connect(
+        this, &TransportChannelProxy::OnReadableState);
+    impl_->SignalWritableState.connect(
+        this, &TransportChannelProxy::OnWritableState);
+    impl_->SignalReadPacket.connect(
+        this, &TransportChannelProxy::OnReadPacket);
+    impl_->SignalReadyToSend.connect(
+        this, &TransportChannelProxy::OnReadyToSend);
+    impl_->SignalRouteChange.connect(
+        this, &TransportChannelProxy::OnRouteChange);
+    for (OptionList::iterator it = pending_options_.begin();
+         it != pending_options_.end();
+         ++it) {
+      impl_->SetOption(it->first, it->second);
+    }
 
-  impl_->SignalReadableState.connect(
-      this, &TransportChannelProxy::OnReadableState);
-  impl_->SignalWritableState.connect(
-      this, &TransportChannelProxy::OnWritableState);
-  impl_->SignalReadPacket.connect(this, &TransportChannelProxy::OnReadPacket);
-  impl_->SignalReadyToSend.connect(this, &TransportChannelProxy::OnReadyToSend);
-  impl_->SignalRouteChange.connect(this, &TransportChannelProxy::OnRouteChange);
-  for (OptionList::iterator it = pending_options_.begin();
-       it != pending_options_.end();
-       ++it) {
-    impl_->SetOption(it->first, it->second);
+    // Push down the SRTP ciphers, if any were set.
+    if (!pending_srtp_ciphers_.empty()) {
+      impl_->SetSrtpCiphers(pending_srtp_ciphers_);
+    }
+    pending_options_.clear();
   }
-
-  // Push down the SRTP ciphers, if any were set.
-  if (!pending_srtp_ciphers_.empty()) {
-    impl_->SetSrtpCiphers(pending_srtp_ciphers_);
-  }
-  pending_options_.clear();
 
   // Post ourselves a message to see if we need to fire state callbacks.
   worker_thread_->Post(this, MSG_UPDATESTATE);
@@ -213,8 +215,8 @@ void TransportChannelProxy::OnMessage(talk_base::Message* msg) {
   ASSERT(talk_base::Thread::Current() == worker_thread_);
   if (msg->message_id == MSG_UPDATESTATE) {
      // If impl_ is already readable or writable, push up those signals.
-     set_readable(impl_->readable());
-     set_writable(impl_->writable());
+     set_readable(impl_ ? impl_->readable() : false);
+     set_writable(impl_ ? impl_->writable() : false);
   }
 }
 

@@ -139,7 +139,7 @@ float VideoAdapter::FindLowerScale(int width, int height,
 ///////////////////////////////////////////////////////////////////////
 // Implementation of VideoAdapter
 VideoAdapter::VideoAdapter()
-    : output_num_pixels_(0),
+    : output_num_pixels_(INT_MAX),
       black_output_(false),
       is_black_(false),
       interval_next_frame_(0) {
@@ -194,11 +194,11 @@ int VideoAdapter::GetOutputNumPixels() const {
 bool VideoAdapter::AdaptFrame(const VideoFrame* in_frame,
                               const VideoFrame** out_frame) {
   talk_base::CritScope cs(&critical_section_);
-
-  if (!in_frame || !out_frame || input_format_.IsSize0x0()) {
+  // TODO(fbarchard): Remove this once video mute is reimplented.
+  if (!in_frame || !out_frame ||
+      (input_format_.IsSize0x0() && output_num_pixels_ != INT_MAX)) {
     return false;
   }
-
   // Drop the input frame if necessary.
   bool should_drop = false;
   if (!output_num_pixels_) {
@@ -218,7 +218,6 @@ bool VideoAdapter::AdaptFrame(const VideoFrame* in_frame,
       }
     }
   }
-
   if (should_drop) {
     *out_frame = NULL;
     return true;

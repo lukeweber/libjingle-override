@@ -868,7 +868,7 @@ void P2PTransportChannel::SortConnections() {
   }
 
   // Now update the writable state of the channel with the information we have
-  // sp far.
+  // so far.
   if (best_connection_ && best_connection_->writable()) {
     HandleWritable();
   } else if (all_connections_timedout) {

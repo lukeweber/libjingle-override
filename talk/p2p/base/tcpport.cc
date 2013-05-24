@@ -72,8 +72,10 @@ TCPPort::~TCPPort() {
 Connection* TCPPort::CreateConnection(const Candidate& address,
                                       CandidateOrigin origin) {
   // We only support TCP protocols
-  if ((address.protocol() != "tcp") && (address.protocol() != "ssltcp"))
+  if ((address.protocol() != TCP_PROTOCOL_NAME) &&
+      (address.protocol() != SSLTCP_PROTOCOL_NAME)) {
     return NULL;
+  }
 
   // We can't accept TCP connections incoming on other ports
   if (origin == ORIGIN_OTHER_PORT)
@@ -84,8 +86,10 @@ Connection* TCPPort::CreateConnection(const Candidate& address,
     return NULL;
 
   // We don't know how to act as an ssl server yet
-  if ((address.protocol() == "ssltcp") && (origin == ORIGIN_THIS_PORT))
+  if ((address.protocol() == SSLTCP_PROTOCOL_NAME) &&
+      (origin == ORIGIN_THIS_PORT)) {
     return NULL;
+  }
 
   if (!IsCompatibleAddress(address.address())) {
     return NULL;
@@ -113,13 +117,14 @@ void TCPPort::PrepareAddress() {
     if (socket_->GetState() == talk_base::AsyncPacketSocket::STATE_BOUND ||
         socket_->GetState() == talk_base::AsyncPacketSocket::STATE_CLOSED)
       AddAddress(socket_->GetLocalAddress(), socket_->GetLocalAddress(),
-                 "tcp", LOCAL_PORT_TYPE, ICE_TYPE_PREFERENCE_HOST_TCP, true);
+                 TCP_PROTOCOL_NAME, LOCAL_PORT_TYPE,
+                 ICE_TYPE_PREFERENCE_HOST_TCP, true);
   } else {
     LOG_J(LS_INFO, this) << "Not listening due to firewall restrictions.";
     // Note: We still add the address, since otherwise the remote side won't
     // recognize our incoming TCP connections.
     AddAddress(talk_base::SocketAddress(ip(), 0),
-               talk_base::SocketAddress(ip(), 0), "tcp",
+               talk_base::SocketAddress(ip(), 0), TCP_PROTOCOL_NAME,
                LOCAL_PORT_TYPE, ICE_TYPE_PREFERENCE_HOST_TCP, true);
   }
 }
@@ -220,11 +225,11 @@ TCPConnection::TCPConnection(TCPPort* port, const Candidate& candidate,
   bool outgoing = (socket_ == NULL);
   if (outgoing) {
     // TODO: Handle failures here (unlikely since TCP).
-
+    int opts = (candidate.protocol() == SSLTCP_PROTOCOL_NAME) ?
+        talk_base::PacketSocketFactory::OPT_SSLTCP : 0;
     socket_ = port->socket_factory()->CreateClientTcpSocket(
         talk_base::SocketAddress(port_->Network()->ip(), 0),
-        candidate.address(), port->proxy(), port->user_agent(),
-        candidate.protocol() == "ssltcp");
+        candidate.address(), port->proxy(), port->user_agent(), opts);
     if (socket_) {
       LOG_J(LS_VERBOSE, this) << "Connecting from "
                               << socket_->GetLocalAddress().ToString() << " to "

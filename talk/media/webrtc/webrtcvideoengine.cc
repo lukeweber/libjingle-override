@@ -478,13 +478,16 @@ class WebRtcVideoChannelSendInfo  {
   }
   int64 interval() { return interval_; }
 
-  bool AdaptFrame(const VideoFrame* in_frame, const VideoFrame** out_frame) {
-    if (!video_adapter_->cpu_adaptation()) {
-      // Skip adapting frame (to make it possible to turn off cpu adaptation in
-      // case of a problem and skip calling the video_adapter).
-      *out_frame = in_frame;
-      return true;
+  void InitializeAdapterOutputFormat(const webrtc::VideoCodec& codec) {
+    VideoFormat format(codec.width, codec.height,
+                       VideoFormat::FpsToInterval(codec.maxFramerate),
+                       FOURCC_I420);
+    if (video_adapter_->output_format().IsSize0x0()) {
+      video_adapter_->SetOutputFormat(format);
     }
+  }
+
+  bool AdaptFrame(const VideoFrame* in_frame, const VideoFrame** out_frame) {
     *out_frame = NULL;
     return video_adapter_->AdaptFrame(in_frame, out_frame);
   }
@@ -1602,6 +1605,12 @@ bool WebRtcVideoMediaChannel::SetSendCodecs(
     return false;
   }
 
+  for (SendChannelMap::iterator iter = send_channels_.begin();
+       iter != send_channels_.end(); ++iter) {
+    WebRtcVideoChannelSendInfo* send_channel = iter->second;
+    send_channel->InitializeAdapterOutputFormat(codec);
+  }
+
   LogSendCodecChange("SetSendCodecs()");
 
   return true;
@@ -1626,21 +1635,7 @@ bool WebRtcVideoMediaChannel::SetSendStreamFormat(uint32 ssrc,
     LOG(LS_ERROR) << "The specified ssrc " << ssrc << " is not in use.";
     return false;
   }
-
-  const VideoFormat old_format = send_channel->video_format();
-  // The video format must be called before SetSendCodec since it will use the
-  // registered format to set the resolution.
   send_channel->set_video_format(format);
-
-  const bool ret_val = SetSendCodec(send_channel, *send_codec_.get(),
-                                    send_min_bitrate_, send_start_bitrate_,
-                                    send_max_bitrate_);
-  if (!ret_val) {
-    // Rollback
-    send_channel->set_video_format(old_format);
-    return false;
-  }
-  LogSendCodecChange("SetSendStreamFormat()");
   return true;
 }
 
@@ -2592,13 +2587,13 @@ bool WebRtcVideoMediaChannel::SetOptions(const VideoOptions &options) {
 
   // Trigger SetSendCodec to set correct noise reduction state if the option has
   // changed.
-  bool denoiser_changed =
+  bool denoiser_changed = options.video_noise_reduction.IsSet() &&
       (options_.video_noise_reduction != options.video_noise_reduction);
 
-  bool leaky_bucket_changed =
+  bool leaky_bucket_changed = options.video_leaky_bucket.IsSet() &&
       (options_.video_leaky_bucket != options.video_leaky_bucket);
 
-  bool buffer_latency_changed =
+  bool buffer_latency_changed = options.buffered_mode_latency.IsSet() &&
       (options_.buffered_mode_latency != options.buffered_mode_latency);
 
   bool conference_mode_turned_off = false;
@@ -2609,7 +2604,9 @@ bool WebRtcVideoMediaChannel::SetOptions(const VideoOptions &options) {
   }
 
   // Save the options, to be interpreted where appropriate.
-  options_ = options;
+  // Use options_.SetAll() instead of assignment so that unset value in options
+  // will not overwrite the previous option value.
+  options_.SetAll(options);
 
   // Set CPU options for all send channels.
   for (SendChannelMap::iterator iter = send_channels_.begin();

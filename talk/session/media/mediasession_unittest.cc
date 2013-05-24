@@ -286,7 +286,7 @@ class MediaSessionDescriptionFactoryTest : public testing::Test {
       EXPECT_TRUE(ti_video == NULL);
     }
     const TransportInfo* ti_data = desc->GetTransportInfoByName("data");
-    if (options.has_data) {
+    if (options.has_data()) {
       EXPECT_TRUE(ti_data != NULL);
       if (options.bundle_enabled) {
         EXPECT_EQ(ti_audio->description.ice_ufrag,
@@ -314,7 +314,7 @@ class MediaSessionDescriptionFactoryTest : public testing::Test {
     MediaSessionOptions options;
     options.has_audio = true;
     options.has_video = true;
-    options.has_data = true;
+    options.data_channel_type = cricket::DCT_RTP;
     talk_base::scoped_ptr<SessionDescription> ref_desc;
     talk_base::scoped_ptr<SessionDescription> desc;
     if (offer) {
@@ -481,7 +481,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestBundleOfferWithSameCodecPlType) {
   MediaSessionOptions opts;
   opts.has_audio = true;
   opts.has_video = true;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   opts.bundle_enabled = true;
   talk_base::scoped_ptr<SessionDescription>
   offer(f2_.CreateOffer(opts, NULL));
@@ -511,7 +511,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   MediaSessionOptions opts;
   opts.has_audio = true;
   opts.has_video = false;
-  opts.has_data = false;
+  opts.data_channel_type = cricket::DCT_NONE;
   opts.bundle_enabled = true;
   talk_base::scoped_ptr<SessionDescription> offer(f1_.CreateOffer(opts, NULL));
   talk_base::scoped_ptr<SessionDescription> answer(
@@ -520,7 +520,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   MediaSessionOptions updated_opts;
   updated_opts.has_audio = true;
   updated_opts.has_video = true;
-  updated_opts.has_data = true;
+  updated_opts.data_channel_type = cricket::DCT_RTP;
   updated_opts.bundle_enabled = true;
   talk_base::scoped_ptr<SessionDescription> updated_offer(f1_.CreateOffer(
       updated_opts, answer.get()));
@@ -545,7 +545,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
 // Create a typical data offer, and ensure it matches what we expect.
 TEST_F(MediaSessionDescriptionFactoryTest, TestCreateDataOffer) {
   MediaSessionOptions opts;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   f1_.set_secure(SEC_ENABLED);
   talk_base::scoped_ptr<SessionDescription>
       offer(f1_.CreateOffer(opts, NULL));
@@ -660,7 +660,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateVideoAnswer) {
 
 TEST_F(MediaSessionDescriptionFactoryTest, TestCreateDataAnswer) {
   MediaSessionOptions opts;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   f1_.set_secure(SEC_ENABLED);
   f2_.set_secure(SEC_ENABLED);
   talk_base::scoped_ptr<SessionDescription> offer(f1_.CreateOffer(opts, NULL));
@@ -719,7 +719,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, CreateAnswerToInactiveOffer) {
 TEST_F(MediaSessionDescriptionFactoryTest,
        CreateDataAnswerToOfferWithUnknownProtocol) {
   MediaSessionOptions opts;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   opts.has_audio = false;
   f1_.set_secure(SEC_ENABLED);
   f2_.set_secure(SEC_ENABLED);
@@ -806,7 +806,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
        TestCreateAnswerWithoutLegacyStreams) {
   MediaSessionOptions opts;
   opts.has_video = true;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   f1_.set_add_legacy_streams(false);
   f2_.set_add_legacy_streams(false);
   talk_base::scoped_ptr<SessionDescription> offer(f1_.CreateOffer(opts, NULL));
@@ -833,7 +833,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
 TEST_F(MediaSessionDescriptionFactoryTest, TestPartial) {
   MediaSessionOptions opts;
   opts.has_video = true;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   f1_.set_secure(SEC_ENABLED);
   talk_base::scoped_ptr<SessionDescription>
       offer(f1_.CreateOffer(opts, NULL));
@@ -873,8 +873,8 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateVideoAnswerRtcpMux) {
   MediaSessionOptions answer_opts;
   answer_opts.has_video = true;
   offer_opts.has_video = true;
-  answer_opts.has_data = true;
-  offer_opts.has_data = true;
+  answer_opts.data_channel_type = cricket::DCT_RTP;
+  offer_opts.data_channel_type = cricket::DCT_RTP;
 
   talk_base::scoped_ptr<SessionDescription> offer(NULL);
   talk_base::scoped_ptr<SessionDescription> answer(NULL);
@@ -972,7 +972,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateAudioAnswerToVideo) {
 // Create an audio-only answer to an offer with data.
 TEST_F(MediaSessionDescriptionFactoryTest, TestCreateNoDataAnswerToDataOffer) {
   MediaSessionOptions opts;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   talk_base::scoped_ptr<SessionDescription>
       offer(f1_.CreateOffer(opts, NULL));
   ASSERT_TRUE(offer.get() != NULL);
@@ -991,7 +991,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
        CreateAnswerToOfferWithRejectedMedia) {
   MediaSessionOptions opts;
   opts.has_video = true;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   talk_base::scoped_ptr<SessionDescription>
       offer(f1_.CreateOffer(opts, NULL));
   ASSERT_TRUE(offer.get() != NULL);
@@ -1028,6 +1028,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoOffer) {
   opts.AddStream(MEDIA_TYPE_VIDEO, kVideoTrack1, kMediaStream1);
   opts.AddStream(MEDIA_TYPE_AUDIO, kAudioTrack1, kMediaStream1);
   opts.AddStream(MEDIA_TYPE_AUDIO, kAudioTrack2, kMediaStream1);
+  opts.data_channel_type = cricket::DCT_RTP;
   opts.AddStream(MEDIA_TYPE_DATA, kDataTrack1, kMediaStream1);
   opts.AddStream(MEDIA_TYPE_DATA, kDataTrack2, kMediaStream1);
 
@@ -1164,7 +1165,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoOffer) {
 TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoAnswer) {
   MediaSessionOptions offer_opts;
   offer_opts.has_video = true;
-  offer_opts.has_data = true;
+  offer_opts.data_channel_type = cricket::DCT_RTP;
   f1_.set_secure(SEC_ENABLED);
   f2_.set_secure(SEC_ENABLED);
   talk_base::scoped_ptr<SessionDescription> offer(f1_.CreateOffer(offer_opts,
@@ -1174,6 +1175,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoAnswer) {
   opts.AddStream(MEDIA_TYPE_VIDEO, kVideoTrack1, kMediaStream1);
   opts.AddStream(MEDIA_TYPE_AUDIO, kAudioTrack1, kMediaStream1);
   opts.AddStream(MEDIA_TYPE_AUDIO, kAudioTrack2, kMediaStream1);
+  opts.data_channel_type = cricket::DCT_RTP;
   opts.AddStream(MEDIA_TYPE_DATA, kDataTrack1, kMediaStream1);
   opts.AddStream(MEDIA_TYPE_DATA, kDataTrack2, kMediaStream1);
 
@@ -1633,7 +1635,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestTransportInfoOfferMultimedia) {
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   TestTransportInfo(true, options, false);
 }
 
@@ -1642,7 +1644,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   TestTransportInfo(true, options, true);
 }
 
@@ -1650,7 +1652,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestTransportInfoOfferBundle) {
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   options.bundle_enabled = true;
   TestTransportInfo(true, options, false);
 }
@@ -1660,7 +1662,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   options.bundle_enabled = true;
   TestTransportInfo(true, options, true);
 }
@@ -1682,7 +1684,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestTransportInfoAnswerMultimedia) {
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   TestTransportInfo(false, options, false);
 }
 
@@ -1691,7 +1693,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   TestTransportInfo(false, options, true);
 }
 
@@ -1699,7 +1701,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestTransportInfoAnswerBundle) {
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   options.bundle_enabled = true;
   TestTransportInfo(false, options, false);
 }
@@ -1709,7 +1711,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   options.bundle_enabled = true;
   TestTransportInfo(false, options, true);
 }
@@ -1835,7 +1837,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCryptoOfferDtlsButNotSdes) {
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
 
   talk_base::scoped_ptr<SessionDescription> offer, answer;
 

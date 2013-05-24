@@ -40,12 +40,12 @@
 #include "talk/base/stringencode.h"
 #include "talk/base/stringutils.h"
 #include "talk/media/base/capturemanager.h"
-// TODO(pthatcher): Once SCTP data engine is in, uncomment this.
-// #include "talk/media/base/hybriddataengine.h"
+#include "talk/media/base/hybriddataengine.h"
 #include "talk/media/base/rtpdataengine.h"
 #include "talk/media/base/videocapturer.h"
-// TODO(pthatcher): Once SCTP data engine is in, uncomment this.
-// #include "talk/media/sctp/sctpdataengine.h"
+#ifdef HAVE_SCTP
+#include "talk/media/sctp/sctpdataengine.h"
+#endif
 #include "talk/session/media/soundclip.h"
 
 namespace cricket {
@@ -66,12 +66,18 @@ struct CaptureStateParams : public talk_base::MessageData {
   cricket::CaptureState state;
 };
 
+static DataEngineInterface* ConstructDataEngine() {
+#ifdef HAVE_SCTP
+  return new HybridDataEngine(new RtpDataEngine(), new SctpDataEngine());
+#else
+  return new RtpDataEngine();
+#endif
+}
+
 #if !defined(DISABLE_MEDIA_ENGINE_FACTORY)
 ChannelManager::ChannelManager(talk_base::Thread* worker_thread) {
   Construct(MediaEngineFactory::Create(),
-            // TODO(pthatcher): Once SCTP data engine is in, use it:
-            // new HybridDataEngine(new RtpDataEngine(), new SctpDataEngine()),
-            new RtpDataEngine(),
+            ConstructDataEngine(),
             cricket::DeviceManagerFactory::Create(),
             new CaptureManager(),
             worker_thread);
@@ -90,9 +96,7 @@ ChannelManager::ChannelManager(MediaEngineInterface* me,
                                DeviceManagerInterface* dm,
                                talk_base::Thread* worker_thread) {
   Construct(me,
-            // TODO(pthatcher): Once SCTP data engine is in, use it:
-            // new HybridDataEngine(new RtpDataEngine(), new SctpDataEngine()),
-            new RtpDataEngine(),
+            ConstructDataEngine(),
             dm,
             new CaptureManager(),
             worker_thread);
@@ -398,22 +402,22 @@ void ChannelManager::DestroyVideoChannel_w(VideoChannel* video_channel) {
 
 DataChannel* ChannelManager::CreateDataChannel(
     BaseSession* session, const std::string& content_name,
-    bool rtcp, const std::string& codec_name) {
+    bool rtcp, DataChannelType channel_type) {
   return worker_thread_->Invoke<DataChannel*>(
       Bind(&ChannelManager::CreateDataChannel_w, this, session, content_name,
-           rtcp, codec_name));
+           rtcp, channel_type));
 }
 
 DataChannel* ChannelManager::CreateDataChannel_w(
     BaseSession* session, const std::string& content_name,
-    bool rtcp, const std::string& codec_name) {
+    bool rtcp, DataChannelType data_channel_type) {
   // This is ok to alloc from a thread other than the worker thread.
   ASSERT(initialized_);
   DataMediaChannel* media_channel = data_media_engine_->CreateChannel(
-      codec_name);
+      data_channel_type);
   if (!media_channel) {
-    LOG(LS_WARNING) << "Failed to create data channel with codec "
-                    << codec_name;
+    LOG(LS_WARNING) << "Failed to create data channel of type "
+                    << data_channel_type;
     return NULL;
   }
 

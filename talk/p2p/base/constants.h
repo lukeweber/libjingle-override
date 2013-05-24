@@ -133,6 +133,10 @@ extern const buzz::StaticQName QN_JINGLE_RTCP_MUX;
 extern const buzz::StaticQName QN_JINGLE_RTP_HDREXT;
 extern const buzz::StaticQName QN_URI;
 
+extern const char NS_JINGLE_DRAFT_SCTP[];
+extern const buzz::StaticQName QN_JINGLE_DRAFT_SCTP_CONTENT;
+extern const buzz::StaticQName QN_JINGLE_DRAFT_SCTP_STREAM;
+
 extern const char NS_GINGLE_AUDIO[];
 extern const buzz::StaticQName QN_GINGLE_AUDIO_CONTENT;
 extern const buzz::StaticQName QN_GINGLE_AUDIO_PAYLOADTYPE;

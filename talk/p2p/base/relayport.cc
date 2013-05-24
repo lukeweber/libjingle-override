@@ -271,7 +271,8 @@ void RelayPort::PrepareAddress() {
 Connection* RelayPort::CreateConnection(const Candidate& address,
                                         CandidateOrigin origin) {
   // We only create conns to non-udp sockets if they are incoming on this port
-  if ((address.protocol() != "udp") && (origin != ORIGIN_THIS_PORT)) {
+  if ((address.protocol() != UDP_PROTOCOL_NAME) &&
+      (origin != ORIGIN_THIS_PORT)) {
     return 0;
   }
 
@@ -476,9 +477,11 @@ void RelayEntry::Connect() {
         talk_base::SocketAddress(port_->ip(), 0),
         port_->min_port(), port_->max_port());
   } else if (ra->proto == PROTO_TCP || ra->proto == PROTO_SSLTCP) {
+    int opts = (ra->proto == PROTO_SSLTCP) ?
+     talk_base::PacketSocketFactory::OPT_SSLTCP : 0;
     socket = port_->socket_factory()->CreateClientTcpSocket(
         talk_base::SocketAddress(port_->ip(), 0), ra->address,
-        port_->proxy(), port_->user_agent(), ra->proto == PROTO_SSLTCP);
+        port_->proxy(), port_->user_agent(), opts);
   } else {
     LOG(LS_WARNING) << "Unknown protocol (" << ra->proto << ")";
   }

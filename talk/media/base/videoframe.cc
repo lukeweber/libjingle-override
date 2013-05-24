@@ -46,10 +46,10 @@ namespace cricket {
 talk_base::StreamResult VideoFrame::Write(talk_base::StreamInterface* stream,
                                           int* error) {
   talk_base::StreamResult result = talk_base::SR_SUCCESS;
-  const uint8* in_y = GetYPlane();
-  const uint8* in_u = GetUPlane();
-  const uint8* in_v = GetVPlane();
-  if (!in_y || !in_u || !in_v) {
+  const uint8* src_y = GetYPlane();
+  const uint8* src_u = GetUPlane();
+  const uint8* src_v = GetVPlane();
+  if (!src_y || !src_u || !src_v) {
     return result;  // Nothing to write.
   }
   const int32 y_pitch = GetYPitch();
@@ -61,21 +61,21 @@ talk_base::StreamResult VideoFrame::Write(talk_base::StreamInterface* stream,
   const size_t half_height = (height + 1) >> 1;
   // Write Y.
   for (size_t row = 0; row < height; ++row) {
-    result = stream->Write(in_y + row * y_pitch, width, NULL, error);
+    result = stream->Write(src_y + row * y_pitch, width, NULL, error);
     if (result != talk_base::SR_SUCCESS) {
       return result;
     }
   }
   // Write U.
   for (size_t row = 0; row < half_height; ++row) {
-    result = stream->Write(in_u + row * u_pitch, half_width, NULL, error);
+    result = stream->Write(src_u + row * u_pitch, half_width, NULL, error);
     if (result != talk_base::SR_SUCCESS) {
       return result;
     }
   }
   // Write V.
   for (size_t row = 0; row < half_height; ++row) {
-    result = stream->Write(in_v + row * v_pitch, half_width, NULL, error);
+    result = stream->Write(src_v + row * v_pitch, half_width, NULL, error);
     if (result != talk_base::SR_SUCCESS) {
       return result;
     }
@@ -85,86 +85,83 @@ talk_base::StreamResult VideoFrame::Write(talk_base::StreamInterface* stream,
 
 // TODO(fbarchard): Handle odd width/height with rounding.
 void VideoFrame::StretchToPlanes(
-    uint8* y, uint8* u, uint8* v,
+    uint8* dst_y, uint8* dst_u, uint8* dst_v,
     int32 dst_pitch_y, int32 dst_pitch_u, int32 dst_pitch_v,
     size_t width, size_t height, bool interpolate, bool vert_crop) const {
 #ifdef HAVE_YUV
   if (!GetYPlane() || !GetUPlane() || !GetVPlane())
     return;
 
-  const uint8* in_y = GetYPlane();
-  const uint8* in_u = GetUPlane();
-  const uint8* in_v = GetVPlane();
-  int32 iwidth = GetWidth();
-  int32 iheight = GetHeight();
+  const uint8* src_y = GetYPlane();
+  const uint8* src_u = GetUPlane();
+  const uint8* src_v = GetVPlane();
+  int32 src_width = GetWidth();
+  int32 src_height = GetHeight();
 
   if (vert_crop) {
     // Adjust the input width:height ratio to be the same as the output ratio.
-    if (iwidth * height > iheight * width) {
+    if (src_width * height > src_height * width) {
       // Reduce the input width, but keep size/position aligned for YuvScaler
-      iwidth = ROUNDTO2(iheight * width / height);
-      int32 iwidth_offset = ROUNDTO2((GetWidth() - iwidth) / 2);
-      in_y += iwidth_offset;
-      in_u += iwidth_offset / 2;
-      in_v += iwidth_offset / 2;
-    } else if (iwidth * height < iheight * width) {
+      src_width = ROUNDTO2(src_height * width / height);
+      int32 iwidth_offset = ROUNDTO2((GetWidth() - src_width) / 2);
+      src_y += iwidth_offset;
+      src_u += iwidth_offset / 2;
+      src_v += iwidth_offset / 2;
+    } else if (src_width * height < src_height * width) {
       // Reduce the input height.
-      iheight = iwidth * height / width;
-      int32 iheight_offset = (GetHeight() - iheight) >> 2;
+      src_height = src_width * height / width;
+      int32 iheight_offset = (GetHeight() - src_height) >> 2;
       iheight_offset <<= 1;  // Ensure that iheight_offset is even.
-      in_y += iheight_offset * GetYPitch();
-      in_u += iheight_offset / 2 * GetUPitch();
-      in_v += iheight_offset / 2 * GetVPitch();
+      src_y += iheight_offset * GetYPitch();
+      src_u += iheight_offset / 2 * GetUPitch();
+      src_v += iheight_offset / 2 * GetVPitch();
     }
   }
 
   // Scale to the output I420 frame.
-  libyuv::Scale(in_y, in_u, in_v,
-                GetYPitch(),
-                GetUPitch(),
-                GetVPitch(),
-                iwidth, iheight,
-                y, u, v, dst_pitch_y, dst_pitch_u, dst_pitch_v,
+  libyuv::Scale(src_y, src_u, src_v,
+                GetYPitch(), GetUPitch(), GetVPitch(),
+                src_width, src_height,
+                dst_y, dst_u, dst_v, dst_pitch_y, dst_pitch_u, dst_pitch_v,
                 width, height, interpolate);
+#else
+  ASSERT(false);  // Scaling requested but is not implemented.  Enable HAVE_YUV.
 #endif
 }
 
-size_t VideoFrame::StretchToBuffer(size_t w, size_t h,
-                                   uint8* buffer, size_t size,
+size_t VideoFrame::StretchToBuffer(size_t dst_width, size_t dst_height,
+                                   uint8* dst_buffer, size_t size,
                                    bool interpolate, bool vert_crop) const {
-  if (!buffer) return 0;
+  if (!dst_buffer) return 0;
 
-  size_t needed = SizeOf(w, h);
+  size_t needed = SizeOf(dst_width, dst_height);
   if (needed <= size) {
-    uint8* bufy = buffer;
-    uint8* bufu = bufy + w * h;
-    uint8* bufv = bufu + ((w + 1) >> 1) * ((h + 1) >> 1);
-    StretchToPlanes(bufy, bufu, bufv, w, (w + 1) >> 1, (w + 1) >> 1, w, h,
-                    interpolate, vert_crop);
+    uint8* dst_y = dst_buffer;
+    uint8* dst_u = dst_y + dst_width * dst_height;
+    uint8* dst_v = dst_u + ((dst_width + 1) >> 1) * ((dst_height + 1) >> 1);
+    StretchToPlanes(dst_y, dst_u, dst_v,
+                    dst_width, (dst_width + 1) >> 1, (dst_width + 1) >> 1,
+                    dst_width, dst_height, interpolate, vert_crop);
   }
   return needed;
 }
 
-void VideoFrame::StretchToFrame(VideoFrame *target,
+void VideoFrame::StretchToFrame(VideoFrame *dst,
                                 bool interpolate, bool vert_crop) const {
-  if (!target) return;
+  if (!dst) return;
 
-  StretchToPlanes(target->GetYPlane(),
-                  target->GetUPlane(),
-                  target->GetVPlane(),
-                  target->GetYPitch(),
-                  target->GetUPitch(),
-                  target->GetVPitch(),
-                  target->GetWidth(),
-                  target->GetHeight(),
+  StretchToPlanes(dst->GetYPlane(), dst->GetUPlane(), dst->GetVPlane(),
+                  dst->GetYPitch(), dst->GetUPitch(), dst->GetVPitch(),
+                  dst->GetWidth(), dst->GetHeight(),
                   interpolate, vert_crop);
-  target->SetElapsedTime(GetElapsedTime());
-  target->SetTimeStamp(GetTimeStamp());
+  dst->SetElapsedTime(GetElapsedTime());
+  dst->SetTimeStamp(GetTimeStamp());
 }
 
-VideoFrame* VideoFrame::Stretch(size_t w, size_t h,
+VideoFrame* VideoFrame::Stretch(size_t dst_width, size_t dst_height,
                                 bool interpolate, bool vert_crop) const {
-  VideoFrame* dest = CreateEmptyFrame(w, h, GetPixelWidth(), GetPixelHeight(),
+  VideoFrame* dest = CreateEmptyFrame(dst_width, dst_height,
+                                      GetPixelWidth(), GetPixelHeight(),
                                       GetElapsedTime(), GetTimeStamp());
   if (dest) {
     StretchToFrame(dest, interpolate, vert_crop);
@@ -228,9 +225,6 @@ bool VideoFrame::Validate(uint32 fourcc, int w, int h,
     case FOURCC_RGBO:
     case FOURCC_R444:
       expected_bpp = 16;
-      break;
-    case FOURCC_V210:
-      expected_bpp = 22;  // 22.5 actually.
       break;
     case FOURCC_I444:
     case FOURCC_YV24:

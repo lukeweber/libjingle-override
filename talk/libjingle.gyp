@@ -43,7 +43,7 @@
       ],
     }],
 
-    ['libjingle_java == 1', {
+    ['OS=="linux" or OS=="android"', {
       'targets': [
         {
           'target_name': 'libjingle_peerconnection_so',
@@ -61,8 +61,8 @@
                 'HAVE_GTK',
               ],
               'include_dirs': [
-                '<!(/bin/echo -n ${JAVA_HOME})/include',
-                '<!(/bin/echo -n ${JAVA_HOME})/include/linux',
+                '<(java_home)/include',
+                '<(java_home)/include/linux',
               ],
               'link_settings': {
                 'libraries': [
@@ -458,6 +458,7 @@
         'media/base/constants.cc',
         'media/base/cpuid.cc',
         'media/base/filemediaengine.cc',
+        'media/base/hybriddataengine.h',
         'media/base/hybridvideoengine.cc',
         'media/base/mediaengine.cc',
         'media/base/rtpdataengine.cc',
@@ -471,6 +472,7 @@
         'media/base/videoframe.cc',
         'media/devices/devicemanager.cc',
         'media/devices/filevideocapturer.cc',
+        'media/sctp/sctpdataengine.cc',
         'media/webrtc/webrtcpassthroughrender.cc',
         'media/webrtc/webrtcpassthroughrender.h',
         'media/webrtc/webrtcvideocapturer.cc',

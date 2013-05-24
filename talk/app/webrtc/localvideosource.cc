@@ -146,6 +146,7 @@ void FromConstraintsForScreencast(
 bool NewFormatWithConstraints(
     const MediaConstraintsInterface::Constraint& constraint,
     const cricket::VideoFormat& format_in,
+    bool mandatory,
     cricket::VideoFormat* format_out) {
   ASSERT(format_out != NULL);
   *format_out = format_in;
@@ -167,6 +168,15 @@ bool NewFormatWithConstraints(
     return (value <= cricket::VideoFormat::IntervalToFps(format_in.interval));
   } else if (constraint.key == MediaConstraintsInterface::kMaxFrameRate) {
     int value = talk_base::FromString<int>(constraint.value);
+    if (value == 0) {
+      if (mandatory) {
+        // TODO(ronghuawu): Convert the constraint value to float when sub-1fps
+        // is supported by the capturer.
+        return false;
+      } else {
+        value = 1;
+      }
+    }
     if (value <= cricket::VideoFormat::IntervalToFps(format_in.interval)) {
       format_out->interval = cricket::VideoFormat::FpsToInterval(value);
       return true;
@@ -205,13 +215,15 @@ bool NewFormatWithConstraints(
 // Removes cricket::VideoFormats from |formats| that don't meet |constraint|.
 void FilterFormatsByConstraint(
     const MediaConstraintsInterface::Constraint& constraint,
+    bool mandatory,
     std::vector<cricket::VideoFormat>* formats) {
   std::vector<cricket::VideoFormat>::iterator format_it =
       formats->begin();
   while (format_it != formats->end()) {
     // Modify the format_it to fulfill the constraint if possible.
     // Delete it otherwise.
-    if (!NewFormatWithConstraints(constraint, (*format_it), &(*format_it))) {
+    if (!NewFormatWithConstraints(constraint, (*format_it),
+                                  mandatory, &(*format_it))) {
       format_it = formats->erase(format_it);
     } else {
       ++format_it;
@@ -230,7 +242,7 @@ std::vector<cricket::VideoFormat> FilterFormats(
 
   for (ConstraintsIterator constraints_it = mandatory.begin();
        constraints_it != mandatory.end(); ++constraints_it)
-    FilterFormatsByConstraint(*constraints_it, &candidates);
+    FilterFormatsByConstraint(*constraints_it, true, &candidates);
 
   if (candidates.size() == 0)
     return candidates;
@@ -240,7 +252,7 @@ std::vector<cricket::VideoFormat> FilterFormats(
   for (ConstraintsIterator  constraints_it = optional.begin();
        constraints_it != optional.end(); ++constraints_it) {
     std::vector<cricket::VideoFormat> current_candidates = candidates;
-    FilterFormatsByConstraint(*constraints_it, &current_candidates);
+    FilterFormatsByConstraint(*constraints_it, false, &current_candidates);
     if (current_candidates.size() > 0) {
       candidates = current_candidates;
     }

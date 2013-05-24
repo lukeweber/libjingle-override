@@ -114,7 +114,6 @@ class P2PTransportChannel : public TransportChannelImpl,
   void UpdateConnectionStates();
   void RequestSort();
   void SortConnections();
-  void PruneAndUpdateChannelState();
   void SwitchBestConnectionTo(Connection* conn);
   void UpdateChannelState();
   void HandleWritable();

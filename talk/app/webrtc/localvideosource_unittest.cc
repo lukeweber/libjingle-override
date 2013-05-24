@@ -203,7 +203,7 @@ TEST_F(LocalVideoSourceTest, MandatoryConstraintCif5Fps) {
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
                  kMaxWaitMs);
-  const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
+  const cricket::VideoFormat* format = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
   EXPECT_EQ(352, format->width);
   EXPECT_EQ(288, format->height);
@@ -223,7 +223,7 @@ TEST_F(LocalVideoSourceTest, MandatoryMinVgaOptional720P) {
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
                  kMaxWaitMs);
-  const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
+  const cricket::VideoFormat* format = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
   EXPECT_EQ(1280, format->width);
   EXPECT_EQ(720, format->height);
@@ -244,7 +244,7 @@ TEST_F(LocalVideoSourceTest, MandatoryAspectRatio4To3) {
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
                  kMaxWaitMs);
-  const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
+  const cricket::VideoFormat* format = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
   EXPECT_EQ(640, format->width);
   EXPECT_EQ(480, format->height);
@@ -270,7 +270,7 @@ TEST_F(LocalVideoSourceTest, OptionalAspectRatioTooHigh) {
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
                  kMaxWaitMs);
-  const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
+  const cricket::VideoFormat* format = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
   double aspect_ratio = static_cast<double>(format->width) / format->height;
   EXPECT_LT(aspect_ratio, 2);
@@ -284,7 +284,7 @@ TEST_F(LocalVideoSourceTest, NoCameraCapability) {
   CreateLocalVideoSource();
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
                  kMaxWaitMs);
-  const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
+  const cricket::VideoFormat* format = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
   EXPECT_EQ(640, format->width);
   EXPECT_EQ(480, format->height);
@@ -306,7 +306,7 @@ TEST_F(LocalVideoSourceTest, NoCameraCapability16To9Ratio) {
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
                  kMaxWaitMs);
-  const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
+  const cricket::VideoFormat* format = capturer_->GetCaptureFormat();
   double aspect_ratio = static_cast<double>(format->width) / format->height;
   EXPECT_LE(requested_aspect_ratio, aspect_ratio);
 }
@@ -451,7 +451,7 @@ TEST_F(LocalVideoSourceTest, MixedOptionsAndConstraints) {
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
                  kMaxWaitMs);
-  const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
+  const cricket::VideoFormat* format = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
   EXPECT_EQ(352, format->width);
   EXPECT_EQ(288, format->height);
@@ -472,7 +472,7 @@ TEST_F(LocalVideoSourceTest, ScreencastResolutionNoConstraint) {
   CreateLocalVideoSource();
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
                  kMaxWaitMs);
-  const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
+  const cricket::VideoFormat* format = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
   EXPECT_EQ(640, format->width);
   EXPECT_EQ(480, format->height);
@@ -492,9 +492,32 @@ TEST_F(LocalVideoSourceTest, ScreencastResolutionWithConstraint) {
   CreateLocalVideoSource(&constraints);
   EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
                  kMaxWaitMs);
-  const cricket::VideoFormat* format  = capturer_->GetCaptureFormat();
+  const cricket::VideoFormat* format = capturer_->GetCaptureFormat();
   ASSERT_TRUE(format != NULL);
   EXPECT_EQ(480, format->width);
   EXPECT_EQ(270, format->height);
   EXPECT_EQ(30, format->framerate());
 }
+
+TEST_F(LocalVideoSourceTest, MandatorySubOneFpsConstraints) {
+  FakeConstraints constraints;
+  constraints.AddMandatory(MediaConstraintsInterface::kMaxFrameRate, 0.5);
+
+  CreateLocalVideoSource(&constraints);
+  EXPECT_EQ_WAIT(MediaSourceInterface::kEnded, state_observer_->state(),
+                 kMaxWaitMs);
+  ASSERT_TRUE(capturer_->GetCaptureFormat() == NULL);
+}
+
+TEST_F(LocalVideoSourceTest, OptionalSubOneFpsConstraints) {
+  FakeConstraints constraints;
+  constraints.AddOptional(MediaConstraintsInterface::kMaxFrameRate, 0.5);
+
+  CreateLocalVideoSource(&constraints);
+  EXPECT_EQ_WAIT(MediaSourceInterface::kLive, state_observer_->state(),
+                 kMaxWaitMs);
+  const cricket::VideoFormat* format = capturer_->GetCaptureFormat();
+  ASSERT_TRUE(format != NULL);
+  EXPECT_EQ(1, format->framerate());
+}
+

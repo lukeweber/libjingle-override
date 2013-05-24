@@ -58,6 +58,8 @@ namespace webrtc {
 
 static const uint64 kInitSessionVersion = 2;
 
+const char kInternalConstraintPrefix[] = "internal";
+
 // Supported MediaConstraints.
 // DTLS-SRTP pseudo-constraints.
 const char MediaConstraintsInterface::kEnableDtlsSrtp[] =
@@ -65,6 +67,11 @@ const char MediaConstraintsInterface::kEnableDtlsSrtp[] =
 // DataChannel pseudo constraints.
 const char MediaConstraintsInterface::kEnableRtpDataChannels[] =
     "RtpDataChannels";
+// This constraint is for internal use only, representing the Chrome command
+// line flag. So it is prefixed with kInternalConstraintPrefix so JS values
+// will be removed.
+const char MediaConstraintsInterface::kEnableSctpDataChannels[] =
+    "internalSctpDataChannels";
 
 // Arbitrary constant used as prefix for the identity.
 // Chosen to make the certificates more readable.
@@ -359,7 +366,7 @@ WebRtcSession::WebRtcSession(cricket::ChannelManager* channel_manager,
       // |kInitSessionVersion|.
       session_version_(kInitSessionVersion),
       older_version_remote_peer_(false),
-      allow_rtp_data_engine_(false),
+      data_channel_type_(cricket::DCT_NONE),
       ice_restart_latch_(new IceRestartAnswerLatch) {
   transport_desc_factory_.set_protocol(cricket::ICEPROTO_HYBRID);
 }
@@ -407,11 +414,25 @@ bool WebRtcSession::Initialize(const MediaConstraintsInterface* constraints) {
   }
 
   // Enable creation of RTP data channels if the kEnableRtpDataChannels is set.
-  allow_rtp_data_engine_ = FindConstraint(
+  // It takes precendence over the kEnableSctpDataChannels constraint.
+  if (FindConstraint(
       constraints, MediaConstraintsInterface::kEnableRtpDataChannels,
-      &value, NULL) && value;
-  if (allow_rtp_data_engine_)
+      &value, NULL) && value) {
+    LOG(LS_INFO) << "Allowing RTP data engine.";
+    data_channel_type_ = cricket::DCT_RTP;
+  } else if (
+      FindConstraint(
+          constraints,
+          MediaConstraintsInterface::kEnableSctpDataChannels,
+          &value, NULL) && value &&
+      // DTLS has to be enabled to use SCTP.
+      (transport_desc_factory_.secure() == cricket::SEC_ENABLED)) {
+    LOG(LS_INFO) << "Allowing SCTP data engine.";
+    data_channel_type_ = cricket::DCT_SCTP;
+  }
+  if (data_channel_type_ != cricket::DCT_NONE) {
     mediastream_signaling_->SetDataChannelFactory(this);
+  }
 
   // Make sure SessionDescriptions only contains the StreamParams we negotiate.
   session_desc_factory_.set_add_legacy_streams(false);
@@ -931,7 +952,7 @@ talk_base::scoped_refptr<DataChannel> WebRtcSession::CreateDataChannel(
   if (state() == STATE_RECEIVEDTERMINATE) {
     return NULL;
   }
-  if (!allow_rtp_data_engine_) {
+  if (data_channel_type_ == cricket::DCT_NONE) {
     LOG(LS_ERROR) << "CreateDataChannel: Data is not supported in this call.";
     return NULL;
   }
@@ -1246,8 +1267,8 @@ bool WebRtcSession::CreateChannels(const SessionDescription* desc) {
   }
 
   const cricket::ContentInfo* data = cricket::GetFirstDataContent(desc);
-  if (allow_rtp_data_engine_ && data && !data->rejected &&
-      !data_channel_.get()) {
+  if (data_channel_type_ != cricket::DCT_NONE &&
+      data && !data->rejected && !data_channel_.get()) {
     if (!CreateDataChannel(desc)) {
       LOG(LS_ERROR) << "Failed to create data channel.";
       return false;
@@ -1273,10 +1294,8 @@ bool WebRtcSession::CreateVideoChannel(const SessionDescription* desc) {
 
 bool WebRtcSession::CreateDataChannel(const SessionDescription* desc) {
   const cricket::ContentInfo* data = cricket::GetFirstDataContent(desc);
-  // TODO(juberti): Pass down kGoogleSctpDataCodecName depending upon
-  // various flags in Chrome.
   data_channel_.reset(channel_manager_->CreateDataChannel(
-      this, data->name, true, cricket::kGoogleRtpDataCodecName));
+      this, data->name, true, data_channel_type_));
   if (!data_channel_.get()) {
     return false;
   }

@@ -259,7 +259,7 @@ void TurnPort::OnSocketClose(talk_base::AsyncPacketSocket* socket, int error) {
 Connection* TurnPort::CreateConnection(const Candidate& address,
                                        CandidateOrigin origin) {
   // TURN-UDP can only connect to UDP candidates.
-  if (address.protocol() != "udp") {
+  if (address.protocol() != UDP_PROTOCOL_NAME) {
     return NULL;
   }
 

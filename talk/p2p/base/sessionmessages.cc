@@ -888,17 +888,6 @@ bool ParseContentType(SignalingProtocol protocol,
 
     if (!ParseContentType(pair_elem, content_type, &content_elem, error))
       return false;
-
-    // If there is more than one content type, return an error.
-    for (; pair_elem != NULL;
-         pair_elem = pair_elem->NextNamed(QN_JINGLE_CONTENT)) {
-      std::string content_type2;
-      if (!ParseContentType(pair_elem, &content_type2, &content_elem, error))
-        return false;
-
-      if (content_type2 != *content_type)
-        return BadParse("More than one content type found", error);
-    }
   }
 
   return true;

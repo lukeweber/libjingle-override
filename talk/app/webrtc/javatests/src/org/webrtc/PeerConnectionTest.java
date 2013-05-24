@@ -44,7 +44,7 @@ import java.util.concurrent.TimeUnit;
 /** End-to-end tests for PeerConnection.java. */
 public class PeerConnectionTest extends TestCase {
   // Set to true to render video.
-  private static final boolean RENDER_TO_GUI = true;
+  private static final boolean RENDER_TO_GUI = false;
 
   private static class ObserverExpectations implements PeerConnection.Observer,
                                             VideoRenderer.Callbacks,

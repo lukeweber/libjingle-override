@@ -98,11 +98,7 @@ class FakeVideoCapturer : public cricket::VideoCapturer {
     frame.fourcc = fourcc;
     frame.data_size = size;
     frame.elapsed_time = next_timestamp_;
-#ifdef USE_WEBRTC_DEV_BRANCH
     frame.time_stamp = initial_unix_timestamp_ + next_timestamp_;
-#else
-    frame.time_stamp = next_timestamp_;
-#endif
     next_timestamp_ += 33333333;  // 30 fps
 
     talk_base::scoped_array<char> data(new char[size]);

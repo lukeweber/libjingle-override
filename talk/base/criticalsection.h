@@ -169,10 +169,8 @@ class TryCritScope {
   DISALLOW_COPY_AND_ASSIGN(TryCritScope);
 };
 
-// TODO: Replace with platform-specific "atomic" ops.
-// Something like: google3/base/atomicops.h TODO: And, move
-// it to atomicops.h, which can't be done easily because of complex
-// compile rules.
+// TODO: Move this to atomicops.h, which can't be done easily because of
+// complex compile rules.
 class AtomicOps {
  public:
 #ifdef WIN32
@@ -185,25 +183,10 @@ class AtomicOps {
   }
 #else
   static int Increment(int* i) {
-    // Could be faster, and less readable:
-    // static CriticalSection* crit = StaticCrit();
-    // CritScope scope(crit);
-    CritScope scope(StaticCrit());
-    return ++(*i);
+    return __sync_add_and_fetch(i, 1);
   }
-
   static int Decrement(int* i) {
-    // Could be faster, and less readable:
-    // static CriticalSection* crit = StaticCrit();
-    // CritScope scope(crit);
-    CritScope scope(StaticCrit());
-    return --(*i);
-  }
-
- private:
-  static CriticalSection* StaticCrit() {
-    static CriticalSection* crit = new CriticalSection();
-    return crit;
+    return __sync_sub_and_fetch(i, 1);
   }
 #endif
 };

@@ -240,7 +240,7 @@ int UDPPort::GetError() {
 
 void UDPPort::OnLocalAddressReady(talk_base::AsyncPacketSocket* socket,
                                   const talk_base::SocketAddress& address) {
-  AddAddress(address, address, "udp", LOCAL_PORT_TYPE,
+  AddAddress(address, address, UDP_PROTOCOL_NAME, LOCAL_PORT_TYPE,
              ICE_TYPE_PREFERENCE_HOST, false);
   MaybePrepareStunCandidate();
 }
@@ -319,7 +319,7 @@ void UDPPort::OnStunBindingRequestSucceeded(
     // Setting related address before STUN candidate is added. For STUN
     // related address is local socket address.
     set_related_address(socket_->GetLocalAddress());
-    AddAddress(stun_addr, socket_->GetLocalAddress(), "udp",
+    AddAddress(stun_addr, socket_->GetLocalAddress(), UDP_PROTOCOL_NAME,
                STUN_PORT_TYPE, ICE_TYPE_PREFERENCE_PRFLX, false);
   }
   SetResult(true);

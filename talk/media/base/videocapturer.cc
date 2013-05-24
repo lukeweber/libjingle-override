@@ -47,7 +47,6 @@ namespace cricket {
 const uint32 kStateChange = 0;
 
 static const int64 kMaxDistance = ~(static_cast<int64>(1) << 63);
-static const int64 kMinDesirableFps = static_cast<int64>(14);
 static const int kYU12Penalty = 16;  // Needs to be higher than MJPG index.
 static const int kDefaultScreencastFps = 5;
 typedef talk_base::TypedMessageData<CaptureState> StateChangeParams;
@@ -413,11 +412,12 @@ int64 VideoCapturer::GetFormatDistance(const VideoFormat& desired,
   if (delta_h < 0) {
     delta_h = delta_h * kDownPenalty;
   }
+  // Require camera fps to be at least 80% of what is requested.
   if (delta_fps < 0) {
-    // For same resolution, prefer higher framerate but accept lower.
-    // Otherwise prefer higher resolution.
+    int64 min_desirable_fps =
+        VideoFormat::IntervalToFps(desired.interval) * 24 / 30;
     delta_fps = -delta_fps;
-    if (supported_fps < kMinDesirableFps) {
+    if (supported_fps < min_desirable_fps) {
       distance |= static_cast<int64>(1) << 62;
     } else {
       distance |= static_cast<int64>(1) << 15;

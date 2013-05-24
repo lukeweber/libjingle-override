@@ -151,7 +151,6 @@ class WebRtcVideoEngineTestFake : public testing::Test {
                           unsigned int fps = 30,
                           unsigned int max_quantization = 0
                           ) {
-
     webrtc::VideoCodec gcodec;
     EXPECT_EQ(0, vie_.GetSendCodec(channel_num, gcodec));
 
@@ -736,7 +735,7 @@ TEST_F(WebRtcVideoEngineTestFake, BufferedModeLatency) {
   EXPECT_EQ(0, vie_.GetReceiverTargetDelay(second_send_channel));
 
   // Disable sender buffered mode and verify.
-  options.buffered_mode_latency.Clear();
+  options.buffered_mode_latency.Set(cricket::kBufferedModeDisabled);
   EXPECT_TRUE(channel_->SetOptions(options));
   EXPECT_EQ(0, vie_.GetSenderTargetDelay(first_send_channel));
   EXPECT_EQ(0, vie_.GetReceiverTargetDelay(first_send_channel));
@@ -744,6 +743,37 @@ TEST_F(WebRtcVideoEngineTestFake, BufferedModeLatency) {
   EXPECT_EQ(0, vie_.GetReceiverTargetDelay(second_send_channel));
   EXPECT_EQ(0, vie_.GetSenderTargetDelay(recv_channel_num));
   EXPECT_EQ(0, vie_.GetReceiverTargetDelay(recv_channel_num));
+}
+
+TEST_F(WebRtcVideoEngineTestFake, AdditiveVideoOptions) {
+  EXPECT_TRUE(SetupEngine());
+
+  EXPECT_TRUE(channel_->AddSendStream(cricket::StreamParams::CreateLegacy(1)));
+  int first_send_channel = vie_.GetLastChannel();
+  EXPECT_EQ(0, vie_.GetSenderTargetDelay(first_send_channel));
+  EXPECT_EQ(0, vie_.GetReceiverTargetDelay(first_send_channel));
+
+  cricket::VideoOptions options1;
+  options1.buffered_mode_latency.Set(100);
+  EXPECT_TRUE(channel_->SetOptions(options1));
+  EXPECT_EQ(100, vie_.GetSenderTargetDelay(first_send_channel));
+  EXPECT_EQ(100, vie_.GetReceiverTargetDelay(first_send_channel));
+  EXPECT_FALSE(vie_.GetTransmissionSmoothingStatus(first_send_channel));
+
+  cricket::VideoOptions options2;
+  options2.video_leaky_bucket.Set(true);
+  EXPECT_TRUE(channel_->SetOptions(options2));
+  EXPECT_TRUE(vie_.GetTransmissionSmoothingStatus(first_send_channel));
+  // The buffered_mode_latency still takes effect.
+  EXPECT_EQ(100, vie_.GetSenderTargetDelay(first_send_channel));
+  EXPECT_EQ(100, vie_.GetReceiverTargetDelay(first_send_channel));
+
+  options1.buffered_mode_latency.Set(50);
+  EXPECT_TRUE(channel_->SetOptions(options1));
+  EXPECT_EQ(50, vie_.GetSenderTargetDelay(first_send_channel));
+  EXPECT_EQ(50, vie_.GetReceiverTargetDelay(first_send_channel));
+  // The video_leaky_bucket still takes effect.
+  EXPECT_TRUE(vie_.GetTransmissionSmoothingStatus(first_send_channel));
 }
 
 // Test that AddRecvStream doesn't create new channel for 1:1 call.
@@ -1370,14 +1400,6 @@ TEST_F(WebRtcVideoMediaChannelTest, SendVp8HdAndReceiveAdaptedVp8Vga) {
   cricket::VideoFormat capture_format_hd = (*formats)[0];
   EXPECT_EQ(cricket::CS_RUNNING, video_capturer_->Start(capture_format_hd));
   EXPECT_TRUE(channel_->SetCapturer(kSsrc, video_capturer_.get()));
-  // TODO(asapersson): Remove if the cpu_adaptation() check in
-  // WebRtcVideoChannelSendInfo::AdaptFrame is removed.
-  // Make sure that a cpu load update does not trigger any change.
-  cricket::VideoOptions options;
-  options.adapt_input_to_cpu_usage.Set(true);
-  options.system_low_adaptation_threshhold.Set(0.0f);
-  options.system_high_adaptation_threshhold.Set(1.0f);
-  EXPECT_TRUE(channel_->SetOptions(options));
 
   // Capture format HD -> adapt (OnOutputFormatRequest VGA) -> VGA.
   cricket::VideoCodec codec(100, "VP8", 1280, 720, 30, 0);

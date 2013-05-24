@@ -147,7 +147,8 @@ class SctpDataMediaChannelTest : public testing::Test {
   cricket::SctpDataMediaChannel* CreateChannel(
         SctpFakeNetworkInterface* net, SctpFakeDataReceiver* recv) {
     cricket::SctpDataMediaChannel* channel =
-        static_cast<cricket::SctpDataMediaChannel*>(engine_->CreateChannel(""));
+        static_cast<cricket::SctpDataMediaChannel*>(engine_->CreateChannel(
+            cricket::DCT_SCTP));
     channel->SetInterface(net);
     // When data is received, pass it to the SctpFakeDataReceiver.
     channel->SignalDataReceived.connect(

@@ -182,8 +182,10 @@ SctpDataEngine::SctpDataEngine() {
   }
   usrsctp_engines_count++;
 
-  codecs_.push_back(cricket::DataCodec(
-      kGoogleSctpDataCodecId, kGoogleSctpDataCodecName, 0));
+  // We don't put in a codec because we don't want one offered when we
+  // use the hybrid data engine.
+  // codecs_.push_back(cricket::DataCodec( kGoogleSctpDataCodecId,
+  // kGoogleSctpDataCodecName, 0));
 }
 
 SctpDataEngine::~SctpDataEngine() {
@@ -200,8 +202,9 @@ SctpDataEngine::~SctpDataEngine() {
   // }
 }
 
-DataMediaChannel* SctpDataEngine::CreateChannel(const std::string& codec_name) {
-  if (codec_name != "" && codec_name != kGoogleSctpDataCodecName) {
+DataMediaChannel* SctpDataEngine::CreateChannel(
+    DataChannelType data_channel_type) {
+  if (data_channel_type != DCT_SCTP) {
     return NULL;
   }
   return new SctpDataMediaChannel(talk_base::Thread::Current());
@@ -511,7 +514,7 @@ void SctpDataMediaChannel::OnPacketReceived(talk_base::Buffer* packet) {
     // TODO(ldixon): Consider caching the packet for very slightly better
     // reliability.
     LOG(LS_INFO) << debug_name_ << "->OnPacketReceived(...):"
-                    << " Threw packet (probably an INIT) away.";
+                 << " Threw packet (probably an INIT) away.";
   }
 }
 

@@ -122,7 +122,13 @@ const char LOCAL_PORT_TYPE[] = "local";
 const char STUN_PORT_TYPE[] = "stun";
 const char RELAY_PORT_TYPE[] = "relay";
 
-static const char* const PROTO_NAMES[] = { "udp", "tcp", "ssltcp" };
+const char UDP_PROTOCOL_NAME[] = "udp";
+const char TCP_PROTOCOL_NAME[] = "tcp";
+const char SSLTCP_PROTOCOL_NAME[] = "ssltcp";
+
+static const char* const PROTO_NAMES[] = { UDP_PROTOCOL_NAME,
+                                           TCP_PROTOCOL_NAME,
+                                           SSLTCP_PROTOCOL_NAME };
 
 const char* ProtoToString(ProtocolType proto) {
   return PROTO_NAMES[proto];

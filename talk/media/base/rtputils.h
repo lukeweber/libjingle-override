@@ -53,6 +53,7 @@ enum RtcpTypes {
   kRtcpTypePSFB = 206,    // Payload-specific Feedback message payload type.
 };
 
+bool GetRtpVersion(const void* data, size_t len, int* version);
 bool GetRtpPayloadType(const void* data, size_t len, int* value);
 bool GetRtpSeqNum(const void* data, size_t len, int* value);
 bool GetRtpTimestamp(const void* data, size_t len, uint32* value);

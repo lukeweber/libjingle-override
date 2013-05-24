@@ -44,9 +44,7 @@ class RtpDataEngine : public DataEngineInterface {
  public:
   RtpDataEngine();
 
-  // codec_name == "" means use the default codec.
-  virtual DataMediaChannel* CreateChannel(
-      const std::string& codec_name);
+  virtual DataMediaChannel* CreateChannel(DataChannelType data_channel_type);
 
   virtual const std::vector<DataCodec>& data_codecs() {
     return data_codecs_;

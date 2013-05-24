@@ -39,6 +39,7 @@
 #include "talk/media/base/constants.h"
 #include "talk/media/base/cryptoparams.h"
 #include "talk/media/base/mediachannel.h"
+#include "talk/media/base/mediaengine.h"  // For DataChannelType
 #include "talk/media/base/streamparams.h"
 #include "talk/p2p/base/sessiondescription.h"
 #include "talk/p2p/base/transport.h"
@@ -74,15 +75,22 @@ extern const char kMediaProtocolAvpf[];
 // RFC5124 RTP/SAVPF
 extern const char kMediaProtocolSavpf[];
 
+extern const char kMediaProtocolSctp[];
+extern const char kMediaProtocolSctpDtls[];
+
 // Options to control how session descriptions are generated.
 const int kAutoBandwidth = -1;
 const int kBufferedModeDisabled = 0;
+// TODO(pthatcher): This is imposed by usrsctp lib.  I have no idea
+// why it is 9.  Figure out why, and make it bigger, hopefully up to
+// 2^16-1.
+const uint32 kMaxSctpSid = 9;
 
 struct MediaSessionOptions {
   MediaSessionOptions() :
       has_audio(true),  // Audio enabled by default.
       has_video(false),
-      has_data(false),
+      data_channel_type(DCT_NONE),
       is_muc(false),
       vad_enabled(true),  // When disabled, removes all CN codecs from SDP.
       rtcp_mux_enabled(true),
@@ -90,6 +98,8 @@ struct MediaSessionOptions {
       video_bandwidth(kAutoBandwidth),
       data_bandwidth(kDataMaxBandwidth) {
   }
+
+  bool has_data() const { return data_channel_type != DCT_NONE; }
 
   // Add a stream with MediaType type and id.
   // All streams with the same sync_label will get the same CNAME.
@@ -101,7 +111,7 @@ struct MediaSessionOptions {
 
   bool has_audio;
   bool has_video;
-  bool has_data;
+  DataChannelType data_channel_type;
   bool is_muc;
   bool vad_enabled;
   bool rtcp_mux_enabled;

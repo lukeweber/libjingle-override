@@ -102,7 +102,12 @@ class MediaConstraintsInterface {
   // Temporary pseudo-constraints used to enable DTLS-SRTP
   static const char kEnableDtlsSrtp[];  // Enable DTLS-SRTP
   // Temporary pseudo-constraints used to enable DataChannels
-  static const char kEnableRtpDataChannels[];  // Enable DataChannels
+  static const char kEnableRtpDataChannels[];  // Enable RTP DataChannels
+  static const char kEnableSctpDataChannels[];  // Enable SCTP DataChannels
+
+  // The prefix of internal-only constraints whose JS set values should be
+  // stripped by Chrome before passed down to Libjingle.
+  static const char kInternalConstraintPrefix[];
 
  protected:
   // Dtor protected as objects shouldn't be deleted via this interface

@@ -120,8 +120,9 @@ void Call::AcceptSession(Session* session,
                          const cricket::CallOptions& options) {
   MediaSessionMap::iterator it = media_session_map_.find(session->id());
   if (it != media_session_map_.end()) {
-    it->second.session->Accept(
-        session_client_->CreateAnswer(session->remote_description(), options));
+    const SessionDescription* answer = session_client_->CreateAnswer(
+        session->remote_description(), options);
+    it->second.session->Accept(answer);
   }
 }
 
@@ -275,18 +276,28 @@ bool Call::AddSession(Session* session, const SessionDescription* offer) {
     }
   }
 
-  // If desired, create data channel
+  // If desired, create data channel.
   if (has_data_ && succeeded) {
-    bool rtcp = false;
-    // TODO(pthatcher): Use SCTP if available.
-    media_session.data_channel =
-        session_client_->channel_manager()->CreateDataChannel(
-            session, data_offer->name, rtcp, kGoogleRtpDataCodecName);
-    if (media_session.data_channel) {
-      media_session.data_channel->SignalDataReceived.connect(
-          this, &Call::OnDataReceived);
-    } else {
+    const DataContentDescription* data = GetFirstDataContentDescription(offer);
+    if (data == NULL) {
       succeeded = false;
+    } else {
+      DataChannelType data_channel_type = DCT_RTP;
+      if ((data->protocol() == kMediaProtocolSctp) ||
+          (data->protocol() == kMediaProtocolSctpDtls)) {
+        data_channel_type = DCT_SCTP;
+      }
+
+      bool rtcp = false;
+      media_session.data_channel =
+          session_client_->channel_manager()->CreateDataChannel(
+              session, data_offer->name, rtcp, data_channel_type);
+      if (media_session.data_channel) {
+        media_session.data_channel->SignalDataReceived.connect(
+            this, &Call::OnDataReceived);
+      } else {
+        succeeded = false;
+      }
     }
   }
 

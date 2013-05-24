@@ -162,6 +162,7 @@
           'sources': [
             'base/win32_unittest.cc',
             'base/win32regkey_unittest.cc',
+            'base/win32socketserver_unittest.cc',
             'base/win32toolhelp_unittest.cc',
             'base/win32window_unittest.cc',
             'base/winfirewall_unittest.cc',
@@ -351,7 +352,7 @@
     },  # target libjingle_peerconnection_unittest
   ],
   'conditions': [
-    ['libjingle_java == 1', {
+    ['OS=="linux"', {
       'targets': [
         {
           'target_name': 'libjingle_peerconnection_test_jar',
@@ -383,6 +384,32 @@
             },
           ],
         },
+        {
+          'target_name': 'libjingle_peerconnection_java_unittest',
+          'type': 'none',
+          'actions': [
+            {
+              'action_name': 'copy libjingle_peerconnection_java_unittest',
+              'inputs': [
+                'app/webrtc/javatests/libjingle_peerconnection_java_unittest.sh',
+                '<(PRODUCT_DIR)/libjingle_peerconnection_test_jar',
+                '<(DEPTH)/third_party/junit/junit-4.11.jar',
+              ],
+              'outputs': [
+                '<(PRODUCT_DIR)/libjingle_peerconnection_java_unittest',
+              ],
+              'action': [
+                'bash', '-c',
+                'rm -f <(PRODUCT_DIR)/libjingle_peerconnection_java_unittest && '
+                'sed -e "s@GYP_JAVA_HOME@<(java_home)@" '
+                '< app/webrtc/javatests/libjingle_peerconnection_java_unittest.sh '
+                '> <(PRODUCT_DIR)/libjingle_peerconnection_java_unittest && '
+                'cp <(DEPTH)/third_party/junit/junit-4.11.jar <(PRODUCT_DIR) && '
+                'chmod u+x <(PRODUCT_DIR)/libjingle_peerconnection_java_unittest'
+              ],
+            },
+          ],
+        }
       ],
     }],
   ],

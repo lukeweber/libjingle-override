@@ -119,8 +119,8 @@ class CallClient: public sigslot::has_slots<> {
   void SetRender(bool render) {
     render_ = render;
   }
-  void SetDataChannelEnabled(bool data_channel_enabled) {
-    data_channel_enabled_ = data_channel_enabled;
+  void SetDataChannelType(cricket::DataChannelType data_channel_type) {
+    data_channel_type_ = data_channel_type;
   }
   void SetMultiSessionEnabled(bool multisession_enabled) {
     multisession_enabled_ = multisession_enabled;
@@ -322,7 +322,7 @@ class CallClient: public sigslot::has_slots<> {
   bool auto_accept_;
   std::string pmuc_domain_;
   bool render_;
-  bool data_channel_enabled_;
+  cricket::DataChannelType data_channel_type_;
   bool multisession_enabled_;
   cricket::VideoRenderer* local_renderer_;
   StaticRenderedViews static_rendered_views_;

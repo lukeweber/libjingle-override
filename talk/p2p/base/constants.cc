@@ -119,6 +119,12 @@ const buzz::StaticQName QN_JINGLE_RTP_HDREXT =
     { NS_JINGLE_RTP, "rtp-hdrext" };
 const buzz::StaticQName QN_URI = { NS_EMPTY, "uri" };
 
+const char NS_JINGLE_DRAFT_SCTP[] = "google:jingle:sctp";
+const buzz::StaticQName QN_JINGLE_DRAFT_SCTP_CONTENT =
+    { NS_JINGLE_DRAFT_SCTP, LN_DESCRIPTION };
+const buzz::StaticQName QN_JINGLE_DRAFT_SCTP_STREAM =
+    { NS_JINGLE_DRAFT_SCTP, "stream" };
+
 const char NS_GINGLE_AUDIO[] = "http://www.google.com/session/phone";
 const buzz::StaticQName QN_GINGLE_AUDIO_CONTENT =
     { NS_GINGLE_AUDIO, LN_DESCRIPTION };

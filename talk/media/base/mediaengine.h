@@ -393,12 +393,16 @@ class NullVideoEngine {
 
 typedef CompositeMediaEngine<NullVoiceEngine, NullVideoEngine> NullMediaEngine;
 
+enum DataChannelType {
+  DCT_NONE = 0,
+  DCT_RTP = 1,
+  DCT_SCTP = 2
+};
+
 class DataEngineInterface {
  public:
   virtual ~DataEngineInterface() {}
-  // codec_name == "" means use the default codec.
-  virtual DataMediaChannel* CreateChannel(
-      const std::string& codec_name) = 0;
+  virtual DataMediaChannel* CreateChannel(DataChannelType type) = 0;
   virtual const std::vector<DataCodec>& data_codecs() = 0;
 };
 

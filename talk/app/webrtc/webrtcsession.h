@@ -266,9 +266,14 @@ class WebRtcSession : public cricket::BaseSession,
   uint64 session_version_;
   // If the remote peer is using a older version of implementation.
   bool older_version_remote_peer_;
-  // True if this session can create an RTP data engine. This is controlled
-  // by the constraint kEnableRtpDataChannels.
-  bool allow_rtp_data_engine_;
+  // Specifies which kind of data channel is allowed. This is controlled
+  // by the chrome command-line flag and constraints:
+  // 1. If chrome command-line switch 'enable-sctp-data-channels' is enabled,
+  // constraint kEnableDtlsSrtp is true, and constaint kEnableRtpDataChannels is
+  // not set or false, SCTP is allowed (DCT_SCTP);
+  // 2. If constraint kEnableRtpDataChannels is true, RTP is allowed (DCT_RTP);
+  // 3. If both 1&2 are false, data channel is not allowed (DCT_NONE).
+  cricket::DataChannelType data_channel_type_;
   talk_base::scoped_ptr<IceRestartAnswerLatch> ice_restart_latch_;
   sigslot::signal0<> SignalVoiceChannelDestroyed;
   sigslot::signal0<> SignalVideoChannelDestroyed;

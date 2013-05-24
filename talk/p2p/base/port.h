@@ -58,6 +58,10 @@ extern const char LOCAL_PORT_TYPE[];
 extern const char STUN_PORT_TYPE[];
 extern const char RELAY_PORT_TYPE[];
 
+extern const char UDP_PROTOCOL_NAME[];
+extern const char TCP_PROTOCOL_NAME[];
+extern const char SSLTCP_PROTOCOL_NAME[];
+
 // The length of time we wait before timing out readability on a connection.
 const uint32 CONNECTION_READ_TIMEOUT = 30 * 1000;   // 30 seconds
 

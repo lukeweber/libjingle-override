@@ -697,17 +697,13 @@ void FakeAudioCaptureModule::ReceiveFrameP() {
 
 void FakeAudioCaptureModule::SendFrameP() {
   ASSERT(talk_base::Thread::Current() == process_thread_);
-#ifdef USE_WEBRTC_DEV_BRANCH
-  bool keyPressed = false;
-#endif
+  bool key_pressed = false;
   if (audio_callback_->RecordedDataIsAvailable(send_buffer_, kNumberSamples,
                                               kNumberBytesPerSample,
                                               kNumberOfChannels,
                                               kSamplesPerSecond, kTotalDelayMs,
                                               kClockDriftMs, current_mic_level_,
-#ifdef USE_WEBRTC_DEV_BRANCH
-                                              keyPressed,
-#endif
+                                              key_pressed,
                                               current_mic_level_) != 0) {
     ASSERT(false);
   }

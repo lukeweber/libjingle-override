@@ -47,6 +47,9 @@
 #include "talk/media/base/mediaengine.h"
 #include "talk/media/base/rtpdataengine.h"
 #include "talk/media/base/screencastid.h"
+#ifdef HAVE_SCTP
+#include "talk/media/sctp/sctpdataengine.h"
+#endif
 #include "talk/media/base/videorenderer.h"
 #include "talk/media/devices/devicemanager.h"
 #include "talk/media/devices/videorendererfactory.h"
@@ -193,7 +196,7 @@ void CallClient::ParseLine(const std::string& line) {
       cricket::CallOptions options;
       options.video_bandwidth = GetInt(words, 1, cricket::kAutoBandwidth);
       options.has_video = true;
-      options.has_data = data_channel_enabled_;
+      options.data_channel_type = data_channel_type_;
       Accept(options);
     } else if (command == "reject") {
       Reject();
@@ -211,7 +214,7 @@ void CallClient::ParseLine(const std::string& line) {
       cricket::CallOptions options;
       options.has_video = call_->has_video();
       options.video_bandwidth = cricket::kAutoBandwidth;
-      options.has_data = data_channel_enabled_;
+      options.data_channel_type = data_channel_type_;
       options.AddStream(cricket::MEDIA_TYPE_VIDEO, "", "");
       if (!InitiateAdditionalSession(to, options)) {
         console_->PrintLine("Failed to initiate additional session.");
@@ -326,7 +329,7 @@ void CallClient::ParseLine(const std::string& line) {
     } else if (command == "call") {
       std::string to = GetWord(words, 1, "");
       cricket::CallOptions options;
-      options.has_data = data_channel_enabled_;
+      options.data_channel_type = data_channel_type_;
       if (!PlaceCall(to, options)) {
         console_->PrintLine("Failed to initiate call.");
       }
@@ -336,7 +339,7 @@ void CallClient::ParseLine(const std::string& line) {
       cricket::CallOptions options;
       options.has_video = true;
       options.video_bandwidth = bandwidth;
-      options.has_data = data_channel_enabled_;
+      options.data_channel_type = data_channel_type_;
       if (!PlaceCall(to, options)) {
         console_->PrintLine("Failed to initiate call.");
       }
@@ -381,7 +384,7 @@ CallClient::CallClient(buzz::XmppClient* xmpp_client,
       auto_accept_(false),
       pmuc_domain_("groupchat.google.com"),
       render_(true),
-      data_channel_enabled_(false),
+      data_channel_type_(cricket::DCT_NONE),
       multisession_enabled_(false),
       local_renderer_(NULL),
       static_views_accumulated_count_(0),
@@ -515,9 +518,19 @@ void CallClient::InitMedia() {
   }
 
   if (!data_engine_) {
-    // TODO(pthatcher): Make it easy to make other types of data
-    // engines.
-    data_engine_ = new cricket::RtpDataEngine();
+    if (data_channel_type_ == cricket::DCT_SCTP) {
+#ifdef HAVE_SCTP
+      data_engine_ = new cricket::SctpDataEngine();
+#else
+      LOG(LS_WARNING) << "SCTP Data Engine not supported.";
+      data_channel_type_ = cricket::DCT_NONE;
+      data_engine_ = new cricket::RtpDataEngine();
+#endif
+    } else {
+      // Even if we have DCT_NONE, we still have a data engine, just
+      // to make sure it isn't NULL.
+      data_engine_ = new cricket::RtpDataEngine();
+    }
   }
 
   media_client_ = new cricket::MediaSessionClient(
@@ -561,7 +574,7 @@ void CallClient::OnSessionState(cricket::Call* call,
 
       cricket::CallOptions options;
       options.has_video = call_->has_video();
-      options.has_data = data_channel_enabled_;
+      options.data_channel_type = data_channel_type_;
       call_->AcceptSession(session, options);
 
       if (call_->has_video() && render_) {
@@ -579,7 +592,7 @@ void CallClient::OnSessionState(cricket::Call* call,
       if (auto_accept_) {
         cricket::CallOptions options;
         options.has_video = true;
-        options.has_data = data_channel_enabled_;
+        options.data_channel_type = data_channel_type_;
         Accept(options);
       }
     }

@@ -1041,6 +1041,11 @@ CandidateTranslatorMap Session::GetCandidateTranslators() {
 ContentParserMap Session::GetContentParsers() {
   ContentParserMap parsers;
   parsers[content_type()] = client_;
+  // We need to be able parse both RTP-based and SCTP-based Jingle
+  // with the same client.
+  if (content_type() == NS_JINGLE_RTP) {
+    parsers[NS_JINGLE_DRAFT_SCTP] = client_;
+  }
   return parsers;
 }
 

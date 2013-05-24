@@ -715,18 +715,13 @@ bool BaseChannel::SendPacket(bool rtcp, talk_base::Buffer* packet) {
   return true;
 }
 
-void BaseChannel::HandlePacket(bool rtcp, talk_base::Buffer* packet) {
-  if (!has_received_packet_) {
-    has_received_packet_ = true;
-    signaling_thread()->Post(this, MSG_FIRSTPACKETRECEIVED);
-  }
-
-  // Protect ourselvs against crazy data.
+bool BaseChannel::WantsPacket(bool rtcp, talk_base::Buffer* packet) {
+  // Protect ourselves against crazy data.
   if (!ValidPacket(rtcp, packet)) {
     LOG(LS_ERROR) << "Dropping incoming " << content_name_ << " "
                   << PacketType(rtcp) << " packet: wrong size="
                   << packet->length();
-    return;
+    return false;
   }
 
   // If this channel is suppose to handle RTP data, that is determined by
@@ -734,7 +729,20 @@ void BaseChannel::HandlePacket(bool rtcp, talk_base::Buffer* packet) {
   // double decryption.
   if (ssrc_filter_.IsActive() &&
       !ssrc_filter_.DemuxPacket(packet->data(), packet->length(), rtcp)) {
+    return false;
+  }
+
+  return true;
+}
+
+void BaseChannel::HandlePacket(bool rtcp, talk_base::Buffer* packet) {
+  if (!WantsPacket(rtcp, packet)) {
     return;
+  }
+
+  if (!has_received_packet_) {
+    has_received_packet_ = true;
+    signaling_thread()->Post(this, MSG_FIRSTPACKETRECEIVED);
   }
 
   // Signal to the media sink before unprotecting the packet.
@@ -2351,7 +2359,8 @@ DataChannel::DataChannel(talk_base::Thread* thread,
                          const std::string& content_name,
                          bool rtcp)
     // MediaEngine is NULL
-    : BaseChannel(thread, NULL, media_channel, session, content_name, rtcp) {
+    : BaseChannel(thread, NULL, media_channel, session, content_name, rtcp),
+      data_channel_type_(cricket::DCT_NONE) {
 }
 
 DataChannel::~DataChannel() {
@@ -2390,10 +2399,58 @@ const ContentInfo* DataChannel::GetFirstContent(
   return GetFirstDataContent(sdesc);
 }
 
+
+static bool IsRtpPacket(const talk_base::Buffer* packet) {
+  int version;
+  if (!GetRtpVersion(packet->data(), packet->length(), &version)) {
+    return false;
+  }
+
+  return version == 2;
+}
+
+bool DataChannel::WantsPacket(bool rtcp, talk_base::Buffer* packet) {
+  if (data_channel_type_ == DCT_SCTP) {
+    // TODO(pthatcher): Do this in a more robust way by checking for
+    // SCTP or DTLS.
+    return !IsRtpPacket(packet);
+  } else if (data_channel_type_ == DCT_RTP) {
+    return BaseChannel::WantsPacket(rtcp, packet);
+  }
+  return false;
+}
+
 // Sets the maximum bandwidth.  Anything over this will be dropped.
 bool DataChannel::SetMaxSendBandwidth_w(int max_bps) {
   LOG(LS_INFO) << "DataChannel: Setting max bandwidth to " << max_bps;
   return media_channel()->SetSendBandwidth(false, max_bps);
+}
+
+bool DataChannel::SetDataChannelType(DataChannelType new_data_channel_type) {
+  // It hasn't been set before, so set it now.
+  if (data_channel_type_ == DCT_NONE) {
+    data_channel_type_ = new_data_channel_type;
+    return true;
+  }
+
+  // It's been set before, but doesn't match.  That's bad.
+  if (data_channel_type_ != new_data_channel_type) {
+    LOG(LS_WARNING) << "Data channel type mismatch."
+                    << " Expected " << data_channel_type_
+                    << " Got " << new_data_channel_type;
+    return false;
+  }
+
+  // It's hasn't changed.  Nothing to do.
+  return true;
+}
+
+bool DataChannel::SetDataChannelTypeFromContent(
+    const DataContentDescription* content) {
+  bool is_sctp = ((content->protocol() == kMediaProtocolSctp) ||
+                  (content->protocol() == kMediaProtocolSctpDtls));
+  DataChannelType data_channel_type = is_sctp ? DCT_SCTP : DCT_RTP;
+  return SetDataChannelType(data_channel_type);
 }
 
 bool DataChannel::SetLocalContent_w(const MediaContentDescription* content,
@@ -2406,10 +2463,23 @@ bool DataChannel::SetLocalContent_w(const MediaContentDescription* content,
   ASSERT(data != NULL);
   if (!data) return false;
 
-  bool ret = SetBaseLocalContent_w(content, action);
+  bool ret = false;
+  if (!SetDataChannelTypeFromContent(data)) {
+    return false;
+  }
 
-  if (action != CA_UPDATE || data->has_codecs()) {
-    ret &= media_channel()->SetRecvCodecs(data->codecs());
+  if (data_channel_type_ == DCT_SCTP) {
+    // SCTP data channels don't need the rest of the stuff.
+    ret = UpdateLocalStreams_w(data->streams(), action);
+    if (ret) {
+      set_local_content_direction(content->direction());
+    }
+  } else {
+    ret = SetBaseLocalContent_w(content, action);
+
+    if (action != CA_UPDATE || data->has_codecs()) {
+      ret &= media_channel()->SetRecvCodecs(data->codecs());
+    }
   }
 
   // If everything worked, see if we can start receiving.
@@ -2430,27 +2500,40 @@ bool DataChannel::SetRemoteContent_w(const MediaContentDescription* content,
   ASSERT(data != NULL);
   if (!data) return false;
 
-  // If the remote data doesn't have codecs and isn't an update, it
-  // must be empty, so ignore it.
-  if (action != CA_UPDATE && !data->has_codecs()) {
-    return true;
-  }
-  LOG(LS_INFO) << "Setting remote data description";
-
   bool ret = true;
-  // Set remote video codecs (what the other side wants to receive).
-  if (action != CA_UPDATE || data->has_codecs()) {
-    ret &= media_channel()->SetSendCodecs(data->codecs());
+  if (!SetDataChannelTypeFromContent(data)) {
+    return false;
   }
 
-  if (ret) {
-    ret &= SetBaseRemoteContent_w(content, action);
-  }
+  if (data_channel_type_ == DCT_SCTP) {
+    LOG(LS_INFO) << "Setting SCTP remote data description";
+    // SCTP data channels don't need the rest of the stuff.
+    ret = UpdateRemoteStreams_w(content->streams(), action);
+    if (ret) {
+      set_remote_content_direction(content->direction());
+    }
+  } else {
+    // If the remote data doesn't have codecs and isn't an update, it
+    // must be empty, so ignore it.
+    if (action != CA_UPDATE && !data->has_codecs()) {
+      return true;
+    }
+    LOG(LS_INFO) << "Setting remote data description";
 
-  if (action != CA_UPDATE) {
-    int bandwidth_bps = data->bandwidth();
-    bool auto_bandwidth = (bandwidth_bps == kAutoBandwidth);
-    ret &= media_channel()->SetSendBandwidth(auto_bandwidth, bandwidth_bps);
+    // Set remote video codecs (what the other side wants to receive).
+    if (action != CA_UPDATE || data->has_codecs()) {
+      ret &= media_channel()->SetSendCodecs(data->codecs());
+    }
+
+    if (ret) {
+      ret &= SetBaseRemoteContent_w(content, action);
+    }
+
+    if (action != CA_UPDATE) {
+      int bandwidth_bps = data->bandwidth();
+      bool auto_bandwidth = (bandwidth_bps == kAutoBandwidth);
+      ret &= media_channel()->SetSendBandwidth(auto_bandwidth, bandwidth_bps);
+    }
   }
 
   // If everything worked, see if we can start sending.

@@ -59,8 +59,8 @@ RtpDataEngine::RtpDataEngine() {
 }
 
 DataMediaChannel* RtpDataEngine::CreateChannel(
-    const std::string& codec_name) {
-  if (codec_name != "" && codec_name != kGoogleRtpDataCodecName) {
+    DataChannelType data_channel_type) {
+  if (data_channel_type != DCT_RTP) {
     return NULL;
   }
   return new RtpDataMediaChannel(timing_.get());

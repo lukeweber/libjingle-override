@@ -73,7 +73,8 @@ class SctpDataEngine : public DataEngineInterface {
   SctpDataEngine();
   virtual ~SctpDataEngine();
 
-  virtual DataMediaChannel* CreateChannel(const std::string& codec_name);
+  virtual DataMediaChannel* CreateChannel(DataChannelType data_channel_type);
+
   virtual const std::vector<DataCodec>& data_codecs() { return codecs_; }
 
  private:
@@ -143,12 +144,14 @@ class SctpDataMediaChannel : public DataMediaChannel,
 
   // Many of these things are unused by SCTP, but are needed to fulfill
   // the MediaChannel interface.
-  // TODO(pthatcher): Cleanup MediaChannel interface.
-  virtual bool SetSendBandwidth(bool autobw, int bps) { return false; }
+  // TODO(pthatcher): Cleanup MediaChannel interface, or at least
+  // don't try calling these and return false.  Right now, things
+  // don't work if we return false.
+  virtual bool SetSendBandwidth(bool autobw, int bps) { return true; }
   virtual bool SetRecvRtpHeaderExtensions(
-      const std::vector<RtpHeaderExtension>& extensions) { return false; }
+      const std::vector<RtpHeaderExtension>& extensions) { return true; }
   virtual bool SetSendRtpHeaderExtensions(
-      const std::vector<RtpHeaderExtension>& extensions) { return false; }
+      const std::vector<RtpHeaderExtension>& extensions) { return true; }
   virtual bool SetSendCodecs(const std::vector<DataCodec>& codecs) {
     return true;
   }

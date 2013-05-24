@@ -125,7 +125,7 @@ static bool ParseConstraints(
 // and the constraint kUseRtpMux has not disabled bundle.
 static bool EvaluateNeedForBundle(const cricket::MediaSessionOptions& options) {
   return options.bundle_enabled &&
-      (options.has_audio || options.has_video || options.has_data);
+      (options.has_audio || options.has_video || options.has_data());
 }
 
 // Factory class for creating remote MediaStreams and MediaStreamTracks.
