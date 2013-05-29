@@ -283,7 +283,7 @@ TEST_F(VideoCapturerTest, TestHDResolutionMatch) {
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
   EXPECT_EQ(640, best.width);
   EXPECT_EQ(480, best.height);
-  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(24), best.interval);
+  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(30), best.interval);
 
   desired.width = 1280;
   desired.height = 720;

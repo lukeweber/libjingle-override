@@ -49,6 +49,7 @@
 #include "talk/media/base/streamparams.h"
 #include "talk/media/base/voiceprocessor.h"
 #include "talk/media/webrtc/webrtcvoe.h"
+#include "webrtc/modules/audio_processing/include/audio_processing.h"
 
 #ifdef WIN32
 #include <objbase.h>  // NOLINT
