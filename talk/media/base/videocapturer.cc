@@ -29,7 +29,7 @@
 
 #include <algorithm>
 
-#if defined(HAVE_YUV)
+#if !defined(DISABLE_YUV)
 #include "libyuv/scale_argb.h"
 #endif
 #include "talk/base/common.h"
@@ -238,7 +238,7 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
 #define VIDEO_FRAME_NAME WebRtcVideoFrame
 #endif
 #if defined(VIDEO_FRAME_NAME)
-#if defined(HAVE_YUV)
+#if !defined(DISABLE_YUV)
   if (IsScreencast()) {
     int scaled_width, scaled_height;
     int desired_screencast_fps = capture_format_.get() ?
@@ -276,7 +276,7 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
       scaled_frame->data_size = scaled_width * 4 * scaled_height;
     }
   }
-#endif  // HAVE_YUV
+#endif  // !DISABLE_YUV
         // Size to crop captured frame to.  This adjusts the captured frames
         // aspect ratio to match the final view aspect ratio, considering pixel
   // aspect ratio and rotation.  The final size may be scaled down by video
@@ -412,10 +412,14 @@ int64 VideoCapturer::GetFormatDistance(const VideoFormat& desired,
   if (delta_h < 0) {
     delta_h = delta_h * kDownPenalty;
   }
-  // Require camera fps to be at least 80% of what is requested.
+  // Require camera fps to be at least 80% of what is requested if resolution
+  // matches.
+  // Require camera fps to be at least 96% of what is requested, or higher,
+  // if resolution differs. 96% allows for slight variations in fps. e.g. 29.97
   if (delta_fps < 0) {
-    int64 min_desirable_fps =
-        VideoFormat::IntervalToFps(desired.interval) * 24 / 30;
+    int64 min_desirable_fps = delta_w ?
+    VideoFormat::IntervalToFps(desired.interval) * 29 / 30 :
+    VideoFormat::IntervalToFps(desired.interval) * 24 / 30;
     delta_fps = -delta_fps;
     if (supported_fps < min_desirable_fps) {
       distance |= static_cast<int64>(1) << 62;

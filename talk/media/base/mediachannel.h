@@ -163,6 +163,7 @@ struct AudioOptions {
     conference_mode.SetFrom(change.conference_mode);
     adjust_agc_delta.SetFrom(change.adjust_agc_delta);
     experimental_agc.SetFrom(change.experimental_agc);
+    aec_dump.SetFrom(change.aec_dump);
   }
 
   bool operator==(const AudioOptions& o) const {
@@ -174,7 +175,8 @@ struct AudioOptions {
         typing_detection == o.typing_detection &&
         conference_mode == o.conference_mode &&
         experimental_agc == o.experimental_agc &&
-        adjust_agc_delta == o.adjust_agc_delta;
+        adjust_agc_delta == o.adjust_agc_delta &&
+        aec_dump == o.aec_dump;
   }
 
   std::string ToString() const {
@@ -189,6 +191,7 @@ struct AudioOptions {
     ost << ToStringIfSet("conference", conference_mode);
     ost << ToStringIfSet("agc_delta", adjust_agc_delta);
     ost << ToStringIfSet("experimental_agc", experimental_agc);
+    ost << ToStringIfSet("aec_dump", aec_dump);
     ost << "}";
     return ost.str();
   }
@@ -209,6 +212,7 @@ struct AudioOptions {
   Settable<bool> conference_mode;
   Settable<int> adjust_agc_delta;
   Settable<bool> experimental_agc;
+  Settable<bool> aec_dump;
 };
 
 // Options that can be applied to a VideoMediaChannel or a VideoMediaEngine.

@@ -618,7 +618,7 @@ void BasicPortAllocatorSession::OnPortComplete(Port* port) {
   ASSERT(talk_base::Thread::Current() == network_thread_);
   PortData* data = FindPort(port);
   ASSERT(data != NULL);
-  ASSERT(data->ready());
+
   // Ignore any late signals.
   if (data->complete())
     return;

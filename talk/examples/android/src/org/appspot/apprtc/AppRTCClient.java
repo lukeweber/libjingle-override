@@ -201,10 +201,8 @@ public class AppRTCClient {
 
     @Override
     protected void onPostExecute(AppRTCSignalingParameters params) {
-      String channelUrl = params.gaeBaseHref +
-          "html/android_channel.html?token=" + params.channelToken;
       channelClient =
-          new GAEChannelClient(activity, channelUrl, gaeHandler);
+          new GAEChannelClient(activity, params.channelToken, gaeHandler);
       synchronized (sendQueue) {
         appRTCSignalingParameters = params;
       }

@@ -293,12 +293,13 @@ uint32 ExtractSsrc(const cricket::VideoSenderInfo& info) {
 // ExtractSsrc and ExtractStats must be defined and overloaded for each type.
 template<typename T>
 void ExtractStatsFromList(const std::vector<T>& data,
+                          const std::string& transport_id,
                           StatsCollector* collector) {
   typename std::vector<T>::const_iterator it = data.begin();
   for (; it != data.end(); ++it) {
     std::string id;
     uint32 ssrc = ExtractSsrc(*it);
-    StatsReport* report = collector->PrepareReport(ssrc);
+    StatsReport* report = collector->PrepareReport(ssrc, transport_id);
     if (!report) {
       continue;
     }
@@ -385,7 +386,8 @@ void StatsCollector::UpdateStats() {
   }
 }
 
-StatsReport* StatsCollector::PrepareReport(uint32 ssrc) {
+StatsReport* StatsCollector::PrepareReport(uint32 ssrc,
+                                           const std::string& transport_id) {
   std::string ssrc_id = talk_base::ToString<uint32>(ssrc);
   StatsMap::iterator it = reports_.find(StatsId(
       StatsReport::kStatsReportTypeSsrc, ssrc_id));
@@ -418,7 +420,9 @@ StatsReport* StatsCollector::PrepareReport(uint32 ssrc) {
 
   report->AddValue(StatsReport::kStatsValueNameSsrc, ssrc_id);
   report->AddValue(StatsReport::kStatsValueNameTrackId, track_id);
-  // TODO(hta): Add a StatsReport::kStatsvalueNameTransportId for the transport.
+  // Add the mapping of SSRC to transport.
+  report->AddValue(StatsReport::kStatsValueNameTransportId,
+                   transport_id);
   return report;
 }
 
@@ -434,22 +438,14 @@ void StatsCollector::ExtractSessionInfo() {
 
   reports_[report.id] = report;
 
-  // TODO(hta): Add transport information.
-  // Transport info should come from GetStats() on each Transport
-  // available from session_.
-
-  // TODO(hta): Add candidate pair information.
-  // The ICE candidate pair information is stored in
-  // cricket::P2PTransportChannel::connections_ (of type cricket::Connection)
-  // It exports a GetStats call that returns a vector of ConnectionInfo
-  // declared in transportchannel.h that has the information we want.
   cricket::SessionStats stats;
   if (session_->GetStats(&stats)) {
-    // TODO(hta): Report on the proxy (M-line) to transport mapping when needed.
+    // Store the proxy map away for use in SSRC reporting.
+    proxy_to_transport_ = stats.proxy_to_transport;
+
     for (cricket::TransportStatsMap::iterator transport_iter
              = stats.transport_stats.begin();
          transport_iter != stats.transport_stats.end(); ++transport_iter) {
-      // TODO(hta): Report on transports when we want to have some info here.
       for (cricket::TransportChannelStatsList::iterator channel_iter
                = transport_iter->second.channel_stats.begin();
            channel_iter != transport_iter->second.channel_stats.end();
@@ -509,8 +505,15 @@ void StatsCollector::ExtractVoiceInfo() {
     LOG(LS_ERROR) << "Failed to get voice channel stats.";
     return;
   }
-  ExtractStatsFromList(voice_info.receivers, this);
-  ExtractStatsFromList(voice_info.senders, this);
+  std::string transport_id;
+  if (!GetTransportIdFromProxy(session_->voice_channel()->content_name(),
+                               &transport_id)) {
+    LOG(LS_ERROR) << "Failed to get transport name for proxy "
+                  << session_->voice_channel()->content_name();
+    return;
+  }
+  ExtractStatsFromList(voice_info.receivers, transport_id, this);
+  ExtractStatsFromList(voice_info.senders, transport_id, this);
 }
 
 void StatsCollector::ExtractVideoInfo() {
@@ -522,8 +525,15 @@ void StatsCollector::ExtractVideoInfo() {
     LOG(LS_ERROR) << "Failed to get video channel stats.";
     return;
   }
-  ExtractStatsFromList(video_info.receivers, this);
-  ExtractStatsFromList(video_info.senders, this);
+  std::string transport_id;
+  if (!GetTransportIdFromProxy(session_->video_channel()->content_name(),
+                               &transport_id)) {
+    LOG(LS_ERROR) << "Failed to get transport name for proxy "
+                  << session_->video_channel()->content_name();
+    return;
+  }
+  ExtractStatsFromList(video_info.receivers, transport_id, this);
+  ExtractStatsFromList(video_info.senders, transport_id, this);
   if (video_info.bw_estimations.size() != 1) {
     LOG(LS_ERROR) << "BWEs count: " << video_info.bw_estimations.size();
   } else {
@@ -537,5 +547,22 @@ double StatsCollector::GetTimeNow() {
   return timing_.WallTimeNow() * talk_base::kNumMillisecsPerSec;
 }
 
+bool StatsCollector::GetTransportIdFromProxy(const std::string& proxy,
+                                             std::string* transport) {
+  // TODO(hta): Remove handling of empty proxy name once tests do not use it.
+  if (proxy.empty()) {
+    transport->clear();
+    return true;
+  }
+  if (proxy_to_transport_.find(proxy) == proxy_to_transport_.end()) {
+    LOG(LS_ERROR) << "No transport ID mapping for " << proxy;
+    return false;
+  }
+  std::ostringstream ost;
+  // Component 1 is always used for RTP.
+  ost << "Channel-" << proxy_to_transport_.at(proxy) << "-1";
+  *transport = ost.str();
+  return true;
+}
 
 }  // namespace webrtc

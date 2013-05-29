@@ -186,12 +186,12 @@ bool MacWindowPicker::GetDesktopList(DesktopDescriptionList* descriptions) {
     DesktopId id(active_displays[i], static_cast<int>(i));
     // TODO: Figure out an appropriate desktop title.
     DesktopDescription desc(id, "");
+    desc.set_primary(CGDisplayIsMain(id.id()));
     descriptions->push_back(desc);
   }
   return display_count > 0;
 }
 
-// TODO(dcaiafa): add dimensions to DesktopDescription. Remove it from picker.
 bool MacWindowPicker::GetDesktopDimensions(const DesktopId& id,
                                            int* width,
                                            int* height) {

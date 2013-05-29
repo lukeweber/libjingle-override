@@ -27,14 +27,14 @@
 
 #include "talk/media/base/cpuid.h"
 
-#ifdef HAVE_YUV
+#if !defined(DISABLE_YUV)
 #include "libyuv/cpu_id.h"
 #endif
 
 namespace cricket {
 
 bool CpuInfo::TestCpuFlag(int flag) {
-#ifdef HAVE_YUV
+#if !defined(DISABLE_YUV)
   return libyuv::TestCpuFlag(flag) ? true : false;
 #else
   return false;
@@ -42,14 +42,14 @@ bool CpuInfo::TestCpuFlag(int flag) {
 }
 
 void CpuInfo::MaskCpuFlagsForTest(int enable_flags) {
-#ifdef HAVE_YUV
+#if !defined(DISABLE_YUV)
   libyuv::MaskCpuFlags(enable_flags);
 #endif
 }
 
 // Detect an Intel Core I5 or better such as 4th generation Macbook Air.
 bool IsCoreIOrBetter() {
-#if defined(HAVE_YUV) && (defined(__i386__) || defined(__x86_64__) || \
+#if !defined(DISABLE_YUV) && (defined(__i386__) || defined(__x86_64__) || \
     defined(_M_IX86) || defined(_M_X64))
   int cpu_info[4];
   libyuv::CpuId(cpu_info, 0);  // Function 0: Vendor ID

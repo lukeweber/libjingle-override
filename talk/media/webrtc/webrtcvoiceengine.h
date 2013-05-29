@@ -259,6 +259,9 @@ class WebRtcVoiceEngine
                                   VoiceProcessor* voice_processor,
                                   MediaProcessorDirection processor_direction);
 
+  void StartAecDump(const std::string& filename);
+  void StopAecDump();
+
   // When a voice processor registers with the engine, it is connected
   // to either the Rx or Tx signals, based on the direction parameter.
   // SignalXXMediaFrame will be invoked for every audio packet.

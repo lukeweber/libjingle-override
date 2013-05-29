@@ -980,8 +980,10 @@ class FakeWebRtcVideoEngine
     }
     return 0;
   }
+#ifndef USE_WEBRTC_DEV_BRANCH
   WEBRTC_STUB_CONST(SetOverUseDetectorOptions,
       (const webrtc::OverUseDetectorOptions&));
+#endif
 
   WEBRTC_STUB(StartRTPDump, (const int, const char*, webrtc::RTPDirections));
   WEBRTC_STUB(StopRTPDump, (const int, webrtc::RTPDirections));
@@ -989,6 +991,10 @@ class FakeWebRtcVideoEngine
   WEBRTC_STUB(DeregisterRTPObserver, (const int));
   WEBRTC_STUB(RegisterRTCPObserver, (const int, webrtc::ViERTCPObserver&));
   WEBRTC_STUB(DeregisterRTCPObserver, (const int));
+#ifdef USE_WEBRTC_DEV_BRANCH
+  WEBRTC_STUB(SetSendAbsoluteSendTimeStatus, (int, bool, int));
+  WEBRTC_STUB(SetReceiveAbsoluteSendTimeStatus, (int, bool, int));
+#endif
 
   // webrtc::ViEImageProcess
   WEBRTC_STUB(RegisterCaptureEffectFilter, (const int,

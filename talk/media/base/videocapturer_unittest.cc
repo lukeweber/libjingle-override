@@ -229,7 +229,16 @@ TEST_F(VideoCapturerTest, TestHDResolutionMatch) {
                                cricket::VideoFormat::FpsToInterval(30),
                                cricket::FOURCC_ANY);
   cricket::VideoFormat best;
-  // Ask for 960x720. Get qHD
+  // Ask for 960x720 30 fps. Get qHD 24 fps
+  EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
+  EXPECT_EQ(960, best.width);
+  EXPECT_EQ(544, best.height);
+  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(24), best.interval);
+
+  desired.width = 960;
+  desired.height = 544;
+  desired.interval = cricket::VideoFormat::FpsToInterval(30);
+  // Ask for qHD 30 fps. Get qHD 24 fps
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
   EXPECT_EQ(960, best.width);
   EXPECT_EQ(544, best.height);
@@ -237,7 +246,8 @@ TEST_F(VideoCapturerTest, TestHDResolutionMatch) {
 
   desired.width = 360;
   desired.height = 250;
-  // Ask for a litter higher than QVGA. Get QVGA.
+  desired.interval = cricket::VideoFormat::FpsToInterval(30);
+  // Ask for a little higher than QVGA. Get QVGA.
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
   EXPECT_EQ(320, best.width);
   EXPECT_EQ(240, best.height);
@@ -269,10 +279,10 @@ TEST_F(VideoCapturerTest, TestHDResolutionMatch) {
 
   desired.width = 1280;
   desired.height = 720;
-  // Ask for HD. 720p fps is too low. Get qHD.
+  // Ask for HD. 720p fps is too low. Get VGA which has 30 fps.
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
-  EXPECT_EQ(960, best.width);
-  EXPECT_EQ(544, best.height);
+  EXPECT_EQ(640, best.width);
+  EXPECT_EQ(480, best.height);
   EXPECT_EQ(cricket::VideoFormat::FpsToInterval(24), best.interval);
 
   desired.width = 1280;
@@ -287,11 +297,11 @@ TEST_F(VideoCapturerTest, TestHDResolutionMatch) {
   desired.width = 1920;
   desired.height = 1080;
   desired.interval = cricket::VideoFormat::FpsToInterval(30);
-  // Ask for 1080p. Fps of HD formats is too low. Get qHD.
+  // Ask for 1080p. Fps of HD formats is too low. Get VGA which can do 30 fps.
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
-  EXPECT_EQ(960, best.width);
-  EXPECT_EQ(544, best.height);
-  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(24), best.interval);
+  EXPECT_EQ(640, best.width);
+  EXPECT_EQ(480, best.height);
+  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(30), best.interval);
 }
 
 // Some cameras support 320x240 and 320x640. Verify we choose 320x240.
@@ -356,10 +366,9 @@ TEST_F(VideoCapturerTest, TestPoorFpsFormats) {
   }
 
   // Increase framerate of 320x240. Expect low fps VGA avoided.
-  // Except on Mac, where QVGA is avoid due to aspect ratio.
   supported_formats.clear();
   supported_formats.push_back(cricket::VideoFormat(320, 240,
-      cricket::VideoFormat::FpsToInterval(24), cricket::FOURCC_I420));
+      cricket::VideoFormat::FpsToInterval(30), cricket::FOURCC_I420));
   supported_formats.push_back(cricket::VideoFormat(640, 480,
       cricket::VideoFormat::FpsToInterval(7), cricket::FOURCC_I420));
   supported_formats.push_back(cricket::VideoFormat(1280, 720,

@@ -52,6 +52,10 @@ class FakeDeviceManager;
 
 namespace {
 
+// Error return values
+const char kNotFound[] = "NOT FOUND";
+const char kNoReports[] = "NO REPORTS";
+
 class MockWebRtcSession : public webrtc::WebRtcSession {
  public:
   explicit MockWebRtcSession(cricket::ChannelManager* channel_manager)
@@ -60,6 +64,7 @@ class MockWebRtcSession : public webrtc::WebRtcSession {
   }
   MOCK_METHOD0(video_channel, cricket::VideoChannel*());
   MOCK_METHOD2(GetTrackIdBySsrc, bool(uint32, std::string*));
+  MOCK_METHOD1(GetStats, bool(cricket::SessionStats*));
 };
 
 class MockVideoMediaChannel : public cricket::FakeVideoMediaChannel {
@@ -67,6 +72,7 @@ class MockVideoMediaChannel : public cricket::FakeVideoMediaChannel {
   MockVideoMediaChannel()
     : cricket::FakeVideoMediaChannel(NULL) {
   }
+  // MOCK_METHOD0(transport_channel, cricket::TransportChannel*());
   MOCK_METHOD1(GetStats, bool(cricket::VideoMediaInfo*));
 };
 
@@ -74,7 +80,7 @@ std::string ExtractStatsValue(const std::string& type,
                               webrtc::StatsReports reports,
                               const std::string name) {
   if (reports.empty()) {
-    return "NO REPORTS";
+    return kNoReports;
   }
   for (size_t i = 0; i < reports.size(); ++i) {
     if (reports[i].type != type)
@@ -88,7 +94,7 @@ std::string ExtractStatsValue(const std::string& type,
     }
   }
 
-  return "NOT FOUND";
+  return kNotFound;
 }
 
 // Finds the |n|-th report of type |type| in |reports|.
@@ -101,6 +107,16 @@ const webrtc::StatsReport* FindNthReportByType(webrtc::StatsReports reports,
       n--;
       if (n == 0)
         return &reports[i];
+    }
+  }
+  return NULL;
+}
+
+const webrtc::StatsReport* FindReportById(webrtc::StatsReports reports,
+                                          const std::string& id) {
+  for (size_t i = 0; i < reports.size(); ++i) {
+    if (reports[i].id == id) {
+      return &reports[i];
     }
   }
   return NULL;
@@ -127,6 +143,8 @@ class StatsCollectorTest : public testing::Test {
                                       new cricket::FakeDeviceManager(),
                                       talk_base::Thread::Current())),
       session_(channel_manager_.get()) {
+    // By default, we ignore session GetStats calls.
+    EXPECT_CALL(session_, GetStats(_)).WillRepeatedly(Return(false));
   }
 
   cricket::FakeMediaEngine* media_engine_;
@@ -289,7 +307,7 @@ TEST_F(StatsCollectorTest, TrackObjectExistsWithoutUpdateStats) {
 }
 
 // This test verifies that the empty track report exists in the returned stats
-// when StastCollector::UpdateStats is called with ssrc stats.
+// when StatsCollector::UpdateStats is called with ssrc stats.
 TEST_F(StatsCollectorTest, TrackAndSsrcObjectExistAfterUpdateSsrcStats) {
   webrtc::StatsCollector stats;  // Implementation under test.
   MockVideoMediaChannel* media_channel = new MockVideoMediaChannel;
@@ -312,7 +330,6 @@ TEST_F(StatsCollectorTest, TrackAndSsrcObjectExistAfterUpdateSsrcStats) {
   cricket::VideoMediaInfo stats_read;
   const uint32 kSsrcOfTrack = 1234;
   const int64 kBytesSent = 12345678901234LL;
-  const std::string kBytesSentString("12345678901234");
 
   // Construct a stats value to read.
   video_sender_info.ssrcs.push_back(1234);
@@ -352,6 +369,74 @@ TEST_F(StatsCollectorTest, TrackAndSsrcObjectExistAfterUpdateSsrcStats) {
   std::string track_id = ExtractSsrcStatsValue(
       reports, webrtc::StatsReport::kStatsValueNameTrackId);
   EXPECT_EQ(kTrackId, track_id);
+}
+
+// This test verifies that an SSRC object has the identifier of a Transport
+// stats object, and that this transport stats object exists in stats.
+TEST_F(StatsCollectorTest, TransportObjectLinkedFromSsrcObject) {
+  webrtc::StatsCollector stats;  // Implementation under test.
+  MockVideoMediaChannel* media_channel = new MockVideoMediaChannel;
+  // The content_name known by the video channel.
+  const std::string kVcName("vcname");
+  cricket::VideoChannel video_channel(talk_base::Thread::Current(),
+      media_engine_, media_channel, &session_, kVcName, false, NULL);
+  const std::string kTrackId("somename");
+  talk_base::scoped_refptr<webrtc::MediaStream> stream(
+      webrtc::MediaStream::Create("streamlabel"));
+  talk_base::scoped_refptr<webrtc::VideoTrack> track =
+      webrtc::VideoTrack::Create(kTrackId, NULL);
+  stream->AddTrack(track);
+  stats.AddStream(stream);
+
+  stats.set_session(&session_);
+
+  webrtc::StatsReports reports;
+
+  // Constructs an ssrc stats update.
+  cricket::VideoSenderInfo video_sender_info;
+  cricket::VideoMediaInfo stats_read;
+  const uint32 kSsrcOfTrack = 1234;
+  const int64 kBytesSent = 12345678901234LL;
+
+  // Construct a stats value to read.
+  video_sender_info.ssrcs.push_back(1234);
+  video_sender_info.bytes_sent = kBytesSent;
+  stats_read.senders.push_back(video_sender_info);
+
+  EXPECT_CALL(session_, video_channel())
+    .WillRepeatedly(Return(&video_channel));
+  EXPECT_CALL(*media_channel, GetStats(_))
+    .WillRepeatedly(DoAll(SetArgPointee<0>(stats_read),
+                          Return(true)));
+  EXPECT_CALL(session_, GetTrackIdBySsrc(kSsrcOfTrack, _))
+    .WillOnce(DoAll(SetArgPointee<1>(kTrackId),
+                    Return(true)));
+
+  // Instruct the session to return stats containing the transport channel.
+  const std::string kTransportName("trspname");
+  cricket::SessionStats session_stats;
+  cricket::TransportStats transport_stats;
+  cricket::TransportChannelStats channel_stats;
+  channel_stats.component = 1;
+  transport_stats.content_name = kTransportName;
+  transport_stats.channel_stats.push_back(channel_stats);
+
+  session_stats.transport_stats[kTransportName] = transport_stats;
+  session_stats.proxy_to_transport[kVcName] = kTransportName;
+  EXPECT_CALL(session_, GetStats(_))
+    .WillRepeatedly(DoAll(SetArgPointee<0>(session_stats),
+                          Return(true)));
+
+  stats.UpdateStats();
+  stats.GetStats(NULL, &reports);
+  std::string transport_id = ExtractStatsValue(
+      webrtc::StatsReport::kStatsReportTypeSsrc,
+      reports,
+      webrtc::StatsReport::kStatsValueNameTransportId);
+  ASSERT_NE(kNotFound, transport_id);
+  const webrtc::StatsReport* transport_report = FindReportById(reports,
+                                                               transport_id);
+  ASSERT_FALSE(transport_report == NULL);
 }
 
 }  // namespace

@@ -30,7 +30,7 @@
 
 #include <string>
 #include <vector>
-#ifdef HAVE_YUV
+#if !defined(DISABLE_YUV)
 #include "libyuv/compare.h"
 #endif
 #include "talk/base/basictypes.h"
@@ -184,7 +184,7 @@ std::string GetTestFilePath(const std::string& filename);
 // PSNR formula: psnr = 10 * log10 (Peak Signal^2 / mse)
 // sse is set to a small number for identical frames or sse == 0
 static inline double ComputePSNR(double sse, double count) {
-#ifdef HAVE_YUV
+#if !defined(DISABLE_YUV)
   return libyuv::SumSquareErrorToPsnr(static_cast<uint64>(sse),
                                       static_cast<uint64>(count));
 #else
@@ -196,7 +196,7 @@ static inline double ComputePSNR(double sse, double count) {
 
 static inline double ComputeSumSquareError(const uint8 *org, const uint8 *rec,
                                            int size) {
-#ifdef HAVE_YUV
+#if !defined(DISABLE_YUV)
   return static_cast<double>(libyuv::ComputeSumSquareError(org, rec, size));
 #else
   double sse = 0.;

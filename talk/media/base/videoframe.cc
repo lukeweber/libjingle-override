@@ -29,7 +29,7 @@
 
 #include <cstring>
 
-#ifdef HAVE_YUV
+#if !defined(DISABLE_YUV)
 #include "libyuv/compare.h"
 #include "libyuv/planar_functions.h"
 #include "libyuv/scale.h"
@@ -88,7 +88,7 @@ void VideoFrame::StretchToPlanes(
     uint8* dst_y, uint8* dst_u, uint8* dst_v,
     int32 dst_pitch_y, int32 dst_pitch_u, int32 dst_pitch_v,
     size_t width, size_t height, bool interpolate, bool vert_crop) const {
-#ifdef HAVE_YUV
+#if !defined(DISABLE_YUV)
   if (!GetYPlane() || !GetUPlane() || !GetVPlane())
     return;
 
@@ -125,7 +125,7 @@ void VideoFrame::StretchToPlanes(
                 dst_y, dst_u, dst_v, dst_pitch_y, dst_pitch_u, dst_pitch_v,
                 width, height, interpolate);
 #else
-  ASSERT(false);  // Scaling requested but is not implemented.  Enable HAVE_YUV.
+  ASSERT(false);  // Scaling requested but is not implemented.
 #endif
 }
 
@@ -170,7 +170,7 @@ VideoFrame* VideoFrame::Stretch(size_t dst_width, size_t dst_height,
 }
 
 bool VideoFrame::SetToBlack() {
-#ifdef HAVE_YUV
+#if !defined(DISABLE_YUV)
   return libyuv::I420Rect(GetYPlane(), GetYPitch(),
                           GetUPlane(), GetUPitch(),
                           GetVPlane(), GetVPitch(),

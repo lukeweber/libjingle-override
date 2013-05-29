@@ -28,12 +28,15 @@
 package org.appspot.apprtc;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Point;
 import android.media.AudioManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import org.json.JSONException;
@@ -110,14 +113,34 @@ public class AppRTCDemoActivity extends Activity
         "OfferToReceiveVideo", "true"));
 
     final Intent intent = getIntent();
-    if (!intent.getAction().equals("android.intent.action.VIEW")) {
-      logAndToast("AppRTC must be launched via an intent opening a room URL " +
-          "such as https://apprtc.appspot.com/?r=...  Exiting.");
-      disconnectAndExit();
+    if ("android.intent.action.VIEW".equals(intent.getAction())) {
+      connectToRoom(intent.getData().toString());
       return;
     }
-    appRtcClient.connectToRoom(intent.getData().toString());
+    showGetRoomUI();
+  }
+
+  private void showGetRoomUI() {
+    final EditText roomInput = new EditText(this);
+    roomInput.setText("https://apprtc.appspot.com/?r=");
+    roomInput.setSelection(roomInput.getText().length());
+    DialogInterface.OnClickListener listener =
+        new DialogInterface.OnClickListener() {
+          @Override public void onClick(DialogInterface dialog, int which) {
+            abortUnless(which == DialogInterface.BUTTON_POSITIVE, "lolwat?");
+            dialog.dismiss();
+            connectToRoom(roomInput.getText().toString());
+          }
+        };
+    AlertDialog.Builder builder = new AlertDialog.Builder(this);
+    builder
+        .setMessage("Enter room URL").setView(roomInput)
+        .setPositiveButton("Go!", listener).show();
+  }
+
+  private void connectToRoom(String roomUrl) {
     logAndToast("Connecting to room...");
+    appRtcClient.connectToRoom(roomUrl);
   }
 
   @Override
@@ -174,13 +197,7 @@ public class AppRTCDemoActivity extends Activity
 
     {
       logAndToast("Creating local video source...");
-      VideoCapturer capturer =
-          VideoCapturer.create("Camera 1, Facing front, Orientation 270");
-      if (capturer == null) {
-        capturer =
-            VideoCapturer.create("Camera 0, Facing front, Orientation 270");
-      }
-      abortUnless(capturer != null, "Failed to open capturer");
+      VideoCapturer capturer = getVideoCapturer();
       VideoSource videoSource = factory.createVideoSource(
           capturer, new MediaConstraints());
       MediaStream lMS = factory.createLocalMediaStream("ARDAMS");
@@ -192,6 +209,28 @@ public class AppRTCDemoActivity extends Activity
       pc.addStream(lMS, new MediaConstraints());
     }
     logAndToast("Waiting for ICE candidates...");
+  }
+
+  // Cycle through likely device names for the camera and return the first
+  // capturer that works, or crash if none do.
+  private VideoCapturer getVideoCapturer() {
+    String[] cameraFacing = { "front", "back" };
+    int[] cameraIndex = { 0, 1 };
+    int[] cameraOrientation = { 0, 90, 180, 270 };
+    for (String facing : cameraFacing) {
+      for (int index : cameraIndex) {
+        for (int orientation : cameraOrientation) {
+          String name = "Camera " + index + ", Facing " + facing +
+              ", Orientation " + orientation;
+          VideoCapturer capturer = VideoCapturer.create(name);
+          if (capturer != null) {
+            logAndToast("Using camera: " + name);
+            return capturer;
+          }
+        }
+      }
+    }
+    throw new RuntimeException("Failed to open capturer");
   }
 
   @Override
@@ -289,7 +328,7 @@ public class AppRTCDemoActivity extends Activity
   // Implementation detail: handle offer creation/signaling and answer setting,
   // as well as adding remote ICE candidates once the answer SDP is set.
   private class SDPObserver implements SdpObserver {
-    @Override public void onSuccess(final SessionDescription sdp) {
+    @Override public void onCreateSuccess(final SessionDescription sdp) {
       runOnUiThread(new Runnable() {
           public void run() {
             logAndToast("Sending " + sdp.type);
@@ -302,7 +341,7 @@ public class AppRTCDemoActivity extends Activity
         });
     }
 
-    @Override public void onSuccess() {
+    @Override public void onSetSuccess() {
       runOnUiThread(new Runnable() {
           public void run() {
             if (appRtcClient.isInitiator()) {
@@ -326,10 +365,18 @@ public class AppRTCDemoActivity extends Activity
         });
     }
 
-    @Override public void onFailure(final String error) {
+    @Override public void onCreateFailure(final String error) {
       runOnUiThread(new Runnable() {
           public void run() {
-            throw new RuntimeException("SDP error: " + error);
+            throw new RuntimeException("createSDP error: " + error);
+          }
+        });
+    }
+
+    @Override public void onSetFailure(final String error) {
+      runOnUiThread(new Runnable() {
+          public void run() {
+            throw new RuntimeException("setSDP error: " + error);
           }
         });
     }

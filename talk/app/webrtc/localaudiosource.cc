@@ -49,6 +49,7 @@ const char MediaConstraintsInterface::kNoiseSuppression[] =
     "googNoiseSuppression";
 const char MediaConstraintsInterface::kHighpassFilter[] =
     "googHighpassFilter";
+const char MediaConstraintsInterface::kInternalAecDump[] = "internalAecDump";
 
 namespace {
 
@@ -82,6 +83,8 @@ bool FromConstraints(const MediaConstraintsInterface::Constraints& constraints,
       options->noise_suppression.Set(value);
     else if (iter->key == MediaConstraintsInterface::kHighpassFilter)
       options->highpass_filter.Set(value);
+    else if (iter->key == MediaConstraintsInterface::kInternalAecDump)
+      options->aec_dump.Set(value);
     else
       success = false;
   }

@@ -237,17 +237,21 @@ public class PeerConnectionTest extends TestCase {
 
     public SdpObserverLatch() {}
 
-    public void onSuccess() {
+    public void onCreateSuccess(SessionDescription sdp) {
+      this.sdp = sdp;
+      onSetSuccess();
+    }
+
+    public void onSetSuccess() {
       success = true;
       latch.countDown();
     }
 
-    public void onSuccess(SessionDescription sdp) {
-      this.sdp = sdp;
-      onSuccess();
+    public void onCreateFailure(String error) {
+      onSetFailure(error);
     }
 
-    public void onFailure(String error) {
+    public void onSetFailure(String error) {
       this.error = error;
       latch.countDown();
     }

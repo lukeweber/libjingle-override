@@ -40,5 +40,16 @@ TEST(WindowPickerTest, DISABLE_ON_MAC(GetDesktopList)) {
                                              &height));
     EXPECT_GT(width, 0);
     EXPECT_GT(height, 0);
+
+    // Test |IsPrimaryDesktop|. Only one desktop should be a primary.
+    bool found_primary = false;
+    for (talk_base::DesktopDescriptionList::iterator it = descriptions.begin();
+         it != descriptions.end(); ++it) {
+      if (it->primary()) {
+        EXPECT_FALSE(found_primary);
+        found_primary = true;
+      }
+    }
+    EXPECT_TRUE(found_primary);
   }
 }

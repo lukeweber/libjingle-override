@@ -194,9 +194,7 @@ int VideoAdapter::GetOutputNumPixels() const {
 bool VideoAdapter::AdaptFrame(const VideoFrame* in_frame,
                               const VideoFrame** out_frame) {
   talk_base::CritScope cs(&critical_section_);
-  // TODO(fbarchard): Remove this once video mute is reimplented.
-  if (!in_frame || !out_frame ||
-      (input_format_.IsSize0x0() && output_num_pixels_ != INT_MAX)) {
+  if (!in_frame || !out_frame) {
     return false;
   }
   // Drop the input frame if necessary.

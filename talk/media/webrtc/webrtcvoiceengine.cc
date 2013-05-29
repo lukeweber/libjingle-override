@@ -512,12 +512,7 @@ void WebRtcVoiceEngine::Terminate() {
   LOG(LS_INFO) << "WebRtcVoiceEngine::Terminate";
   initialized_ = false;
 
-  if (is_dumping_aec_) {
-    if (voe_wrapper_->processing()->StopDebugRecording() == -1) {
-      LOG_RTCERR0(StopDebugRecording);
-    }
-    is_dumping_aec_ = false;
-  }
+  StopAecDump();
 
   voe_wrapper_sc_->base()->Terminate();
   voe_wrapper_->base()->Terminate();
@@ -569,6 +564,7 @@ bool WebRtcVoiceEngine::SetOptions(int flags) {
   // them when we clear overrides.
   options.conference_mode.Set(false);
   options.adjust_agc_delta.Set(0);
+  options.aec_dump.Set(false);
 
   return SetAudioOptions(options);
 }
@@ -711,6 +707,16 @@ bool WebRtcVoiceEngine::ApplyOptions(const AudioOptions& options_in) {
       LOG_RTCERR1(SetConferenceMode, conference_mode);
       return false;
     }
+  }
+
+  bool aec_dump;
+  if (options.aec_dump.Get(&aec_dump)) {
+    // TODO(grunell): Use a string in the options instead and let the embedder
+    // choose the filename.
+    if (aec_dump)
+      StartAecDump("audio.aecdump");
+    else
+      StopAecDump();
   }
 
   return true;
@@ -1059,21 +1065,10 @@ void WebRtcVoiceEngine::SetTraceOptions(const std::string& options) {
       std::find(opts.begin(), opts.end(), "recordEC");
   if (recordEC != opts.end()) {
     ++recordEC;
-    if (recordEC != opts.end() && !is_dumping_aec_) {
-      // Start dumping AEC when we are not dumping and recordEC has a filename.
-      if (voe_wrapper_->processing()->StartDebugRecording(
-          recordEC->c_str()) == -1) {
-        LOG_RTCERR0(StartDebugRecording);
-      } else {
-        is_dumping_aec_ = true;
-      }
-    } else if (recordEC == opts.end() && is_dumping_aec_) {
-      // Stop dumping EC when we are dumping and recordEC has no filename.
-      if (voe_wrapper_->processing()->StopDebugRecording() == -1) {
-        LOG_RTCERR0(StopDebugRecording);
-      }
-      is_dumping_aec_ = false;
-    }
+    if (recordEC != opts.end())
+      StartAecDump(recordEC->c_str());
+    else
+      StopAecDump();
   }
 }
 
@@ -1465,6 +1460,29 @@ void WebRtcVoiceEngine::Process(const int channel,
                       << " tx_ssrc: " << tx_processor_ssrc_
                       << " rx_ssrc: " << rx_processor_ssrc_;
     }
+}
+
+void WebRtcVoiceEngine::StartAecDump(const std::string& filename) {
+  if (!is_dumping_aec_) {
+    // Start dumping AEC when we are not dumping.
+    if (voe_wrapper_->processing()->StartDebugRecording(
+        filename.c_str()) != webrtc::AudioProcessing::kNoError) {
+      LOG_RTCERR0(StartDebugRecording);
+    } else {
+      is_dumping_aec_ = true;
+    }
+  }
+}
+
+void WebRtcVoiceEngine::StopAecDump() {
+  if (is_dumping_aec_) {
+    // Stop dumping AEC when we are dumping.
+    if (voe_wrapper_->processing()->StopDebugRecording() !=
+        webrtc::AudioProcessing::kNoError) {
+      LOG_RTCERR0(StopDebugRecording);
+    }
+    is_dumping_aec_ = false;
+  }
 }
 
 // WebRtcVoiceMediaChannel

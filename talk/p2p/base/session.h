@@ -188,9 +188,10 @@ typedef std::map<std::string, TransportProxy*> TransportMap;
 
 // Statistics for all the transports of this session.
 typedef std::map<std::string, TransportStats> TransportStatsMap;
+typedef std::map<std::string, std::string> ProxyTransportMap;
 
 struct SessionStats {
-  std::map<std::string, std::string> proxy_to_transport;
+  ProxyTransportMap proxy_to_transport;
   TransportStatsMap transport_stats;
 };
 

@@ -67,7 +67,10 @@ class StatsCollector {
 
   WebRtcSession* session() { return session_; }
   // Prepare an SSRC report for the given ssrc. Used internally.
-  StatsReport* PrepareReport(uint32 ssrc);
+  StatsReport* PrepareReport(uint32 ssrc, const std::string& transport);
+  // Extracts the ID of a Transport belonging to an SSRC. Used internally.
+  bool GetTransportIdFromProxy(const std::string& proxy,
+                               std::string* transport_id);
 
  private:
   bool CopySelectedReports(const std::string& selector, StatsReports* reports);
@@ -76,6 +79,7 @@ class StatsCollector {
   void ExtractVoiceInfo();
   void ExtractVideoInfo();
   double GetTimeNow();
+  void BuildSsrcToTransportId();
 
   // A map from the report id to the report.
   std::map<std::string, webrtc::StatsReport> reports_;
@@ -83,6 +87,7 @@ class StatsCollector {
   WebRtcSession* session_;
   double stats_gathering_started_;
   talk_base::Timing timing_;
+  cricket::ProxyTransportMap proxy_to_transport_;
 };
 
 }  // namespace webrtc

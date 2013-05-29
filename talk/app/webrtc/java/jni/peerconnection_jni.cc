@@ -209,8 +209,8 @@ static ClassReferenceHolder* g_class_reference_holder = NULL;
 // JNIEnv-helper methods that CHECK success: no Java exception thrown and found
 // object/class/method/field is non-null.
 jmethodID GetMethodID(
-    JNIEnv* jni, jclass c, const char* name, const char* signature) {
-  jmethodID m = jni->GetMethodID(c, name, signature);
+    JNIEnv* jni, jclass c, const std::string& name, const char* signature) {
+  jmethodID m = jni->GetMethodID(c, name.c_str(), signature);
   CHECK_EXCEPTION(jni,
                   "error during GetMethodID: " << name << ", " << signature);
   CHECK(m, name << ", " << signature);
@@ -640,23 +640,26 @@ class SdpObserverWrapper : public T {
   }
 
   virtual void OnSuccess() {
-    jmethodID m = GetMethodID(jni(), j_observer_class_, "onSuccess", "()V");
+    jmethodID m = GetMethodID(jni(), j_observer_class_, "onSetSuccess", "()V");
     jni()->CallVoidMethod(j_observer_global_, m);
     CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
   virtual void OnSuccess(SessionDescriptionInterface* desc) {
     jmethodID m = GetMethodID(
-        jni(), j_observer_class_, "onSuccess",
+        jni(), j_observer_class_, "onCreateSuccess",
         "(Lorg/webrtc/SessionDescription;)V");
     ScopedLocalRef<jobject> j_sdp(jni(), JavaSdpFromNativeSdp(jni(), desc));
     jni()->CallVoidMethod(j_observer_global_, m, *j_sdp);
     CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
-  virtual void OnFailure(const std::string& error) {
+ protected:
+  // Common implementation for failure of Set & Create types, distinguished by
+  // |op| being "Set" or "Create".
+  void OnFailure(const std::string& op, const std::string& error) {
     jmethodID m = GetMethodID(jni(),
-        j_observer_class_, "onFailure", "(Ljava/lang/String;)V");
+        j_observer_class_, "on" + op + "Failure", "(Ljava/lang/String;)V");
     ScopedLocalRef<jstring> j_error_string(
         jni(), JavaStringFromStdString(jni(), error));
     jni()->CallVoidMethod(j_observer_global_, m, *j_error_string);
@@ -673,9 +676,29 @@ class SdpObserverWrapper : public T {
   const jclass j_observer_class_;
 };
 
-typedef SdpObserverWrapper<CreateSessionDescriptionObserver>
-    CreateSdpObserverWrapper;
-typedef SdpObserverWrapper<SetSessionDescriptionObserver> SetSdpObserverWrapper;
+class CreateSdpObserverWrapper
+    : public SdpObserverWrapper<CreateSessionDescriptionObserver> {
+ public:
+  CreateSdpObserverWrapper(JNIEnv* jni, jobject j_observer,
+                           ConstraintsWrapper* constraints)
+      : SdpObserverWrapper(jni, j_observer, constraints) {}
+
+  virtual void OnFailure(const std::string& error) {
+    SdpObserverWrapper::OnFailure(std::string("Create"), error);
+  }
+};
+
+class SetSdpObserverWrapper
+    : public SdpObserverWrapper<SetSessionDescriptionObserver> {
+ public:
+  SetSdpObserverWrapper(JNIEnv* jni, jobject j_observer,
+                        ConstraintsWrapper* constraints)
+      : SdpObserverWrapper(jni, j_observer, constraints) {}
+
+  virtual void OnFailure(const std::string& error) {
+    SdpObserverWrapper::OnFailure(std::string("Set"), error);
+  }
+};
 
 // Adapter for a Java StatsObserver presenting a C++ StatsObserver and
 // dispatching the callback from C++ back to Java.

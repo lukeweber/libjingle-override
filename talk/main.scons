@@ -381,7 +381,7 @@ if 'NSS_BUILD_PLATFORM' in root_env['ENV']:
                                       'NSS_SSL_RELATIVE_PATH'])
 else:
    posix_env.AppendUnique(CPPDEFINES=['HAVE_OPENSSL_SSL_H=1'])
- 
+
 
 #-------------------------------------------------------------------------------
 # M A C OSX
@@ -436,7 +436,7 @@ if 'NSS_BUILD_PLATFORM' in root_env['ENV']:
   mac_env.AppendUnique(LINKFLAGS = ['-Lthird_party/mozilla/dist/' + root_env['ENV']['NSS_BUILD_PLATFORM'] + '/lib'])
 else:
   mac_env.AppendUnique(LINKFLAGS = ['-Lthird_party/openssl'])
-                       
+
 
 # add debug flags to environment
 def mac_debug_include(env):

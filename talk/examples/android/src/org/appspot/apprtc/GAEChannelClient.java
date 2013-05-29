@@ -65,7 +65,7 @@ public class GAEChannelClient {
   /** Asynchronously open an AppEngine channel. */
   @SuppressLint("SetJavaScriptEnabled")
   public GAEChannelClient(
-      Activity activity, String gaeUrl, MessageHandler handler) {
+      Activity activity, String token, MessageHandler handler) {
     webView = new WebView(activity);
     webView.getSettings().setJavaScriptEnabled(true);
     webView.setWebChromeClient(new WebChromeClient() {  // Purely for debugging.
@@ -86,7 +86,7 @@ public class GAEChannelClient {
     proxyingMessageHandler = new ProxyingMessageHandler(activity, handler);
     webView.addJavascriptInterface(
         proxyingMessageHandler, "androidMessageHandler");
-    webView.loadUrl(gaeUrl);
+    webView.loadUrl("file:///android_asset/channel.html?token=" + token);
   }
 
   /** Close the connection to the AppEngine channel. */
