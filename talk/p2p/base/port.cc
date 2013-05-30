@@ -502,7 +502,7 @@ bool Port::MaybeIceRoleConflict(
     case ROLE_CONTROLLING:
       if (ROLE_CONTROLLING == remote_ice_role) {
         if (remote_tiebreaker >= tiebreaker_) {
-          SignalRoleConflict();
+          SignalRoleConflict(this);
         } else {
           // Send Role Conflict (487) error response.
           SendBindingErrorResponse(stun_msg, addr,
@@ -514,7 +514,7 @@ bool Port::MaybeIceRoleConflict(
     case ROLE_CONTROLLED:
       if (ROLE_CONTROLLED == remote_ice_role) {
         if (remote_tiebreaker < tiebreaker_) {
-          SignalRoleConflict();
+          SignalRoleConflict(this);
         } else {
           // Send Role Conflict (487) error response.
           SendBindingErrorResponse(stun_msg, addr,
@@ -1261,7 +1261,7 @@ void Connection::CheckTimeout() {
 }
 
 void Connection::HandleRoleConflictFromPeer() {
-  port_->SignalRoleConflict();
+  port_->SignalRoleConflict(port_);
 }
 
 void Connection::OnMessage(talk_base::Message *pmsg) {

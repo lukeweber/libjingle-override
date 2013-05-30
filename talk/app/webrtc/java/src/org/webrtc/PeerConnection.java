@@ -81,18 +81,25 @@ public class PeerConnection {
     public void onRemoveStream(MediaStream stream);
   }
 
-  /** Java version of JsepInterface.IceServer. */
+  /** Java version of PeerConnectionInterface.IceServer. */
   public static class IceServer {
     public final String uri;
+    public final String username;
     public final String password;
 
-    public IceServer(String uri, String password) {
+    /** Convenience constructor for STUN servers. */
+    public IceServer(String uri) {
+      this(uri, "", "");
+    }
+
+    public IceServer(String uri, String username, String password) {
       this.uri = uri;
+      this.username = username;
       this.password = password;
     }
 
     public String toString() {
-      return uri + "[" + password + "]";
+      return uri + "[" + username + ":" + password + "]";
     }
   }
 

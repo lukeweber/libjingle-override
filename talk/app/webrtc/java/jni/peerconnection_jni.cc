@@ -1076,14 +1076,19 @@ static void JavaIceServersToJsepIceServers(
     jclass j_ice_server_class = GetObjectClass(jni, j_ice_server);
     jfieldID j_ice_server_uri_id =
         GetFieldID(jni, j_ice_server_class, "uri", "Ljava/lang/String;");
+    jfieldID j_ice_server_username_id =
+        GetFieldID(jni, j_ice_server_class, "username", "Ljava/lang/String;");
     jfieldID j_ice_server_password_id =
         GetFieldID(jni, j_ice_server_class, "password", "Ljava/lang/String;");
     jstring uri = reinterpret_cast<jstring>(
         GetObjectField(jni, j_ice_server, j_ice_server_uri_id));
+    jstring username = reinterpret_cast<jstring>(
+        GetObjectField(jni, j_ice_server, j_ice_server_username_id));
     jstring password = reinterpret_cast<jstring>(
         GetObjectField(jni, j_ice_server, j_ice_server_password_id));
     PeerConnectionInterface::IceServer server;
     server.uri = JavaToStdString(jni, uri);
+    server.username = JavaToStdString(jni, username);
     server.password = JavaToStdString(jni, password);
     ice_servers->push_back(server);
   }

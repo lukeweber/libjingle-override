@@ -218,18 +218,8 @@ public class AppRTCClient {
     // want to interop with apprtc).
     private AppRTCSignalingParameters getParametersForRoomUrl(String url)
         throws IOException {
-      final Pattern tokenPattern = Pattern.compile(
-          ".*\n *openChannel\\('([^']*)'\\);\n.*");
-      final Pattern postMessagePattern = Pattern.compile(
-          ".*\n *path = '/(message\\?r=.+)' \\+ '(&u=[0-9]+)';\n.*");
       final Pattern fullRoomPattern = Pattern.compile(
           ".*\n *Sorry, this room is full\\..*");
-      final Pattern pcConfigPattern = Pattern.compile(
-          ".*\n *var pc_config = (\\{[^\n]*\\});\n.*");
-      final Pattern requestTurnPattern = Pattern.compile(
-          ".*\n *requestTurn\\('([^\n]*)'\\);\n.*");
-      final Pattern initiatorPattern = Pattern.compile(
-          ".*\n *var initiator = ([01]);\n.*");
 
       String roomHtml =
           drainStream((new URL(url)).openConnection().getInputStream());
@@ -240,35 +230,13 @@ public class AppRTCClient {
       }
 
       String gaeBaseHref = url.substring(0, url.indexOf('?'));
-
-      Matcher tokenMatcher = tokenPattern.matcher(roomHtml);
-      if (!tokenMatcher.find()) {
-        throw new IOException("Missing channel token in HTML: " + roomHtml);
-      }
-      String token = tokenMatcher.group(1);
-      if (tokenMatcher.find()) {
-        throw new IOException("Too many channel tokens in HTML: " + roomHtml);
-      }
-
-      Matcher postMessageMatcher = postMessagePattern.matcher(roomHtml);
-      if (!postMessageMatcher.find()) {
-        throw new IOException("Missing postMessage URL in HTML: " + roomHtml);
-      }
-      String postMessageUrl =
-          postMessageMatcher.group(1) + postMessageMatcher.group(2);
-      if (postMessageMatcher.find()) {
-        throw new IOException("Too many postMessage URLs in HTML: " + roomHtml);
-      }
-
-      Matcher pcConfigMatcher = pcConfigPattern.matcher(roomHtml);
-      if (!pcConfigMatcher.find()) {
-        throw new IOException("Missing pc_config in HTML: " + roomHtml);
-      }
+      String token = getVarValue(roomHtml, "channelToken", true);
+      String postMessageUrl = "/message?r=" +
+          getVarValue(roomHtml, "roomKey", true) + "&u=" +
+          getVarValue(roomHtml, "me", true);
+      boolean initiator = getVarValue(roomHtml, "initiator", false).equals("1");
       LinkedList<PeerConnection.IceServer> iceServers =
-          iceServersFromPCConfigJSON(pcConfigMatcher.group(1));
-      if (pcConfigMatcher.find()) {
-        throw new IOException("Too many pc_configs in HTML: " + roomHtml);
-      }
+          iceServersFromPCConfigJSON(getVarValue(roomHtml, "pcConfig", false));
 
       boolean isTurnPresent = false;
       for (PeerConnection.IceServer server : iceServers) {
@@ -278,29 +246,33 @@ public class AppRTCClient {
         }
       }
       if (!isTurnPresent) {
-        Matcher requestTurnMatcher = requestTurnPattern.matcher(roomHtml);
-        if (!requestTurnMatcher.find()) {
-          throw new IOException("Missing requestTurn() in HTML: " + roomHtml);
-        }
-        String requestTurnUrl = requestTurnMatcher.group(1);
-        PeerConnection.IceServer server = requestTurnServer(requestTurnUrl);
-        iceServers.add(server);
-        if (requestTurnMatcher.find()) {
-          throw new IOException("Too many requestTurn()s in HTML: " + roomHtml);
-        }
-      }
-
-      Matcher initiatorMatcher = initiatorPattern.matcher(roomHtml);
-      if (!initiatorMatcher.find()) {
-        throw new IOException("Missing initiator in HTML: " + roomHtml);
-      }
-      boolean initiator = initiatorMatcher.group(1).equals("1");
-      if (initiatorMatcher.find()) {
-        throw new IOException("Too many initiators in HTML: " + roomHtml);
+        iceServers.add(
+            requestTurnServer(getVarValue(roomHtml, "turnUrl", true)));
       }
 
       return new AppRTCSignalingParameters(
           iceServers, gaeBaseHref, token, postMessageUrl, initiator);
+    }
+
+    // Scan |roomHtml| for declaration & assignment of |varName| and return its
+    // value, optionally stripping outside quotes if |stripQuotes| requests it.
+    private String getVarValue(
+        String roomHtml, String varName, boolean stripQuotes)
+        throws IOException {
+      final Pattern pattern = Pattern.compile(
+          ".*\n *var " + varName + " = ([^\n]*);\n.*");
+      Matcher matcher = pattern.matcher(roomHtml);
+      if (!matcher.find()) {
+        throw new IOException("Missing " + varName + " in HTML: " + roomHtml);
+      }
+      String varValue = matcher.group(1);
+      if (matcher.find()) {
+        throw new IOException("Too many " + varName + " in HTML: " + roomHtml);
+      }
+      if (stripQuotes) {
+        varValue = varValue.substring(1, varValue.length() - 1);
+      }
+      return varValue;
     }
 
     // Requests & returns a TURN ICE Server based on a request URL.  Must be run
@@ -312,11 +284,10 @@ public class AppRTCClient {
         connection.addRequestProperty("origin", "https://apprtc.appspot.com");
         String response = drainStream(connection.getInputStream());
         JSONObject responseJSON = new JSONObject(response);
+        String uri = responseJSON.getJSONArray("uris").getString(0);
         String username = responseJSON.getString("username");
-        String turnServer = responseJSON.getString("turn");
         String password = responseJSON.getString("password");
-        return new PeerConnection.IceServer(
-            "turn:" + username + "@" + turnServer, password);
+        return new PeerConnection.IceServer(uri, username, password);
       } catch (JSONException e) {
         throw new RuntimeException(e);
       } catch (IOException e) {
@@ -339,7 +310,7 @@ public class AppRTCClient {
         String url = server.getString("url");
         String credential =
             server.has("credential") ? server.getString("credential") : "";
-        ret.add(new PeerConnection.IceServer(url, credential));
+        ret.add(new PeerConnection.IceServer(url, "", credential));
       }
       return ret;
     } catch (JSONException e) {

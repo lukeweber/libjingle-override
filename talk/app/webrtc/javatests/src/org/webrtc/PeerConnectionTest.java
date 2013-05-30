@@ -348,7 +348,9 @@ public class PeerConnectionTest extends TestCase {
     LinkedList<PeerConnection.IceServer> iceServers =
         new LinkedList<PeerConnection.IceServer>();
     iceServers.add(new PeerConnection.IceServer(
-        "stun:stun.l.google.com:19302", ""));
+        "stun:stun.l.google.com:19302"));
+    iceServers.add(new PeerConnection.IceServer(
+        "turn:fake.example.com", "fakeUsername", "fakePassword"));
     ObserverExpectations offeringExpectations = new ObserverExpectations();
     PeerConnection offeringPC = factory.createPeerConnection(
         iceServers, constraints, offeringExpectations);

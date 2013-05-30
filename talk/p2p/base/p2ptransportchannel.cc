@@ -497,7 +497,7 @@ void P2PTransportChannel::OnUnknownAddress(
   }
 }
 
-void P2PTransportChannel::OnRoleConflict() {
+void P2PTransportChannel::OnRoleConflict(PortInterface* port) {
   SignalRoleConflict(this);  // STUN ping will be sent when SetRole is called
                              // from Transport.
 }

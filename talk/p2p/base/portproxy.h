@@ -91,7 +91,9 @@ class PortProxy : public PortInterface, public sigslot::has_slots<> {
                         IceMessage *stun_msg,
                         const std::string &remote_username,
                         bool port_muxed);
+  void OnRoleConflict(PortInterface* port);
   void OnPortDestroyed(PortInterface* port);
+
   PortInterface* impl_;
 };
 

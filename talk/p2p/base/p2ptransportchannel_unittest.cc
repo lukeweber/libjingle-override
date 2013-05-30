@@ -528,6 +528,33 @@ class P2PTransportChannelTestBase : public testing::Test,
     EXPECT_EQ(1u, RemoteCandidate(ep1_ch1())->generation());
   }
 
+  void TestSignalRoleConflict() {
+    SetIceProtocol(0, cricket::ICEPROTO_RFC5245);
+    SetTiebreaker(0, kTiebreaker1);  // Default EP1 is in controlling state.
+
+    SetIceProtocol(1, cricket::ICEPROTO_RFC5245);
+    SetIceRole(1, cricket::ROLE_CONTROLLING);
+    SetTiebreaker(1, kTiebreaker2);
+
+    // Creating channels with both channels role set to CONTROLLING.
+    CreateChannels(1);
+    // Since both the channels initiated with controlling state and channel2
+    // has higher tiebreaker value, channel1 should receive SignalRoleConflict.
+    EXPECT_TRUE_WAIT(GetRoleConflict(0), 1000);
+    EXPECT_FALSE(GetRoleConflict(1));
+
+    EXPECT_TRUE_WAIT(ep1_ch1()->readable() &&
+                     ep1_ch1()->writable() &&
+                     ep2_ch1()->readable() &&
+                     ep2_ch1()->writable(),
+                     1000);
+
+    EXPECT_TRUE(ep1_ch1()->best_connection() &&
+                ep2_ch1()->best_connection());
+
+    TestSendRecv(1);
+  }
+
   void OnChannelRequestSignaling(cricket::TransportChannelImpl* channel) {
     channel->OnSignalingReady();
   }
@@ -1302,32 +1329,18 @@ TEST_F(P2PTransportChannelTest, TestBundleAllocatorToNonBundleAllocator) {
   DestroyChannels();
 }
 
-TEST_F(P2PTransportChannelTest, TestIceRoleConflict) {
+TEST_F(P2PTransportChannelTest, TestIceRoleConflictWithoutBundle) {
   AddAddress(0, kPublicAddrs[0]);
   AddAddress(1, kPublicAddrs[1]);
+  TestSignalRoleConflict();
+}
 
-  SetIceProtocol(0, cricket::ICEPROTO_RFC5245);
-  SetTiebreaker(0, kTiebreaker1);  // Default EP1 is in controlling state.
-  SetIceProtocol(1, cricket::ICEPROTO_RFC5245);
-  SetIceRole(1, cricket::ROLE_CONTROLLING);
-  SetTiebreaker(1, kTiebreaker2);
-
-  // Creating channels with both channels role set to CONTROLLING.
-  CreateChannels(1);
-  // Since both the channels initiated with controlling state and channel2
-  // has higher tiebreaker value, channel1 should receive SignalRoleConflict.
-  EXPECT_TRUE_WAIT(GetRoleConflict(0), 1000);
-
-  EXPECT_TRUE_WAIT(ep1_ch1()->readable() &&
-                   ep1_ch1()->writable() &&
-                   ep2_ch1()->readable() &&
-                   ep2_ch1()->writable(),
-                   1000);
-
-  EXPECT_TRUE(ep1_ch1()->best_connection() &&
-              ep2_ch1()->best_connection());
-
-  TestSendRecv(1);
+TEST_F(P2PTransportChannelTest, TestIceRoleConflictWithBundle) {
+  AddAddress(0, kPublicAddrs[0]);
+  AddAddress(1, kPublicAddrs[1]);
+  SetAllocatorFlags(0, cricket::PORTALLOCATOR_ENABLE_BUNDLE);
+  SetAllocatorFlags(1, cricket::PORTALLOCATOR_ENABLE_BUNDLE);
+  TestSignalRoleConflict();
 }
 
 // Tests that the ice configs (protocol, tiebreaker and role can be passed down

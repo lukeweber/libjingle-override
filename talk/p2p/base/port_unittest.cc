@@ -558,7 +558,7 @@ class PortTest : public testing::Test, public sigslot::has_slots<> {
     return port;
   }
 
-  void OnRoleConflict() {
+  void OnRoleConflict(PortInterface* port) {
     role_conflict_ = true;
   }
   bool role_conflict() const { return role_conflict_; }

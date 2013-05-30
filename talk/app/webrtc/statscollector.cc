@@ -560,7 +560,7 @@ bool StatsCollector::GetTransportIdFromProxy(const std::string& proxy,
   }
   std::ostringstream ost;
   // Component 1 is always used for RTP.
-  ost << "Channel-" << proxy_to_transport_.at(proxy) << "-1";
+  ost << "Channel-" << proxy_to_transport_[proxy] << "-1";
   *transport = ost.str();
   return true;
 }

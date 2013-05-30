@@ -34,6 +34,7 @@ void PortProxy::set_impl(PortInterface* port) {
   impl_->SignalUnknownAddress.connect(
       this, &PortProxy::OnUnknownAddress);
   impl_->SignalDestroyed.connect(this, &PortProxy::OnPortDestroyed);
+  impl_->SignalRoleConflict.connect(this, &PortProxy::OnRoleConflict);
 }
 
 const std::string& PortProxy::Type() const {
@@ -163,6 +164,11 @@ void PortProxy::OnUnknownAddress(
   ASSERT(port == impl_);
   ASSERT(!port_muxed);
   SignalUnknownAddress(this, addr, proto, stun_msg, remote_username, true);
+}
+
+void PortProxy::OnRoleConflict(PortInterface* port) {
+  ASSERT(port == impl_);
+  SignalRoleConflict(this);
 }
 
 void PortProxy::OnPortDestroyed(PortInterface* port) {
