@@ -711,8 +711,9 @@
         'media/devices/filevideocapturer.h',
         'media/devices/videorendererfactory.h',
         'media/other/linphonemediaengine.h',
-        'media/sctp/sctpdataengine.cc',
-        'media/sctp/sctpdataengine.h',
+        # TODO(ronghuawu): Enable when SCTP is ready.
+        # 'media/sctp/sctpdataengine.cc',
+        # 'media/sctp/sctpdataengine.h',
         'media/webrtc/webrtccommon.h',
         'media/webrtc/webrtcexport.h',
         'media/webrtc/webrtcmediaengine.h',
@@ -827,7 +828,8 @@
         ],
       },
       'defines': [
-        'HAVE_SCTP',
+        # TODO(ronghuawu): enable SCTP when it's ready.
+        # 'HAVE_SCTP',
       ],
       'sources': [
         'p2p/base/asyncstuntcpsocket.cc',
