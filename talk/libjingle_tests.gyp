@@ -56,8 +56,14 @@
       'target_name': 'libjingle_unittest_main',
       'type': 'static_library',
       'dependencies': [
+        '<(DEPTH)/third_party/libyuv/libyuv.gyp:libyuv',
         'gunit',
       ],
+      'direct_dependent_settings': {
+        'include_dirs': [
+          '<(DEPTH)/third_party/libyuv/include',
+        ],
+      },
       'sources': [
         'base/unittest_main.cc',
         # Also use this as a convenient dumping ground for misc files that are

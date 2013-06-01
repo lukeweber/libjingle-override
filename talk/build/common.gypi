@@ -64,7 +64,6 @@
       # TODO(ronghuawu): Remove this once libjingle is updated to use the new
       # webrtc.
       'USE_WEBRTC_DEV_BRANCH',
-      'DISABLE_YUV',
     ],
     'conditions': [
       # TODO(ronghuawu): Support dynamic library build.
