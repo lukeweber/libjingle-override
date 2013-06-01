@@ -11,7 +11,7 @@ vars = {
   "chromium_git": "https://chromium.googlesource.com",
 
   "chromium_revision": "199693",
-  "webrtc_revision": "4032",
+  "webrtc_revision": "4125",
 }
 
 # NOTE: Prefer revision numbers to tags for svn deps. Use http rather than
@@ -92,6 +92,9 @@ deps = {
 
   "tools/gyp":
     From("chromium_deps", "src/tools/gyp"),
+
+  "tools/protoc_wrapper":
+    Var("chromium_trunk") + "/src/tools/protoc_wrapper@" + Var("chromium_revision"),
 
   "tools/python":
     Var("chromium_trunk") + "/src/tools/python@" + Var("chromium_revision"),
