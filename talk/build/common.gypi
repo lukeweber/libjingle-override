@@ -35,7 +35,7 @@
     # flood of chromium-style warnings.
     'clang_use_chrome_plugins%': 0,
     'libpeer_target_type%': 'static_library',
-    'java_home%': '<!(/bin/echo -n ${JAVA_HOME})',
+    'java_home%': '<!(python -c \'import os; print os.getenv("JAVA_HOME");\')',
   },
   'target_defaults': {
     'include_dirs': [
