@@ -39,7 +39,6 @@
 #include "talk/p2p/base/common.h"
 #include "talk/p2p/base/stun.h"
 
-
 namespace cricket {
 
 // TODO(juberti): Move to stun.h when relay messages have been renamed.
@@ -75,7 +74,6 @@ class TurnAllocateRequest : public StunRequest {
   virtual void OnResponse(StunMessage* response);
   virtual void OnErrorResponse(StunMessage* response);
   virtual void OnTimeout();
-  virtual std::string GetClassname() const { return "TurnAllocateRequest"; }
 
  private:
   // Handles authentication challenge from the server.
@@ -92,7 +90,6 @@ class TurnRefreshRequest : public StunRequest {
   virtual void OnResponse(StunMessage* response);
   virtual void OnErrorResponse(StunMessage* response);
   virtual void OnTimeout();
-  virtual std::string GetClassname() const { return "TurnRefreshRequest"; }
 
  private:
   TurnPort* port_;
@@ -107,7 +104,6 @@ class TurnCreatePermissionRequest : public StunRequest,
   virtual void OnResponse(StunMessage* response);
   virtual void OnErrorResponse(StunMessage* response);
   virtual void OnTimeout();
-  virtual std::string GetClassname() const { return "TurnCreatePermissionRequest"; }
 
  private:
   void OnEntryDestroyed(TurnEntry* entry);
@@ -126,7 +122,6 @@ class TurnChannelBindRequest : public StunRequest,
   virtual void OnResponse(StunMessage* response);
   virtual void OnErrorResponse(StunMessage* response);
   virtual void OnTimeout();
-  virtual std::string GetClassname() const { return "TurnChannelBindRequest"; }
 
  private:
   void OnEntryDestroyed(TurnEntry* entry);
@@ -161,7 +156,6 @@ class TurnEntry : public sigslot::has_slots<> {
   void OnCreatePermissionSuccess();
   void OnCreatePermissionError(StunMessage* response, int code);
   void OnChannelBindSuccess();
-  virtual std::string GetClassname() const { return "TurnEntry"; }
   void OnChannelBindError(StunMessage* response, int code);
   // Signal sent when TurnEntry is destroyed.
   sigslot::signal1<TurnEntry*> SignalDestroyed;

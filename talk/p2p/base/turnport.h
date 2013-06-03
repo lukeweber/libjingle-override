@@ -63,7 +63,6 @@ class TurnPort : public Port {
   }
 
   virtual ~TurnPort();
-  virtual std::string GetClassname() const { return "TurnPort"; }
 
   const ProtocolAddress& server_address() const { return server_address_; }
 
@@ -95,6 +94,7 @@ class TurnPort : public Port {
   sigslot::signal3<TurnPort*, const talk_base::SocketAddress&, int>
       SignalCreatePermissionResult;
 
+ protected:
   TurnPort(talk_base::Thread* thread,
            talk_base::PacketSocketFactory* factory,
            talk_base::Network* network,
@@ -102,7 +102,7 @@ class TurnPort : public Port {
            int min_port, int max_port,
            const std::string& username,
            const std::string& password,
-           const talk_base::SocketAddress& server_address,
+           const ProtocolAddress& server_address,
            const RelayCredentials& credentials);
 
  private:

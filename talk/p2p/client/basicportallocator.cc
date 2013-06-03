@@ -1143,7 +1143,6 @@ void AllocationSequence::CreateTurnPort(const RelayServerConfig& config) {
                                       session_->username(),
                                       session_->password(),
                                       *relay_port, config.credentials);
-    if (port) {
       if (port) {
         session_->AddAllocatedPort(port, this, true);
       }
