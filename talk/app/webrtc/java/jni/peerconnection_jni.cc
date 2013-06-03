@@ -910,7 +910,7 @@ extern "C" jint JNIEXPORT JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
   return JNI_VERSION_1_6;
 }
 
-extern "C" jint JNIEXPORT JNICALL JNI_OnUnLoad(JavaVM *jvm, void *reserved) {
+extern "C" void JNIEXPORT JNICALL JNI_OnUnLoad(JavaVM *jvm, void *reserved) {
   webrtc::Trace::ReturnTrace();
   delete g_class_reference_holder;
   g_class_reference_holder = NULL;
@@ -1200,8 +1200,7 @@ JOW(jboolean, PeerConnection_updateIce)(
   JavaIceServersToJsepIceServers(jni, j_ice_servers, &ice_servers);
   talk_base::scoped_ptr<ConstraintsWrapper> constraints(
       new ConstraintsWrapper(jni, j_constraints));
-  CHECK(ExtractNativePC(jni, j_pc)->UpdateIce(
-      ice_servers, constraints.get()), "");
+  return ExtractNativePC(jni, j_pc)->UpdateIce(ice_servers, constraints.get());
 }
 
 JOW(jboolean, PeerConnection_nativeAddIceCandidate)(
@@ -1211,7 +1210,7 @@ JOW(jboolean, PeerConnection_nativeAddIceCandidate)(
   std::string sdp = JavaToStdString(jni, j_candidate_sdp);
   talk_base::scoped_ptr<IceCandidateInterface> candidate(
       webrtc::CreateIceCandidate(sdp_mid, j_sdp_mline_index, sdp, NULL));
-  CHECK(ExtractNativePC(jni, j_pc)->AddIceCandidate(candidate.get()), "");
+  return ExtractNativePC(jni, j_pc)->AddIceCandidate(candidate.get());
 }
 
 JOW(jboolean, PeerConnection_nativeAddLocalStream)(
