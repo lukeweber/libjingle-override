@@ -224,7 +224,8 @@
         ['os_posix==1', {
           'sources': [
             'base/sslidentity_unittest.cc',
-            'base/sslstreamadapter_unittest.cc',
+            # TODO(ronghuawu): reenable once fixed on build bots.
+            # 'base/sslstreamadapter_unittest.cc',
           ],
         }],
       ],  # conditions
@@ -319,7 +320,9 @@
         '<(DEPTH)/third_party/libsrtp/srtp',
       ],
       'sources': [
-        'p2p/base/dtlstransportchannel_unittest.cc',
+        # TODO(ronghuawu): reenable once fixed on build bots.
+        # webrtc issue #1541.
+        # 'p2p/base/dtlstransportchannel_unittest.cc',
         'p2p/base/fakesession.h',
         'p2p/base/p2ptransportchannel_unittest.cc',
         'p2p/base/port_unittest.cc',
