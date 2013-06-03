@@ -56,6 +56,8 @@ class TurnPort : public Port {
                           int min_port, int max_port,
                           const std::string& username,  // ice username.
                           const std::string& password,  // ice password.
+                          const ProtocolAddress& server_address,
+                          const RelayCredentials& credentials) {
     return new TurnPort(thread, factory, network, ip, min_port, max_port,
                         username, password, server_address, credentials);
   }

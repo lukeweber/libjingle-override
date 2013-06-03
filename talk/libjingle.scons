@@ -170,7 +170,7 @@ talk.Library(env, name = "jingle",
                "base/autodetectproxy.cc",
                "base/bandwidthsmoother.cc",
                "base/base64.cc",
-               "base/basicpacketsocketfactory.cc",
+               "p2p/base/basicpacketsocketfactory.cc",
                "base/bytebuffer.cc",
                "base/checks.cc",
                "base/common.cc",
@@ -484,7 +484,6 @@ talk.App(env, name = "call",
            "examples/call/mediaenginefactory.cc",
            "examples/call/mucinviterecvtask.cc",
            "examples/call/mucinvitesendtask.cc",
-           "xmpp/presenceouttask.cc",
            "examples/call/presencepushtask.cc",
          ],
          libs = [
@@ -500,16 +499,6 @@ talk.App(env, name = "relayserver",
          srcs = [
            "p2p/base/relayserver_main.cc",
          ],
-)
-talk.App(env, name = "turnserver",
-         libs = [
-           "jingle",
-         ],
-         srcs = [
-           "p2p/base/turnserver_main.cc",
-         ],
-         includedirs = SSL_INCLUDES,
-         posix_libs = SSL_LIBS,
 )
 talk.App(env, name = "stunserver",
          libs = [
