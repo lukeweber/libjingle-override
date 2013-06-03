@@ -85,8 +85,6 @@ class ThreadManager {
   DISALLOW_COPY_AND_ASSIGN(ThreadManager);
 };
 
-class Thread;
-
 struct _SendMessage {
   _SendMessage() {}
   Thread *thread;
@@ -115,7 +113,7 @@ class Runnable {
 
 class Thread : public MessageQueue {
  public:
-  Thread(SocketServer* ss = NULL);
+  explicit Thread(SocketServer* ss = NULL);
   virtual ~Thread();
 
   static Thread* Current();
@@ -162,6 +160,18 @@ class Thread : public MessageQueue {
   virtual void Send(MessageHandler *phandler, uint32 id = 0,
       MessageData *pdata = NULL);
 
+  // Convenience method to invoke a functor on another thread.  Caller must
+  // provide the |ReturnT| template argument, which cannot (easily) be deduced.
+  // Uses Send() internally, which blocks the current thread until execution
+  // is complete.
+  // Ex: bool result = thread.Invoke<bool>(&MyFunctionReturningBool);
+  template <class ReturnT, class FunctorT>
+  ReturnT Invoke(const FunctorT& functor) {
+    FunctorMessageHandler<ReturnT, FunctorT> handler(functor);
+    Send(&handler);
+    return handler.result();
+  }
+
   // From MessageQueue
   virtual void Clear(MessageHandler *phandler, uint32 id = MQID_ANY,
                      MessageList* removed = NULL);
@@ -207,6 +217,33 @@ class Thread : public MessageQueue {
   void Join();
 
  private:
+  // Helper class to facilitate executing a functor on a thread.
+  template <class ReturnT, class FunctorT>
+  class FunctorMessageHandler : public MessageHandler {
+   public:
+    explicit FunctorMessageHandler(const FunctorT& functor)
+        : functor_(functor) {}
+    virtual void OnMessage(Message* msg) {
+      result_ = functor_();
+    }
+    const ReturnT& result() const { return result_; }
+   private:
+    FunctorT functor_;
+    ReturnT result_;
+  };
+
+  // Specialization for ReturnT of void.
+  template <class FunctorT>
+  class FunctorMessageHandler<void, FunctorT> : public MessageHandler {
+   public:
+    explicit FunctorMessageHandler(const FunctorT& functor)
+        : functor_(functor) {}
+    virtual void OnMessage(Message* msg) { functor_(); }
+    void result() const {}
+   private:
+    FunctorT functor_;
+  };
+
   static void *PreRun(void *pv);
 
   // ThreadManager calls this instead WrapCurrent() because
@@ -243,7 +280,7 @@ class Thread : public MessageQueue {
 
 class AutoThread : public Thread {
  public:
-  AutoThread(SocketServer* ss = 0);
+  explicit AutoThread(SocketServer* ss = 0);
   virtual ~AutoThread();
 
  private:

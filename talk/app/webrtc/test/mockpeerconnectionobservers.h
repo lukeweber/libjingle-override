@@ -127,21 +127,21 @@ class MockStatsObserver : public webrtc::StatsObserver {
 
   int AudioOutputLevel() {
     return GetSsrcStatsValue(
-        webrtc::StatsElement::kStatsValueNameAudioOutputLevel);
+        webrtc::StatsReport::kStatsValueNameAudioOutputLevel);
   }
 
   int AudioInputLevel() {
     return GetSsrcStatsValue(
-        webrtc::StatsElement::kStatsValueNameAudioInputLevel);
+        webrtc::StatsReport::kStatsValueNameAudioInputLevel);
   }
 
   int BytesReceived() {
     return GetSsrcStatsValue(
-        webrtc::StatsElement::kStatsValueNameBytesReceived);
+        webrtc::StatsReport::kStatsValueNameBytesReceived);
   }
 
   int BytesSent() {
-    return GetSsrcStatsValue(webrtc::StatsElement::kStatsValueNameBytesSent);
+    return GetSsrcStatsValue(webrtc::StatsReport::kStatsValueNameBytesSent);
   }
 
  private:
@@ -152,9 +152,9 @@ class MockStatsObserver : public webrtc::StatsObserver {
     for (size_t i = 0; i < reports_.size(); ++i) {
       if (reports_[i].type != StatsReport::kStatsReportTypeSsrc)
         continue;
-      webrtc::StatsElement::Values::const_iterator it =
-          reports_[i].local.values.begin();
-      for (; it != reports_[i].local.values.end(); ++it) {
+      webrtc::StatsReport::Values::const_iterator it =
+          reports_[i].values.begin();
+      for (; it != reports_[i].values.end(); ++it) {
         if (it->name == name) {
           return talk_base::FromString<int>(it->value);
         }

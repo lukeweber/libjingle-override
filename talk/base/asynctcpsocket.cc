@@ -39,23 +39,21 @@
 
 namespace talk_base {
 
-static const size_t MAX_PACKET_SIZE = 64 * 1024;
+static const size_t kMaxPacketSize = 64 * 1024;
 
 typedef uint16 PacketLength;
-static const size_t PKT_LEN_SIZE = sizeof(PacketLength);
+static const size_t kPacketLenSize = sizeof(PacketLength);
 
-static const size_t BUF_SIZE = MAX_PACKET_SIZE + PKT_LEN_SIZE;
+static const size_t kBufSize = kMaxPacketSize + kPacketLenSize;
 
-static const int LISTEN_BACKLOG = 5;
+static const int kListenBacklog = 5;
 
-// Binds and connects |socket| and creates AsyncTCPSocket for
-// it. Takes ownership of |socket|. Returns NULL if bind() or
-// connect() fail (|socket| is destroyed in that case).
-AsyncTCPSocket* AsyncTCPSocket::Create(
-    AsyncSocket* socket,
-    const SocketAddress& bind_address,
-    const SocketAddress& remote_address) {
-  scoped_ptr<AsyncSocket> owned_socket(socket);
+// Binds and connects |socket|
+AsyncSocket* AsyncTCPSocketBase::ConnectSocket(
+    talk_base::AsyncSocket* socket,
+    const talk_base::SocketAddress& bind_address,
+    const talk_base::SocketAddress& remote_address) {
+  talk_base::scoped_ptr<talk_base::AsyncSocket> owned_socket(socket);
   if (socket->Bind(bind_address) < 0) {
     LOG(LS_ERROR) << "Bind() failed with error " << socket->GetError();
     return NULL;
@@ -64,86 +62,52 @@ AsyncTCPSocket* AsyncTCPSocket::Create(
     LOG(LS_ERROR) << "Connect() failed with error " << socket->GetError();
     return NULL;
   }
-  return new AsyncTCPSocket(owned_socket.release(), false);
+  return owned_socket.release();
 }
 
-AsyncTCPSocket::AsyncTCPSocket(AsyncSocket* socket, bool listen)
+AsyncTCPSocketBase::AsyncTCPSocketBase(AsyncSocket* socket, bool listen,
+                                       size_t max_packet_size)
     : socket_(socket),
       listen_(listen),
-      insize_(BUF_SIZE),
+      insize_(max_packet_size),
       inpos_(0),
-      outsize_(BUF_SIZE),
+      outsize_(max_packet_size),
       outpos_(0) {
   inbuf_ = new char[insize_];
   outbuf_ = new char[outsize_];
 
   ASSERT(socket_.get() != NULL);
-  socket_->SignalConnectEvent.connect(this, &AsyncTCPSocket::OnConnectEvent);
-  socket_->SignalReadEvent.connect(this, &AsyncTCPSocket::OnReadEvent);
-  socket_->SignalWriteEvent.connect(this, &AsyncTCPSocket::OnWriteEvent);
-  socket_->SignalCloseEvent.connect(this, &AsyncTCPSocket::OnCloseEvent);
+  socket_->SignalConnectEvent.connect(
+      this, &AsyncTCPSocketBase::OnConnectEvent);
+  socket_->SignalReadEvent.connect(this, &AsyncTCPSocketBase::OnReadEvent);
+  socket_->SignalWriteEvent.connect(this, &AsyncTCPSocketBase::OnWriteEvent);
+  socket_->SignalCloseEvent.connect(this, &AsyncTCPSocketBase::OnCloseEvent);
 
   if (listen_) {
-    if (socket_->Listen(LISTEN_BACKLOG) < 0) {
+    if (socket_->Listen(kListenBacklog) < 0) {
       LOG(LS_ERROR) << "Listen() failed with error " << socket_->GetError();
     }
   }
 }
 
-AsyncTCPSocket::~AsyncTCPSocket() {
+AsyncTCPSocketBase::~AsyncTCPSocketBase() {
   delete [] inbuf_;
   delete [] outbuf_;
 }
 
-SocketAddress AsyncTCPSocket::GetLocalAddress() const {
+SocketAddress AsyncTCPSocketBase::GetLocalAddress() const {
   return socket_->GetLocalAddress();
 }
 
-SocketAddress AsyncTCPSocket::GetRemoteAddress() const {
+SocketAddress AsyncTCPSocketBase::GetRemoteAddress() const {
   return socket_->GetRemoteAddress();
 }
 
-int AsyncTCPSocket::Send(const void *pv, size_t cb) {
-  if (cb > MAX_PACKET_SIZE) {
-    socket_->SetError(EMSGSIZE);
-    return -1;
-  }
-
-  // If we are blocking on send, then silently drop this packet
-  if (outpos_)
-    return static_cast<int>(cb);
-
-  PacketLength pkt_len = HostToNetwork16(static_cast<PacketLength>(cb));
-  memcpy(outbuf_, &pkt_len, PKT_LEN_SIZE);
-  memcpy(outbuf_ + PKT_LEN_SIZE, pv, cb);
-  outpos_ = PKT_LEN_SIZE + cb;
-
-  int res = Flush();
-  if (res <= 0) {
-    // drop packet if we made no progress
-    outpos_ = 0;
-    return res;
-  }
-
-  // We claim to have sent the whole thing, even if we only sent partial
-  return static_cast<int>(cb);
-}
-
-int AsyncTCPSocket::SendTo(const void *pv, size_t cb,
-                           const SocketAddress& addr) {
-  if (addr == GetRemoteAddress())
-    return Send(pv, cb);
-
-  ASSERT(false);
-  socket_->SetError(ENOTCONN);
-  return -1;
-}
-
-int AsyncTCPSocket::Close() {
+int AsyncTCPSocketBase::Close() {
   return socket_->Close();
 }
 
-AsyncTCPSocket::State AsyncTCPSocket::GetState() const {
+AsyncTCPSocket::State AsyncTCPSocketBase::GetState() const {
   switch (socket_->GetState()) {
     case Socket::CS_CLOSED:
       return STATE_CLOSED;
@@ -161,23 +125,33 @@ AsyncTCPSocket::State AsyncTCPSocket::GetState() const {
   }
 }
 
-int AsyncTCPSocket::GetOption(Socket::Option opt, int* value) {
+int AsyncTCPSocketBase::GetOption(Socket::Option opt, int* value) {
   return socket_->GetOption(opt, value);
 }
 
-int AsyncTCPSocket::SetOption(Socket::Option opt, int value) {
+int AsyncTCPSocketBase::SetOption(Socket::Option opt, int value) {
   return socket_->SetOption(opt, value);
 }
 
-int AsyncTCPSocket::GetError() const {
+int AsyncTCPSocketBase::GetError() const {
   return socket_->GetError();
 }
 
-void AsyncTCPSocket::SetError(int error) {
+void AsyncTCPSocketBase::SetError(int error) {
   return socket_->SetError(error);
 }
 
-int AsyncTCPSocket::SendRaw(const void * pv, size_t cb) {
+int AsyncTCPSocketBase::SendTo(const void *pv, size_t cb,
+                               const SocketAddress& addr) {
+  if (addr == GetRemoteAddress())
+    return Send(pv, cb);
+
+  ASSERT(false);
+  socket_->SetError(ENOTCONN);
+  return -1;
+}
+
+int AsyncTCPSocketBase::SendRaw(const void * pv, size_t cb) {
   if (outpos_ + cb > outsize_) {
     socket_->SetError(EMSGSIZE);
     return -1;
@@ -186,33 +160,10 @@ int AsyncTCPSocket::SendRaw(const void * pv, size_t cb) {
   memcpy(outbuf_ + outpos_, pv, cb);
   outpos_ += cb;
 
-  return Flush();
+  return FlushOutBuffer();
 }
 
-void AsyncTCPSocket::ProcessInput(char * data, size_t& len) {
-  SocketAddress remote_addr(GetRemoteAddress());
-
-  while (true) {
-    if (len < PKT_LEN_SIZE)
-      return;
-
-    PacketLength pkt_len;
-    memcpy(&pkt_len, data, PKT_LEN_SIZE);
-    pkt_len = NetworkToHost16(pkt_len);
-
-    if (len < PKT_LEN_SIZE + pkt_len)
-      return;
-
-    SignalReadPacket(this, data + PKT_LEN_SIZE, pkt_len, remote_addr);
-
-    len -= PKT_LEN_SIZE + pkt_len;
-    if (len > 0) {
-      memmove(data, data + PKT_LEN_SIZE + pkt_len, len);
-    }
-  }
-}
-
-int AsyncTCPSocket::Flush() {
+int AsyncTCPSocketBase::FlushOutBuffer() {
   int res = socket_->Send(outbuf_, outpos_);
   if (res <= 0) {
     return res;
@@ -229,11 +180,17 @@ int AsyncTCPSocket::Flush() {
   return res;
 }
 
-void AsyncTCPSocket::OnConnectEvent(AsyncSocket* socket) {
+void AsyncTCPSocketBase::AppendToOutBuffer(const void* pv, size_t cb) {
+  ASSERT(outpos_ + cb < outsize_);
+  memcpy(outbuf_ + outpos_, pv, cb);
+  outpos_ += cb;
+}
+
+void AsyncTCPSocketBase::OnConnectEvent(AsyncSocket* socket) {
   SignalConnect(this);
 }
 
-void AsyncTCPSocket::OnReadEvent(AsyncSocket* socket) {
+void AsyncTCPSocketBase::OnReadEvent(AsyncSocket* socket) {
   ASSERT(socket_.get() == socket);
 
   if (listen_) {
@@ -246,7 +203,7 @@ void AsyncTCPSocket::OnReadEvent(AsyncSocket* socket) {
       return;
     }
 
-    SignalNewConnection(this, new AsyncTCPSocket(new_socket, false));
+    HandleIncomingConnection(new_socket);
 
     // Prime a read event in case data is waiting.
     new_socket->SignalReadEvent(new_socket);
@@ -262,7 +219,7 @@ void AsyncTCPSocket::OnReadEvent(AsyncSocket* socket) {
 
     inpos_ += len;
 
-    ProcessInput(inbuf_, inpos_);
+    ProcessInput(inbuf_, &inpos_);
 
     if (inpos_ >= insize_) {
       LOG(LS_ERROR) << "input buffer overflow";
@@ -272,16 +229,85 @@ void AsyncTCPSocket::OnReadEvent(AsyncSocket* socket) {
   }
 }
 
-void AsyncTCPSocket::OnWriteEvent(AsyncSocket* socket) {
+void AsyncTCPSocketBase::OnWriteEvent(AsyncSocket* socket) {
   ASSERT(socket_.get() == socket);
 
   if (outpos_ > 0) {
-    Flush();
+    FlushOutBuffer();
+  }
+
+  if (outpos_ == 0) {
+    SignalReadyToSend(this);
   }
 }
 
-void AsyncTCPSocket::OnCloseEvent(AsyncSocket* socket, int error) {
+void AsyncTCPSocketBase::OnCloseEvent(AsyncSocket* socket, int error) {
   SignalClose(this, error);
+}
+
+// AsyncTCPSocket
+// Binds and connects |socket| and creates AsyncTCPSocket for
+// it. Takes ownership of |socket|. Returns NULL if bind() or
+// connect() fail (|socket| is destroyed in that case).
+AsyncTCPSocket* AsyncTCPSocket::Create(
+    AsyncSocket* socket,
+    const SocketAddress& bind_address,
+    const SocketAddress& remote_address) {
+  return new AsyncTCPSocket(AsyncTCPSocketBase::ConnectSocket(
+      socket, bind_address, remote_address), false);
+}
+
+AsyncTCPSocket::AsyncTCPSocket(AsyncSocket* socket, bool listen)
+    : AsyncTCPSocketBase(socket, listen, kBufSize) {
+}
+
+int AsyncTCPSocket::Send(const void *pv, size_t cb) {
+  if (cb > kBufSize) {
+    SetError(EMSGSIZE);
+    return -1;
+  }
+
+  // If we are blocking on send, then silently drop this packet
+  if (!IsOutBufferEmpty())
+    return static_cast<int>(cb);
+
+  PacketLength pkt_len = HostToNetwork16(static_cast<PacketLength>(cb));
+  AppendToOutBuffer(&pkt_len, kPacketLenSize);
+  AppendToOutBuffer(pv, cb);
+
+  int res = FlushOutBuffer();
+  if (res <= 0) {
+    // drop packet if we made no progress
+    ClearOutBuffer();
+    return res;
+  }
+
+  // We claim to have sent the whole thing, even if we only sent partial
+  return static_cast<int>(cb);
+}
+
+void AsyncTCPSocket::ProcessInput(char * data, size_t* len) {
+  SocketAddress remote_addr(GetRemoteAddress());
+
+  while (true) {
+    if (*len < kPacketLenSize)
+      return;
+
+    PacketLength pkt_len = talk_base::GetBE16(data);
+    if (*len < kPacketLenSize + pkt_len)
+      return;
+
+    SignalReadPacket(this, data + kPacketLenSize, pkt_len, remote_addr);
+
+    *len -= kPacketLenSize + pkt_len;
+    if (*len > 0) {
+      memmove(data, data + kPacketLenSize + pkt_len, *len);
+    }
+  }
+}
+
+void AsyncTCPSocket::HandleIncomingConnection(AsyncSocket* socket) {
+  SignalNewConnection(this, new AsyncTCPSocket(socket, false));
 }
 
 }  // namespace talk_base

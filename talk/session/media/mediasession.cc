@@ -57,6 +57,9 @@ const char kMediaProtocolAvpf[] = "RTP/AVPF";
 // RFC5124
 const char kMediaProtocolSavpf[] = "RTP/SAVPF";
 
+const char kMediaProtocolSctp[] = "SCTP";
+const char kMediaProtocolSctpDtls[] = "SCTP/DTLS";
+
 static bool IsMediaContentOfType(const ContentInfo* content,
                                  MediaType media_type) {
   if (!IsMediaContent(content)) {
@@ -234,16 +237,44 @@ static bool GenerateCname(const StreamParamsVec& params_vec,
 // true or false. The generated values are added to |ssrcs|.
 static void GenerateSsrcs(const StreamParamsVec& params_vec,
                           bool include_rtx_stream,
-                          std::vector<uint32>& ssrcs) {
+                          std::vector<uint32>* ssrcs) {
   unsigned int num_ssrcs = include_rtx_stream ? 2 : 1;
   for (unsigned int i = 0; i < num_ssrcs; i++) {
     uint32 candidate;
     do {
       candidate = talk_base::CreateRandomNonZeroId();
     } while (GetStreamBySsrc(params_vec, candidate, NULL) ||
-             std::count(ssrcs.begin(), ssrcs.end(), candidate) > 0);
-    ssrcs.push_back(candidate);
+             std::count(ssrcs->begin(), ssrcs->end(), candidate) > 0);
+    ssrcs->push_back(candidate);
   }
+}
+
+// Returns false if we exhaust the range of SIDs.
+static bool GenerateSctpSid(const StreamParamsVec& params_vec,
+                            uint32* sid) {
+  if (params_vec.size() > kMaxSctpSid) {
+    LOG(LS_WARNING) <<
+        "Could not generate an SCTP SID: too many SCTP streams.";
+    return false;
+  }
+  while (true) {
+    uint32 candidate = talk_base::CreateRandomNonZeroId() % kMaxSctpSid;
+    if (!GetStreamBySsrc(params_vec, candidate, NULL)) {
+      *sid = candidate;
+      return true;
+    }
+  }
+}
+
+static bool GenerateSctpSids(const StreamParamsVec& params_vec,
+                             std::vector<uint32>* sids) {
+  uint32 sid;
+  if (!GenerateSctpSid(params_vec, &sid)) {
+    LOG(LS_WARNING) << "Could not generated an SCTP SID.";
+    return false;
+  }
+  sids->push_back(sid);
+  return true;
 }
 
 // Finds all StreamParams of all media types and attach them to stream_params.
@@ -364,6 +395,11 @@ class UsedRtpHeaderExtensionIds : public UsedIds<RtpHeaderExtension> {
   static const int kLocalIdMax = 255;
 };
 
+static bool IsSctp(const MediaContentDescription* desc) {
+  return ((desc->protocol() == kMediaProtocolSctp) ||
+          (desc->protocol() == kMediaProtocolSctpDtls));
+}
+
 // Adds a StreamParams for each Stream in Streams with media type
 // media_type to content_description.
 // |current_params| - All currently known StreamParams of any media type.
@@ -380,7 +416,11 @@ static bool AddStreamParams(
   if (streams.empty() && add_legacy_stream) {
     // TODO(perkj): Remove this legacy stream when all apps use StreamParams.
     std::vector<uint32> ssrcs;
-    GenerateSsrcs(*current_streams, include_rtx_stream, ssrcs);
+    if (IsSctp(content_description)) {
+      GenerateSctpSids(*current_streams, &ssrcs);
+    } else {
+      GenerateSsrcs(*current_streams, include_rtx_stream, &ssrcs);
+    }
     if (include_rtx_stream) {
       content_description->AddLegacyStream(ssrcs[0], ssrcs[1]);
       content_description->set_multistream(true);
@@ -410,7 +450,11 @@ static bool AddStreamParams(
       }
 
       std::vector<uint32> ssrcs;
-      GenerateSsrcs(*current_streams, include_rtx_stream, ssrcs);
+      if (IsSctp(content_description)) {
+        GenerateSctpSids(*current_streams, &ssrcs);
+      } else {
+        GenerateSsrcs(*current_streams, include_rtx_stream, &ssrcs);
+      }
       StreamParams stream_param;
       stream_param.id = stream_it->id;
       stream_param.ssrcs.push_back(ssrcs[0]);
@@ -653,9 +697,14 @@ static void NegotiateCodecs(const std::vector<C>& local_codecs,
         C negotiated = *ours;
         negotiated.IntersectFeedbackParams(*theirs);
         if (IsRtxCodec(negotiated)) {
-          // Since we use the payload type from the |offered_codecs|, we also
-          // need to use the referenced payload type.
-          negotiated.params = theirs->params;
+          // Only negotiate RTX if kCodecParamAssociatedPayloadType has been
+          // set.
+          std::string apt_value;
+          if (!theirs->GetParam(kCodecParamAssociatedPayloadType, &apt_value)) {
+            LOG(LS_WARNING) << "RTX missing associated payload type.";
+            continue;
+          }
+          negotiated.SetParam(kCodecParamAssociatedPayloadType, apt_value);
         }
         negotiated.id = theirs->id;
         negotiated_codecs->push_back(negotiated);
@@ -781,6 +830,17 @@ static void NegotiateRtpHeaderExtensions(
   }
 }
 
+static void StripCNCodecs(AudioCodecs* audio_codecs) {
+  AudioCodecs::iterator iter = audio_codecs->begin();
+  while (iter != audio_codecs->end()) {
+    if (stricmp(iter->name.c_str(), kComfortNoiseCodecName) == 0) {
+      iter = audio_codecs->erase(iter);
+    } else {
+      ++iter;
+    }
+  }
+}
+
 // Create a media content to be answered in a session-accept,
 // according to the given options.rtcp_mux, options.streams, codecs,
 // crypto, and streams.  If we don't currently have crypto (in
@@ -838,11 +898,36 @@ static bool CreateMediaContentAnswer(
     return false;  // Something went seriously wrong.
   }
 
+  // Make sure the answer media content direction is per default set as
+  // described in RFC3264 section 6.1.
+  switch (offer->direction()) {
+    case MD_INACTIVE:
+      answer->set_direction(MD_INACTIVE);
+      break;
+    case MD_SENDONLY:
+      answer->set_direction(MD_RECVONLY);
+      break;
+    case MD_RECVONLY:
+      answer->set_direction(MD_SENDONLY);
+      break;
+    case MD_SENDRECV:
+      answer->set_direction(MD_SENDRECV);
+      break;
+    default:
+      break;
+  }
+
   return true;
 }
 
 static bool IsMediaProtocolSupported(MediaType type,
                                      const std::string& protocol) {
+  // Data channels can have a protocol of SCTP or SCTP/DTLS.
+  if (type == MEDIA_TYPE_DATA &&
+      (protocol == kMediaProtocolSctp ||
+       protocol == kMediaProtocolSctpDtls)) {
+    return true;
+  }
   // Since not all applications serialize and deserialize the media protocol,
   // we will have to accept |protocol| to be empty.
   return protocol == kMediaProtocolAvpf || protocol == kMediaProtocolSavpf ||
@@ -866,8 +951,10 @@ void MediaSessionOptions::AddStream(MediaType type,
     has_video = true;
   else if (type == MEDIA_TYPE_AUDIO)
     has_audio = true;
-  else if (type == MEDIA_TYPE_DATA)
-    has_data = true;
+  // If we haven't already set the data_channel_type, and we add a
+  // stream, we assume it's an RTP data stream.
+  else if (type == MEDIA_TYPE_DATA && data_channel_type == DCT_NONE)
+    data_channel_type = DCT_RTP;
 }
 
 void MediaSessionOptions::RemoveStream(MediaType type,
@@ -917,6 +1004,11 @@ SessionDescription* MediaSessionDescriptionFactory::CreateOffer(
   DataCodecs data_codecs;
   GetCodecsToOffer(current_description, &audio_codecs, &video_codecs,
                    &data_codecs);
+
+  if (!options.vad_enabled) {
+    // If application doesn't want CN codecs in offer.
+    StripCNCodecs(&audio_codecs);
+  }
 
   RtpHeaderExtensions audio_rtp_extensions;
   RtpHeaderExtensions video_rtp_extensions;
@@ -978,14 +1070,30 @@ SessionDescription* MediaSessionDescriptionFactory::CreateOffer(
   }
 
   // Handle m=data.
-  if (options.has_data) {
+  if (options.has_data()) {
     scoped_ptr<DataContentDescription> data(new DataContentDescription());
+    bool is_sctp = (options.data_channel_type == DCT_SCTP);
+
     std::vector<std::string> crypto_suites;
-    GetSupportedDataCryptoSuites(&crypto_suites);
+    cricket::SecurePolicy sdes_policy = secure();
+    if (is_sctp) {
+      // SDES doesn't make sense for SCTP, so we disable it, and we only
+      // get SDES crypto suites for RTP-based data channels.
+      sdes_policy = cricket::SEC_DISABLED;
+      // Unlike SetMediaProtocol below, we need to set the protocol
+      // before we call CreateMediaContentOffer.  Otherwise,
+      // CreateMediaContentOffer won't know this is SCTP and will
+      // generate SSRCs rather than SIDs.
+      data->set_protocol(
+          secure_transport ? kMediaProtocolSctpDtls : kMediaProtocolSctp);
+    } else {
+      GetSupportedDataCryptoSuites(&crypto_suites);
+    }
+
     if (!CreateMediaContentOffer(
             options,
             data_codecs,
-            secure(),
+            sdes_policy,
             GetCryptos(GetFirstDataContentDescription(current_description)),
             crypto_suites,
             RtpHeaderExtensions(),
@@ -995,9 +1103,13 @@ SessionDescription* MediaSessionDescriptionFactory::CreateOffer(
       return NULL;
     }
 
-    data->set_bandwidth(options.data_bandwidth);
-    SetMediaProtocol(secure_transport, data.get());
-    offer->AddContent(CN_DATA, NS_JINGLE_RTP, data.release());
+    if (is_sctp) {
+      offer->AddContent(CN_DATA, NS_JINGLE_DRAFT_SCTP, data.release());
+    } else {
+      data->set_bandwidth(options.data_bandwidth);
+      SetMediaProtocol(secure_transport, data.get());
+      offer->AddContent(CN_DATA, NS_JINGLE_RTP, data.release());
+    }
     if (!AddTransportOffer(CN_DATA, options.transport_options,
                            current_description, offer.get())) {
       return NULL;
@@ -1051,6 +1163,11 @@ SessionDescription* MediaSessionDescriptionFactory::CreateAnswer(
       return NULL;
     }
 
+    AudioCodecs audio_codecs = audio_codecs_;
+    if (!options.vad_enabled) {
+      StripCNCodecs(&audio_codecs);
+    }
+
     scoped_ptr<AudioContentDescription> audio_answer(
         new AudioContentDescription());
     // Do not require or create SDES cryptos if DTLS is used.
@@ -1060,7 +1177,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateAnswer(
             static_cast<const AudioContentDescription*>(
                 audio_content->description),
             options,
-            audio_codecs_,
+            audio_codecs,
             sdes_policy,
             GetCryptos(GetFirstAudioContentDescription(current_description)),
             audio_rtp_extensions_,
@@ -1167,7 +1284,8 @@ SessionDescription* MediaSessionDescriptionFactory::CreateAnswer(
             data_answer.get())) {
       return NULL;  // Fails the session setup.
     }
-    bool rejected = !options.has_data || data_content->rejected ||
+
+    bool rejected = !options.has_data() || data_content->rejected ||
         !IsMediaProtocolSupported(MEDIA_TYPE_DATA, data_answer->protocol());
     if (!rejected) {
       data_answer->set_bandwidth(options.data_bandwidth);
@@ -1360,7 +1478,9 @@ bool MediaSessionDescriptionFactory::AddTransportAnswer(
 }
 
 bool IsMediaContent(const ContentInfo* content) {
-  return (content && content->type == NS_JINGLE_RTP);
+  return (content &&
+          (content->type == NS_JINGLE_RTP ||
+           content->type == NS_JINGLE_DRAFT_SCTP));
 }
 
 bool IsAudioContent(const ContentInfo* content) {

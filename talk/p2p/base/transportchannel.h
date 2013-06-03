@@ -44,24 +44,6 @@ namespace cricket {
 
 class Candidate;
 
-// Stats that we can return about the connections for this transport channel.
-struct ConnectionInfo {
-  bool best_connection;        // Is this the best connection we have?
-  bool writable;               // Has this connection received a STUN response?
-  bool readable;               // Has this connection received a STUN request?
-  bool timeout;                // Has this connection timed out?
-  bool new_connection;         // Is this a newly created connection?
-  size_t rtt;                  // The STUN RTT for this connection.
-  size_t sent_total_bytes;     // Total bytes sent on this connection.
-  size_t sent_bytes_second;    // Bps over the last measurement interval.
-  size_t recv_total_bytes;     // Total bytes received on this connection.
-  size_t recv_bytes_second;    // Bps over the last measurement interval.
-  Candidate local_candidate;   // The local candidate for this connection.
-  Candidate remote_candidate;  // The remote candidate for this connection.
-  void* key;                   // A static value that identifies this conn.
-};
-typedef std::vector<ConnectionInfo> ConnectionInfos;
-
 // Flags for SendPacket/SignalReadPacket.
 enum PacketFlags {
   PF_NORMAL       = 0x00,  // A normal packet.
@@ -96,6 +78,8 @@ class TransportChannel : public sigslot::has_slots<> {
   bool writable() const { return writable_; }
   sigslot::signal1<TransportChannel*> SignalReadableState;
   sigslot::signal1<TransportChannel*> SignalWritableState;
+  // Emitted when the TransportChannel's ability to send has changed.
+  sigslot::signal1<TransportChannel*> SignalReadyToSend;
 
   // Attempts to send the given packet.  The return value is < 0 on failure.
   // TODO: Remove the default argument once channel code is updated.

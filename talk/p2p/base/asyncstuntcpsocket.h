@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2011, Google Inc.
+ * Copyright 2013, Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,36 +25,42 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_BASE_PACKETSOCKETFACTORY_H_
-#define TALK_BASE_PACKETSOCKETFACTORY_H_
+#ifndef TALK_BASE_ASYNCSTUNTCPSOCKET_H_
+#define TALK_BASE_ASYNCSTUNTCPSOCKET_H_
 
-#include "talk/base/proxyinfo.h"
+#include "talk/base/asynctcpsocket.h"
+#include "talk/base/scoped_ptr.h"
+#include "talk/base/socketfactory.h"
 
-namespace talk_base {
+namespace cricket {
 
-class AsyncPacketSocket;
-
-class PacketSocketFactory {
+class AsyncStunTCPSocket : public talk_base::AsyncTCPSocketBase {
  public:
-  PacketSocketFactory() { }
-  virtual ~PacketSocketFactory() { }
+  // Binds and connects |socket| and creates AsyncTCPSocket for
+  // it. Takes ownership of |socket|. Returns NULL if bind() or
+  // connect() fail (|socket| is destroyed in that case).
+  static AsyncStunTCPSocket* Create(
+      talk_base::AsyncSocket* socket,
+      const talk_base::SocketAddress& bind_address,
+      const talk_base::SocketAddress& remote_address);
 
-  virtual AsyncPacketSocket* CreateUdpSocket(
-      const SocketAddress& address, int min_port, int max_port) = 0;
-  virtual AsyncPacketSocket* CreateServerTcpSocket(
-      const SocketAddress& local_address, int min_port, int max_port,
-      bool ssl) = 0;
+  AsyncStunTCPSocket(talk_base::AsyncSocket* socket, bool listen);
+  virtual ~AsyncStunTCPSocket() {}
 
-  // TODO: |proxy_info| and |user_agent| should be set
-  // per-factory and not when socket is created.
-  virtual AsyncPacketSocket* CreateClientTcpSocket(
-      const SocketAddress& local_address, const SocketAddress& remote_address,
-      const ProxyInfo& proxy_info, const std::string& user_agent, bool ssl) = 0;
+  virtual int Send(const void* pv, size_t cb);
+  virtual void ProcessInput(char* data, size_t* len);
+  virtual void HandleIncomingConnection(talk_base::AsyncSocket* socket);
 
  private:
-  DISALLOW_EVIL_CONSTRUCTORS(PacketSocketFactory);
+  // This method returns the message hdr + length written in the header.
+  // This method also returns the number of padding bytes needed/added to the
+  // turn message. |pad_bytes| should be used only when |is_turn| is true.
+  size_t GetExpectedLength(const void* data, size_t len,
+                           int* pad_bytes);
+
+  DISALLOW_EVIL_CONSTRUCTORS(AsyncStunTCPSocket);
 };
 
-}  // namespace talk_base
+}  // namespace cricket
 
-#endif  // TALK_BASE_PACKETSOCKETFACTORY_H_
+#endif  // TALK_BASE_ASYNCSTUNTCPSOCKET_H_

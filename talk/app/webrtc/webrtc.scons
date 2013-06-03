@@ -22,6 +22,7 @@ if env.Bit('have_webrtc_voice') and env.Bit('have_webrtc_video'):
       'audiotrack.cc',
       'jsepicecandidate.cc',
       'jsepsessiondescription.cc',
+      'mediaconstraintsinterface.cc',
       'mediastream.cc',
       'mediastreamhandler.cc',
       'mediastreamproxy.cc',

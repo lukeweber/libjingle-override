@@ -148,6 +148,19 @@ class SignalWhenDestroyedThread : public Thread {
   Event* event_;
 };
 
+// Function objects to test Thread::Invoke.
+struct Functor1 {
+  int operator()() { return 42; }
+};
+class Functor2 {
+ public:
+  explicit Functor2(bool* flag) : flag_(flag) {}
+  void operator()() { if (flag_) *flag_ = true; }
+ private:
+  bool* flag_;
+};
+
+
 TEST(ThreadTest, Main) {
   const SocketAddress addr("127.0.0.1", 0);
 
@@ -268,6 +281,25 @@ TEST(ThreadTest, Release) {
   // give it 3 seconds in case the machine is under load.
   bool signaled = event->Wait(3000);
   EXPECT_TRUE(signaled);
+}
+
+TEST(ThreadTest, Invoke) {
+  // Create and start the thread.
+  Thread thread;
+  thread.Start();
+  // Try calling functors.
+  EXPECT_EQ(42, thread.Invoke<int>(Functor1()));
+  bool called = false;
+  Functor2 f2(&called);
+  thread.Invoke<void>(f2);
+  EXPECT_TRUE(called);
+  // Try calling bare functions.
+  struct LocalFuncs {
+    static int Func1() { return 999; }
+    static void Func2() {}
+  };
+  EXPECT_EQ(999, thread.Invoke<int>(&LocalFuncs::Func1));
+  thread.Invoke<void>(&LocalFuncs::Func2);
 }
 
 #ifdef WIN32

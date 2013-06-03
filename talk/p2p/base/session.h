@@ -186,6 +186,15 @@ class TransportProxy : public sigslot::has_slots<>,
 
 typedef std::map<std::string, TransportProxy*> TransportMap;
 
+// Statistics for all the transports of this session.
+typedef std::map<std::string, TransportStats> TransportStatsMap;
+typedef std::map<std::string, std::string> ProxyTransportMap;
+
+struct SessionStats {
+  ProxyTransportMap proxy_to_transport;
+  TransportStatsMap transport_stats;
+};
+
 // A BaseSession manages general session state. This includes negotiation
 // of both the application-level and network-level protocols:  the former
 // defines what will be sent and the latter defines how it will be sent.  Each
@@ -324,6 +333,14 @@ class BaseSession : public sigslot::has_slots<>,
   sigslot::signal2<BaseSession* , const ContentInfos&>
       SignalRemoteDescriptionUpdate;
 
+  // Fired when SetState is called (regardless if there's a state change), which
+  // indicates the session description might have be updated.
+  sigslot::signal2<BaseSession*, ContentAction> SignalNewLocalDescription;
+
+  // Fired when SetState is called (regardless if there's a state change), which
+  // indicates the session description might have be updated.
+  sigslot::signal2<BaseSession*, ContentAction> SignalNewRemoteDescription;
+
   // Returns the transport that has been negotiated or NULL if
   // negotiation is still in progress.
   Transport* GetTransport(const std::string& content_name);
@@ -349,6 +366,9 @@ class BaseSession : public sigslot::has_slots<>,
   virtual void DestroyChannel(const std::string& content_name,
                               int component);
 
+  // Returns stats for all channels of all transports.
+  // This avoids exposing the internal structures used to track them.
+  virtual bool GetStats(SessionStats* stats);
  protected:
   bool PushdownTransportDescription(ContentSource source,
                                     ContentAction action);
@@ -462,6 +482,12 @@ class BaseSession : public sigslot::has_slots<>,
                                const std::string& content_name,
                                TransportDescription* info);
 
+  // Fires the new description signal according to the current state.
+  void SignalNewDescription();
+
+  // Gets the ContentAction and ContentSource according to the session state.
+  bool GetContentAction(ContentAction* action, ContentSource* source);
+
   talk_base::Thread* signaling_thread_;
   talk_base::Thread* worker_thread_;
   PortAllocator* port_allocator_;
@@ -472,7 +498,6 @@ class BaseSession : public sigslot::has_slots<>,
   talk_base::SSLIdentity* identity_;
   const SessionDescription* local_description_;
   SessionDescription* remote_description_;
-  bool transport_muxed_;
   uint64 ice_tiebreaker_;
   // This flag will be set to true after the first role switch. This flag
   // will enable us to stop any role switch during the call.

@@ -121,6 +121,7 @@ class P2PTransportChannel : public TransportChannelImpl,
   void HandleWritable();
   void HandleNotWritable();
   void HandleAllTimedOut();
+
   Connection* GetBestConnectionOnNetwork(talk_base::Network* network);
   bool CreateConnections(const Candidate &remote_candidate,
                          PortInterface* origin_port, bool readable);
@@ -133,7 +134,7 @@ class P2PTransportChannel : public TransportChannelImpl,
                                PortInterface* origin_port);
   bool IsPingable(Connection* conn);
   Connection* FindNextPingableConnection();
-  int NumPingableConnections();
+  void PingConnection(Connection* conn);
   void AddAllocatorSession(PortAllocatorSession* session);
 
   void OnPortReady(PortAllocatorSession *session, PortInterface* port);
@@ -147,11 +148,12 @@ class P2PTransportChannel : public TransportChannelImpl,
                         const std::string& remote_username,
                         bool port_muxed);
   void OnPortDestroyed(PortInterface* port);
+  void OnRoleConflict(PortInterface* port);
 
   void OnConnectionStateChange(Connection *connection);
   void OnReadPacket(Connection *connection, const char *data, size_t len);
+  void OnReadyToSend(Connection* connection);
   void OnConnectionDestroyed(Connection *connection);
-  void OnRoleConflict();
 
   void OnUseCandidate(Connection* conn);
 
@@ -168,7 +170,10 @@ class P2PTransportChannel : public TransportChannelImpl,
   std::vector<PortAllocatorSession*> allocator_sessions_;
   std::vector<PortInterface *> ports_;
   std::vector<Connection *> connections_;
-  Connection *best_connection_;
+  Connection* best_connection_;
+  // Connection selected by the controlling agent. This should be used only
+  // at controlled side when protocol type is RFC5245.
+  Connection* pending_best_connection_;
   std::vector<RemoteCandidate> remote_candidates_;
   bool sort_dirty_;  // indicates whether another sort is needed right now
   bool was_writable_;

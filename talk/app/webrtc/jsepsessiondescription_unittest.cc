@@ -102,7 +102,7 @@ class JsepSessionDescriptionTest : public testing::Test {
                                  "", "local", "eth0", 0, "1");
     candidate_ = candidate;
     const std::string session_id =
-        talk_base::ToString(talk_base::CreateRandomId());
+        talk_base::ToString(talk_base::CreateRandomId64());
     const std::string session_version =
         talk_base::ToString(talk_base::CreateRandomId());
     jsep_desc_.reset(new JsepSessionDescription("dummy"));

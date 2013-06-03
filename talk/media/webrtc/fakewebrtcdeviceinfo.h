@@ -52,16 +52,16 @@ class FakeWebRtcDeviceInfo : public webrtc::VideoCaptureModule::DeviceInfo {
     if (!dev) return;
     dev->caps.push_back(cap);
   }
-  virtual WebRtc_UWord32 NumberOfDevices() {
+  virtual uint32_t NumberOfDevices() {
     return devices_.size();
   }
-  virtual WebRtc_Word32 GetDeviceName(WebRtc_UWord32 device_num,
-                                      char* device_name,
-                                      WebRtc_UWord32 device_name_len,
-                                      char* device_id,
-                                      WebRtc_UWord32 device_id_len,
-                                      char* product_id,
-                                      WebRtc_UWord32 product_id_len) {
+  virtual int32_t GetDeviceName(uint32_t device_num,
+                                char* device_name,
+                                uint32_t device_name_len,
+                                char* device_id,
+                                uint32_t device_id_len,
+                                char* product_id,
+                                uint32_t product_id_len) {
     Device* dev = GetDeviceByIndex(device_num);
     if (!dev) return -1;
     talk_base::strcpyn(reinterpret_cast<char*>(device_name), device_name_len,
@@ -74,33 +74,33 @@ class FakeWebRtcDeviceInfo : public webrtc::VideoCaptureModule::DeviceInfo {
     }
     return 0;
   }
-  virtual WebRtc_Word32 NumberOfCapabilities(const char* device_id) {
+  virtual int32_t NumberOfCapabilities(const char* device_id) {
     Device* dev = GetDeviceById(device_id);
     if (!dev) return -1;
     return dev->caps.size();
   }
-  virtual WebRtc_Word32 GetCapability(const char* device_id,
-                                      const WebRtc_UWord32 device_cap_num,
-                                      webrtc::VideoCaptureCapability& cap) {
+  virtual int32_t GetCapability(const char* device_id,
+                                const uint32_t device_cap_num,
+                                webrtc::VideoCaptureCapability& cap) {
     Device* dev = GetDeviceById(device_id);
     if (!dev) return -1;
     if (device_cap_num >= dev->caps.size()) return -1;
     cap = dev->caps[device_cap_num];
     return 0;
   }
-  virtual WebRtc_Word32 GetOrientation(const char* device_id,
-                                       webrtc::VideoCaptureRotation& rotation) {
+  virtual int32_t GetOrientation(const char* device_id,
+                                 webrtc::VideoCaptureRotation& rotation) {
     return -1;  // not implemented
   }
-  virtual WebRtc_Word32 GetBestMatchedCapability(
+  virtual int32_t GetBestMatchedCapability(
       const char* device_id,
       const webrtc::VideoCaptureCapability& requested,
       webrtc::VideoCaptureCapability& resulting) {
     return -1;  // not implemented
   }
-  virtual WebRtc_Word32 DisplayCaptureSettingsDialogBox(
+  virtual int32_t DisplayCaptureSettingsDialogBox(
       const char* device_id, const char* dialog_title,
-      void* parent, WebRtc_UWord32 x, WebRtc_UWord32 y) {
+      void* parent, uint32_t x, uint32_t y) {
     return -1;  // not implemented
   }
 

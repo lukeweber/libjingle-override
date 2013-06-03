@@ -156,6 +156,14 @@ TEST_F(PhysicalSocketTest, TestUdpIPv6) {
   SocketTest::TestUdpIPv6();
 }
 
+TEST_F(PhysicalSocketTest, TestUdpReadyToSendIPv4) {
+  SocketTest::TestUdpReadyToSendIPv4();
+}
+
+TEST_F(PhysicalSocketTest, TestUdpReadyToSendIPv6) {
+  SocketTest::TestUdpReadyToSendIPv6();
+}
+
 TEST_F(PhysicalSocketTest, TestGetSetOptionsIPv4) {
   SocketTest::TestGetSetOptionsIPv4();
 }

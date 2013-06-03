@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2011, Google Inc.
+ * Copyright 2013, Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,42 +25,16 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_BASE_BASICPACKETSOCKETFACTORY_H_
-#define TALK_BASE_BASICPACKETSOCKETFACTORY_H_
+//
+// Prefix header for all source files of the 'AppRTCDemo' target in the
+// 'AppRTCDemo' project
+//
 
-#include "talk/base/packetsocketfactory.h"
+#import <Availability.h>
 
-namespace talk_base {
+#if __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_6_0
+#warning "This project uses features only available in iOS SDK 6.0 and later."
+#endif
 
-class AsyncSocket;
-class SocketFactory;
-class Thread;
-
-class BasicPacketSocketFactory : public PacketSocketFactory {
- public:
-  BasicPacketSocketFactory();
-  explicit BasicPacketSocketFactory(Thread* thread);
-  explicit BasicPacketSocketFactory(SocketFactory* socket_factory);
-  virtual ~BasicPacketSocketFactory();
-
-  virtual AsyncPacketSocket* CreateUdpSocket(
-      const SocketAddress& local_address, int min_port, int max_port);
-  virtual AsyncPacketSocket* CreateServerTcpSocket(
-      const SocketAddress& local_address, int min_port, int max_port, bool ssl);
-  virtual AsyncPacketSocket* CreateClientTcpSocket(
-      const SocketAddress& local_address, const SocketAddress& remote_address,
-      const ProxyInfo& proxy_info, const std::string& user_agent, bool ssl);
-
- private:
-  int BindSocket(AsyncSocket* socket, const SocketAddress& local_address,
-                 int min_port, int max_port);
-
-  SocketFactory* socket_factory();
-
-  Thread* thread_;
-  SocketFactory* socket_factory_;
-};
-
-}  // namespace talk_base
-
-#endif  // TALK_BASE_BASICPACKETSOCKETFACTORY_H_
+#import <UIKit/UIKit.h>
+#import <Foundation/Foundation.h>

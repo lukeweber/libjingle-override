@@ -93,7 +93,6 @@ class VideoEngineOverride : public T {
   }
   virtual ~VideoEngineOverride() {
   }
-
   bool is_camera_on() const { return T::GetVideoCapturer()->IsRunning(); }
   void set_has_senders(bool has_senders) {
     if (has_senders) {
@@ -126,7 +125,7 @@ class VideoEngineOverride : public T {
   }
 #define TEST_POST_VIDEOENGINE_INIT(TestClass, func) \
   TEST_F(TestClass, func##PostInit) { \
-    EXPECT_TRUE(engine_.Init()); \
+    EXPECT_TRUE(engine_.Init(talk_base::Thread::Current())); \
     func##Body(); \
     engine_.Terminate(); \
   }
@@ -136,7 +135,7 @@ class VideoEngineTest : public testing::Test {
  protected:
   // Tests starting and stopping the engine, and creating a channel.
   void StartupShutdown() {
-    EXPECT_TRUE(engine_.Init());
+    EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
     cricket::VideoMediaChannel* channel = engine_.CreateChannel(NULL);
     EXPECT_TRUE(channel != NULL);
     delete channel;
@@ -151,7 +150,7 @@ class VideoEngineTest : public testing::Test {
     EXPECT_EQ(S_OK, CoInitializeEx(NULL, COINIT_MULTITHREADED));
 
     // Engine should start even with COM already inited.
-    EXPECT_TRUE(engine_.Init());
+    EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
     engine_.Terminate();
     // Refcount after terminate should be 1; this tests if it is nonzero.
     EXPECT_EQ(S_FALSE, CoInitializeEx(NULL, COINIT_MULTITHREADED));
@@ -167,7 +166,7 @@ class VideoEngineTest : public testing::Test {
 
   void RegisterVideoProcessor() {
     cricket::FakeMediaProcessor vp;
-    EXPECT_TRUE(engine_.Init());
+    EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
     EXPECT_TRUE(engine_.RegisterProcessor(&vp));
     bool drop_frame = false;
     engine_.TriggerMediaFrame(0, NULL, &drop_frame);
@@ -184,7 +183,7 @@ class VideoEngineTest : public testing::Test {
   void SetCapture() {
     cricket::Device device("test", "device");
     EXPECT_FALSE(engine_.GetVideoCapturer());
-    EXPECT_TRUE(engine_.Init());
+    EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
     cricket::FakeVideoCapturer video_capturer;
     EXPECT_TRUE(engine_.SetVideoCapturer(&video_capturer));
     EXPECT_TRUE(engine_.GetVideoCapturer() != NULL);
@@ -565,7 +564,7 @@ class VideoMediaChannelTest : public testing::Test,
 
   virtual void SetUp() {
     cricket::Device device("test", "device");
-    EXPECT_TRUE(engine_.Init());
+    EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
     video_capturer_.reset(new cricket::FakeVideoCapturer);
     EXPECT_TRUE(video_capturer_.get() != NULL);
     EXPECT_TRUE(engine_.SetVideoCapturer(video_capturer_.get()));
@@ -1318,7 +1317,7 @@ class VideoMediaChannelTest : public testing::Test,
       EXPECT_TRUE(channel_->SetCapturer(kSsrc, capturer.get()));
       talk_base::Thread::Current()->ProcessMessages(time_between_send);
       EXPECT_TRUE(capturer->CaptureCustomFrame(format.width, format.height,
-                                             cricket::FOURCC_I420));
+                                               cricket::FOURCC_I420));
       ++captured_frames;
       EXPECT_FRAME_WAIT(captured_frames, format.width, format.height, kTimeout);
       EXPECT_FALSE(renderer_.black_frame());
@@ -1328,6 +1327,13 @@ class VideoMediaChannelTest : public testing::Test,
       ++captured_frames;
       EXPECT_FRAME_WAIT(captured_frames, codec.width, codec.height, kTimeout);
       EXPECT_TRUE(renderer_.black_frame());
+
+      // The black frame has the same timestamp as the next frame since it's
+      // timestamp is set to the last frame's timestamp + interval. WebRTC will
+      // not render a frame with the same timestamp so capture another frame
+      // with the frame capturer to increment the next frame's timestamp.
+      EXPECT_TRUE(capturer->CaptureCustomFrame(format.width, format.height,
+                                               cricket::FOURCC_I420));
     }
   }
 
@@ -1413,10 +1419,10 @@ class VideoMediaChannelTest : public testing::Test,
   }
 
   void HighAspectHighHeightCapturer() {
-    const int kWidth  = 100;
+    const int kWidth  = 80;
     const int kHeight = 10000;
-    const int kScaledWidth = 28;
-    const int kScaledHeight = 3072;
+    const int kScaledWidth = 20;
+    const int kScaledHeight = 2500;
 
     cricket::VideoCodec codec(DefaultCodec());
     EXPECT_TRUE(SetOneCodec(codec));
@@ -1442,6 +1448,8 @@ class VideoMediaChannelTest : public testing::Test,
         capturer->GetSupportedFormats();
     cricket::VideoFormat capture_format = (*formats)[0];
     EXPECT_EQ(cricket::CS_RUNNING, capturer->Start(capture_format));
+    // Capture frame to not get same frame timestamps as previous capturer.
+    capturer->CaptureFrame();
     EXPECT_TRUE(channel_->SetCapturer(kSsrc, capturer.get()));
     EXPECT_TRUE(talk_base::Thread::Current()->ProcessMessages(30));
     EXPECT_TRUE(capturer->CaptureCustomFrame(kWidth, kHeight,

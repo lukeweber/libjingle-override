@@ -70,6 +70,7 @@ class MediaSessionClient : public SessionClient, public sigslot::has_slots<> {
   const std::map<uint32, Call *>& calls() const { return calls_; }
 
   // The settings below combine with the settings on SessionManager to choose
+
   // whether SDES-SRTP, DTLS-SRTP, or no security should be used. The possible
   // combinations are shown in the following table. Note that where either DTLS
   // or SDES is possible, DTLS is preferred. Thus to require either SDES or

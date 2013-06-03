@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "talk/base/basictypes.h"
+#include "talk/base/buffer.h"
 #include "talk/base/logging.h"
 #include "talk/base/sigslot.h"
 #include "talk/base/socket.h"
@@ -162,6 +163,7 @@ struct AudioOptions {
     conference_mode.SetFrom(change.conference_mode);
     adjust_agc_delta.SetFrom(change.adjust_agc_delta);
     experimental_agc.SetFrom(change.experimental_agc);
+    aec_dump.SetFrom(change.aec_dump);
   }
 
   bool operator==(const AudioOptions& o) const {
@@ -173,7 +175,8 @@ struct AudioOptions {
         typing_detection == o.typing_detection &&
         conference_mode == o.conference_mode &&
         experimental_agc == o.experimental_agc &&
-        adjust_agc_delta == o.adjust_agc_delta;
+        adjust_agc_delta == o.adjust_agc_delta &&
+        aec_dump == o.aec_dump;
   }
 
   std::string ToString() const {
@@ -188,6 +191,7 @@ struct AudioOptions {
     ost << ToStringIfSet("conference", conference_mode);
     ost << ToStringIfSet("agc_delta", adjust_agc_delta);
     ost << ToStringIfSet("experimental_agc", experimental_agc);
+    ost << ToStringIfSet("aec_dump", aec_dump);
     ost << "}";
     return ost.str();
   }
@@ -208,6 +212,7 @@ struct AudioOptions {
   Settable<bool> conference_mode;
   Settable<int> adjust_agc_delta;
   Settable<bool> experimental_agc;
+  Settable<bool> aec_dump;
 };
 
 // Options that can be applied to a VideoMediaChannel or a VideoMediaEngine.
@@ -414,6 +419,8 @@ class MediaChannel : public sigslot::has_slots<> {
   virtual void OnPacketReceived(talk_base::Buffer* packet) = 0;
   // Called when a RTCP packet is received.
   virtual void OnRtcpReceived(talk_base::Buffer* packet) = 0;
+  // Called when the socket's ability to send has changed.
+  virtual void OnReadyToSend(bool ready) = 0;
   // Creates a new outgoing media stream with SSRCs and CNAME as described
   // by sp.
   virtual bool AddSendStream(const StreamParams& sp) = 0;
@@ -461,6 +468,7 @@ struct VoiceSenderInfo {
         rtt_ms(0),
         jitter_ms(0),
         audio_level(0),
+        aec_quality_min(0.0),
         echo_delay_median_ms(0),
         echo_delay_std_ms(0),
         echo_return_loss(0),
@@ -477,6 +485,7 @@ struct VoiceSenderInfo {
   int rtt_ms;
   int jitter_ms;
   int audio_level;
+  float aec_quality_min;
   int echo_delay_median_ms;
   int echo_delay_std_ms;
   int echo_return_loss;
@@ -529,7 +538,8 @@ struct VideoSenderInfo {
         framerate_input(0),
         framerate_sent(0),
         nominal_bitrate(0),
-        preferred_bitrate(0) {
+        preferred_bitrate(0),
+        adapt_reason(0) {
   }
 
   std::vector<uint32> ssrcs;
@@ -549,6 +559,7 @@ struct VideoSenderInfo {
   int framerate_sent;
   int nominal_bitrate;
   int preferred_bitrate;
+  int adapt_reason;
 };
 
 struct VideoReceiverInfo {
@@ -564,7 +575,9 @@ struct VideoReceiverInfo {
         frame_height(0),
         framerate_rcvd(0),
         framerate_decoded(0),
-        framerate_output(0) {
+        framerate_output(0),
+        framerate_render_input(0),
+        framerate_render_output(0) {
   }
 
   std::vector<uint32> ssrcs;
@@ -582,6 +595,10 @@ struct VideoReceiverInfo {
   int framerate_rcvd;
   int framerate_decoded;
   int framerate_output;
+  // Framerate as sent to the renderer.
+  int framerate_render_input;
+  // Framerate that the renderer reports.
+  int framerate_render_output;
 };
 
 struct DataSenderInfo {
@@ -793,22 +810,69 @@ class VideoMediaChannel : public MediaChannel {
   VideoRenderer *renderer_;
 };
 
+enum DataMessageType {
+  // TODO(pthatcher):  Make this enum match the SCTP PPIDs that WebRTC uses?
+  DMT_CONTROL = 0,
+  DMT_BINARY = 1,
+  DMT_TEXT = 2,
+};
+
 // Info about data received in DataMediaChannel.  For use in
 // DataMediaChannel::SignalDataReceived and in all of the signals that
 // signal fires, on up the chain.
 struct ReceiveDataParams {
-  // TODO(pthatcher): Should we change this to non-ssrc for non-rtp
-  // data engines?
+  // The in-packet stream indentifier.
+  // For SCTP, this is really SID, not SSRC.
   uint32 ssrc;
+  // The type of message (binary, text, or control).
+  DataMessageType type;
+  // A per-stream value incremented per packet in the stream.
   int seq_num;
+  // A per-stream value monotonically increasing with time.
   int timestamp;
+
+  ReceiveDataParams() :
+      ssrc(0),
+      type(DMT_TEXT),
+      seq_num(0),
+      timestamp(0) {
+  }
 };
 
 struct SendDataParams {
-  // TODO(pthatcher): Should we change this to non-ssrc for non-rtp
-  // data engines?
+  // The in-packet stream indentifier.
+  // For SCTP, this is really SID, not SSRC.
   uint32 ssrc;
+  // The type of message (binary, text, or control).
+  DataMessageType type;
+
+  // For SCTP, whether to send messages flagged as ordered or not.
+  // If false, messages can be received out of order.
+  bool ordered;
+  // For SCTP, whether the messages are sent reliably or not.
+  // If false, messages may be lost.
+  bool reliable;
+  // For SCTP, if reliable == false, provide partial reliability by
+  // resending up to this many times.  Either count or millis
+  // is supported, not both at the same time.
+  int max_rtx_count;
+  // For SCTP, if reliable == false, provide partial reliability by
+  // resending for up to this many milliseconds.  Either count or millis
+  // is supported, not both at the same time.
+  int max_rtx_ms;
+
+  SendDataParams() :
+      ssrc(0),
+      type(DMT_TEXT),
+      // TODO(pthatcher): Make these true by default?
+      ordered(false),
+      reliable(false),
+      max_rtx_count(0),
+      max_rtx_ms(0) {
+  }
 };
+
+enum SendDataResult { SDR_SUCCESS, SDR_ERROR, SDR_BLOCK };
 
 class DataMediaChannel : public MediaChannel {
  public:
@@ -845,7 +909,9 @@ class DataMediaChannel : public MediaChannel {
   virtual void OnRtcpReceived(talk_base::Buffer* packet) = 0;
 
   virtual bool SendData(
-      const SendDataParams& params, const std::string& data) = 0;
+      const SendDataParams& params,
+      const talk_base::Buffer& payload,
+      SendDataResult* result = NULL) = 0;
   // Signals when data is received (params, data, len)
   sigslot::signal3<const ReceiveDataParams&,
                    const char*,

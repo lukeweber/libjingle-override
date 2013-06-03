@@ -85,10 +85,12 @@ class Thread;
 namespace cricket {
 class PortAllocator;
 class WebRtcVideoDecoderFactory;
+class WebRtcVideoEncoderFactory;
 }
 
 namespace webrtc {
 class AudioDeviceModule;
+class MediaConstraintsInterface;
 
 // MediaStream container interface.
 class StreamCollectionInterface : public talk_base::RefCountInterface {
@@ -158,6 +160,7 @@ class PeerConnectionInterface : public talk_base::RefCountInterface {
 
   struct IceServer {
     std::string uri;
+    std::string username;
     std::string password;
   };
   typedef std::vector<IceServer> IceServers;
@@ -311,13 +314,16 @@ class PortAllocatorFactoryInterface : public talk_base::RefCountInterface {
     TurnConfiguration(const std::string& address,
                       int port,
                       const std::string& username,
-                      const std::string& password)
+                      const std::string& password,
+                      const std::string& transport_type)
         : server(address, port),
           username(username),
-          password(password) {}
+          password(password),
+          transport_type(transport_type) {}
     talk_base::SocketAddress server;
     std::string username;
     std::string password;
+    std::string transport_type;
   };
 
   virtual cricket::PortAllocator* CreatePortAllocator(
@@ -389,16 +395,15 @@ talk_base::scoped_refptr<PeerConnectionFactoryInterface>
 CreatePeerConnectionFactory();
 
 // Create a new instance of PeerConnectionFactoryInterface.
-// Ownership of |factory|, |default_adm|, and |decoder_factory| is transferred
-// to the returned factory.
-// TODO(dwkang): To prevent build break the default value is added for
-// |decoder_factory|. Remove it once Chrome has a value for that.
+// Ownership of |factory|, |default_adm|, and optionally |encoder_factory| and
+// |decoder_factory| transferred to the returned factory.
 talk_base::scoped_refptr<PeerConnectionFactoryInterface>
 CreatePeerConnectionFactory(
     talk_base::Thread* worker_thread,
     talk_base::Thread* signaling_thread,
     AudioDeviceModule* default_adm,
-    cricket::WebRtcVideoDecoderFactory* decoder_factory = NULL);
+    cricket::WebRtcVideoEncoderFactory* encoder_factory,
+    cricket::WebRtcVideoDecoderFactory* decoder_factory);
 
 }  // namespace webrtc
 

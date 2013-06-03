@@ -125,9 +125,9 @@ class TransportDescriptionFactoryTest : public testing::Test {
     // If DTLS is enabled, make sure the finger print is unchanged.
     if (dtls) {
       EXPECT_FALSE(
-          org_desc->identity_fingerprint->GetRfc4752Fingerprint().empty());
-      EXPECT_EQ(org_desc->identity_fingerprint->GetRfc4752Fingerprint(),
-                restart_desc->identity_fingerprint->GetRfc4752Fingerprint());
+          org_desc->identity_fingerprint->GetRfc4572Fingerprint().empty());
+      EXPECT_EQ(org_desc->identity_fingerprint->GetRfc4572Fingerprint(),
+                restart_desc->identity_fingerprint->GetRfc4572Fingerprint());
     }
   }
 

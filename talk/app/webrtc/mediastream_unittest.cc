@@ -139,8 +139,12 @@ TEST_F(MediaStreamTest, RemoveTrack) {
 
   EXPECT_TRUE(stream_->RemoveTrack(video_track_));
   EXPECT_FALSE(stream_->RemoveTrack(video_track_));
+
   EXPECT_EQ(0u, stream_->GetVideoTracks().size());
   EXPECT_EQ(0u, stream_->GetVideoTracks().size());
+
+  EXPECT_FALSE(stream_->RemoveTrack(static_cast<AudioTrackInterface*>(NULL)));
+  EXPECT_FALSE(stream_->RemoveTrack(static_cast<VideoTrackInterface*>(NULL)));
 }
 
 TEST_F(MediaStreamTest, ChangeVideoTrack) {

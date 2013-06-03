@@ -29,9 +29,6 @@
 
 #include <math.h>
 
-#ifdef HAVE_YUV
-#include "libyuv/compare.h"
-#endif
 #include "talk/base/bytebuffer.h"
 #include "talk/base/fileutils.h"
 #include "talk/base/gunit.h"
@@ -262,27 +259,6 @@ std::string GetTestFilePath(const std::string& filename) {
   path.AppendFolder("testdata");
   path.SetFilename(filename);
   return path.pathname();
-}
-
-// PSNR formula: psnr = 10 * log10 (Peak Signal^2 / mse)
-// sse is set to a small number for identical frames or sse == 0
-double ComputePSNR(double sse, double size) {
-  if (sse <= 0.)
-    sse = 65025.0 * size / pow(10., 128./10.);  // produces max PSNR of 128
-  return 10.0 * log10(65025.0 * size / sse);
-}
-
-double ComputeSumSquareError(const uint8 *org, const uint8 *rec, int size) {
-#ifdef HAVE_YUV
-  return static_cast<double>(libyuv::ComputeSumSquareError(org, rec, size));
-#else
-  double sse = 0.;
-  for (int j = 0; j < size; ++j) {
-    const int diff = static_cast<int>(org[j]) - static_cast<int>(rec[j]);
-    sse += static_cast<double>(diff * diff);
-  }
-  return sse;
-#endif
 }
 
 // Loads the image with the specified prefix and size into |out|.

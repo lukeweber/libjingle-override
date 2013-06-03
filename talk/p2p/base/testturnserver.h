@@ -31,8 +31,8 @@
 #include <string>
 
 #include "talk/base/asyncudpsocket.h"
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/thread.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/stun.h"
 #include "talk/p2p/base/turnserver.h"
 
@@ -47,14 +47,20 @@ class TestTurnServer : public TurnAuthInterface {
                  const talk_base::SocketAddress& udp_int_addr,
                  const talk_base::SocketAddress& udp_ext_addr)
       : server_(thread) {
-    server_.AddInternalServerSocket(talk_base::AsyncUDPSocket::Create(
-        thread->socketserver(), udp_int_addr));
+    server_.AddInternalSocket(talk_base::AsyncUDPSocket::Create(
+        thread->socketserver(), udp_int_addr), PROTO_UDP);
     server_.SetExternalSocketFactory(new talk_base::BasicPacketSocketFactory(),
         udp_ext_addr);
     server_.set_realm(kTestRealm);
     server_.set_software(kTestSoftware);
     server_.set_auth_hook(this);
   }
+
+  void set_enable_otu_nonce(bool enable) {
+    server_.set_enable_otu_nonce(enable);
+  }
+
+  TurnServer* server() { return &server_; }
 
  private:
   // For this test server, succeed if the password is the same as the username.

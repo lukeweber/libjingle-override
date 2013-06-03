@@ -50,6 +50,9 @@ void TransportChannel::set_readable(bool readable) {
 void TransportChannel::set_writable(bool writable) {
   if (writable_ != writable) {
     writable_ = writable;
+    if (writable_) {
+      SignalReadyToSend(this);
+    }
     SignalWritableState(this);
   }
 }

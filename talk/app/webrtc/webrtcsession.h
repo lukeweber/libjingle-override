@@ -133,8 +133,7 @@ class WebRtcSession : public cricket::BaseSession,
       const MediaConstraintsInterface* constraints);
 
   SessionDescriptionInterface* CreateAnswer(
-      const MediaConstraintsInterface* constraints,
-      const SessionDescriptionInterface* offer);
+      const MediaConstraintsInterface* constraints);
 
   bool SetLocalDescription(SessionDescriptionInterface* desc,
                            std::string* err_desc);
@@ -152,18 +151,18 @@ class WebRtcSession : public cricket::BaseSession,
   virtual bool GetTrackIdBySsrc(uint32 ssrc, std::string* id);
 
   // AudioMediaProviderInterface implementation.
-  virtual void SetAudioPlayout(const std::string& name, bool enable);
-  virtual void SetAudioSend(const std::string& name, bool enable,
-                            const cricket::AudioOptions& options);
+  virtual void SetAudioPlayout(uint32 ssrc, bool enable) OVERRIDE;
+  virtual void SetAudioSend(uint32 ssrc, bool enable,
+                            const cricket::AudioOptions& options) OVERRIDE;
 
   // Implements VideoMediaProviderInterface.
-  virtual bool SetCaptureDevice(const std::string& name,
-                                cricket::VideoCapturer* camera);
-  virtual void SetVideoPlayout(const std::string& name,
+  virtual bool SetCaptureDevice(uint32 ssrc,
+                                cricket::VideoCapturer* camera) OVERRIDE;
+  virtual void SetVideoPlayout(uint32 ssrc,
                                bool enable,
-                               cricket::VideoRenderer* renderer);
-  virtual void SetVideoSend(const std::string& name, bool enable,
-                            const cricket::VideoOptions* options);
+                               cricket::VideoRenderer* renderer) OVERRIDE;
+  virtual void SetVideoSend(uint32 ssrc, bool enable,
+                            const cricket::VideoOptions* options) OVERRIDE;
 
   // Implements DtmfProviderInterface.
   virtual bool CanInsertDtmf(const std::string& track_id);
@@ -189,8 +188,6 @@ class WebRtcSession : public cricket::BaseSession,
   bool UpdateSessionState(Action action, cricket::ContentSource source,
                           const cricket::SessionDescription* desc);
   static Action GetAction(const std::string& type);
-
-  virtual void OnMessage(talk_base::Message* msg);
 
   // Transport related callbacks, override from cricket::BaseSession.
   virtual void OnTransportRequestSignaling(cricket::Transport* transport);
@@ -266,13 +263,17 @@ class WebRtcSession : public cricket::BaseSession,
   talk_base::scoped_ptr<SessionDescriptionInterface> remote_desc_;
   // Candidates that arrived before the remote description was set.
   std::vector<IceCandidateInterface*> saved_candidates_;
-  std::string session_id_;
   uint64 session_version_;
   // If the remote peer is using a older version of implementation.
   bool older_version_remote_peer_;
-  // True if this session can create an RTP data engine. This is controlled
-  // by the constraint kEnableRtpDataChannels.
-  bool allow_rtp_data_engine_;
+  // Specifies which kind of data channel is allowed. This is controlled
+  // by the chrome command-line flag and constraints:
+  // 1. If chrome command-line switch 'enable-sctp-data-channels' is enabled,
+  // constraint kEnableDtlsSrtp is true, and constaint kEnableRtpDataChannels is
+  // not set or false, SCTP is allowed (DCT_SCTP);
+  // 2. If constraint kEnableRtpDataChannels is true, RTP is allowed (DCT_RTP);
+  // 3. If both 1&2 are false, data channel is not allowed (DCT_NONE).
+  cricket::DataChannelType data_channel_type_;
   talk_base::scoped_ptr<IceRestartAnswerLatch> ice_restart_latch_;
   sigslot::signal0<> SignalVoiceChannelDestroyed;
   sigslot::signal0<> SignalVideoChannelDestroyed;

@@ -47,8 +47,12 @@ static const size_t kMinIceUriTokens = 2;
 // The min number of tokens must present in Turn host uri.
 // e.g. user@turn.example.org
 static const size_t kTurnHostTokensNum = 2;
+// Number of tokens must be preset when TURN uri has transport param.
+static const size_t kTurnTransportTokensNum = 2;
 // The default stun port.
 static const int kDefaultPort = 3478;
+static const char kTransport[] = "transport";
+static const char kDefaultTransportType[] = "udp";
 
 // NOTE: Must be in the same order as the ServiceType enum.
 static const char* kValidIceServiceTypes[] = {
@@ -141,9 +145,18 @@ bool ParseIceServers(const PeerConnectionInterface::IceServers& configuration,
       continue;
     }
     std::vector<std::string> tokens;
+    std::string turn_transport_type = kDefaultTransportType;
     talk_base::tokenize(server.uri, '?', &tokens);
-    // TODO(ronghuawu): Handle [ "?transport=" transport ].
     std::string uri_without_transport = tokens[0];
+    // Let's look into transport= param, if it exists.
+    if (tokens.size() == kTurnTransportTokensNum) {  // ?transport= is present.
+      std::string uri_transport_param = tokens[1];
+      talk_base::tokenize(uri_transport_param, '=', &tokens);
+      if (tokens[0] == kTransport) {
+        turn_transport_type = tokens[1];
+      }
+    }
+
     tokens.clear();
     talk_base::tokenize(uri_without_transport, ':', &tokens);
     if (tokens.size() < kMinIceUriTokens) {
@@ -181,24 +194,25 @@ bool ParseIceServers(const PeerConnectionInterface::IceServers& configuration,
       case STUNS:
         stun_config->push_back(StunConfiguration(address, port));
         break;
-      case TURN:
-      case TURNS: {
-        // Turn url example from the spec |url:"turn:user@turn.example.org"|.
-        std::vector<std::string> turn_tokens;
-        talk_base::tokenize(address, '@', &turn_tokens);
-        if (turn_tokens.size() != kTurnHostTokensNum) {
-          LOG(LS_ERROR) << "Invalid TURN configuration : "
-                        << address << " can't proceed.";
-          return false;
+      case TURN: {
+        if (server.username.empty()) {
+          // Turn url example from the spec |url:"turn:user@turn.example.org"|.
+          std::vector<std::string> turn_tokens;
+          talk_base::tokenize(address, '@', &turn_tokens);
+          if (turn_tokens.size() == kTurnHostTokensNum) {
+            server.username = talk_base::s_url_decode(turn_tokens[0]);
+            address = turn_tokens[1];
+          }
         }
-        std::string username = turn_tokens[0];
-        address = turn_tokens[1];
         turn_config->push_back(TurnConfiguration(address, port,
-                                                 username, server.password));
+                                                 server.username,
+                                                 server.password,
+                                                 turn_transport_type));
         // STUN functionality is part of TURN.
         stun_config->push_back(StunConfiguration(address, port));
         break;
       }
+      case TURNS:
       case INVALID:
       default:
         LOG(WARNING) << "Configuration not supported: " << server.uri;
@@ -215,6 +229,11 @@ bool CanAddLocalMediaStream(webrtc::StreamCollectionInterface* current_streams,
                             webrtc::MediaStreamInterface* new_stream) {
   if (!new_stream || !current_streams)
     return false;
+  if (current_streams->find(new_stream->label()) != NULL) {
+    LOG(LS_ERROR) << "MediaStream with label " << new_stream->label()
+                  << " is already added.";
+    return false;
+  }
 
   bool audio_track_exist = false;
   for (size_t j = 0; j < current_streams->count(); ++j) {
@@ -240,11 +259,14 @@ PeerConnection::PeerConnection(PeerConnectionFactory* factory)
       signaling_state_(kStable),
       ice_state_(kIceNew),
       ice_connection_state_(kIceConnectionNew),
-      ice_gathering_state_(kIceGatheringNew),
-      local_media_streams_(StreamCollection::Create()) {
+      ice_gathering_state_(kIceGatheringNew) {
 }
 
 PeerConnection::~PeerConnection() {
+  if (mediastream_signaling_)
+    mediastream_signaling_->TearDown();
+  if (stream_handler_container_)
+    stream_handler_container_->TearDown();
 }
 
 bool PeerConnection::Initialize(
@@ -288,8 +310,8 @@ bool PeerConnection::DoInitialize(
                                    factory_->worker_thread(),
                                    port_allocator_.get(),
                                    mediastream_signaling_.get()));
-  stream_handler_.reset(new MediaStreamHandlers(session_.get(),
-                                                session_.get()));
+  stream_handler_container_.reset(new MediaStreamHandlerContainer(
+      session_.get(), session_.get()));
   stats_.set_session(session_.get());
 
   // Initialize the WebRtcSession. It creates transport channels etc.
@@ -306,7 +328,7 @@ bool PeerConnection::DoInitialize(
 
 talk_base::scoped_refptr<StreamCollectionInterface>
 PeerConnection::local_streams() {
-  return local_media_streams_;
+  return mediastream_signaling_->local_streams();
 }
 
 talk_base::scoped_refptr<StreamCollectionInterface>
@@ -319,23 +341,24 @@ bool PeerConnection::AddStream(MediaStreamInterface* local_stream,
   if (IsClosed()) {
     return false;
   }
-  if (!CanAddLocalMediaStream(local_media_streams_, local_stream))
+  if (!CanAddLocalMediaStream(mediastream_signaling_->local_streams(),
+                              local_stream))
     return false;
 
   // TODO(perkj): Implement support for MediaConstraints in AddStream.
-  local_media_streams_->AddStream(local_stream);
-  mediastream_signaling_->SetLocalStreams(local_media_streams_);
+  if (!mediastream_signaling_->AddLocalStream(local_stream)) {
+    return false;
+  }
   stats_.AddStream(local_stream);
   observer_->OnRenegotiationNeeded();
   return true;
 }
 
-void PeerConnection::RemoveStream(MediaStreamInterface* remove_stream) {
+void PeerConnection::RemoveStream(MediaStreamInterface* local_stream) {
   if (IsClosed()) {
     return;
   }
-  local_media_streams_->RemoveStream(remove_stream);
-  mediastream_signaling_->SetLocalStreams(local_media_streams_);
+  mediastream_signaling_->RemoveLocalStream(local_stream);
   observer_->OnRenegotiationNeeded();
 }
 
@@ -345,7 +368,7 @@ talk_base::scoped_refptr<DtmfSenderInterface> PeerConnection::CreateDtmfSender(
     LOG(LS_ERROR) << "CreateDtmfSender - track is NULL.";
     return NULL;
   }
-  if (!local_media_streams_->FindAudioTrack(track->id())) {
+  if (!mediastream_signaling_->local_streams()->FindAudioTrack(track->id())) {
     LOG(LS_ERROR) << "CreateDtmfSender is called with a non local audio track.";
     return NULL;
   }
@@ -433,23 +456,7 @@ void PeerConnection::CreateAnswer(
     return;
   }
   CreateSessionDescriptionMsg* msg = new CreateSessionDescriptionMsg(observer);
-  // TODO(perkj): This checks should be done by the session. Not here.
-  // Clean this up once the old Jsep API has been removed.
-  const SessionDescriptionInterface* offer = session_->remote_description();
-  std::string error;
-  if (!offer) {
-    msg->error = "CreateAnswer can't be called before SetRemoteDescription.";
-    signaling_thread()->Post(this, MSG_CREATE_SESSIONDESCRIPTION_FAILED, msg);
-    return;
-  }
-  if (offer->type() != JsepSessionDescription::kOffer) {
-    msg->error =
-        "CreateAnswer failed because remote_description is not an offer.";
-    signaling_thread()->Post(this, MSG_CREATE_SESSIONDESCRIPTION_FAILED, msg);
-    return;
-  }
-
-  msg->description.reset(session_->CreateAnswer(constraints, offer));
+  msg->description.reset(session_->CreateAnswer(constraints));
   if (!msg->description) {
     msg->error = "CreateAnswer failed.";
     signaling_thread()->Post(this, MSG_CREATE_SESSIONDESCRIPTION_FAILED, msg);
@@ -479,7 +486,6 @@ void PeerConnection::SetLocalDescription(
     PostSetSessionDescriptionFailure(observer, error);
     return;
   }
-  stream_handler_->CommitLocalStreams(local_media_streams_);
   SetSessionDescriptionMsg* msg =  new SetSessionDescriptionMsg(observer);
   signaling_thread()->Post(this, MSG_SET_SESSIONDESCRIPTION_SUCCESS, msg);
 }
@@ -540,10 +546,6 @@ void PeerConnection::Close() {
   // Update stats here so that we have the most recent stats for tracks and
   // streams before the channels are closed.
   stats_.UpdateStats();
-
-  // Remove any association between local MediaStreams and this session by
-  // providing an empty collection instead of |local_media_streams_|.
-  stream_handler_->CommitLocalStreams(StreamCollection::Create());
 
   session_->Terminate();
 }
@@ -637,20 +639,67 @@ void PeerConnection::OnMessage(talk_base::Message* msg) {
   }
 }
 
-void PeerConnection::OnAddStream(MediaStreamInterface* stream) {
-  stream_handler_->AddRemoteStream(stream);
+void PeerConnection::OnAddRemoteStream(MediaStreamInterface* stream) {
   stats_.AddStream(stream);
   observer_->OnAddStream(stream);
 }
 
-void PeerConnection::OnRemoveStream(MediaStreamInterface* stream) {
-  stream_handler_->RemoveRemoteStream(stream);
+void PeerConnection::OnRemoveRemoteStream(MediaStreamInterface* stream) {
+  stream_handler_container_->RemoveRemoteStream(stream);
   observer_->OnRemoveStream(stream);
 }
 
 void PeerConnection::OnAddDataChannel(DataChannelInterface* data_channel) {
   observer_->OnDataChannel(DataChannelProxy::Create(signaling_thread(),
                                                     data_channel));
+}
+
+void PeerConnection::OnAddRemoteAudioTrack(MediaStreamInterface* stream,
+                                           AudioTrackInterface* audio_track,
+                                           uint32 ssrc) {
+  stream_handler_container_->AddRemoteAudioTrack(stream, audio_track, ssrc);
+}
+
+void PeerConnection::OnAddRemoteVideoTrack(MediaStreamInterface* stream,
+                                           VideoTrackInterface* video_track,
+                                           uint32 ssrc) {
+  stream_handler_container_->AddRemoteVideoTrack(stream, video_track, ssrc);
+}
+
+void PeerConnection::OnRemoveRemoteAudioTrack(
+    MediaStreamInterface* stream,
+    AudioTrackInterface* audio_track) {
+  stream_handler_container_->RemoveRemoteTrack(stream, audio_track);
+}
+
+void PeerConnection::OnRemoveRemoteVideoTrack(
+    MediaStreamInterface* stream,
+    VideoTrackInterface* video_track) {
+  stream_handler_container_->RemoveRemoteTrack(stream, video_track);
+}
+void PeerConnection::OnAddLocalAudioTrack(MediaStreamInterface* stream,
+                                          AudioTrackInterface* audio_track,
+                                          uint32 ssrc) {
+  stream_handler_container_->AddLocalAudioTrack(stream, audio_track, ssrc);
+}
+void PeerConnection::OnAddLocalVideoTrack(MediaStreamInterface* stream,
+                                          VideoTrackInterface* video_track,
+                                          uint32 ssrc) {
+  stream_handler_container_->AddLocalVideoTrack(stream, video_track, ssrc);
+}
+
+void PeerConnection::OnRemoveLocalAudioTrack(MediaStreamInterface* stream,
+                                             AudioTrackInterface* audio_track) {
+  stream_handler_container_->RemoveLocalTrack(stream, audio_track);
+}
+
+void PeerConnection::OnRemoveLocalVideoTrack(MediaStreamInterface* stream,
+                                             VideoTrackInterface* video_track) {
+  stream_handler_container_->RemoveLocalTrack(stream, video_track);
+}
+
+void PeerConnection::OnRemoveLocalStream(MediaStreamInterface* stream) {
+  stream_handler_container_->RemoveLocalStream(stream);
 }
 
 void PeerConnection::OnIceConnectionChange(

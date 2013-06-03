@@ -29,11 +29,12 @@
 
 #include <algorithm>
 
-#if defined(HAVE_YUV)
+#if !defined(DISABLE_YUV)
 #include "libyuv/scale_argb.h"
 #endif
 #include "talk/base/common.h"
 #include "talk/base/logging.h"
+#include "talk/base/systeminfo.h"
 #include "talk/media/base/videoprocessor.h"
 
 #if defined(HAVE_WEBRTC_VIDEO)
@@ -49,8 +50,8 @@ namespace cricket {
 const uint32 kStateChange = 0;
 
 static const int64 kMaxDistance = ~(static_cast<int64>(1) << 63);
-static const int64 kMinDesirableFps = static_cast<int64>(14);
 static const int kYU12Penalty = 16;  // Needs to be higher than MJPG index.
+static const int kDefaultScreencastFps = 5;
 typedef talk_base::TypedMessageData<CaptureState> StateChangeParams;
 
 /////////////////////////////////////////////////////////////////////
@@ -93,6 +94,11 @@ void VideoCapturer::Construct() {
   enable_camera_list_ = false;
   capture_state_ = CS_STOPPED;
   SignalFrameCaptured.connect(this, &VideoCapturer::OnFrameCaptured);
+  scaled_width_ = 0;
+  scaled_height_ = 0;
+  // TODO(fbarchard): Consider removing cores as a factor for scaling.
+  talk_base::SystemInfo system_info;
+  num_cores_ = system_info.GetMaxPhysicalCpus();
 }
 
 const std::vector<VideoFormat>* VideoCapturer::GetSupportedFormats() const {
@@ -124,6 +130,20 @@ void VideoCapturer::UpdateAspectRatio(int ratio_w, int ratio_h) {
 void VideoCapturer::ClearAspectRatio() {
   ratio_w_ = 0;
   ratio_h_ = 0;
+}
+
+bool VideoCapturer::Restart(const VideoFormat& capture_format) {
+  if (!IsRunning()) {
+    return StartCapturing(capture_format);
+  }
+
+  if (GetCaptureFormat() != NULL && *GetCaptureFormat() == capture_format) {
+    // The reqested format is the same; nothing to do.
+    return true;
+  }
+
+  Stop();
+  return StartCapturing(capture_format);
 }
 
 void VideoCapturer::SetSupportedFormats(
@@ -191,6 +211,7 @@ bool VideoCapturer::RemoveVideoProcessor(VideoProcessor* video_processor) {
 
 void VideoCapturer::ConstrainSupportedFormats(const VideoFormat& max_format) {
   max_format_.reset(new VideoFormat(max_format));
+  LOG(LS_VERBOSE) << " ConstrainSupportedFormats " << max_format.ToString();
   UpdateFilteredSupportedFormats();
 }
 
@@ -220,11 +241,24 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
 #define VIDEO_FRAME_NAME WebRtcVideoFrame
 #endif
 #if defined(VIDEO_FRAME_NAME)
-#if defined(HAVE_YUV)
+#if !defined(DISABLE_YUV)
   if (IsScreencast()) {
     int scaled_width, scaled_height;
-    ComputeScale(captured_frame->width, captured_frame->height, &scaled_width,
-                 &scaled_height);
+    int desired_screencast_fps = capture_format_.get() ?
+        VideoFormat::IntervalToFps(capture_format_->interval) :
+        kDefaultScreencastFps;
+    ComputeScale(captured_frame->width, captured_frame->height,
+                 desired_screencast_fps, num_cores_,
+                 &scaled_width, &scaled_height);
+
+    if (scaled_width != scaled_width_ || scaled_height != scaled_height_) {
+      LOG(LS_VERBOSE) << "Scaling Screencast from "
+                      << captured_frame->width << "x"
+                      << captured_frame->height << " to "
+                      << scaled_width << "x" << scaled_height;
+      scaled_width_ = scaled_width;
+      scaled_height_ = scaled_height;
+    }
     if (FOURCC_ARGB == captured_frame->fourcc &&
         (scaled_width != captured_frame->height ||
          scaled_height != captured_frame->height)) {
@@ -245,7 +279,7 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
       scaled_frame->data_size = scaled_width * 4 * scaled_height;
     }
   }
-#endif  // HAVE_YUV
+#endif  // !DISABLE_YUV
         // Size to crop captured frame to.  This adjusts the captured frames
         // aspect ratio to match the final view aspect ratio, considering pixel
   // aspect ratio and rotation.  The final size may be scaled down by video
@@ -381,11 +415,16 @@ int64 VideoCapturer::GetFormatDistance(const VideoFormat& desired,
   if (delta_h < 0) {
     delta_h = delta_h * kDownPenalty;
   }
+  // Require camera fps to be at least 80% of what is requested if resolution
+  // matches.
+  // Require camera fps to be at least 96% of what is requested, or higher,
+  // if resolution differs. 96% allows for slight variations in fps. e.g. 29.97
   if (delta_fps < 0) {
-    // For same resolution, prefer higher framerate but accept lower.
-    // Otherwise prefer higher resolution.
+    int64 min_desirable_fps = delta_w ?
+    VideoFormat::IntervalToFps(desired.interval) * 29 / 30 :
+    VideoFormat::IntervalToFps(desired.interval) * 24 / 30;
     delta_fps = -delta_fps;
-    if (supported_fps < kMinDesirableFps) {
+    if (supported_fps < min_desirable_fps) {
       distance |= static_cast<int64>(1) << 62;
     } else {
       distance |= static_cast<int64>(1) << 15;

@@ -44,7 +44,7 @@ import java.util.concurrent.TimeUnit;
 /** End-to-end tests for PeerConnection.java. */
 public class PeerConnectionTest extends TestCase {
   // Set to true to render video.
-  private static final boolean RENDER_TO_GUI = true;
+  private static final boolean RENDER_TO_GUI = false;
 
   private static class ObserverExpectations implements PeerConnection.Observer,
                                             VideoRenderer.Callbacks,
@@ -237,17 +237,21 @@ public class PeerConnectionTest extends TestCase {
 
     public SdpObserverLatch() {}
 
-    public void onSuccess() {
+    public void onCreateSuccess(SessionDescription sdp) {
+      this.sdp = sdp;
+      onSetSuccess();
+    }
+
+    public void onSetSuccess() {
       success = true;
       latch.countDown();
     }
 
-    public void onSuccess(SessionDescription sdp) {
-      this.sdp = sdp;
-      onSuccess();
+    public void onCreateFailure(String error) {
+      onSetFailure(error);
     }
 
-    public void onFailure(String error) {
+    public void onSetFailure(String error) {
       this.error = error;
       latch.countDown();
     }
@@ -315,7 +319,10 @@ public class PeerConnectionTest extends TestCase {
     MediaStream lMS = factory.createLocalMediaStream(streamLabel);
     VideoTrack videoTrack =
         factory.createVideoTrack(videoTrackId, videoSource);
-    videoTrack.addRenderer(createVideoRenderer(observer));
+    assertNotNull(videoTrack);
+    VideoRenderer videoRenderer = createVideoRenderer(observer);
+    assertNotNull(videoRenderer);
+    videoTrack.addRenderer(videoRenderer);
     lMS.addTrack(videoTrack);
     // Just for fun, let's remove and re-add the track.
     lMS.removeTrack(videoTrack);
@@ -341,7 +348,9 @@ public class PeerConnectionTest extends TestCase {
     LinkedList<PeerConnection.IceServer> iceServers =
         new LinkedList<PeerConnection.IceServer>();
     iceServers.add(new PeerConnection.IceServer(
-        "stun:stun.l.google.com:19302", ""));
+        "stun:stun.l.google.com:19302"));
+    iceServers.add(new PeerConnection.IceServer(
+        "turn:fake.example.com", "fakeUsername", "fakePassword"));
     ObserverExpectations offeringExpectations = new ObserverExpectations();
     PeerConnection offeringPC = factory.createPeerConnection(
         iceServers, constraints, offeringExpectations);

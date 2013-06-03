@@ -34,191 +34,243 @@
 
 namespace webrtc {
 
-const char StatsElement::kStatsValueNameAudioOutputLevel[] = "audioOutputLevel";
-const char StatsElement::kStatsValueNameAudioInputLevel[] = "audioInputLevel";
-const char StatsElement::kStatsValueNameBytesSent[] = "bytesSent";
-const char StatsElement::kStatsValueNamePacketsSent[] = "packetsSent";
-const char StatsElement::kStatsValueNameBytesReceived[] = "bytesReceived";
-const char StatsElement::kStatsValueNamePacketsReceived[] = "packetsReceived";
-const char StatsElement::kStatsValueNamePacketsLost[] = "packetsLost";
-
-const char StatsElement::kStatsValueNameFirsReceived[] = "googFirsReceived";
-const char StatsElement::kStatsValueNameFirsSent[] = "googFirsSent";
-const char StatsElement::kStatsValueNameFrameHeightReceived[] =
-    "googFrameHeightReceived";
-const char StatsElement::kStatsValueNameFrameHeightSent[] =
-    "googFrameHeightSent";
-const char StatsElement::kStatsValueNameFrameRateReceived[] =
-    "googFrameRateReceived";
-const char StatsElement::kStatsValueNameFrameRateDecoded[] =
-    "googFrameRateDecoded";
-const char StatsElement::kStatsValueNameFrameRateOutput[] =
-    "googFrameRateOutput";
-const char StatsElement::kStatsValueNameFrameRateInput[] = "googFrameRateInput";
-const char StatsElement::kStatsValueNameFrameRateSent[] = "googFrameRateSent";
-const char StatsElement::kStatsValueNameFrameWidthReceived[] =
-    "googFrameWidthReceived";
-const char StatsElement::kStatsValueNameFrameWidthSent[] = "googFrameWidthSent";
-const char StatsElement::kStatsValueNameJitterReceived[] = "googJitterReceived";
-const char StatsElement::kStatsValueNameNacksReceived[] = "googNacksReceived";
-const char StatsElement::kStatsValueNameNacksSent[] = "googNacksSent";
-const char StatsElement::kStatsValueNameRtt[] = "googRtt";
-
-const char StatsElement::kStatsValueNameAvailableSendBandwidth[] =
-    "googAvailableSendBandwidth";
-const char StatsElement::kStatsValueNameAvailableReceiveBandwidth[] =
-    "googAvailableReceiveBandwidth";
-const char StatsElement::kStatsValueNameTargetEncBitrate[] =
-    "googTargetEncBitrate";
-const char StatsElement::kStatsValueNameActualEncBitrate[] =
+// The items below are in alphabetical order.
+const char StatsReport::kStatsValueNameActiveConnection[] =
+    "googActiveConnection";
+const char StatsReport::kStatsValueNameActualEncBitrate[] =
     "googActualEncBitrate";
-const char StatsElement::kStatsValueNameRetransmitBitrate[] =
-    "googRetransmitBitrate";
-const char StatsElement::kStatsValueNameTransmitBitrate[] =
-    "googTransmitBitrate";
-const char StatsElement::kStatsValueNameBucketDelay[] = "googBucketDelay";
+const char StatsReport::kStatsValueNameAudioOutputLevel[] = "audioOutputLevel";
+const char StatsReport::kStatsValueNameAudioInputLevel[] = "audioInputLevel";
+const char StatsReport::kStatsValueNameAvailableReceiveBandwidth[] =
+    "googAvailableReceiveBandwidth";
+const char StatsReport::kStatsValueNameAvailableSendBandwidth[] =
+    "googAvailableSendBandwidth";
+const char StatsReport::kStatsValueNameBucketDelay[] = "googBucketDelay";
+const char StatsReport::kStatsValueNameBytesReceived[] = "bytesReceived";
+const char StatsReport::kStatsValueNameBytesSent[] = "bytesSent";
+const char StatsReport::kStatsValueNameChannelId[] = "googChannelId";
+const char StatsReport::kStatsValueNameComponent[] = "googComponent";
+const char StatsReport::kStatsValueNameContentName[] = "googContentName";
+// Echo metrics from the audio processing module.
+const char StatsReport::kStatsValueNameEchoCancellationQualityMin[] =
+    "googEchoCancellationQualityMin";
+const char StatsReport::kStatsValueNameEchoDelayMedian[] =
+    "googEchoCancellationEchoDelayMedian";
+const char StatsReport::kStatsValueNameEchoDelayStdDev[] =
+    "googEchoCancellationEchoDelayStdDev";
+const char StatsReport::kStatsValueNameEchoReturnLoss[] =
+    "googEchoCancellationReturnLoss";
+const char StatsReport::kStatsValueNameEchoReturnLossEnhancement[] =
+    "googEchoCancellationReturnLossEnhancement";
 
+const char StatsReport::kStatsValueNameFirsReceived[] = "googFirsReceived";
+const char StatsReport::kStatsValueNameFirsSent[] = "googFirsSent";
+const char StatsReport::kStatsValueNameFrameHeightReceived[] =
+    "googFrameHeightReceived";
+const char StatsReport::kStatsValueNameFrameHeightSent[] =
+    "googFrameHeightSent";
+const char StatsReport::kStatsValueNameFrameRateReceived[] =
+    "googFrameRateReceived";
+const char StatsReport::kStatsValueNameFrameRateDecoded[] =
+    "googFrameRateDecoded";
+const char StatsReport::kStatsValueNameFrameRateOutput[] =
+    "googFrameRateOutput";
+const char StatsReport::kStatsValueNameFrameRateInput[] = "googFrameRateInput";
+const char StatsReport::kStatsValueNameFrameRateSent[] = "googFrameRateSent";
+const char StatsReport::kStatsValueNameFrameWidthReceived[] =
+    "googFrameWidthReceived";
+const char StatsReport::kStatsValueNameFrameWidthSent[] = "googFrameWidthSent";
+const char StatsReport::kStatsValueNameInitiator[] = "googInitiator";
+const char StatsReport::kStatsValueNameJitterReceived[] = "googJitterReceived";
+const char StatsReport::kStatsValueNameLocalAddress[] = "googLocalAddress";
+const char StatsReport::kStatsValueNameNacksReceived[] = "googNacksReceived";
+const char StatsReport::kStatsValueNameNacksSent[] = "googNacksSent";
+const char StatsReport::kStatsValueNamePacketsReceived[] = "packetsReceived";
+const char StatsReport::kStatsValueNamePacketsSent[] = "packetsSent";
+const char StatsReport::kStatsValueNamePacketsLost[] = "packetsLost";
+const char StatsReport::kStatsValueNameReadable[] = "googReadable";
+const char StatsReport::kStatsValueNameRemoteAddress[] = "googRemoteAddress";
+const char StatsReport::kStatsValueNameRetransmitBitrate[] =
+    "googRetransmitBitrate";
+const char StatsReport::kStatsValueNameRtt[] = "googRtt";
+const char StatsReport::kStatsValueNameTargetEncBitrate[] =
+    "googTargetEncBitrate";
+const char StatsReport::kStatsValueNameTransmitBitrate[] =
+    "googTransmitBitrate";
+const char StatsReport::kStatsValueNameTransportId[] = "transportId";
+const char StatsReport::kStatsValueNameTransportType[] = "googTransportType";
+const char StatsReport::kStatsValueNameTrackId[] = "googTrackId";
+const char StatsReport::kStatsValueNameSsrc[] = "ssrc";
+const char StatsReport::kStatsValueNameWritable[] = "googWritable";
+
+const char StatsReport::kStatsReportTypeSession[] = "googLibjingleSession";
 const char StatsReport::kStatsReportTypeBwe[] = "VideoBwe";
 const char StatsReport::kStatsReportTypeSsrc[] = "ssrc";
+const char StatsReport::kStatsReportTypeTrack[] = "googTrack";
+const char StatsReport::kStatsReportTypeIceCandidate[] = "iceCandidate";
+const char StatsReport::kStatsReportTypeTransport[] = "googTransport";
+const char StatsReport::kStatsReportTypeComponent[] = "googComponent";
+const char StatsReport::kStatsReportTypeCandidatePair[] = "googCandidatePair";
+
+const char StatsReport::kStatsReportVideoBweId[] = "bweforvideo";
 
 // Implementations of functions in statstypes.h
-void StatsElement::AddValue(const std::string& name, const std::string& value) {
+void StatsReport::AddValue(const std::string& name, const std::string& value) {
   Value temp;
   temp.name = name;
   temp.value = value;
   values.push_back(temp);
 }
 
-void StatsElement::AddValue(const std::string& name, int64 value) {
+void StatsReport::AddValue(const std::string& name, int64 value) {
   AddValue(name, talk_base::ToString<int64>(value));
 }
 
+void StatsReport::AddBoolean(const std::string& name, bool value) {
+  AddValue(name, value ? "true" : "false");
+}
+
 namespace {
+typedef std::map<std::string, StatsReport> StatsMap;
 
-typedef std::map<std::string, webrtc::StatsReport> ReportsMap;
+std::string StatsId(const std::string& type, const std::string& id) {
+  return type + "_" + id;
+}
 
-void AddEmptyReport(const std::string& label, ReportsMap* reports) {
-  reports->insert(std::pair<std::string, webrtc::StatsReport>(
-      label, webrtc::StatsReport()));
+bool ExtractValueFromReport(
+    const StatsReport& report,
+    const std::string& name,
+    std::string* value) {
+  StatsReport::Values::const_iterator it = report.values.begin();
+  for (; it != report.values.end(); ++it) {
+    if (it->name == name) {
+      *value = it->value;
+      return true;
+    }
+  }
+  return false;
 }
 
 template <class TrackVector>
-void CreateTrackReports(const TrackVector& tracks, ReportsMap* reports) {
+void CreateTrackReports(const TrackVector& tracks, StatsMap* reports) {
   for (size_t j = 0; j < tracks.size(); ++j) {
     webrtc::MediaStreamTrackInterface* track = tracks[j];
-    // If there is no previous report for this track, add one.
-    if (reports->find(track->id()) == reports->end()) {
-      AddEmptyReport(track->id(), reports);
-    }
+    // Adds an empty track report.
+    StatsReport report;
+    report.type = StatsReport::kStatsReportTypeTrack;
+    report.id = StatsId(StatsReport::kStatsReportTypeTrack, track->id());
+    report.AddValue(StatsReport::kStatsValueNameTrackId,
+                    track->id());
+    (*reports)[report.id] = report;
   }
 }
 
 void ExtractStats(const cricket::VoiceReceiverInfo& info, StatsReport* report) {
-  report->local.AddValue(StatsElement::kStatsValueNameAudioOutputLevel,
-                         info.audio_level);
-  report->local.AddValue(StatsElement::kStatsValueNameBytesReceived,
-                         info.bytes_rcvd);
-  report->local.AddValue(StatsElement::kStatsValueNameJitterReceived,
-                         info.jitter_ms);
-  report->local.AddValue(StatsElement::kStatsValueNamePacketsReceived,
-                         info.packets_rcvd);
-  report->local.AddValue(StatsElement::kStatsValueNamePacketsLost,
-                         info.packets_lost);
+  report->AddValue(StatsReport::kStatsValueNameAudioOutputLevel,
+                   info.audio_level);
+  report->AddValue(StatsReport::kStatsValueNameBytesReceived,
+                   info.bytes_rcvd);
+  report->AddValue(StatsReport::kStatsValueNameJitterReceived,
+                   info.jitter_ms);
+  report->AddValue(StatsReport::kStatsValueNamePacketsReceived,
+                   info.packets_rcvd);
+  report->AddValue(StatsReport::kStatsValueNamePacketsLost,
+                   info.packets_lost);
 }
 
 void ExtractStats(const cricket::VoiceSenderInfo& info, StatsReport* report) {
-  report->local.AddValue(StatsElement::kStatsValueNameAudioInputLevel,
-                         info.audio_level);
-  report->local.AddValue(StatsElement::kStatsValueNameBytesSent,
-                         info.bytes_sent);
-  report->local.AddValue(StatsElement::kStatsValueNamePacketsSent,
-                         info.packets_sent);
-
-  // TODO(jiayl): Move the remote stuff into a separate function to extract them to
-  // a different stats element for v2.
-  report->remote.AddValue(StatsElement::kStatsValueNameJitterReceived,
-                          info.jitter_ms);
-  report->remote.AddValue(StatsElement::kStatsValueNameRtt, info.rtt_ms);
+  report->AddValue(StatsReport::kStatsValueNameAudioInputLevel,
+                   info.audio_level);
+  report->AddValue(StatsReport::kStatsValueNameBytesSent,
+                   info.bytes_sent);
+  report->AddValue(StatsReport::kStatsValueNamePacketsSent,
+                   info.packets_sent);
+  report->AddValue(StatsReport::kStatsValueNameJitterReceived,
+                   info.jitter_ms);
+  report->AddValue(StatsReport::kStatsValueNameRtt, info.rtt_ms);
+  report->AddValue(StatsReport::kStatsValueNameEchoCancellationQualityMin,
+                   talk_base::ToString<float>(info.aec_quality_min));
+  report->AddValue(StatsReport::kStatsValueNameEchoDelayMedian,
+                   info.echo_delay_median_ms);
+  report->AddValue(StatsReport::kStatsValueNameEchoDelayStdDev,
+                   info.echo_delay_std_ms);
+  report->AddValue(StatsReport::kStatsValueNameEchoReturnLoss,
+                   info.echo_return_loss);
+  report->AddValue(StatsReport::kStatsValueNameEchoReturnLossEnhancement,
+                   info.echo_return_loss_enhancement);
 }
 
 void ExtractStats(const cricket::VideoReceiverInfo& info, StatsReport* report) {
-  report->local.AddValue(StatsElement::kStatsValueNameBytesReceived,
-                         info.bytes_rcvd);
-  report->local.AddValue(StatsElement::kStatsValueNamePacketsReceived,
-                         info.packets_rcvd);
-  report->local.AddValue(StatsElement::kStatsValueNamePacketsLost,
-                         info.packets_lost);
+  report->AddValue(StatsReport::kStatsValueNameBytesReceived,
+                   info.bytes_rcvd);
+  report->AddValue(StatsReport::kStatsValueNamePacketsReceived,
+                   info.packets_rcvd);
+  report->AddValue(StatsReport::kStatsValueNamePacketsLost,
+                   info.packets_lost);
 
-  report->local.AddValue(StatsElement::kStatsValueNameFirsSent,
-                         info.firs_sent);
-  report->local.AddValue(StatsElement::kStatsValueNameNacksSent,
-                         info.nacks_sent);
-  report->local.AddValue(StatsElement::kStatsValueNameFrameWidthReceived,
-                         info.frame_width);
-  report->local.AddValue(StatsElement::kStatsValueNameFrameHeightReceived,
-                         info.frame_height);
-  report->local.AddValue(StatsElement::kStatsValueNameFrameRateReceived,
-                         info.framerate_rcvd);
-  report->local.AddValue(StatsElement::kStatsValueNameFrameRateDecoded,
-                         info.framerate_decoded);
-  report->local.AddValue(StatsElement::kStatsValueNameFrameRateOutput,
-                         info.framerate_output);
+  report->AddValue(StatsReport::kStatsValueNameFirsSent,
+                   info.firs_sent);
+  report->AddValue(StatsReport::kStatsValueNameNacksSent,
+                   info.nacks_sent);
+  report->AddValue(StatsReport::kStatsValueNameFrameWidthReceived,
+                   info.frame_width);
+  report->AddValue(StatsReport::kStatsValueNameFrameHeightReceived,
+                   info.frame_height);
+  report->AddValue(StatsReport::kStatsValueNameFrameRateReceived,
+                   info.framerate_rcvd);
+  report->AddValue(StatsReport::kStatsValueNameFrameRateDecoded,
+                   info.framerate_decoded);
+  report->AddValue(StatsReport::kStatsValueNameFrameRateOutput,
+                   info.framerate_output);
 }
 
 void ExtractStats(const cricket::VideoSenderInfo& info, StatsReport* report) {
-  report->local.AddValue(StatsElement::kStatsValueNameBytesSent,
-                         info.bytes_sent);
-  report->local.AddValue(StatsElement::kStatsValueNamePacketsSent,
-                         info.packets_sent);
+  report->AddValue(StatsReport::kStatsValueNameBytesSent,
+                   info.bytes_sent);
+  report->AddValue(StatsReport::kStatsValueNamePacketsSent,
+                   info.packets_sent);
 
-  report->local.AddValue(StatsElement::kStatsValueNameFirsReceived,
-                         info.firs_rcvd);
-  report->local.AddValue(StatsElement::kStatsValueNameNacksReceived,
-                         info.nacks_rcvd);
-  report->local.AddValue(StatsElement::kStatsValueNameFrameWidthSent,
-                         info.frame_width);
-  report->local.AddValue(StatsElement::kStatsValueNameFrameHeightSent,
-                         info.frame_height);
-  report->local.AddValue(StatsElement::kStatsValueNameFrameRateInput,
-                         info.framerate_input);
-  report->local.AddValue(StatsElement::kStatsValueNameFrameRateSent,
-                         info.framerate_sent);
-
-  // TODO(jiayl): Move the remote stuff into a separate function to extract them to
-  // a different stats element for v2.
-  report->remote.AddValue(StatsElement::kStatsValueNameRtt, info.rtt_ms);
+  report->AddValue(StatsReport::kStatsValueNameFirsReceived,
+                   info.firs_rcvd);
+  report->AddValue(StatsReport::kStatsValueNameNacksReceived,
+                   info.nacks_rcvd);
+  report->AddValue(StatsReport::kStatsValueNameFrameWidthSent,
+                   info.frame_width);
+  report->AddValue(StatsReport::kStatsValueNameFrameHeightSent,
+                   info.frame_height);
+  report->AddValue(StatsReport::kStatsValueNameFrameRateInput,
+                   info.framerate_input);
+  report->AddValue(StatsReport::kStatsValueNameFrameRateSent,
+                   info.framerate_sent);
+  report->AddValue(StatsReport::kStatsValueNameRtt, info.rtt_ms);
 }
 
 void ExtractStats(const cricket::BandwidthEstimationInfo& info,
                   double stats_gathering_started,
                   StatsReport* report) {
-  report->id = "bweforvideo";
-  report->type = webrtc::StatsReport::kStatsReportTypeBwe;
+  report->id = StatsReport::kStatsReportVideoBweId;
+  report->type = StatsReport::kStatsReportTypeBwe;
 
   // Clear out stats from previous GatherStats calls if any.
-  if (report->local.timestamp != stats_gathering_started) {
-    report->local.values.clear();
-    report->local.timestamp = stats_gathering_started;
-  }
-  if (report->remote.timestamp != stats_gathering_started) {
-    report->remote.values.clear();
-    report->remote.timestamp = stats_gathering_started;
+  if (report->timestamp != stats_gathering_started) {
+    report->values.clear();
+    report->timestamp = stats_gathering_started;
   }
 
-  report->local.AddValue(StatsElement::kStatsValueNameAvailableSendBandwidth,
-                         info.available_send_bandwidth);
-  report->local.AddValue(StatsElement::kStatsValueNameAvailableReceiveBandwidth,
-                         info.available_recv_bandwidth);
-  report->local.AddValue(StatsElement::kStatsValueNameTargetEncBitrate,
-                         info.target_enc_bitrate);
-  report->local.AddValue(StatsElement::kStatsValueNameActualEncBitrate,
-                         info.actual_enc_bitrate);
-  report->local.AddValue(StatsElement::kStatsValueNameRetransmitBitrate,
-                         info.retransmit_bitrate);
-  report->local.AddValue(StatsElement::kStatsValueNameTransmitBitrate,
-                         info.transmit_bitrate);
-  report->local.AddValue(StatsElement::kStatsValueNameBucketDelay,
-                         info.bucket_delay);
+  report->AddValue(StatsReport::kStatsValueNameAvailableSendBandwidth,
+                   info.available_send_bandwidth);
+  report->AddValue(StatsReport::kStatsValueNameAvailableReceiveBandwidth,
+                   info.available_recv_bandwidth);
+  report->AddValue(StatsReport::kStatsValueNameTargetEncBitrate,
+                   info.target_enc_bitrate);
+  report->AddValue(StatsReport::kStatsValueNameActualEncBitrate,
+                   info.actual_enc_bitrate);
+  report->AddValue(StatsReport::kStatsValueNameRetransmitBitrate,
+                   info.retransmit_bitrate);
+  report->AddValue(StatsReport::kStatsValueNameTransmitBitrate,
+                   info.transmit_bitrate);
+  report->AddValue(StatsReport::kStatsValueNameBucketDelay,
+                   info.bucket_delay);
 }
 
 uint32 ExtractSsrc(const cricket::VoiceReceiverInfo& info) {
@@ -241,17 +293,13 @@ uint32 ExtractSsrc(const cricket::VideoSenderInfo& info) {
 // ExtractSsrc and ExtractStats must be defined and overloaded for each type.
 template<typename T>
 void ExtractStatsFromList(const std::vector<T>& data,
+                          const std::string& transport_id,
                           StatsCollector* collector) {
   typename std::vector<T>::const_iterator it = data.begin();
   for (; it != data.end(); ++it) {
-    std::string label;
+    std::string id;
     uint32 ssrc = ExtractSsrc(*it);
-    if (!collector->session()->GetTrackIdBySsrc(ssrc, &label)) {
-      LOG(LS_ERROR) << "The SSRC " << ssrc
-                    << " is not associated with a track";
-      continue;
-    }
-    StatsReport* report = collector->PrepareReport(label, ssrc);
+    StatsReport* report = collector->PrepareReport(ssrc, transport_id);
     if (!report) {
       continue;
     }
@@ -271,9 +319,9 @@ void StatsCollector::AddStream(MediaStreamInterface* stream) {
   ASSERT(stream != NULL);
 
   CreateTrackReports<AudioTrackVector>(stream->GetAudioTracks(),
-                                       &track_reports_);
+                                       &reports_);
   CreateTrackReports<VideoTrackVector>(stream->GetVideoTracks(),
-                                       &track_reports_);
+                                       &reports_);
 }
 
 bool StatsCollector::GetStats(MediaStreamTrackInterface* track,
@@ -281,23 +329,41 @@ bool StatsCollector::GetStats(MediaStreamTrackInterface* track,
   ASSERT(reports != NULL);
   reports->clear();
 
-  if (track) {
-    ReportsMap::const_iterator it = track_reports_.find(track->id());
-    if (it == track_reports_.end()) {
-      LOG(LS_WARNING) << "No StatsReport is available for "<< track->id();
-      return false;
+  StatsMap::iterator it;
+  if (!track) {
+    for (it = reports_.begin(); it != reports_.end(); ++it) {
+      reports->push_back(it->second);
     }
-    reports->push_back(it->second);
     return true;
   }
 
-  if (bandwidth_estimation_report_.local.timestamp > 0)
-    reports->push_back(bandwidth_estimation_report_);
-
-  // If no selector given, add all Stats to |reports|.
-  ReportsMap::const_iterator it = track_reports_.begin();
-  for (; it != track_reports_.end(); ++it) {
+  it = reports_.find(StatsId(StatsReport::kStatsReportTypeSession,
+                             session_->id()));
+  if (it != reports_.end()) {
     reports->push_back(it->second);
+  }
+
+  it = reports_.find(StatsId(StatsReport::kStatsReportTypeTrack, track->id()));
+
+  if (it == reports_.end()) {
+    LOG(LS_WARNING) << "No StatsReport is available for "<< track->id();
+    return false;
+  }
+
+  reports->push_back(it->second);
+
+  std::string track_id;
+  for (it = reports_.begin(); it != reports_.end(); ++it) {
+    if (it->second.type != StatsReport::kStatsReportTypeSsrc) {
+      continue;
+    }
+    if (ExtractValueFromReport(it->second,
+                               StatsReport::kStatsValueNameTrackId,
+                               &track_id)) {
+      if (track_id == track->id()) {
+        reports->push_back(it->second);
+      }
+    }
   }
 
   return true;
@@ -314,34 +380,120 @@ void StatsCollector::UpdateStats() {
   stats_gathering_started_ = time_now;
 
   if (session_) {
+    ExtractSessionInfo();
     ExtractVoiceInfo();
     ExtractVideoInfo();
   }
 }
 
-StatsReport* StatsCollector::PrepareReport(const std::string& label,
-                                           uint32 ssrc) {
-  std::map<std::string, webrtc::StatsReport>::iterator it =
-      track_reports_.find(label);
-  if (!VERIFY(it != track_reports_.end())) {
-    return NULL;
+StatsReport* StatsCollector::PrepareReport(uint32 ssrc,
+                                           const std::string& transport_id) {
+  std::string ssrc_id = talk_base::ToString<uint32>(ssrc);
+  StatsMap::iterator it = reports_.find(StatsId(
+      StatsReport::kStatsReportTypeSsrc, ssrc_id));
+
+  std::string track_id;
+  if (it == reports_.end()) {
+    if (!session()->GetTrackIdBySsrc(ssrc, &track_id)) {
+      LOG(LS_ERROR) << "The SSRC " << ssrc
+                    << " is not associated with a track";
+      return NULL;
+    }
+  } else {
+    // Keeps the old track id since we want to report the stats for inactive
+    // tracks.
+    ExtractValueFromReport(it->second,
+                           StatsReport::kStatsValueNameTrackId,
+                           &track_id);
   }
 
-  StatsReport* report= &(it->second);
-
-  report->id = talk_base::ToString<uint32>(ssrc);
-  report->type = webrtc::StatsReport::kStatsReportTypeSsrc;
+  StatsReport* report = &reports_[
+      StatsId(StatsReport::kStatsReportTypeSsrc, ssrc_id)];
+  report->id = StatsId(StatsReport::kStatsReportTypeSsrc, ssrc_id);
+  report->type = StatsReport::kStatsReportTypeSsrc;
 
   // Clear out stats from previous GatherStats calls if any.
-  if (report->local.timestamp != stats_gathering_started_) {
-    report->local.values.clear();
-    report->local.timestamp = stats_gathering_started_;
+  if (report->timestamp != stats_gathering_started_) {
+    report->values.clear();
+    report->timestamp = stats_gathering_started_;
   }
-  if (report->remote.timestamp != stats_gathering_started_) {
-    report->remote.values.clear();
-    report->remote.timestamp = stats_gathering_started_;
-  }
+
+  report->AddValue(StatsReport::kStatsValueNameSsrc, ssrc_id);
+  report->AddValue(StatsReport::kStatsValueNameTrackId, track_id);
+  // Add the mapping of SSRC to transport.
+  report->AddValue(StatsReport::kStatsValueNameTransportId,
+                   transport_id);
   return report;
+}
+
+void StatsCollector::ExtractSessionInfo() {
+  // Extract information from the base session.
+  StatsReport report;
+  report.id = StatsId(StatsReport::kStatsReportTypeSession, session_->id());
+  report.type = StatsReport::kStatsReportTypeSession;
+  report.timestamp = stats_gathering_started_;
+  report.values.clear();
+  report.AddBoolean(StatsReport::kStatsValueNameInitiator,
+                    session_->initiator());
+
+  reports_[report.id] = report;
+
+  cricket::SessionStats stats;
+  if (session_->GetStats(&stats)) {
+    // Store the proxy map away for use in SSRC reporting.
+    proxy_to_transport_ = stats.proxy_to_transport;
+
+    for (cricket::TransportStatsMap::iterator transport_iter
+             = stats.transport_stats.begin();
+         transport_iter != stats.transport_stats.end(); ++transport_iter) {
+      for (cricket::TransportChannelStatsList::iterator channel_iter
+               = transport_iter->second.channel_stats.begin();
+           channel_iter != transport_iter->second.channel_stats.end();
+           ++channel_iter) {
+        StatsReport channel_report;
+        std::ostringstream ostc;
+        ostc << "Channel-" << transport_iter->second.content_name
+             << "-" << channel_iter->component;
+        channel_report.id = ostc.str();
+        channel_report.type = StatsReport::kStatsReportTypeComponent;
+        channel_report.timestamp = stats_gathering_started_;
+        channel_report.AddValue(StatsReport::kStatsValueNameComponent,
+                                channel_iter->component);
+        reports_[channel_report.id] = channel_report;
+        for (size_t i = 0;
+             i < channel_iter->connection_infos.size();
+             ++i) {
+          StatsReport report;
+          const cricket::ConnectionInfo& info
+              = channel_iter->connection_infos[i];
+          std::ostringstream ost;
+          ost << "Conn-" << transport_iter->first << "-"
+              << channel_iter->component << "-" << i;
+          report.id = ost.str();
+          report.type = StatsReport::kStatsReportTypeCandidatePair;
+          report.timestamp = stats_gathering_started_;
+          // Link from connection to its containing channel.
+          report.AddValue(StatsReport::kStatsValueNameChannelId,
+                          channel_report.id);
+          report.AddValue(StatsReport::kStatsValueNameBytesSent,
+                          info.sent_total_bytes);
+          report.AddValue(StatsReport::kStatsValueNameBytesReceived,
+                          info.recv_total_bytes);
+          report.AddBoolean(StatsReport::kStatsValueNameWritable,
+                            info.writable);
+          report.AddBoolean(StatsReport::kStatsValueNameReadable,
+                            info.readable);
+          report.AddBoolean(StatsReport::kStatsValueNameActiveConnection,
+                            info.best_connection);
+          report.AddValue(StatsReport::kStatsValueNameLocalAddress,
+                          info.local_candidate.address().ToString());
+          report.AddValue(StatsReport::kStatsValueNameRemoteAddress,
+                          info.remote_candidate.address().ToString());
+          reports_[report.id] = report;
+        }
+      }
+    }
+  }
 }
 
 void StatsCollector::ExtractVoiceInfo() {
@@ -353,8 +505,15 @@ void StatsCollector::ExtractVoiceInfo() {
     LOG(LS_ERROR) << "Failed to get voice channel stats.";
     return;
   }
-  ExtractStatsFromList(voice_info.receivers, this);
-  ExtractStatsFromList(voice_info.senders, this);
+  std::string transport_id;
+  if (!GetTransportIdFromProxy(session_->voice_channel()->content_name(),
+                               &transport_id)) {
+    LOG(LS_ERROR) << "Failed to get transport name for proxy "
+                  << session_->voice_channel()->content_name();
+    return;
+  }
+  ExtractStatsFromList(voice_info.receivers, transport_id, this);
+  ExtractStatsFromList(voice_info.senders, transport_id, this);
 }
 
 void StatsCollector::ExtractVideoInfo() {
@@ -366,14 +525,21 @@ void StatsCollector::ExtractVideoInfo() {
     LOG(LS_ERROR) << "Failed to get video channel stats.";
     return;
   }
-  ExtractStatsFromList(video_info.receivers, this);
-  ExtractStatsFromList(video_info.senders, this);
+  std::string transport_id;
+  if (!GetTransportIdFromProxy(session_->video_channel()->content_name(),
+                               &transport_id)) {
+    LOG(LS_ERROR) << "Failed to get transport name for proxy "
+                  << session_->video_channel()->content_name();
+    return;
+  }
+  ExtractStatsFromList(video_info.receivers, transport_id, this);
+  ExtractStatsFromList(video_info.senders, transport_id, this);
   if (video_info.bw_estimations.size() != 1) {
     LOG(LS_ERROR) << "BWEs count: " << video_info.bw_estimations.size();
   } else {
-    ExtractStats(video_info.bw_estimations[0],
-                 stats_gathering_started_,
-                 &bandwidth_estimation_report_);
+    StatsReport* report = &reports_[StatsReport::kStatsReportVideoBweId];
+    ExtractStats(
+        video_info.bw_estimations[0], stats_gathering_started_, report);
   }
 }
 
@@ -381,5 +547,22 @@ double StatsCollector::GetTimeNow() {
   return timing_.WallTimeNow() * talk_base::kNumMillisecsPerSec;
 }
 
+bool StatsCollector::GetTransportIdFromProxy(const std::string& proxy,
+                                             std::string* transport) {
+  // TODO(hta): Remove handling of empty proxy name once tests do not use it.
+  if (proxy.empty()) {
+    transport->clear();
+    return true;
+  }
+  if (proxy_to_transport_.find(proxy) == proxy_to_transport_.end()) {
+    LOG(LS_ERROR) << "No transport ID mapping for " << proxy;
+    return false;
+  }
+  std::ostringstream ost;
+  // Component 1 is always used for RTP.
+  ost << "Channel-" << proxy_to_transport_[proxy] << "-1";
+  *transport = ost.str();
+  return true;
+}
 
 }  // namespace webrtc

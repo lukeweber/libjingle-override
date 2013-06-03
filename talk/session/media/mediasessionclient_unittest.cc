@@ -416,7 +416,7 @@ const std::string kJingleVideoInitiate(
      "  </jingle>                                                       " \
      "</iq>                                                             ");
 
-const std::string kJingleVideoInitiateWithData(
+const std::string kJingleVideoInitiateWithRtpData(
      "<iq xmlns='jabber:client' from='me@domain.com/resource'           " \
      "    to='user@domain.com/resource' type='set' id='123'>            " \
      "  <jingle xmlns='urn:xmpp:jingle:1' action='session-initiate'     " \
@@ -441,6 +441,36 @@ const std::string kJingleVideoInitiateWithData(
      "      <description xmlns='urn:xmpp:jingle:apps:rtp:1' media='data'> " \
      "        <payload-type id='127' name='google-data'/>               " \
      "        <rtcp-mux/>                                               " \
+     "      </description>                                              " \
+     "     <transport xmlns=\"http://www.google.com/transport/p2p\"/>   " \
+     "    </content>                                                    " \
+     "  </jingle>                                                       " \
+     "</iq>                                                             ");
+
+const std::string kJingleVideoInitiateWithSctpData(
+     "<iq xmlns='jabber:client' from='me@domain.com/resource'           " \
+     "    to='user@domain.com/resource' type='set' id='123'>            " \
+     "  <jingle xmlns='urn:xmpp:jingle:1' action='session-initiate'     " \
+     "          sid='abcdef' initiator='me@domain.com/resource'>        " \
+     "    <content name='test audio'>                                   " \
+     "      <description xmlns='urn:xmpp:jingle:apps:rtp:1' media='audio'> " \
+     "        <payload-type id='103' name='ISAC' clockrate='16000'/>    " \
+     "      </description>                                              " \
+     "     <transport xmlns=\"http://www.google.com/transport/p2p\"/>   " \
+     "    </content>                                                    " \
+     "    <content name='test video'>                                   " \
+     "      <description xmlns='urn:xmpp:jingle:apps:rtp:1' media='video'> " \
+     "        <payload-type id='99' name='H264-SVC'>                    " \
+     "          <parameter name='height' value='200'/>                  " \
+     "          <parameter name='width' value='320'/>                   " \
+     "          <parameter name='framerate' value='30'/>                " \
+     "        </payload-type>                                           " \
+     "      </description>                                              " \
+     "     <transport xmlns=\"http://www.google.com/transport/p2p\"/>   " \
+     "    </content>                                                    " \
+     "    <content name='test data'>                                    " \
+     "      <description xmlns='google:jingle:sctp' media='data'>       " \
+     "        <stream sid='1'/>                                         " \
      "      </description>                                              " \
      "     <transport xmlns=\"http://www.google.com/transport/p2p\"/>   " \
      "    </content>                                                    " \
@@ -815,6 +845,7 @@ const std::string kJingleInitiateDynamicWithoutNames(
 const uint32 kAudioSsrc = 4294967295U;
 const uint32 kVideoSsrc = 87654321;
 const uint32 kDataSsrc = 1010101;
+const uint32 kDataSid = 0;
 // Note that this message does not specify a session ID. It must be populated
 // before use.
 const std::string kGingleAcceptWithSsrcs(
@@ -856,7 +887,7 @@ const std::string kJingleAcceptWithSsrcs(
      "  </jingle>                                                     " \
      "</iq>                                                           ");
 
-const std::string kJingleAcceptWithDataSsrcs(
+const std::string kJingleAcceptWithRtpDataSsrcs(
      "<iq xmlns='jabber:client' from='me@mydomain.com'                " \
      "    to='user@domain.com/resource' type='set' id='150'>          " \
      "  <jingle xmlns='urn:xmpp:jingle:1' action='session-accept'     " \
@@ -878,6 +909,34 @@ const std::string kJingleAcceptWithDataSsrcs(
      "    <content name='data'>                                       " \
      "      <description xmlns='urn:xmpp:jingle:apps:rtp:1'           " \
      "          media='data' ssrc='1010101'>                          " \
+     "      </description>                                            " \
+     "     <transport xmlns='http://www.google.com/transport/p2p'/>   " \
+     "    </content>                                                  " \
+     "  </jingle>                                                     " \
+     "</iq>                                                           ");
+
+const std::string kJingleAcceptWithSctpData(
+     "<iq xmlns='jabber:client' from='me@mydomain.com'                " \
+     "    to='user@domain.com/resource' type='set' id='150'>          " \
+     "  <jingle xmlns='urn:xmpp:jingle:1' action='session-accept'     " \
+     "          initiator='me@domain.com/resource'>                   " \
+     "    <content name='audio'>                                      " \
+     "      <description xmlns='urn:xmpp:jingle:apps:rtp:1'           " \
+     "          media='audio' ssrc='4294967295'>                      " \
+     "        <payload-type id='103' name='ISAC' clockrate='16000'/>  " \
+     "        <payload-type id='104' name='ISAC' clockrate='32000'/>  " \
+     "      </description>                                            " \
+     "     <transport xmlns='http://www.google.com/transport/p2p'/>   " \
+     "    </content>                                                  " \
+     "    <content name='video'>                                      " \
+     "      <description xmlns='urn:xmpp:jingle:apps:rtp:1'           " \
+     "          media='video' ssrc='87654321'>                        " \
+     "      </description>                                            " \
+     "     <transport xmlns='http://www.google.com/transport/p2p'/>   " \
+     "    </content>                                                  " \
+     "    <content name='data'>                                       " \
+     "      <description xmlns='google:jingle:sctp'>                  " \
+     "        <stream sid='1'/>                                       " \
      "      </description>                                            " \
      "     <transport xmlns='http://www.google.com/transport/p2p'/>   " \
      "    </content>                                                  " \
@@ -1070,6 +1129,26 @@ std::string JingleStreamRemove(const std::string& content_name,
       "    </content>"
       "  </jingle>"
       "</iq>";
+}
+
+// Convenience function to get CallOptions that have audio enabled,
+// but not video or data.
+static cricket::CallOptions AudioCallOptions() {
+  cricket::CallOptions options;
+  options.has_audio = true;
+  options.has_video = false;
+  options.data_channel_type = cricket::DCT_NONE;
+  return options;
+}
+
+// Convenience function to get CallOptions that have audio and video
+// enabled, but not data.
+static cricket::CallOptions VideoCallOptions() {
+  cricket::CallOptions options;
+  options.has_audio = true;
+  options.has_video = true;
+  options.data_channel_type = cricket::DCT_NONE;
+  return options;
 }
 
 buzz::XmlElement* CopyElement(const buzz::XmlElement* elem) {
@@ -1551,7 +1630,7 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     }
   }
 
-  virtual void CheckDataContent(buzz::XmlElement* content) {
+  virtual void CheckRtpDataContent(buzz::XmlElement* content) {
     if (initial_protocol_) {
       // Gingle can not write out data content.
       return;
@@ -1571,6 +1650,19 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
       ASSERT_TRUE(encryption != NULL);
       // TODO(pthatcher): Check encryption parameters?
     }
+  }
+
+  virtual void CheckSctpDataContent(buzz::XmlElement* content) {
+    if (initial_protocol_) {
+      // Gingle can not write out data content.
+      return;
+    }
+
+    buzz::XmlElement* payload_type = PayloadTypeFromContent(content);
+    ASSERT_TRUE(payload_type == NULL);
+    buzz::XmlElement* encryption = EncryptionFromContent(content);
+    ASSERT_TRUE(encryption == NULL);
+    // TODO(pthatcher): Check for <streams>.
   }
 
   void CheckDataRtcpMux(bool expected_data_rtcp_mux,
@@ -1603,7 +1695,8 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     ASSERT_EQ(kDataSsrc, data->first_ssrc());
   }
 
-  void TestGoodIncomingInitiate(const std::string &initiate_string,
+  void TestGoodIncomingInitiate(const std::string& initiate_string,
+                                const cricket::CallOptions& options,
                                 buzz::XmlElement** element) {
     *element = NULL;
 
@@ -1628,12 +1721,7 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     }
 
     // TODO(pthatcher): Add tests for sending <bandwidth> in accept.
-    cricket::CallOptions opts;
-    opts.has_video = (GetFirstVideoContentDescription(
-        call_->sessions()[0]->remote_description()) != NULL);
-    opts.has_data = (GetFirstDataContentDescription(
-        call_->sessions()[0]->remote_description()) != NULL);
-    call_->AcceptSession(call_->sessions()[0], opts);
+    call_->AcceptSession(call_->sessions()[0], options);
     ASSERT_EQ(cricket::Session::STATE_SENTACCEPT,
               call_->sessions()[0]->state());
     ASSERT_EQ(1U, stanzas_.size());
@@ -1652,7 +1740,7 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
       CheckCryptoForGoodOutgoingAccept(call_->sessions()[0]);
     }
 
-    if (opts.has_data) {
+  if (options.data_channel_type == cricket::DCT_RTP) {
       CheckDataRtcpMux(true, call_->sessions()[0]->local_description());
       CheckDataRtcpMux(true, call_->sessions()[0]->remote_description());
       // TODO(pthatcher): Check rtcpmux and crypto?
@@ -1673,7 +1761,7 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
   }
 
   void TestRejectOffer(const std::string &initiate_string,
-                       const cricket::CallOptions& opts,
+                       const cricket::CallOptions& options,
                        buzz::XmlElement** element) {
     *element = NULL;
 
@@ -1690,7 +1778,7 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     delete stanzas_[0];
     stanzas_.clear();
 
-    call_->AcceptSession(call_->sessions()[0], opts);
+    call_->AcceptSession(call_->sessions()[0], options);
     ASSERT_EQ(cricket::Session::STATE_SENTACCEPT,
               call_->sessions()[0]->state());
     ASSERT_EQ(1U, stanzas_.size());
@@ -1710,17 +1798,20 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     // The NextContent method actually returns the second content. So we
     // can't handle the case when audio, video and data are all enabled. But
     // since we are testing rejection, it won't be the case.
-    if (opts.has_audio) {
+    if (options.has_audio) {
+      ASSERT_TRUE(content != NULL);
       ASSERT_EQ("test audio", content->Attr(buzz::QName("", "name")));
       content = parser_->NextContent(content);
     }
 
-    if (opts.has_video) {
+    if (options.has_video) {
+      ASSERT_TRUE(content != NULL);
       ASSERT_EQ("test video", content->Attr(buzz::QName("", "name")));
       content = parser_->NextContent(content);
     }
 
-    if (opts.has_data) {
+    if (options.has_data()) {
+      ASSERT_TRUE(content != NULL);
       ASSERT_EQ("test data", content->Attr(buzz::QName("", "name")));
       content = parser_->NextContent(content);
     }
@@ -1752,11 +1843,6 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
     ASSERT_EQ(std::string(buzz::STR_RESULT), stanzas_[1]->Attr(buzz::QN_TYPE));
     delete stanzas_[0];
     stanzas_.clear();
-  }
-
-  void TestGoodOutgoingInitiate() {
-    cricket::CallOptions options;
-    TestGoodOutgoingInitiate(options);
   }
 
   void TestGoodOutgoingInitiate(const cricket::CallOptions& options) {
@@ -1993,9 +2079,14 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
       }
     }
 
-    if (options.has_data) {
+    if (options.data_channel_type == cricket::DCT_RTP) {
       content = parser_->NextContent(content);
-      CheckDataContent(content);
+      CheckRtpDataContent(content);
+    }
+
+    if (options.data_channel_type == cricket::DCT_SCTP) {
+      content = parser_->NextContent(content);
+      CheckSctpDataContent(content);
     }
 
     delete stanzas_[0];
@@ -2310,14 +2401,10 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
   }
 
   void TestIncomingAcceptWithSsrcs(
-      const std::string& accept_string, bool has_data) {
+      const std::string& accept_string,
+      cricket::CallOptions& options) {
     client_->CreateCall();
     ASSERT_TRUE(call_ != NULL);
-
-    cricket::CallOptions options;
-    options.has_video = true;
-    options.has_data = has_data;
-    options.is_muc = true;
 
     call_->InitiateSession(buzz::Jid("me@mydomain.com"),
                            buzz::Jid("me@mydomain.com"), options);
@@ -2365,9 +2452,10 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
 
     CheckAudioSsrcForIncomingAccept(call_->sessions()[0]);
     CheckVideoSsrcForIncomingAccept(call_->sessions()[0]);
-    if (has_data) {
+    if (options.data_channel_type == cricket::DCT_RTP) {
       CheckDataSsrcForIncomingAccept(call_->sessions()[0]);
     }
+    // TODO(pthatcher): Check kDataSid if DCT_SCTP.
   }
 
   size_t ClearStanzas() {
@@ -2387,8 +2475,7 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
   }
 
   void TestSendVideoStreamUpdate() {
-    cricket::CallOptions options;
-    options.has_video = true;
+    cricket::CallOptions options = VideoCallOptions();
     options.is_muc = true;
 
     client_->CreateCall();
@@ -2425,8 +2512,7 @@ class MediaSessionClientTest : public sigslot::has_slots<> {
   }
 
   void TestStreamsUpdateAndViewRequests() {
-    cricket::CallOptions options;
-    options.has_video = true;
+    cricket::CallOptions options = VideoCallOptions();
     options.is_muc = true;
 
     client_->CreateCall();
@@ -2688,7 +2774,8 @@ MediaSessionClientTest* JingleTest() {
 TEST(MediaSessionTest, JingleGoodVideoInitiate) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
-  test->TestGoodIncomingInitiate(kJingleVideoInitiate, elem.use());
+  test->TestGoodIncomingInitiate(
+      kJingleVideoInitiate, VideoCallOptions(), elem.use());
   test->TestCodecsOfVideoInitiate(elem.get());
 }
 
@@ -2696,97 +2783,107 @@ TEST(MediaSessionTest, JingleGoodVideoInitiateWithBandwidth) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   test->ExpectVideoBandwidth(42000);
-  test->TestGoodIncomingInitiate(kJingleVideoInitiateWithBandwidth, elem.use());
+  test->TestGoodIncomingInitiate(
+      kJingleVideoInitiateWithBandwidth, VideoCallOptions(), elem.use());
 }
 
 TEST(MediaSessionTest, JingleGoodVideoInitiateWithRtcpMux) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   test->ExpectVideoRtcpMux(true);
-  test->TestGoodIncomingInitiate(kJingleVideoInitiateWithRtcpMux, elem.use());
+  test->TestGoodIncomingInitiate(
+      kJingleVideoInitiateWithRtcpMux, VideoCallOptions(), elem.use());
 }
 
-TEST(MediaSessionTest, JingleGoodVideoInitiateWithData) {
+TEST(MediaSessionTest, JingleGoodVideoInitiateWithRtpData) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
-  test->TestGoodIncomingInitiate(AddEncryption(kJingleVideoInitiateWithData,
-                                               kJingleCryptoOffer),
+  cricket::CallOptions options = VideoCallOptions();
+  options.data_channel_type = cricket::DCT_RTP;
+  test->TestGoodIncomingInitiate(
+      AddEncryption(kJingleVideoInitiateWithRtpData, kJingleCryptoOffer),
+      options,
+      elem.use());
+}
+
+TEST(MediaSessionTest, JingleGoodVideoInitiateWithSctpData) {
+  talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
+  talk_base::scoped_ptr<buzz::XmlElement> elem;
+  cricket::CallOptions options = VideoCallOptions();
+  options.data_channel_type = cricket::DCT_SCTP;
+  test->TestGoodIncomingInitiate(kJingleVideoInitiateWithSctpData,
+                                 options,
                                  elem.use());
 }
 
 TEST(MediaSessionTest, JingleRejectAudio) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
-  cricket::CallOptions opts;
-  opts.has_audio = false;
-  opts.has_video = true;
-  opts.has_data = true;
-  test->TestRejectOffer(kJingleVideoInitiateWithData, opts, elem.use());
+  cricket::CallOptions options = VideoCallOptions();
+  options.has_audio = false;
+  options.data_channel_type = cricket::DCT_RTP;
+  test->TestRejectOffer(kJingleVideoInitiateWithRtpData, options, elem.use());
 }
 
 TEST(MediaSessionTest, JingleRejectVideo) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
-  cricket::CallOptions opts;
-  opts.has_audio = true;
-  opts.has_video = false;
-  opts.has_data = true;
-  test->TestRejectOffer(kJingleVideoInitiateWithData, opts, elem.use());
+  cricket::CallOptions options = AudioCallOptions();
+  options.data_channel_type = cricket::DCT_RTP;
+  test->TestRejectOffer(kJingleVideoInitiateWithRtpData, options, elem.use());
 }
 
 TEST(MediaSessionTest, JingleRejectData) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
-  cricket::CallOptions opts;
-  opts.has_audio = true;
-  opts.has_video = true;
-  opts.has_data = false;
-  test->TestRejectOffer(kJingleVideoInitiateWithData, opts, elem.use());
+  test->TestRejectOffer(
+      kJingleVideoInitiateWithRtpData, VideoCallOptions(), elem.use());
 }
 
 TEST(MediaSessionTest, JingleRejectVideoAndData) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
-  cricket::CallOptions opts;
-  opts.has_audio = true;
-  opts.has_video = false;
-  opts.has_data = false;
-  test->TestRejectOffer(kJingleVideoInitiateWithData, opts, elem.use());
+  test->TestRejectOffer(
+      kJingleVideoInitiateWithRtpData, AudioCallOptions(), elem.use());
 }
 
 TEST(MediaSessionTest, JingleGoodInitiateAllSupportedAudioCodecs) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
-  test->TestGoodIncomingInitiate(kJingleInitiate, elem.use());
+  test->TestGoodIncomingInitiate(
+      kJingleInitiate, AudioCallOptions(), elem.use());
   test->TestHasAllSupportedAudioCodecs(elem.get());
 }
 
 TEST(MediaSessionTest, JingleGoodInitiateDifferentPreferenceAudioCodecs) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
-  test->TestGoodIncomingInitiate(kJingleInitiateDifferentPreference,
-      elem.use());
+  test->TestGoodIncomingInitiate(
+      kJingleInitiateDifferentPreference, AudioCallOptions(), elem.use());
   test->TestHasAllSupportedAudioCodecs(elem.get());
 }
 
 TEST(MediaSessionTest, JingleGoodInitiateSomeUnsupportedAudioCodecs) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
-  test->TestGoodIncomingInitiate(kJingleInitiateSomeUnsupported, elem.use());
+  test->TestGoodIncomingInitiate(
+      kJingleInitiateSomeUnsupported, AudioCallOptions(), elem.use());
   test->TestHasAudioCodecsFromInitiateSomeUnsupported(elem.get());
 }
 
 TEST(MediaSessionTest, JingleGoodInitiateDynamicAudioCodecs) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
-  test->TestGoodIncomingInitiate(kJingleInitiateDynamicAudioCodecs, elem.use());
+  test->TestGoodIncomingInitiate(
+      kJingleInitiateDynamicAudioCodecs, AudioCallOptions(), elem.use());
   test->TestHasAudioCodecsFromInitiateDynamicAudioCodecs(elem.get());
 }
 
 TEST(MediaSessionTest, JingleGoodInitiateStaticAudioCodecs) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
-  test->TestGoodIncomingInitiate(kJingleInitiateStaticAudioCodecs, elem.use());
+  test->TestGoodIncomingInitiate(
+      kJingleInitiateStaticAudioCodecs, AudioCallOptions(), elem.use());
   test->TestHasAudioCodecsFromInitiateStaticAudioCodecs(elem.get());
 }
 
@@ -2822,30 +2919,35 @@ TEST(MediaSessionTest, JingleBadInitiateDynamicWithoutNames) {
 
 TEST(MediaSessionTest, JingleGoodOutgoingInitiate) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
-  test->TestGoodOutgoingInitiate();
+  test->TestGoodOutgoingInitiate(AudioCallOptions());
 }
 
 TEST(MediaSessionTest, JingleGoodOutgoingInitiateWithBandwidth) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
-  cricket::CallOptions options;
-  options.has_video = true;
+  cricket::CallOptions options = VideoCallOptions();
   options.video_bandwidth = 42000;
   test->TestGoodOutgoingInitiate(options);
 }
 
 TEST(MediaSessionTest, JingleGoodOutgoingInitiateWithRtcpMux) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
-  cricket::CallOptions options;
-  options.has_video = true;
+  cricket::CallOptions options = VideoCallOptions();
   options.rtcp_mux_enabled = true;
   test->TestGoodOutgoingInitiate(options);
 }
 
-TEST(MediaSessionTest, JingleGoodOutgoingInitiateWithData) {
+TEST(MediaSessionTest, JingleGoodOutgoingInitiateWithRtpData) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   cricket::CallOptions options;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   test->ExpectCrypto(cricket::SEC_ENABLED);
+  test->TestGoodOutgoingInitiate(options);
+}
+
+TEST(MediaSessionTest, JingleGoodOutgoingInitiateWithSctpData) {
+  talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
+  cricket::CallOptions options;
+  options.data_channel_type = cricket::DCT_SCTP;
   test->TestGoodOutgoingInitiate(options);
 }
 
@@ -2855,8 +2957,10 @@ TEST(MediaSessionTest, JingleGoodOutgoingInitiateWithData) {
 TEST(MediaSessionTest, JingleInitiateWithCryptoIsIgnoredWhenNotSecured) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
-  test->TestGoodIncomingInitiate(AddEncryption(kJingleVideoInitiate,
-                                              kJingleCryptoOffer), elem.use());
+  test->TestGoodIncomingInitiate(
+      AddEncryption(kJingleVideoInitiate, kJingleCryptoOffer),
+      VideoCallOptions(),
+      elem.use());
 }
 
 // Offer has crypto required but the session is not secure, fail.
@@ -2878,8 +2982,10 @@ TEST(MediaSessionTest, JingleInitiateWithCryptoWhenSecureEnabled) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   test->ExpectCrypto(cricket::SEC_ENABLED);
-  test->TestGoodIncomingInitiate(AddEncryption(kJingleVideoInitiate,
-                                              kJingleCryptoOffer), elem.use());
+  test->TestGoodIncomingInitiate(
+      AddEncryption(kJingleVideoInitiate, kJingleCryptoOffer),
+      VideoCallOptions(),
+      elem.use());
 }
 
 // Offer has crypto and session is secure required, expect crypto in
@@ -2888,8 +2994,10 @@ TEST(MediaSessionTest, JingleInitiateWithCryptoWhenSecureRequired) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   test->ExpectCrypto(cricket::SEC_REQUIRED);
-  test->TestGoodIncomingInitiate(AddEncryption(kJingleVideoInitiate,
-                                              kJingleCryptoOffer), elem.use());
+  test->TestGoodIncomingInitiate(
+      AddEncryption(kJingleVideoInitiate, kJingleCryptoOffer),
+      VideoCallOptions(),
+      elem.use());
 }
 
 // Offer has unsupported crypto and session is secure, no crypto in
@@ -2900,6 +3008,7 @@ TEST(MediaSessionTest, JingleInitiateWithUnsupportedCrypto) {
   test->MakeSignalingSecure(cricket::SEC_ENABLED);
   test->TestGoodIncomingInitiate(
       AddEncryption(kJingleInitiate, kJingleUnsupportedCryptoOffer),
+      VideoCallOptions(),
       elem.use());
 }
 
@@ -2931,23 +3040,36 @@ TEST(MediaSessionTest,
 TEST(MediaSessionTest, JingleGoodOutgoingInitiateWithCrypto) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   test->ExpectCrypto(cricket::SEC_ENABLED);
-  test->TestGoodOutgoingInitiate();
+  test->TestGoodOutgoingInitiate(AudioCallOptions());
 }
 
 TEST(MediaSessionTest, JingleGoodOutgoingInitiateWithCryptoRequired) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
   test->ExpectCrypto(cricket::SEC_REQUIRED);
-  test->TestGoodOutgoingInitiate();
+  test->TestGoodOutgoingInitiate(AudioCallOptions());
 }
 
 TEST(MediaSessionTest, JingleIncomingAcceptWithSsrcs) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
-  test->TestIncomingAcceptWithSsrcs(kJingleAcceptWithSsrcs, false);
+  cricket::CallOptions options = VideoCallOptions();
+  options.is_muc = true;
+  test->TestIncomingAcceptWithSsrcs(kJingleAcceptWithSsrcs, options);
 }
 
-TEST(MediaSessionTest, JingleIncomingAcceptWithDataSsrcs) {
+TEST(MediaSessionTest, JingleIncomingAcceptWithRtpDataSsrcs) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
-  test->TestIncomingAcceptWithSsrcs(kJingleAcceptWithDataSsrcs, true);
+  cricket::CallOptions options = VideoCallOptions();
+  options.is_muc = true;
+  options.data_channel_type = cricket::DCT_RTP;
+  test->TestIncomingAcceptWithSsrcs(kJingleAcceptWithRtpDataSsrcs, options);
+}
+
+TEST(MediaSessionTest, JingleIncomingAcceptWithSctpData) {
+  talk_base::scoped_ptr<MediaSessionClientTest> test(JingleTest());
+  cricket::CallOptions options = VideoCallOptions();
+  options.is_muc = true;
+  options.data_channel_type = cricket::DCT_SCTP;
+  test->TestIncomingAcceptWithSsrcs(kJingleAcceptWithSctpData, options);
 }
 
 TEST(MediaSessionTest, JingleStreamsUpdateAndView) {
@@ -2965,7 +3087,8 @@ TEST(MediaSessionTest, JingleSendVideoStreamUpdate) {
 TEST(MediaSessionTest, GingleGoodVideoInitiate) {
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
-  test->TestGoodIncomingInitiate(kGingleVideoInitiate, elem.use());
+  test->TestGoodIncomingInitiate(
+      kGingleVideoInitiate, VideoCallOptions(), elem.use());
   test->TestCodecsOfVideoInitiate(elem.get());
 }
 
@@ -2973,13 +3096,15 @@ TEST(MediaSessionTest, GingleGoodVideoInitiateWithBandwidth) {
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
   test->ExpectVideoBandwidth(42000);
-  test->TestGoodIncomingInitiate(kGingleVideoInitiateWithBandwidth, elem.use());
+  test->TestGoodIncomingInitiate(
+      kGingleVideoInitiateWithBandwidth, VideoCallOptions(), elem.use());
 }
 
 TEST(MediaSessionTest, GingleGoodInitiateAllSupportedAudioCodecs) {
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
-  test->TestGoodIncomingInitiate(kGingleInitiate, elem.use());
+  test->TestGoodIncomingInitiate(
+      kGingleInitiate, AudioCallOptions(), elem.use());
   test->TestHasAllSupportedAudioCodecs(elem.get());
 }
 
@@ -2987,44 +3112,50 @@ TEST(MediaSessionTest, GingleGoodInitiateAllSupportedAudioCodecsWithCrypto) {
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
   test->ExpectCrypto(cricket::SEC_ENABLED);
-  test->TestGoodIncomingInitiate(AddEncryption(kGingleInitiate,
-                                              kGingleCryptoOffer), elem.use());
+  test->TestGoodIncomingInitiate(
+      AddEncryption(kGingleInitiate, kGingleCryptoOffer),
+      AudioCallOptions(),
+      elem.use());
   test->TestHasAllSupportedAudioCodecs(elem.get());
 }
 
 TEST(MediaSessionTest, GingleGoodInitiateDifferentPreferenceAudioCodecs) {
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
-  test->TestGoodIncomingInitiate(kGingleInitiateDifferentPreference,
-      elem.use());
+  test->TestGoodIncomingInitiate(
+      kGingleInitiateDifferentPreference, AudioCallOptions(), elem.use());
   test->TestHasAllSupportedAudioCodecs(elem.get());
 }
 
 TEST(MediaSessionTest, GingleGoodInitiateSomeUnsupportedAudioCodecs) {
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
-  test->TestGoodIncomingInitiate(kGingleInitiateSomeUnsupported, elem.use());
+  test->TestGoodIncomingInitiate(
+      kGingleInitiateSomeUnsupported, AudioCallOptions(), elem.use());
   test->TestHasAudioCodecsFromInitiateSomeUnsupported(elem.get());
 }
 
 TEST(MediaSessionTest, GingleGoodInitiateDynamicAudioCodecs) {
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
-  test->TestGoodIncomingInitiate(kGingleInitiateDynamicAudioCodecs, elem.use());
+  test->TestGoodIncomingInitiate(
+      kGingleInitiateDynamicAudioCodecs, AudioCallOptions(), elem.use());
   test->TestHasAudioCodecsFromInitiateDynamicAudioCodecs(elem.get());
 }
 
 TEST(MediaSessionTest, GingleGoodInitiateStaticAudioCodecs) {
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
-  test->TestGoodIncomingInitiate(kGingleInitiateStaticAudioCodecs, elem.use());
+  test->TestGoodIncomingInitiate(
+      kGingleInitiateStaticAudioCodecs, AudioCallOptions(), elem.use());
   test->TestHasAudioCodecsFromInitiateStaticAudioCodecs(elem.get());
 }
 
 TEST(MediaSessionTest, GingleGoodInitiateNoAudioCodecs) {
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
-  test->TestGoodIncomingInitiate(kGingleInitiateNoAudioCodecs, elem.use());
+  test->TestGoodIncomingInitiate(
+      kGingleInitiateNoAudioCodecs, AudioCallOptions(), elem.use());
   test->TestHasDefaultAudioCodecs(elem.get());
 }
 
@@ -3056,13 +3187,12 @@ TEST(MediaSessionTest, GingleBadInitiateDynamicWithoutNames) {
 
 TEST(MediaSessionTest, GingleGoodOutgoingInitiate) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
-  test->TestGoodOutgoingInitiate();
+  test->TestGoodOutgoingInitiate(AudioCallOptions());
 }
 
 TEST(MediaSessionTest, GingleGoodOutgoingInitiateWithBandwidth) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
-  cricket::CallOptions options;
-  options.has_video = true;
+  cricket::CallOptions options = VideoCallOptions();
   options.video_bandwidth = 42000;
   test->TestGoodOutgoingInitiate(options);
 }
@@ -3073,8 +3203,10 @@ TEST(MediaSessionTest, GingleGoodOutgoingInitiateWithBandwidth) {
 TEST(MediaSessionTest, GingleInitiateWithCryptoIsIgnoredWhenNotSecured) {
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
-  test->TestGoodIncomingInitiate(AddEncryption(kGingleInitiate,
-                                              kGingleCryptoOffer), elem.use());
+  test->TestGoodIncomingInitiate(
+      AddEncryption(kGingleInitiate, kGingleCryptoOffer),
+      VideoCallOptions(),
+      elem.use());
 }
 
 // Offer has crypto required but the session is not secure, fail.
@@ -3096,8 +3228,10 @@ TEST(MediaSessionTest, GingleInitiateWithCryptoWhenSecureEnabled) {
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
   test->ExpectCrypto(cricket::SEC_ENABLED);
-  test->TestGoodIncomingInitiate(AddEncryption(kGingleInitiate,
-                                              kGingleCryptoOffer), elem.use());
+  test->TestGoodIncomingInitiate(
+      AddEncryption(kGingleInitiate, kGingleCryptoOffer),
+      VideoCallOptions(),
+      elem.use());
 }
 
 // Offer has crypto and session is secure required, expect crypto in
@@ -3106,8 +3240,10 @@ TEST(MediaSessionTest, GingleInitiateWithCryptoWhenSecureRequired) {
   talk_base::scoped_ptr<buzz::XmlElement> elem;
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
   test->ExpectCrypto(cricket::SEC_REQUIRED);
-  test->TestGoodIncomingInitiate(AddEncryption(kGingleInitiate,
-                                              kGingleCryptoOffer), elem.use());
+  test->TestGoodIncomingInitiate(
+      AddEncryption(kGingleInitiate, kGingleCryptoOffer),
+      VideoCallOptions(),
+      elem.use());
 }
 
 // Offer has unsupported crypto and session is secure, no crypto in
@@ -3118,6 +3254,7 @@ TEST(MediaSessionTest, GingleInitiateWithUnsupportedCrypto) {
   test->MakeSignalingSecure(cricket::SEC_ENABLED);
   test->TestGoodIncomingInitiate(
       AddEncryption(kGingleInitiate, kGingleUnsupportedCryptoOffer),
+      VideoCallOptions(),
       elem.use());
 }
 
@@ -3148,24 +3285,26 @@ TEST(MediaSessionTest,
 TEST(MediaSessionTest, GingleGoodOutgoingInitiateWithCrypto) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
   test->ExpectCrypto(cricket::SEC_ENABLED);
-  test->TestGoodOutgoingInitiate();
+  test->TestGoodOutgoingInitiate(AudioCallOptions());
 }
 
 TEST(MediaSessionTest, GingleGoodOutgoingInitiateWithCryptoRequired) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
   test->ExpectCrypto(cricket::SEC_REQUIRED);
-  test->TestGoodOutgoingInitiate();
+  test->TestGoodOutgoingInitiate(AudioCallOptions());
 }
 
 TEST(MediaSessionTest, GingleIncomingAcceptWithSsrcs) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
-  test->TestIncomingAcceptWithSsrcs(kGingleAcceptWithSsrcs, false);
+  cricket::CallOptions options = VideoCallOptions();
+  options.is_muc = true;
+  test->TestIncomingAcceptWithSsrcs(kGingleAcceptWithSsrcs, options);
 }
 
-TEST(MediaSessionTest, GingleGoodOutgoingInitiateWithData) {
+TEST(MediaSessionTest, GingleGoodOutgoingInitiateWithRtpData) {
   talk_base::scoped_ptr<MediaSessionClientTest> test(GingleTest());
   cricket::CallOptions options;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   test->ExpectCrypto(cricket::SEC_ENABLED);
   test->TestGoodOutgoingInitiate(options);
 }

@@ -378,22 +378,27 @@ int CpuSampler::GetCurrentCpus() {
 ///////////////////////////////////////////////////////////////////
 // Implementation of class CpuMonitor.
 CpuMonitor::CpuMonitor(Thread* thread)
-    : monitor_thread_(thread ? thread : Thread::Current()) {
-  monitor_thread_->SignalQueueDestroyed.connect(
-      this, &CpuMonitor::OnMessageQueueDestroyed);
+    : monitor_thread_(thread) {
 }
 
 CpuMonitor::~CpuMonitor() {
   Stop();
 }
 
+void CpuMonitor::set_thread(Thread* thread) {
+  ASSERT(monitor_thread_ == NULL || monitor_thread_ == thread);
+  monitor_thread_ = thread;
+}
+
 bool CpuMonitor::Start(int period_ms) {
-  if (!sampler_.Init()) return false;
+  if (!monitor_thread_  || !sampler_.Init()) return false;
+
+  monitor_thread_->SignalQueueDestroyed.connect(
+       this, &CpuMonitor::OnMessageQueueDestroyed);
 
   period_ms_ = period_ms;
-  if (monitor_thread_) {
-    monitor_thread_->PostDelayed(period_ms_, this);
-  }
+  monitor_thread_->PostDelayed(period_ms_, this);
+
   return true;
 }
 

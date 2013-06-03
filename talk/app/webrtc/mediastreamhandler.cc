@@ -33,18 +33,19 @@
 
 namespace webrtc {
 
-BaseTrackHandler::BaseTrackHandler(MediaStreamTrackInterface* track)
+TrackHandler::TrackHandler(MediaStreamTrackInterface* track, uint32 ssrc)
     : track_(track),
+      ssrc_(ssrc),
       state_(track->state()),
       enabled_(track->enabled()) {
   track_->RegisterObserver(this);
 }
 
-BaseTrackHandler::~BaseTrackHandler() {
+TrackHandler::~TrackHandler() {
   track_->UnregisterObserver(this);
 }
 
-void BaseTrackHandler::OnChanged() {
+void TrackHandler::OnChanged() {
   if (state_ != track_->state()) {
     state_ = track_->state();
     OnStateChanged();
@@ -57,8 +58,9 @@ void BaseTrackHandler::OnChanged() {
 
 LocalAudioTrackHandler::LocalAudioTrackHandler(
     AudioTrackInterface* track,
+    uint32 ssrc,
     AudioProviderInterface* provider)
-    : BaseTrackHandler(track),
+    : TrackHandler(track, ssrc),
       audio_track_(track),
       provider_(provider) {
   OnEnabledChanged();
@@ -71,20 +73,25 @@ void LocalAudioTrackHandler::OnStateChanged() {
   // TODO(perkj): What should happen when the state change?
 }
 
+void LocalAudioTrackHandler::Stop() {
+  cricket::AudioOptions options;
+  provider_->SetAudioSend(ssrc(), false, options);
+}
+
 void LocalAudioTrackHandler::OnEnabledChanged() {
   cricket::AudioOptions options;
   if (audio_track_->enabled() && audio_track_->GetSource()) {
     options = static_cast<LocalAudioSource*>(
         audio_track_->GetSource())->options();
   }
-  provider_->SetAudioSend(audio_track_->id(), audio_track_->enabled(),
-                          options);
+  provider_->SetAudioSend(ssrc(), audio_track_->enabled(), options);
 }
 
 RemoteAudioTrackHandler::RemoteAudioTrackHandler(
     AudioTrackInterface* track,
+    uint32 ssrc,
     AudioProviderInterface* provider)
-    : BaseTrackHandler(track),
+    : TrackHandler(track, ssrc),
       audio_track_(track),
       provider_(provider) {
   OnEnabledChanged();
@@ -93,24 +100,27 @@ RemoteAudioTrackHandler::RemoteAudioTrackHandler(
 RemoteAudioTrackHandler::~RemoteAudioTrackHandler() {
 }
 
+void RemoteAudioTrackHandler::Stop() {
+  provider_->SetAudioPlayout(ssrc(), false);
+}
+
 void RemoteAudioTrackHandler::OnStateChanged() {
-  // TODO(perkj): What should happen when the state change?
 }
 
 void RemoteAudioTrackHandler::OnEnabledChanged() {
-  provider_->SetAudioPlayout(audio_track_->id(), audio_track_->enabled());
+  provider_->SetAudioPlayout(ssrc(), audio_track_->enabled());
 }
 
 LocalVideoTrackHandler::LocalVideoTrackHandler(
     VideoTrackInterface* track,
+    uint32 ssrc,
     VideoProviderInterface* provider)
-    : BaseTrackHandler(track),
+    : TrackHandler(track, ssrc),
       local_video_track_(track),
       provider_(provider) {
   VideoSourceInterface* source = local_video_track_->GetSource();
   if (source)
-    provider_->SetCaptureDevice(local_video_track_->id(),
-                                source->GetVideoCapturer());
+    provider_->SetCaptureDevice(ssrc, source->GetVideoCapturer());
   OnEnabledChanged();
 }
 
@@ -118,7 +128,11 @@ LocalVideoTrackHandler::~LocalVideoTrackHandler() {
 }
 
 void LocalVideoTrackHandler::OnStateChanged() {
-  // TODO(perkj): What should happen when the state change?
+}
+
+void LocalVideoTrackHandler::Stop() {
+  provider_->SetCaptureDevice(ssrc(), NULL);
+  provider_->SetVideoSend(ssrc(), false, NULL);
 }
 
 void LocalVideoTrackHandler::OnEnabledChanged() {
@@ -127,32 +141,33 @@ void LocalVideoTrackHandler::OnEnabledChanged() {
   if (local_video_track_->enabled() && source) {
     options = source->options();
   }
-  provider_->SetVideoSend(local_video_track_->id(),
-                          local_video_track_->enabled(),
-                          options);
+  provider_->SetVideoSend(ssrc(), local_video_track_->enabled(), options);
 }
 
 RemoteVideoTrackHandler::RemoteVideoTrackHandler(
     VideoTrackInterface* track,
+    uint32 ssrc,
     VideoProviderInterface* provider)
-    : BaseTrackHandler(track),
+    : TrackHandler(track, ssrc),
       remote_video_track_(track),
       provider_(provider) {
   OnEnabledChanged();
 }
 
 RemoteVideoTrackHandler::~RemoteVideoTrackHandler() {
+}
+
+void RemoteVideoTrackHandler::Stop() {
   // Since cricket::VideoRenderer is not reference counted
   // we need to remove the renderer before we are deleted.
-  provider_->SetVideoPlayout(remote_video_track_->id(), false, NULL);
+  provider_->SetVideoPlayout(ssrc(), false, NULL);
 }
 
 void RemoteVideoTrackHandler::OnStateChanged() {
-  // TODO(perkj): What should happen when the state change?
 }
 
 void RemoteVideoTrackHandler::OnEnabledChanged() {
-  provider_->SetVideoPlayout(remote_video_track_->id(),
+  provider_->SetVideoPlayout(ssrc(),
                              remote_video_track_->enabled(),
                              remote_video_track_->FrameInput());
 }
@@ -172,6 +187,31 @@ MediaStreamHandler::~MediaStreamHandler() {
   }
 }
 
+void MediaStreamHandler::RemoveTrack(MediaStreamTrackInterface* track) {
+  for (TrackHandlers::iterator it = track_handlers_.begin();
+       it != track_handlers_.end(); ++it) {
+    if ((*it)->track() == track) {
+      TrackHandler* track = *it;
+      track->Stop();
+      delete track;
+      track_handlers_.erase(it);
+      break;
+    }
+  }
+}
+
+TrackHandler* MediaStreamHandler::FindTrackHandler(
+    MediaStreamTrackInterface* track) {
+  TrackHandlers::iterator it = track_handlers_.begin();
+  for (; it != track_handlers_.end(); ++it) {
+    if ((*it)->track() == track) {
+      return *it;
+      break;
+    }
+  }
+  return NULL;
+}
+
 MediaStreamInterface* MediaStreamHandler::stream() {
   return stream_.get();
 }
@@ -179,29 +219,39 @@ MediaStreamInterface* MediaStreamHandler::stream() {
 void MediaStreamHandler::OnChanged() {
 }
 
+void MediaStreamHandler::Stop() {
+  for (TrackHandlers::const_iterator it = track_handlers_.begin();
+      it != track_handlers_.end(); ++it) {
+    (*it)->Stop();
+  }
+}
+
 LocalMediaStreamHandler::LocalMediaStreamHandler(
     MediaStreamInterface* stream,
     AudioProviderInterface* audio_provider,
     VideoProviderInterface* video_provider)
     : MediaStreamHandler(stream, audio_provider, video_provider) {
-  // Create an AudioTrack handler for all audio tracks in the MediaStream.
-  AudioTrackVector audio_tracklist = stream->GetAudioTracks();
-  for (size_t j = 0; j < audio_tracklist.size(); ++j) {
-    BaseTrackHandler* handler(new LocalAudioTrackHandler(audio_tracklist[j],
-                                                         audio_provider));
-    track_handlers_.push_back(handler);
-  }
-  // Create a VideoTrack handler for all video tracks in the MediaStream.
-  VideoTrackVector video_tracklist = stream->GetVideoTracks();
-  for (size_t j = 0; j < video_tracklist.size(); ++j) {
-    VideoTrackInterface* track = video_tracklist[j];
-    BaseTrackHandler* handler(new LocalVideoTrackHandler(track,
-                                                         video_provider));
-    track_handlers_.push_back(handler);
-  }
 }
 
 LocalMediaStreamHandler::~LocalMediaStreamHandler() {
+}
+
+void LocalMediaStreamHandler::AddAudioTrack(AudioTrackInterface* audio_track,
+                                            uint32 ssrc) {
+  ASSERT(!FindTrackHandler(audio_track));
+
+  TrackHandler* handler(new LocalAudioTrackHandler(audio_track, ssrc,
+                                                   audio_provider_));
+  track_handlers_.push_back(handler);
+}
+
+void LocalMediaStreamHandler::AddVideoTrack(VideoTrackInterface* video_track,
+                                            uint32 ssrc) {
+  ASSERT(!FindTrackHandler(video_track));
+
+  TrackHandler* handler(new LocalVideoTrackHandler(video_track, ssrc,
+                                                   video_provider_));
+  track_handlers_.push_back(handler);
 }
 
 RemoteMediaStreamHandler::RemoteMediaStreamHandler(
@@ -209,101 +259,181 @@ RemoteMediaStreamHandler::RemoteMediaStreamHandler(
     AudioProviderInterface* audio_provider,
     VideoProviderInterface* video_provider)
     : MediaStreamHandler(stream, audio_provider, video_provider) {
-  // Create an AudioTrack handler for all audio tracks  in the MediaStream.
-  AudioTrackVector audio_tracklist = stream->GetAudioTracks();
-  for (size_t j = 0; j < audio_tracklist.size(); ++j) {
-    BaseTrackHandler* handler(
-        new RemoteAudioTrackHandler(audio_tracklist[j], audio_provider));
-    track_handlers_.push_back(handler);
-  }
-
-  // Create a VideoTrack handler for all video tracks  in the MediaStream.
-  VideoTrackVector video_tracklist = stream->GetVideoTracks();
-  for (size_t j = 0; j < video_tracklist.size(); ++j) {
-    VideoTrackInterface* track =
-        static_cast<VideoTrackInterface*>(video_tracklist[j]);
-    BaseTrackHandler* handler(
-        new RemoteVideoTrackHandler(track, video_provider));
-    track_handlers_.push_back(handler);
-  }
 }
 
 RemoteMediaStreamHandler::~RemoteMediaStreamHandler() {
 }
 
-MediaStreamHandlers::MediaStreamHandlers(
+void RemoteMediaStreamHandler::AddAudioTrack(AudioTrackInterface* audio_track,
+                                             uint32 ssrc) {
+  ASSERT(!FindTrackHandler(audio_track));
+  TrackHandler* handler(
+      new RemoteAudioTrackHandler(audio_track, ssrc, audio_provider_));
+  track_handlers_.push_back(handler);
+}
+
+void RemoteMediaStreamHandler::AddVideoTrack(VideoTrackInterface* video_track,
+                                             uint32 ssrc) {
+  ASSERT(!FindTrackHandler(video_track));
+  TrackHandler* handler(
+      new RemoteVideoTrackHandler(video_track, ssrc, video_provider_));
+  track_handlers_.push_back(handler);
+}
+
+MediaStreamHandlerContainer::MediaStreamHandlerContainer(
     AudioProviderInterface* audio_provider,
     VideoProviderInterface* video_provider)
     : audio_provider_(audio_provider),
       video_provider_(video_provider) {
 }
 
-MediaStreamHandlers::~MediaStreamHandlers() {
-  for (StreamHandlerList::iterator it = remote_streams_handlers_.begin();
-       it != remote_streams_handlers_.end(); ++it) {
-    delete *it;
-  }
-  for (StreamHandlerList::iterator it = local_streams_handlers_.begin();
-       it != local_streams_handlers_.end(); ++it) {
-    delete *it;
-  }
+MediaStreamHandlerContainer::~MediaStreamHandlerContainer() {
+  ASSERT(remote_streams_handlers_.empty());
+  ASSERT(local_streams_handlers_.empty());
 }
 
-void MediaStreamHandlers::AddRemoteStream(MediaStreamInterface* stream) {
+void MediaStreamHandlerContainer::TearDown() {
+  for (StreamHandlerList::iterator it = remote_streams_handlers_.begin();
+       it != remote_streams_handlers_.end(); ++it) {
+    (*it)->Stop();
+    delete *it;
+  }
+  remote_streams_handlers_.clear();
+  for (StreamHandlerList::iterator it = local_streams_handlers_.begin();
+       it != local_streams_handlers_.end(); ++it) {
+    (*it)->Stop();
+    delete *it;
+  }
+  local_streams_handlers_.clear();
+}
+
+void MediaStreamHandlerContainer::RemoveRemoteStream(
+    MediaStreamInterface* stream) {
+  DeleteStreamHandler(&remote_streams_handlers_, stream);
+}
+
+void MediaStreamHandlerContainer::AddRemoteAudioTrack(
+    MediaStreamInterface* stream,
+    AudioTrackInterface* audio_track,
+    uint32 ssrc) {
+  MediaStreamHandler* handler = FindStreamHandler(remote_streams_handlers_,
+                                                  stream);
+  if (handler == NULL) {
+    handler = CreateRemoteStreamHandler(stream);
+  }
+  handler->AddAudioTrack(audio_track, ssrc);
+}
+
+void MediaStreamHandlerContainer::AddRemoteVideoTrack(
+    MediaStreamInterface* stream,
+    VideoTrackInterface* video_track,
+    uint32 ssrc) {
+  MediaStreamHandler* handler = FindStreamHandler(remote_streams_handlers_,
+                                                  stream);
+  if (handler == NULL) {
+    handler = CreateRemoteStreamHandler(stream);
+  }
+  handler->AddVideoTrack(video_track, ssrc);
+}
+
+void MediaStreamHandlerContainer::RemoveRemoteTrack(
+    MediaStreamInterface* stream,
+    MediaStreamTrackInterface* track) {
+  MediaStreamHandler* handler = FindStreamHandler(remote_streams_handlers_,
+                                                  stream);
+  if (!VERIFY(handler != NULL)) {
+    LOG(LS_WARNING) << "Local MediaStreamHandler for stream  with id "
+                    << stream->label() << "doesnt't exist.";
+    return;
+  }
+  handler->RemoveTrack(track);
+}
+
+void MediaStreamHandlerContainer::RemoveLocalStream(
+    MediaStreamInterface* stream) {
+  DeleteStreamHandler(&local_streams_handlers_, stream);
+}
+
+void MediaStreamHandlerContainer::AddLocalAudioTrack(
+    MediaStreamInterface* stream,
+    AudioTrackInterface* audio_track,
+    uint32 ssrc) {
+  MediaStreamHandler* handler = FindStreamHandler(local_streams_handlers_,
+                                                  stream);
+  if (handler == NULL) {
+    handler = CreateLocalStreamHandler(stream);
+  }
+  handler->AddAudioTrack(audio_track, ssrc);
+}
+
+void MediaStreamHandlerContainer::AddLocalVideoTrack(
+    MediaStreamInterface* stream,
+    VideoTrackInterface* video_track,
+    uint32 ssrc) {
+  MediaStreamHandler* handler = FindStreamHandler(local_streams_handlers_,
+                                                  stream);
+  if (handler == NULL) {
+    handler = CreateLocalStreamHandler(stream);
+  }
+  handler->AddVideoTrack(video_track, ssrc);
+}
+
+void MediaStreamHandlerContainer::RemoveLocalTrack(
+    MediaStreamInterface* stream,
+    MediaStreamTrackInterface* track) {
+  MediaStreamHandler* handler = FindStreamHandler(local_streams_handlers_,
+                                                  stream);
+  if (!VERIFY(handler != NULL)) {
+    LOG(LS_WARNING) << "Remote MediaStreamHandler for stream with id "
+                    << stream->label() << "doesnt't exist.";
+    return;
+  }
+  handler->RemoveTrack(track);
+}
+
+MediaStreamHandler* MediaStreamHandlerContainer::CreateRemoteStreamHandler(
+    MediaStreamInterface* stream) {
+  ASSERT(!FindStreamHandler(remote_streams_handlers_, stream));
+
   RemoteMediaStreamHandler* handler =
       new RemoteMediaStreamHandler(stream, audio_provider_, video_provider_);
   remote_streams_handlers_.push_back(handler);
+  return handler;
 }
 
-void MediaStreamHandlers::RemoveRemoteStream(MediaStreamInterface* stream) {
-  StreamHandlerList::iterator it = remote_streams_handlers_.begin();
-  for (; it != remote_streams_handlers_.end(); ++it) {
+MediaStreamHandler* MediaStreamHandlerContainer::CreateLocalStreamHandler(
+    MediaStreamInterface* stream) {
+  ASSERT(!FindStreamHandler(local_streams_handlers_, stream));
+
+  LocalMediaStreamHandler* handler =
+      new LocalMediaStreamHandler(stream, audio_provider_, video_provider_);
+  local_streams_handlers_.push_back(handler);
+  return handler;
+}
+
+MediaStreamHandler* MediaStreamHandlerContainer::FindStreamHandler(
+    const StreamHandlerList& handlers,
+    MediaStreamInterface* stream) {
+  StreamHandlerList::const_iterator it = handlers.begin();
+  for (; it != handlers.end(); ++it) {
     if ((*it)->stream() == stream) {
+      return *it;
+    }
+  }
+  return NULL;
+}
+
+void MediaStreamHandlerContainer::DeleteStreamHandler(
+    StreamHandlerList* streamhandlers, MediaStreamInterface* stream) {
+  StreamHandlerList::iterator it = streamhandlers->begin();
+  for (; it != streamhandlers->end(); ++it) {
+    if ((*it)->stream() == stream) {
+      (*it)->Stop();
       delete *it;
+      streamhandlers->erase(it);
       break;
     }
   }
-  ASSERT(it != remote_streams_handlers_.end());
-  remote_streams_handlers_.erase(it);
 }
-
-void MediaStreamHandlers::CommitLocalStreams(
-    StreamCollectionInterface* streams) {
-  // Iterate the old list of local streams.
-  // If its not found in the new collection it have been removed.
-  // We can not erase from the old collection at the same time as we iterate.
-  // That is what the ugly while(1) fix.
-  while (1) {
-    StreamHandlerList::iterator it = local_streams_handlers_.begin();
-    for (; it != local_streams_handlers_.end(); ++it) {
-      if (streams->find((*it)->stream()->label()) == NULL) {
-        delete *it;
-        break;
-      }
-    }
-    if (it != local_streams_handlers_.end()) {
-      local_streams_handlers_.erase(it);
-      continue;
-    }
-    break;
-  }
-
-  // Iterate the new collection of local streams.
-  // If its not found in the old collection it have been added.
-  for (size_t j = 0; j < streams->count(); ++j) {
-    MediaStreamInterface* stream = streams->at(j);
-    StreamHandlerList::iterator it = local_streams_handlers_.begin();
-    for (; it != local_streams_handlers_.end(); ++it) {
-      if (stream == (*it)->stream())
-        break;
-    }
-    if (it == local_streams_handlers_.end()) {
-      LocalMediaStreamHandler* handler =
-          new LocalMediaStreamHandler(stream, audio_provider_, video_provider_);
-      local_streams_handlers_.push_back(handler);
-    }
-  }
-};
-
 
 }  // namespace webrtc

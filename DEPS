@@ -10,8 +10,8 @@ vars = {
   "chromium_trunk" : "http://src.chromium.org/svn/trunk",
   "chromium_git": "https://chromium.googlesource.com",
 
-  "chromium_revision": "187216",
-  "webrtc_revision": "3729",
+  "chromium_revision": "199693",
+  "webrtc_revision": "4125",
 }
 
 # NOTE: Prefer revision numbers to tags for svn deps. Use http rather than
@@ -74,13 +74,13 @@ deps = {
 
   "third_party/sqlite/":
     Var("chromium_trunk") + "/src/third_party/sqlite@" + Var("chromium_revision"),
- 
+
   "third_party/yasm":
     Var("chromium_trunk") + "/src/third_party/yasm@" + Var("chromium_revision"),
 
   "third_party/yasm/source/patched-yasm":
     From("chromium_deps", "src/third_party/yasm/source/patched-yasm"),
- 
+
   "third_party/webrtc":
     (Var("googlecode_url") % "webrtc") + "/stable/webrtc@" + Var("webrtc_revision"),
 
@@ -92,6 +92,9 @@ deps = {
 
   "tools/gyp":
     From("chromium_deps", "src/tools/gyp"),
+
+  "tools/protoc_wrapper":
+    Var("chromium_trunk") + "/src/tools/protoc_wrapper@" + Var("chromium_revision"),
 
   "tools/python":
     Var("chromium_trunk") + "/src/tools/python@" + Var("chromium_revision"),

@@ -4,11 +4,11 @@
 #include <string>
 
 #include "talk/base/asynchttprequest.h"
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/gunit.h"
 #include "talk/base/fakenetwork.h"
 #include "talk/base/scoped_ptr.h"
 #include "talk/base/socketaddress.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/relayport.h"
 #include "talk/p2p/base/stunport.h"
 #include "talk/p2p/client/connectivitychecker.h"
@@ -55,7 +55,7 @@ class FakeRelayPort : public RelayPort {
 
   // Just signal that we are done.
   virtual void PrepareAddress() {
-    SignalAddressReady(this);
+    SignalPortComplete(this);
   }
 };
 
@@ -77,7 +77,7 @@ class FakeStunPort : public StunPort {
   virtual void PrepareAddress() {
     AddAddress(kExternalAddr, kExternalAddr, "udp",
                STUN_PORT_TYPE, ICE_TYPE_PREFERENCE_SRFLX, true);
-    SignalAddressReady(this);
+    SignalPortComplete(this);
   }
 };
 

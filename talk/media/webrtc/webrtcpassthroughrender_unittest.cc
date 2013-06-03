@@ -18,9 +18,8 @@ class WebRtcPassthroughRenderTest : public testing::Test {
     virtual ~ExternalRenderer() {
     }
 
-    virtual WebRtc_Word32 RenderFrame(
-        const WebRtc_UWord32 stream_id,
-        webrtc::I420VideoFrame& videoFrame) {
+    virtual int32_t RenderFrame(const uint32_t stream_id,
+                                webrtc::I420VideoFrame& videoFrame) {
       ++frame_num_;
       LOG(INFO) << "RenderFrame stream_id: " << stream_id
                 << " frame_num: " << frame_num_;

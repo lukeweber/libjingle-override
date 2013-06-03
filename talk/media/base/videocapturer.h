@@ -82,8 +82,8 @@ struct CapturedFrame {
   uint32 pixel_height;  // height of a pixel, default is 1
   int64  elapsed_time;  // elapsed time since the creation of the frame
                         // source (that is, the camera), in nanoseconds.
-  int64  time_stamp;    // timestamp of when the frame was captured, in
-                        // nanoseconds.
+  int64  time_stamp;    // timestamp of when the frame was captured, in unix
+                        // time with nanosecond units.
   uint32 data_size;     // number of bytes of the frame data
   int    rotation;      // rotation in degrees of the frame (0, 90, 180, 270)
   void*  data;          // pointer to the frame data. This object allocates the
@@ -192,6 +192,9 @@ class VideoCapturer
   virtual void Stop() = 0;
   // Check if the video capturer is running.
   virtual bool IsRunning() = 0;
+  // Restart the video capturer with the new |capture_format|.
+  // Default implementation stops and starts the capturer.
+  virtual bool Restart(const VideoFormat& capture_format);
 
   // Adds a video processor that will be applied on VideoFrames returned by
   // |SignalVideoFrame|. Multiple video processors can be added. The video
@@ -291,9 +294,12 @@ class VideoCapturer
   talk_base::scoped_ptr<VideoFormat> max_format_;
   std::vector<VideoFormat> filtered_supported_formats_;
 
-  int ratio_w_;
+  int ratio_w_;  // View resolution. e.g. 1280 x 720.
   int ratio_h_;
   bool enable_camera_list_;
+  int scaled_width_;  // Current output size from ComputeScale.
+  int scaled_height_;
+  int num_cores_;  // Number of physical cores.
 
   talk_base::CriticalSection crit_;
   VideoProcessors video_processors_;

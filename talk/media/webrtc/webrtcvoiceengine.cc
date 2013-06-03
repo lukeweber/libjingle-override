@@ -49,6 +49,7 @@
 #include "talk/media/base/streamparams.h"
 #include "talk/media/base/voiceprocessor.h"
 #include "talk/media/webrtc/webrtcvoe.h"
+#include "webrtc/modules/audio_processing/include/audio_processing.h"
 
 #ifdef WIN32
 #include <objbase.h>  // NOLINT
@@ -135,6 +136,22 @@ static void LogMultiline(talk_base::LoggingSeverity sev, char* text) {
   for (char* tok = strtok(text, delim); tok; tok = strtok(NULL, delim)) {
     LOG_V(sev) << tok;
   }
+}
+
+// Severity is an integer because it comes is assumed to be from command line.
+static int SeverityToFilter(int severity) {
+  int filter = webrtc::kTraceNone;
+  switch (severity) {
+    case talk_base::LS_VERBOSE:
+      filter |= webrtc::kTraceAll;
+    case talk_base::LS_INFO:
+      filter |= (webrtc::kTraceStateInfo | webrtc::kTraceInfo);
+    case talk_base::LS_WARNING:
+      filter |= (webrtc::kTraceTerseInfo | webrtc::kTraceWarning);
+    case talk_base::LS_ERROR:
+      filter |= (webrtc::kTraceError | webrtc::kTraceCritical);
+  }
+  return filter;
 }
 
 static bool IsCodecMultiRate(const webrtc::CodecInst& codec) {
@@ -255,7 +272,7 @@ WebRtcVoiceEngine::WebRtcVoiceEngine()
       tracing_(new VoETraceWrapper()),
       adm_(NULL),
       adm_sc_(NULL),
-      log_level_(kDefaultLogSeverity),
+      log_filter_(SeverityToFilter(kDefaultLogSeverity)),
       is_dumping_aec_(false),
       desired_local_monitor_enable_(false),
       tx_processor_ssrc_(0),
@@ -271,7 +288,7 @@ WebRtcVoiceEngine::WebRtcVoiceEngine(VoEWrapper* voe_wrapper,
       tracing_(tracing),
       adm_(NULL),
       adm_sc_(NULL),
-      log_level_(kDefaultLogSeverity),
+      log_filter_(SeverityToFilter(kDefaultLogSeverity)),
       is_dumping_aec_(false),
       desired_local_monitor_enable_(false),
       tx_processor_ssrc_(0),
@@ -280,9 +297,10 @@ WebRtcVoiceEngine::WebRtcVoiceEngine(VoEWrapper* voe_wrapper,
 }
 
 void WebRtcVoiceEngine::Construct() {
+  SetTraceFilter(log_filter_);
   initialized_ = false;
   LOG(LS_VERBOSE) << "WebRtcVoiceEngine::WebRtcVoiceEngine";
-  ApplyLogging("");
+  SetTraceOptions("");
   if (tracing_->SetTraceCallback(this) == -1) {
     LOG_RTCERR0(SetTraceCallback);
   }
@@ -397,7 +415,7 @@ WebRtcVoiceEngine::~WebRtcVoiceEngine() {
   tracing_->SetTraceCallback(NULL);
 }
 
-bool WebRtcVoiceEngine::Init() {
+bool WebRtcVoiceEngine::Init(talk_base::Thread* worker_thread) {
   LOG(LS_INFO) << "WebRtcVoiceEngine::Init";
   bool res = InitInternal();
   if (res) {
@@ -411,20 +429,20 @@ bool WebRtcVoiceEngine::Init() {
 
 bool WebRtcVoiceEngine::InitInternal() {
   // Temporarily turn logging level up for the Init call
-  int old_level = log_level_;
-  log_level_ = talk_base::_min(log_level_,
-                               static_cast<int>(talk_base::LS_INFO));
-  ApplyLogging("");
+  int old_filter = log_filter_;
+  int extended_filter = log_filter_ | SeverityToFilter(talk_base::LS_INFO);
+  SetTraceFilter(extended_filter);
+  SetTraceOptions("");
 
   // Init WebRtc VoiceEngine.
   if (voe_wrapper_->base()->Init(adm_) == -1) {
     LOG_RTCERR0_EX(Init, voe_wrapper_->error());
+    SetTraceFilter(old_filter);
     return false;
   }
 
-  // Restore the previous log level and apply the log filter.
-  log_level_ = old_level;
-  ApplyLogging(log_filter_);
+  SetTraceFilter(old_filter);
+  SetTraceOptions(log_options_);
 
   // Log the VoiceEngine version info
   char buffer[1024] = "";
@@ -498,12 +516,7 @@ void WebRtcVoiceEngine::Terminate() {
   LOG(LS_INFO) << "WebRtcVoiceEngine::Terminate";
   initialized_ = false;
 
-  if (is_dumping_aec_) {
-    if (voe_wrapper_->processing()->StopDebugRecording() == -1) {
-      LOG_RTCERR0(StopDebugRecording);
-    }
-    is_dumping_aec_ = false;
-  }
+  StopAecDump();
 
   voe_wrapper_->base()->Terminate();
   voe_wrapper_sc_->base()->Terminate();
@@ -555,6 +568,7 @@ bool WebRtcVoiceEngine::SetOptions(int flags) {
   // them when we clear overrides.
   options.conference_mode.Set(false);
   options.adjust_agc_delta.Set(0);
+  options.aec_dump.Set(false);
 
   return SetAudioOptions(options);
 }
@@ -697,6 +711,16 @@ bool WebRtcVoiceEngine::ApplyOptions(const AudioOptions& options_in) {
       LOG_RTCERR1(SetConferenceMode, conference_mode);
       return false;
     }
+  }
+
+  bool aec_dump;
+  if (options.aec_dump.Get(&aec_dump)) {
+    // TODO(grunell): Use a string in the options instead and let the embedder
+    // choose the filename.
+    if (aec_dump)
+      StartAecDump("audio.aecdump");
+    else
+      StopAecDump();
   }
 
   return true;
@@ -999,14 +1023,19 @@ WebRtcVoiceEngine::rtp_header_extensions() const {
 void WebRtcVoiceEngine::SetLogging(int min_sev, const char* filter) {
   // if min_sev == -1, we keep the current log level.
   if (min_sev >= 0) {
-    log_level_ = min_sev;
+    SetTraceFilter(SeverityToFilter(min_sev));
   }
-  log_filter_ = filter;
-  ApplyLogging(initialized_ ? log_filter_ : "");
+  log_options_ = filter;
+  SetTraceOptions(initialized_ ? log_options_ : "");
 }
 
 int WebRtcVoiceEngine::GetLastEngineError() {
   return voe_wrapper_->error();
+}
+
+void WebRtcVoiceEngine::SetTraceFilter(int filter) {
+  log_filter_ = filter;
+  tracing_->SetTraceFilter(filter);
 }
 
 // We suppport three different logging settings for VoiceEngine:
@@ -1021,25 +1050,10 @@ int WebRtcVoiceEngine::GetLastEngineError() {
 //
 // For more details see: "https://sites.google.com/a/google.com/wavelet/Home/
 //    Magic-Flute--RTC-Engine-/Magic-Flute-Command-Line-Parameters"
-void WebRtcVoiceEngine::ApplyLogging(const std::string& log_filter) {
-  // Set log level.
-  int filter = 0;
-  switch (log_level_) {
-    case talk_base::LS_VERBOSE:
-      filter |= webrtc::kTraceAll;  // fall through
-    case talk_base::LS_INFO:
-      filter |= (webrtc::kTraceStateInfo | webrtc::kTraceInfo);  // fall through
-    case talk_base::LS_WARNING:
-      // fall through
-      filter |= (webrtc::kTraceTerseInfo | webrtc::kTraceWarning);
-    case talk_base::LS_ERROR:
-      filter |= (webrtc::kTraceError | webrtc::kTraceCritical);
-  }
-  tracing_->SetTraceFilter(filter);
-
+void WebRtcVoiceEngine::SetTraceOptions(const std::string& options) {
   // Set encrypted trace file.
   std::vector<std::string> opts;
-  talk_base::tokenize(log_filter, ' ', '"', '"', &opts);
+  talk_base::tokenize(options, ' ', '"', '"', &opts);
   std::vector<std::string>::iterator tracefile =
       std::find(opts.begin(), opts.end(), "tracefile");
   if (tracefile != opts.end() && ++tracefile != opts.end()) {
@@ -1055,21 +1069,10 @@ void WebRtcVoiceEngine::ApplyLogging(const std::string& log_filter) {
       std::find(opts.begin(), opts.end(), "recordEC");
   if (recordEC != opts.end()) {
     ++recordEC;
-    if (recordEC != opts.end() && !is_dumping_aec_) {
-      // Start dumping AEC when we are not dumping and recordEC has a filename.
-      if (voe_wrapper_->processing()->StartDebugRecording(
-          recordEC->c_str()) == -1) {
-        LOG_RTCERR0(StartDebugRecording);
-      } else {
-        is_dumping_aec_ = true;
-      }
-    } else if (recordEC == opts.end() && is_dumping_aec_) {
-      // Stop dumping EC when we are dumping and recordEC has no filename.
-      if (voe_wrapper_->processing()->StopDebugRecording() == -1) {
-        LOG_RTCERR0(StopDebugRecording);
-      }
-      is_dumping_aec_ = false;
-    }
+    if (recordEC != opts.end())
+      StartAecDump(recordEC->c_str());
+    else
+      StopAecDump();
   }
 }
 
@@ -1106,32 +1109,32 @@ void WebRtcVoiceEngine::Print(webrtc::TraceLevel level, const char* trace,
   talk_base::LoggingSeverity sev = talk_base::LS_VERBOSE;
   if (level == webrtc::kTraceError || level == webrtc::kTraceCritical)
     sev = talk_base::LS_ERROR;
-  else if (level == webrtc::kTraceWarning || level == webrtc::kTraceTerseInfo)
+  else if (level == webrtc::kTraceWarning)
     sev = talk_base::LS_WARNING;
   else if (level == webrtc::kTraceStateInfo || level == webrtc::kTraceInfo)
     sev = talk_base::LS_INFO;
+  else if (level == webrtc::kTraceTerseInfo)
+    sev = talk_base::LS_INFO;
 
-  if (sev >= log_level_) {
-    if (level == webrtc::kTraceTerseInfo) {
-      // Actually use LS_INFO for TerseInfo.
-      sev = talk_base::LS_INFO;
-    }
-    // Skip past boilerplate prefix text
-    if (length < 72) {
-      std::string msg(trace, length);
-      LOG(LS_ERROR) << "Malformed webrtc log message: ";
-      LOG_V(sev) << msg;
-    } else {
-      std::string msg(trace + 71, length - 72);
-      if (!ShouldIgnoreTrace(msg)) {
-        LOG_V(sev) << "webrtc: " << msg;
-      }
+  // Skip past boilerplate prefix text
+  if (length < 72) {
+    std::string msg(trace, length);
+    LOG(LS_ERROR) << "Malformed webrtc log message: ";
+    LOG_V(sev) << msg;
+  } else {
+    std::string msg(trace + 71, length - 72);
+    if (!ShouldIgnoreTrace(msg)) {
+      LOG_V(sev) << "webrtc: " << msg;
     }
   }
 }
 
+#ifdef USE_WEBRTC_DEV_BRANCH
+void WebRtcVoiceEngine::CallbackOnError(int channel_num, int err_code) {
+#else
 void WebRtcVoiceEngine::CallbackOnError(const int channel_num,
                                         const int err_code) {
+#endif
   talk_base::CritScope lock(&channels_cs_);
   WebRtcVoiceMediaChannel* channel = NULL;
   uint32 ssrc = 0;
@@ -1434,12 +1437,21 @@ bool WebRtcVoiceEngine::UnregisterProcessor(
 
 // Implementing method from WebRtc VoEMediaProcess interface
 // Do not lock mux_channel_cs_ in this callback.
+#ifdef USE_WEBRTC_DEV_BRANCH
+void WebRtcVoiceEngine::Process(int channel,
+                                webrtc::ProcessingTypes type,
+                                int16_t audio10ms[],
+                                int length,
+                                int sampling_freq,
+                                bool is_stereo) {
+#else
 void WebRtcVoiceEngine::Process(const int channel,
                                 const webrtc::ProcessingTypes type,
-                                WebRtc_Word16 audio10ms[],
+                                int16_t audio10ms[],
                                 const int length,
                                 const int sampling_freq,
                                 const bool is_stereo) {
+#endif
     talk_base::CritScope cs(&signal_media_critical_);
     AudioFrame frame(audio10ms, length, sampling_freq, is_stereo);
     if (type == webrtc::kPlaybackAllChannelsMixed) {
@@ -1452,6 +1464,29 @@ void WebRtcVoiceEngine::Process(const int channel,
                       << " tx_ssrc: " << tx_processor_ssrc_
                       << " rx_ssrc: " << rx_processor_ssrc_;
     }
+}
+
+void WebRtcVoiceEngine::StartAecDump(const std::string& filename) {
+  if (!is_dumping_aec_) {
+    // Start dumping AEC when we are not dumping.
+    if (voe_wrapper_->processing()->StartDebugRecording(
+        filename.c_str()) != webrtc::AudioProcessing::kNoError) {
+      LOG_RTCERR0(StartDebugRecording);
+    } else {
+      is_dumping_aec_ = true;
+    }
+  }
+}
+
+void WebRtcVoiceEngine::StopAecDump() {
+  if (is_dumping_aec_) {
+    // Stop dumping AEC when we are dumping.
+    if (voe_wrapper_->processing()->StopDebugRecording() !=
+        webrtc::AudioProcessing::kNoError) {
+      LOG_RTCERR0(StopDebugRecording);
+    }
+    is_dumping_aec_ = false;
+  }
 }
 
 // WebRtcVoiceMediaChannel
@@ -1791,6 +1826,7 @@ bool WebRtcVoiceMediaChannel::SetSendRtpHeaderExtensions(
     }
   }
 
+  LOG(LS_INFO) << "Enabling audio level header extension with ID " << id;
 // This api call is not available in iOS version of VoiceEngine currently.
 #if !defined(IOS) && !defined(ANDROID)
   if (engine()->voe()->rtp()->SetRTPAudioLevelIndicationStatus(
@@ -1798,6 +1834,9 @@ bool WebRtcVoiceMediaChannel::SetSendRtpHeaderExtensions(
     LOG_RTCERR3(SetRTPAudioLevelIndicationStatus, voe_channel(), enable, id);
     return false;
   }
+#else
+  LOG(LS_WARNING) << "Not enabling audio level header extension with ID " << id
+                  << " because it's not supported on iOS or Android.";
 #endif
 
   return true;
@@ -2546,8 +2585,9 @@ bool WebRtcVoiceMediaChannel::GetStats(VoiceMediaInfo* info) {
             static_cast<float> (ns.currentExpandRate) / (1 << 14);
       }
       if (engine()->voe()->sync()) {
-        engine()->voe()->sync()->GetDelayEstimate(*it,
-            rinfo.delay_estimate_ms);
+        int playout_buffer_delay_ms = 0;
+        engine()->voe()->sync()->GetDelayEstimate(
+            *it, &rinfo.delay_estimate_ms, &playout_buffer_delay_ms);
       }
 
       // Get speech level.

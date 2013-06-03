@@ -63,6 +63,7 @@ class FakeAdmTest : public testing::Test,
                                           const uint32_t totalDelayMS,
                                           const int32_t clockDrift,
                                           const uint32_t currentMicLevel,
+                                          const bool keyPressed,
                                           uint32_t& newMicLevel) {
     rec_buffer_bytes_ = nSamples * nBytesPerSample;
     if ((rec_buffer_bytes_ <= 0) ||

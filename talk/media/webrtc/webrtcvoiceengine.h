@@ -121,7 +121,7 @@ class WebRtcVoiceEngine
                     VoEWrapper* voe_wrapper_sc,
                     VoETraceWrapper* tracing);
   ~WebRtcVoiceEngine();
-  bool Init();
+  bool Init(talk_base::Thread* worker_thread);
   void Terminate();
 
   int GetCapabilities();
@@ -171,12 +171,21 @@ class WebRtcVoiceEngine
                            MediaProcessorDirection direction);
 
   // Method from webrtc::VoEMediaProcess
+#ifdef USE_WEBRTC_DEV_BRANCH
+  virtual void Process(int channel,
+                       webrtc::ProcessingTypes type,
+                       int16_t audio10ms[],
+                       int length,
+                       int sampling_freq,
+                       bool is_stereo);
+#else
   virtual void Process(const int channel,
                        const webrtc::ProcessingTypes type,
-                       WebRtc_Word16 audio10ms[],
+                       int16_t audio10ms[],
                        const int length,
                        const int sampling_freq,
                        const bool is_stereo);
+#endif
 
   // For tracking WebRtc channels. Needed because we have to pause them
   // all when switching devices.
@@ -218,14 +227,19 @@ class WebRtcVoiceEngine
   void Construct();
   void ConstructCodecs();
   bool InitInternal();
-  void ApplyLogging(const std::string& log_filter);
+  void SetTraceFilter(int filter);
+  void SetTraceOptions(const std::string& options);
   // Applies either options or overrides.  Every option that is "set"
   // will be applied.  Every option not "set" will be ignored.  This
   // allows us to selectively turn on and off different options easily
   // at any time.
   bool ApplyOptions(const AudioOptions& options);
   virtual void Print(webrtc::TraceLevel level, const char* trace, int length);
+#ifdef USE_WEBRTC_DEV_BRANCH
+  virtual void CallbackOnError(int channel, int errCode);
+#else
   virtual void CallbackOnError(const int channel, const int errCode);
+#endif
   // Given the device type, name, and id, find device id. Return true and
   // set the output parameter rtc_id if successful.
   bool FindWebRtcAudioDeviceId(
@@ -245,6 +259,9 @@ class WebRtcVoiceEngine
                                   VoiceProcessor* voice_processor,
                                   MediaProcessorDirection processor_direction);
 
+  void StartAecDump(const std::string& filename);
+  void StopAecDump();
+
   // When a voice processor registers with the engine, it is connected
   // to either the Rx or Tx signals, based on the direction parameter.
   // SignalXXMediaFrame will be invoked for every audio packet.
@@ -261,8 +278,8 @@ class WebRtcVoiceEngine
   // The external audio device manager
   webrtc::AudioDeviceModule* adm_;
   webrtc::AudioDeviceModule* adm_sc_;
-  int log_level_;
-  std::string log_filter_;
+  int log_filter_;
+  std::string log_options_;
   bool is_dumping_aec_;
   std::vector<AudioCodec> codecs_;
   std::vector<RtpHeaderExtension> rtp_header_extensions_;
@@ -391,6 +408,7 @@ class WebRtcVoiceMediaChannel
 
   virtual void OnPacketReceived(talk_base::Buffer* packet);
   virtual void OnRtcpReceived(talk_base::Buffer* packet);
+  virtual void OnReadyToSend(bool ready) {}
   virtual bool MuteStream(uint32 ssrc, bool on);
   virtual bool SetSendBandwidth(bool autobw, int bps);
   virtual bool GetStats(VoiceMediaInfo* info);

@@ -39,22 +39,65 @@
 
 namespace webrtc {
 
-// StatsElement contains a time stamped list of name/value pairs.
-class StatsElement {
+class StatsReport {
  public:
+  StatsReport() : timestamp(0) { }
+
+  std::string id;  // See below for contents.
+  std::string type;  // See below for contents.
+
   struct Value {
     std::string name;
     std::string value;
   };
 
-  StatsElement() : timestamp(0) { }
-
   void AddValue(const std::string& name, const std::string& value);
   void AddValue(const std::string& name, int64 value);
+  void AddBoolean(const std::string& name, bool value);
 
   double timestamp;  // Time since 1970-01-01T00:00:00Z in milliseconds.
   typedef std::vector<Value> Values;
   Values values;
+
+  // StatsReport types.
+  // A StatsReport of |type| = "googSession" contains overall information
+  // about the thing libjingle calls a session (which may contain one
+  // or more RTP sessions.
+  static const char kStatsReportTypeSession[];
+
+  // A StatsReport of |type| = "googTransport" contains information
+  // about a libjingle "transport".
+  static const char kStatsReportTypeTransport[];
+
+  // A StatsReport of |type| = "googComponent" contains information
+  // about a libjingle "channel" (typically, RTP or RTCP for a transport).
+  // This is intended to be the same thing as an ICE "Component".
+  static const char kStatsReportTypeComponent[];
+
+  // A StatsReport of |type| = "googCandidatePair" contains information
+  // about a libjingle "connection" - a single source/destination port pair.
+  // This is intended to be the same thing as an ICE "candidate pair".
+  static const char kStatsReportTypeCandidatePair[];
+
+  // StatsReport of |type| = "VideoBWE" is statistics for video Bandwidth
+  // Estimation, which is global per-session.  The |id| field is "bweforvideo"
+  // (will probably change in the future).
+  static const char kStatsReportTypeBwe[];
+
+  // StatsReport of |type| = "ssrc" is statistics for a specific rtp stream.
+  // The |id| field is the SSRC in decimal form of the rtp stream.
+  static const char kStatsReportTypeSsrc[];
+
+  // StatsReport of |type| = "googTrack" is statistics for a specific media
+  // track. The |id| field is the track id.
+  static const char kStatsReportTypeTrack[];
+
+  // StatsReport of |type| = "iceCandidate" is statistics on a specific
+  // ICE Candidate. It links to its transport.
+  static const char kStatsReportTypeIceCandidate[];
+
+  // The id of StatsReport of type VideoBWE.
+  static const char kStatsReportVideoBweId[];
 
   // StatsValue names
   static const char kStatsValueNameAudioOutputLevel[];
@@ -64,8 +107,20 @@ class StatsElement {
   static const char kStatsValueNameBytesReceived[];
   static const char kStatsValueNamePacketsReceived[];
   static const char kStatsValueNamePacketsLost[];
+  static const char kStatsValueNameTransportId[];
+  static const char kStatsValueNameLocalAddress[];
+  static const char kStatsValueNameRemoteAddress[];
+  static const char kStatsValueNameWritable[];
+  static const char kStatsValueNameReadable[];
+  static const char kStatsValueNameActiveConnection[];
+
 
   // Internal StatsValue names
+  static const char kStatsValueNameEchoCancellationQualityMin[];
+  static const char kStatsValueNameEchoDelayMedian[];
+  static const char kStatsValueNameEchoDelayStdDev[];
+  static const char kStatsValueNameEchoReturnLoss[];
+  static const char kStatsValueNameEchoReturnLossEnhancement[];
   static const char kStatsValueNameFirsReceived[];
   static const char kStatsValueNameFirsSent[];
   static const char kStatsValueNameFrameHeightReceived[];
@@ -88,24 +143,13 @@ class StatsElement {
   static const char kStatsValueNameRetransmitBitrate[];
   static const char kStatsValueNameTransmitBitrate[];
   static const char kStatsValueNameBucketDelay[];
-};
-
-// StatsReport contains local and remote StatsElements that pertain to the same
-// object, for instance a SSRC.
-struct StatsReport {
-  std::string id;  // See below for contents.
-  std::string type;  // See below for contents.
-  StatsElement local;  // Statistics gathered locally.
-  StatsElement remote;  // Statistics received in a RTCP report.
-
-  // StatsReport of |type| = "VideoBWE" is statistics for Bandwidth Estimation,
-  // which is global per-session.  The |id| field is "bweforvideo" (will
-  // probably change in the future).
-  static const char kStatsReportTypeBwe[];
-
-  // StatsReport of |type| = "ssrc" is statistics for a specific rtp stream.
-  // The |id| field is the SSRC in decimal form of the rtp stream.
-  static const char kStatsReportTypeSsrc[];
+  static const char kStatsValueNameInitiator[];
+  static const char kStatsValueNameTransportType[];
+  static const char kStatsValueNameContentName[];
+  static const char kStatsValueNameComponent[];
+  static const char kStatsValueNameChannelId[];
+  static const char kStatsValueNameTrackId[];
+  static const char kStatsValueNameSsrc[];
 };
 
 typedef std::vector<StatsReport> StatsReports;

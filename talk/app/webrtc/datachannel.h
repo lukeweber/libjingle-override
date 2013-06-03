@@ -100,7 +100,7 @@ class DataChannel : public DataChannelInterface,
   // Sigslots from cricket::DataChannel
   void OnDataReceived(cricket::DataChannel* channel,
                       const cricket::ReceiveDataParams& params,
-                      const::std::string& data);
+                      const talk_base::Buffer& payload);
   void OnChannelReady(bool writable);
 
  private:
@@ -123,7 +123,6 @@ class DataChannel : public DataChannelInterface,
   uint32 send_ssrc_;
   bool receive_ssrc_set_;
   uint32 receive_ssrc_;
-  std::string send_buffer_;
   std::queue<DataBuffer*> queued_data_;
 };
 

@@ -122,7 +122,7 @@ class PortInterface {
   sigslot::signal1<PortInterface*> SignalDestroyed;
 
   // Signaled when Port discovers ice role conflict with the peer.
-  sigslot::signal0<> SignalRoleConflict;
+  sigslot::signal1<PortInterface*> SignalRoleConflict;
 
   // Normally, packets arrive through a connection (or they result signaling of
   // unknown address).  Calling this method turns off delivery of packets

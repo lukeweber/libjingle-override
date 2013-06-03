@@ -60,6 +60,7 @@ AsyncUDPSocket::AsyncUDPSocket(AsyncSocket* socket)
 
   // The socket should start out readable but not writable.
   socket_->SignalReadEvent.connect(this, &AsyncUDPSocket::OnReadEvent);
+  socket_->SignalWriteEvent.connect(this, &AsyncUDPSocket::OnWriteEvent);
 }
 
 AsyncUDPSocket::~AsyncUDPSocket() {
@@ -126,6 +127,10 @@ void AsyncUDPSocket::OnReadEvent(AsyncSocket* socket) {
   // TODO: Make sure that we got all of the packet.
   // If we did not, then we should resize our buffer to be large enough.
   SignalReadPacket(this, buf_, (size_t)len, remote_addr);
+}
+
+void AsyncUDPSocket::OnWriteEvent(AsyncSocket* socket) {
+  SignalReadyToSend(this);
 }
 
 }  // namespace talk_base

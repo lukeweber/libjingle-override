@@ -322,6 +322,22 @@ TEST_F(SrtpFilterTest, TestUnsupportedOptions) {
   EXPECT_FALSE(f1_.IsActive());
 }
 
+// Test that we can encrypt/decrypt after setting the same CryptoParams again on
+// one side.
+TEST_F(SrtpFilterTest, TestSettingSameKeyOnOneSide) {
+  std::vector<CryptoParams> offer(MakeVector(kTestCryptoParams1));
+  std::vector<CryptoParams> answer(MakeVector(kTestCryptoParams2));
+  TestSetParams(offer, answer);
+
+  TestProtectUnprotect(CS_AES_CM_128_HMAC_SHA1_80,
+                       CS_AES_CM_128_HMAC_SHA1_80);
+
+  // Re-applying the same keys on one end and it should not reset the ROC.
+  EXPECT_TRUE(f2_.SetOffer(offer, CS_REMOTE));
+  EXPECT_TRUE(f2_.SetAnswer(answer, CS_LOCAL));
+  TestProtectUnprotect(CS_AES_CM_128_HMAC_SHA1_80, CS_AES_CM_128_HMAC_SHA1_80);
+}
+
 // Test that we can encrypt/decrypt after negotiating AES_CM_128_HMAC_SHA1_80.
 TEST_F(SrtpFilterTest, TestProtect_AES_CM_128_HMAC_SHA1_80) {
   std::vector<CryptoParams> offer(MakeVector(kTestCryptoParams1));

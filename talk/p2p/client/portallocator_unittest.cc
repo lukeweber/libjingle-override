@@ -30,11 +30,14 @@
 #include "talk/base/gunit.h"
 #include "talk/base/helpers.h"
 #include "talk/base/logging.h"
+#include "talk/base/natserver.h"
+#include "talk/base/natsocketfactory.h"
 #include "talk/base/network.h"
 #include "talk/base/physicalsocketserver.h"
 #include "talk/base/socketaddress.h"
 #include "talk/base/thread.h"
 #include "talk/base/virtualsocketserver.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/constants.h"
 #include "talk/p2p/base/p2ptransportchannel.h"
 #include "talk/p2p/base/portallocatorsessionproxy.h"
@@ -47,6 +50,7 @@ using talk_base::SocketAddress;
 using talk_base::Thread;
 
 static const SocketAddress kClientAddr("11.11.11.11", 0);
+static const SocketAddress kNatAddr("77.77.77.77", talk_base::NAT_SERVER_PORT);
 static const SocketAddress kRemoteClientAddr("22.22.22.22", 0);
 static const SocketAddress kStunAddr("99.99.99.1", cricket::STUN_SERVER_PORT);
 static const SocketAddress kRelayUdpIntAddr("99.99.99.2", 5000);
@@ -88,6 +92,8 @@ class PortAllocatorTest : public testing::Test, public sigslot::has_slots<> {
         vss_(new talk_base::VirtualSocketServer(pss_.get())),
         fss_(new talk_base::FirewallSocketServer(vss_.get())),
         ss_scope_(fss_.get()),
+        nat_factory_(vss_.get(), kNatAddr),
+        nat_socket_factory_(&nat_factory_),
         stun_server_(Thread::Current(), kStunAddr),
         relay_server_(Thread::Current(), kRelayUdpIntAddr, kRelayUdpExtAddr,
                       kRelayTcpIntAddr, kRelayTcpExtAddr,
@@ -103,6 +109,10 @@ class PortAllocatorTest : public testing::Test, public sigslot::has_slots<> {
   }
   bool SetPortRange(int min_port, int max_port) {
     return allocator_->SetPortRange(min_port, max_port);
+  }
+  talk_base::NATServer* CreateNatServer(const SocketAddress& addr,
+                                        talk_base::NATType type) {
+    return new talk_base::NATServer(type, vss_.get(), addr, vss_.get(), addr);
   }
 
   bool CreateSession(int component) {
@@ -221,6 +231,8 @@ class PortAllocatorTest : public testing::Test, public sigslot::has_slots<> {
   talk_base::scoped_ptr<talk_base::VirtualSocketServer> vss_;
   talk_base::scoped_ptr<talk_base::FirewallSocketServer> fss_;
   talk_base::SocketServerScope ss_scope_;
+  talk_base::NATSocketFactory nat_factory_;
+  talk_base::BasicPacketSocketFactory nat_socket_factory_;
   cricket::TestStunServer stun_server_;
   cricket::TestRelayServer relay_server_;
   talk_base::FakeNetworkManager network_manager_;
@@ -700,18 +712,42 @@ TEST_F(PortAllocatorTest, TestDisableSharedUfrag) {
 // is allocated for udp and stun. Also verify there is only one candidate
 // (local) if stun candidate is same as local candidate, which will be the case
 // in a public network like the below test.
-TEST_F(PortAllocatorTest, TestEnableSharedSocket) {
-  allocator().set_flags(allocator().flags() |
+TEST_F(PortAllocatorTest, TestEnableSharedSocketWithoutNat) {
+  AddInterface(kClientAddr);
+  allocator_->set_flags(allocator().flags() |
                         cricket::PORTALLOCATOR_ENABLE_SHARED_UFRAG |
                         cricket::PORTALLOCATOR_ENABLE_SHARED_SOCKET);
-  AddInterface(kClientAddr);
   EXPECT_TRUE(CreateSession(cricket::ICE_CANDIDATE_COMPONENT_RTP));
   session_->GetInitialPorts();
-  ASSERT_EQ_WAIT(1U, candidates_.size(), 1000);
+  ASSERT_EQ_WAIT(1U, ports_.size(), 1000);
+  EXPECT_EQ(1U, candidates_.size());
   EXPECT_PRED5(CheckCandidate, candidates_[0],
       cricket::ICE_CANDIDATE_COMPONENT_RTP, "local", "udp", kClientAddr);
-  EXPECT_EQ_WAIT(1U, ports_.size(), 1000);
-  EXPECT_TRUE(candidate_allocation_done_);
+  EXPECT_TRUE_WAIT(candidate_allocation_done_, 1000);
+}
+
+// Test that when PORTALLOCATOR_ENABLE_SHARED_SOCKET is enabled only one port
+// is allocated for udp and stun. In this test we should expect both stun and
+// local candidates as client behind a nat.
+TEST_F(PortAllocatorTest, TestEnableSharedSocketWithNat) {
+  AddInterface(kClientAddr);
+  talk_base::scoped_ptr<talk_base::NATServer> nat_server(
+      CreateNatServer(kNatAddr, talk_base::NAT_OPEN_CONE));
+  allocator_.reset(new cricket::BasicPortAllocator(
+      &network_manager_, &nat_socket_factory_, kStunAddr));
+  allocator_->set_flags(allocator().flags() |
+                        cricket::PORTALLOCATOR_ENABLE_SHARED_UFRAG |
+                        cricket::PORTALLOCATOR_ENABLE_SHARED_SOCKET);
+  EXPECT_TRUE(CreateSession(cricket::ICE_CANDIDATE_COMPONENT_RTP));
+  session_->GetInitialPorts();
+  EXPECT_EQ_WAIT(2U, candidates_.size(), 1000);
+  ASSERT_EQ(1U, ports_.size());
+  EXPECT_PRED5(CheckCandidate, candidates_[0],
+      cricket::ICE_CANDIDATE_COMPONENT_RTP, "local", "udp", kClientAddr);
+  EXPECT_PRED5(CheckCandidate, candidates_[1],
+      cricket::ICE_CANDIDATE_COMPONENT_RTP, "stun", "udp",
+      talk_base::SocketAddress(kNatAddr.ipaddr(), 0));
+  EXPECT_TRUE_WAIT(candidate_allocation_done_, 1000);
 }
 
 // This test verifies when PORTALLOCATOR_ENABLE_SHARED_SOCKET flag is enabled
@@ -725,12 +761,12 @@ TEST_F(PortAllocatorTest, TestEnableSharedSocketNoUdpAllowed) {
   AddInterface(kClientAddr);
   EXPECT_TRUE(CreateSession(cricket::ICE_CANDIDATE_COMPONENT_RTP));
   session_->GetInitialPorts();
-  ASSERT_EQ_WAIT(1U, candidates_.size(), 1000);
+  ASSERT_EQ_WAIT(1U, ports_.size(), 1000);
+  EXPECT_EQ(1U, candidates_.size());
   EXPECT_PRED5(CheckCandidate, candidates_[0],
       cricket::ICE_CANDIDATE_COMPONENT_RTP, "local", "udp", kClientAddr);
-  // STUN timeout is 9sec.
-  EXPECT_EQ_WAIT(1U, ports_.size(), 10000);
-  EXPECT_TRUE(candidate_allocation_done_);
+  // STUN timeout is 9sec. We need to wait to get candidate done signal.
+  EXPECT_TRUE_WAIT(candidate_allocation_done_, 10000);
   EXPECT_EQ(1U, candidates_.size());
 }
 

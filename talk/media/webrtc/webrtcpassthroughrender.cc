@@ -37,14 +37,14 @@ namespace cricket {
 
 class PassthroughStream: public webrtc::VideoRenderCallback {
  public:
-  explicit PassthroughStream(const WebRtc_UWord32 stream_id)
+  explicit PassthroughStream(const uint32_t stream_id)
       : stream_id_(stream_id),
         running_(false) {
   }
   virtual ~PassthroughStream() {
   }
-  virtual WebRtc_Word32 RenderFrame(const WebRtc_UWord32 stream_id,
-                                    webrtc::I420VideoFrame& videoFrame) {
+  virtual int32_t RenderFrame(const uint32_t stream_id,
+                              webrtc::I420VideoFrame& videoFrame) {
     talk_base::CritScope cs(&stream_critical_);
     // Send frame for rendering directly
     if (running_ && renderer_) {
@@ -52,26 +52,26 @@ class PassthroughStream: public webrtc::VideoRenderCallback {
     }
     return 0;
   }
-  WebRtc_Word32 SetRenderer(VideoRenderCallback* renderer) {
+  int32_t SetRenderer(VideoRenderCallback* renderer) {
     talk_base::CritScope cs(&stream_critical_);
     renderer_ = renderer;
     return 0;
   }
 
-  WebRtc_Word32 StartRender() {
+  int32_t StartRender() {
     talk_base::CritScope cs(&stream_critical_);
     running_ = true;
     return 0;
   }
 
-  WebRtc_Word32 StopRender() {
+  int32_t StopRender() {
     talk_base::CritScope cs(&stream_critical_);
     running_ = false;
     return 0;
   }
 
  private:
-  WebRtc_UWord32 stream_id_;
+  uint32_t stream_id_;
   VideoRenderCallback* renderer_;
   talk_base::CriticalSection stream_critical_;
   bool running_;
@@ -90,8 +90,8 @@ WebRtcPassthroughRender::~WebRtcPassthroughRender() {
 }
 
 webrtc::VideoRenderCallback* WebRtcPassthroughRender::AddIncomingRenderStream(
-    const WebRtc_UWord32 stream_id,
-    const WebRtc_UWord32 zOrder,
+    const uint32_t stream_id,
+    const uint32_t zOrder,
     const float left, const float top,
     const float right, const float bottom) {
   talk_base::CritScope cs(&render_critical_);
@@ -108,8 +108,8 @@ webrtc::VideoRenderCallback* WebRtcPassthroughRender::AddIncomingRenderStream(
   return stream;
 }
 
-WebRtc_Word32 WebRtcPassthroughRender::DeleteIncomingRenderStream(
-    const WebRtc_UWord32 stream_id) {
+int32_t WebRtcPassthroughRender::DeleteIncomingRenderStream(
+    const uint32_t stream_id) {
   talk_base::CritScope cs(&render_critical_);
   PassthroughStream* stream = FindStream(stream_id);
   if (stream == NULL) {
@@ -121,8 +121,8 @@ WebRtc_Word32 WebRtcPassthroughRender::DeleteIncomingRenderStream(
   return 0;
 }
 
-WebRtc_Word32 WebRtcPassthroughRender::AddExternalRenderCallback(
-    const WebRtc_UWord32 stream_id,
+int32_t WebRtcPassthroughRender::AddExternalRenderCallback(
+    const uint32_t stream_id,
     webrtc::VideoRenderCallback* render_object) {
   talk_base::CritScope cs(&render_critical_);
   PassthroughStream* stream = FindStream(stream_id);
@@ -134,7 +134,7 @@ WebRtc_Word32 WebRtcPassthroughRender::AddExternalRenderCallback(
 }
 
 bool WebRtcPassthroughRender::HasIncomingRenderStream(
-    const WebRtc_UWord32 stream_id) const {
+    const uint32_t stream_id) const {
   return (FindStream(stream_id) != NULL);
 }
 
@@ -142,8 +142,7 @@ webrtc::RawVideoType WebRtcPassthroughRender::PreferredVideoType() const {
   return webrtc::kVideoI420;
 }
 
-WebRtc_Word32 WebRtcPassthroughRender::StartRender(
-    const WebRtc_UWord32 stream_id) {
+int32_t WebRtcPassthroughRender::StartRender(const uint32_t stream_id) {
   talk_base::CritScope cs(&render_critical_);
   PassthroughStream* stream = FindStream(stream_id);
   if (stream == NULL) {
@@ -153,8 +152,7 @@ WebRtc_Word32 WebRtcPassthroughRender::StartRender(
   return stream->StartRender();
 }
 
-WebRtc_Word32 WebRtcPassthroughRender::StopRender(
-    const WebRtc_UWord32 stream_id) {
+int32_t WebRtcPassthroughRender::StopRender(const uint32_t stream_id) {
   talk_base::CritScope cs(&render_critical_);
   PassthroughStream* stream = FindStream(stream_id);
   if (stream == NULL) {
@@ -167,7 +165,7 @@ WebRtc_Word32 WebRtcPassthroughRender::StopRender(
 // TODO(ronghuawu): Is it ok to return non-const pointer to PassthroughStream
 // from this const function FindStream.
 PassthroughStream* WebRtcPassthroughRender::FindStream(
-    const WebRtc_UWord32 stream_id) const {
+    const uint32_t stream_id) const {
   StreamMap::const_iterator it = stream_render_map_.find(stream_id);
   if (it == stream_render_map_.end()) {
     return NULL;

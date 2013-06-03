@@ -351,4 +351,52 @@ TEST(SplitTest, CompareSubstrings) {
   ASSERT_STREQ("", fields.at(0).c_str());
 }
 
+TEST(BoolTest, DecodeValid) {
+  bool value;
+  EXPECT_TRUE(FromString("true", &value));
+  EXPECT_TRUE(value);
+  EXPECT_TRUE(FromString("true,", &value));
+  EXPECT_TRUE(value);
+  EXPECT_TRUE(FromString("true , true", &value));
+  EXPECT_TRUE(value);
+  EXPECT_TRUE(FromString("true ,\n false", &value));
+  EXPECT_TRUE(value);
+  EXPECT_TRUE(FromString("  true  \n", &value));
+  EXPECT_TRUE(value);
+
+  EXPECT_TRUE(FromString("false", &value));
+  EXPECT_FALSE(value);
+  EXPECT_TRUE(FromString("  false ", &value));
+  EXPECT_FALSE(value);
+  EXPECT_TRUE(FromString("  false, ", &value));
+  EXPECT_FALSE(value);
+
+  EXPECT_TRUE(FromString<bool>("true\n"));
+  EXPECT_FALSE(FromString<bool>("false\n"));
+}
+
+TEST(BoolTest, DecodeInvalid) {
+  bool value;
+  EXPECT_FALSE(FromString("True", &value));
+  EXPECT_FALSE(FromString("TRUE", &value));
+  EXPECT_FALSE(FromString("False", &value));
+  EXPECT_FALSE(FromString("FALSE", &value));
+  EXPECT_FALSE(FromString("0", &value));
+  EXPECT_FALSE(FromString("1", &value));
+  EXPECT_FALSE(FromString("0,", &value));
+  EXPECT_FALSE(FromString("1,", &value));
+  EXPECT_FALSE(FromString("1,0", &value));
+  EXPECT_FALSE(FromString("1.", &value));
+  EXPECT_FALSE(FromString("1.0", &value));
+  EXPECT_FALSE(FromString("", &value));
+  EXPECT_FALSE(FromString<bool>("false\nfalse"));
+}
+
+TEST(BoolTest, RoundTrip) {
+  bool value;
+  EXPECT_TRUE(FromString(ToString(true), &value));
+  EXPECT_TRUE(value);
+  EXPECT_TRUE(FromString(ToString(false), &value));
+  EXPECT_FALSE(value);
+}
 }  // namespace talk_base

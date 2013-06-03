@@ -109,7 +109,7 @@ class WebRtcVoiceEngineTestFake : public testing::Test {
     options_adjust_agc_.adjust_agc_delta.Set(-10);
   }
   bool SetupEngine() {
-    bool result = engine_.Init();
+    bool result = engine_.Init(talk_base::Thread::Current());
     if (result) {
       channel_ = engine_.CreateChannel();
       result = (channel_ != NULL);
@@ -219,7 +219,7 @@ class WebRtcVoiceEngineTestFake : public testing::Test {
 TEST_F(WebRtcVoiceEngineTestFake, StartupShutdown) {
   EXPECT_FALSE(voe_.IsInited());
   EXPECT_FALSE(voe_sc_.IsInited());
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   EXPECT_TRUE(voe_.IsInited());
   EXPECT_TRUE(voe_sc_.IsInited());
   engine_.Terminate();
@@ -229,7 +229,7 @@ TEST_F(WebRtcVoiceEngineTestFake, StartupShutdown) {
 
 // Tests that we can create and destroy a channel.
 TEST_F(WebRtcVoiceEngineTestFake, CreateChannel) {
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   channel_ = engine_.CreateChannel();
   EXPECT_TRUE(channel_ != NULL);
 }
@@ -237,7 +237,7 @@ TEST_F(WebRtcVoiceEngineTestFake, CreateChannel) {
 // Tests that we properly handle failures in CreateChannel.
 TEST_F(WebRtcVoiceEngineTestFake, CreateChannelFail) {
   voe_.set_fail_create_channel(true);
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   channel_ = engine_.CreateChannel();
   EXPECT_TRUE(channel_ == NULL);
 }
@@ -1511,7 +1511,7 @@ TEST_F(WebRtcVoiceEngineTestFake, SetSendSsrcWithMultipleStreams) {
 // Test that the local SSRC is the same on sending and receiving channels if the
 // receive channel is created before the send channel.
 TEST_F(WebRtcVoiceEngineTestFake, SetSendSsrcAfterCreatingReceiveChannel) {
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   channel_ = engine_.CreateChannel();
   EXPECT_TRUE(channel_->SetOptions(options_conference_));
 
@@ -1706,7 +1706,7 @@ TEST_F(WebRtcVoiceEngineTestFake, PlayRingbackWithMultipleStreams) {
 
 // Tests creating soundclips, and make sure they come from the right engine.
 TEST_F(WebRtcVoiceEngineTestFake, CreateSoundclip) {
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   soundclip_ = engine_.CreateSoundclip();
   ASSERT_TRUE(soundclip_ != NULL);
   EXPECT_EQ(0, voe_.GetNumChannels());
@@ -1721,7 +1721,7 @@ TEST_F(WebRtcVoiceEngineTestFake, CreateSoundclip) {
 // Tests playing out a fake sound.
 TEST_F(WebRtcVoiceEngineTestFake, PlaySoundclip) {
   static const char kZeroes[16000] = {};
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
   soundclip_ = engine_.CreateSoundclip();
   ASSERT_TRUE(soundclip_ != NULL);
   EXPECT_TRUE(soundclip_->PlaySound(kZeroes, sizeof(kZeroes), 0));
@@ -2155,7 +2155,7 @@ TEST_F(WebRtcVoiceEngineTestFake, InitDoesNotOverwriteDefaultAgcConfig) {
   set_config.digitalCompressionGaindB = 9;
   set_config.limiterEnable = true;
   EXPECT_EQ(0, voe_.SetAgcConfig(set_config));
-  EXPECT_TRUE(engine_.Init());
+  EXPECT_TRUE(engine_.Init(talk_base::Thread::Current()));
 
   webrtc::AgcConfig config = {0};
   EXPECT_EQ(0, voe_.GetAgcConfig(config));
@@ -2340,14 +2340,14 @@ TEST_F(WebRtcVoiceEngineTestFake, SetOutputScaling) {
 // Tests that the library initializes and shuts down properly.
 TEST(WebRtcVoiceEngineTest, StartupShutdown) {
   cricket::WebRtcVoiceEngine engine;
-  EXPECT_TRUE(engine.Init());
+  EXPECT_TRUE(engine.Init(talk_base::Thread::Current()));
   cricket::VoiceMediaChannel* channel = engine.CreateChannel();
   EXPECT_TRUE(channel != NULL);
   delete channel;
   engine.Terminate();
 
   // Reinit to catch regression where VoiceEngineObserver reference is lost
-  EXPECT_TRUE(engine.Init());
+  EXPECT_TRUE(engine.Init(talk_base::Thread::Current()));
   engine.Terminate();
 }
 
@@ -2360,7 +2360,7 @@ TEST(WebRtcVoiceEngineTest, DISABLED_HasUnencryptedLogging) {
   bool cleartext = true;
   talk_base::LogMessage::AddLogToStream(stream.get(), talk_base::LS_VERBOSE);
   engine.SetLogging(talk_base::LS_VERBOSE, "");
-  EXPECT_TRUE(engine.Init());
+  EXPECT_TRUE(engine.Init(talk_base::Thread::Current()));
   EXPECT_TRUE(stream->GetSize(&size));
   EXPECT_GT(size, 0U);
   engine.Terminate();
@@ -2383,7 +2383,7 @@ TEST(WebRtcVoiceEngineTest, HasNoMonitorThread) {
       new talk_base::MemoryStream);
   talk_base::LogMessage::AddLogToStream(stream.get(), talk_base::LS_VERBOSE);
   engine.SetLogging(talk_base::LS_VERBOSE, "");
-  EXPECT_TRUE(engine.Init());
+  EXPECT_TRUE(engine.Init(talk_base::Thread::Current()));
   engine.Terminate();
   talk_base::LogMessage::RemoveLogToStream(stream.get());
 
@@ -2400,10 +2400,6 @@ TEST(WebRtcVoiceEngineTest, HasCorrectCodecs) {
   // Check codecs by name.
   EXPECT_TRUE(engine.FindCodec(
       cricket::AudioCodec(96, "OPUS", 48000, 0, 2, 0)));
-  EXPECT_TRUE(engine.FindCodec(
-      cricket::AudioCodec(96, "CELT", 32000, 0, 2, 0)));
-  EXPECT_TRUE(engine.FindCodec(
-      cricket::AudioCodec(96, "CELT", 32000, 0, 1, 0)));
   EXPECT_TRUE(engine.FindCodec(
       cricket::AudioCodec(96, "ISAC", 16000, 0, 1, 0)));
   EXPECT_TRUE(engine.FindCodec(
@@ -2450,7 +2446,7 @@ TEST(WebRtcVoiceEngineTest, HasCorrectCodecs) {
   EXPECT_FALSE(engine.FindCodec(cricket::AudioCodec(0, "", 5000, 0, 1, 0)));
   EXPECT_FALSE(engine.FindCodec(cricket::AudioCodec(0, "", 0, 5000, 1, 0)));
   // Check that there aren't any extra codecs lying around.
-  EXPECT_EQ(15U, engine.codecs().size());
+  EXPECT_EQ(13U, engine.codecs().size());
   // Verify the payload id of common audio codecs, including CN, ISAC, and G722.
   for (std::vector<cricket::AudioCodec>::const_iterator it =
       engine.codecs().begin(); it != engine.codecs().end(); ++it) {
@@ -2483,7 +2479,7 @@ TEST(WebRtcVoiceEngineTest, HasCorrectCodecs) {
 // Tests that VoE supports at least 32 channels
 TEST(WebRtcVoiceEngineTest, Has32Channels) {
   cricket::WebRtcVoiceEngine engine;
-  EXPECT_TRUE(engine.Init());
+  EXPECT_TRUE(engine.Init(talk_base::Thread::Current()));
 
   cricket::VoiceMediaChannel* channels[32];
   int num_channels = 0;
@@ -2509,7 +2505,7 @@ TEST(WebRtcVoiceEngineTest, Has32Channels) {
 // Test that we set our preferred codecs properly.
 TEST(WebRtcVoiceEngineTest, SetRecvCodecs) {
   cricket::WebRtcVoiceEngine engine;
-  EXPECT_TRUE(engine.Init());
+  EXPECT_TRUE(engine.Init(talk_base::Thread::Current()));
   cricket::WebRtcVoiceMediaChannel channel(&engine);
   EXPECT_TRUE(channel.SetRecvCodecs(engine.codecs()));
 }
@@ -2523,9 +2519,9 @@ TEST(WebRtcVoiceEngineTest, CoInitialize) {
   EXPECT_EQ(S_OK, CoInitializeEx(NULL, COINIT_MULTITHREADED));
 
   // Engine should start even with COM already inited.
-  EXPECT_TRUE(engine->Init());
+  EXPECT_TRUE(engine->Init(talk_base::Thread::Current()));
   engine->Terminate();
-  EXPECT_TRUE(engine->Init());
+  EXPECT_TRUE(engine->Init(talk_base::Thread::Current()));
   engine->Terminate();
 
   // Refcount after terminate should be 1 (in reality 3); test if it is nonzero.

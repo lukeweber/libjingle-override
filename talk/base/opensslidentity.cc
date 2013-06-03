@@ -57,6 +57,9 @@ static const int SERIAL_RAND_BITS = 64;
 
 // Certificate validity lifetime
 static const int CERTIFICATE_LIFETIME = 60*60*24*365;  // one year, arbitrarily
+// Certificate validity window.
+// This is to compensate for slightly incorrect system clocks.
+static const int CERTIFICATE_WINDOW = -60*60*24;
 
 // Generate a key pair. Caller is responsible for freeing the returned object.
 static EVP_PKEY* MakeKey() {
@@ -130,7 +133,7 @@ static X509* MakeCertificate(EVP_PKEY* pkey, const char* common_name) {
       !X509_set_issuer_name(x509, name))
     goto error;
 
-  if (!X509_gmtime_adj(X509_get_notBefore(x509), 0) ||
+  if (!X509_gmtime_adj(X509_get_notBefore(x509), CERTIFICATE_WINDOW) ||
       !X509_gmtime_adj(X509_get_notAfter(x509), CERTIFICATE_LIFETIME))
     goto error;
 

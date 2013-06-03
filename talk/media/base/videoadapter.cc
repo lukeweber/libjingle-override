@@ -25,7 +25,7 @@
 
 #include "talk/media/base/videoadapter.h"
 
-#include <limits.h>
+#include <limits.h>  // For INT_MAX
 
 #include "talk/media/base/constants.h"
 #include "talk/base/logging.h"
@@ -47,27 +47,29 @@ static const int kDefaultDowngradeWaitTimeMs = 2000;
 // or 1/4 scale for HVGA (480 x 270) to QQHVGA (120 x 67)
 static const int kMinNumPixels = 120 * 67;
 static float kScaleFactors[] = {
-  1.f,  // full size
-  3.f / 4.f,  // 3/4 scale
-  1.f / 2.f,  // 1/2 scale
-  3.f / 8.f,  // 3/8 scale
-  1.f / 4.f,  // 1/4 scale
+  1.f / 1.f,  // Full size.
+  3.f / 4.f,  // 3/4 scale.
+  1.f / 2.f,  // 1/2 scale.
+  3.f / 8.f,  // 3/8 scale.
+  1.f / 4.f,  // 1/4 scale.
 };
 #else
-// PC needs 1/8 scale for HD (1280 x 720) to QQVGA (160 x 90)
+// Desktop needs 1/8 scale for HD (1280 x 720) to QQVGA (160 x 90)
 static const int kMinNumPixels = 160 * 100;
 static float kScaleFactors[] = {
-  1.f,  // full size
-  3.f / 4.f,  // 3/4 scale
-  1.f / 2.f,  // 1/2 scale
-  3.f / 8.f,  // 3/8 scale
-  1.f / 4.f,  // 1/4 scale
-  3.f / 16.f,  // 3/16 scale
-  1.f / 8.f  // 1/8 scale
+  1.f / 1.f,  // Full size.
+  3.f / 4.f,  // 3/4 scale.
+  1.f / 2.f,  // 1/2 scale.
+  3.f / 8.f,  // 3/8 scale.
+  1.f / 4.f,  // 1/4 scale.
+  3.f / 16.f,  // 3/16 scale.
+  1.f / 8.f  // 1/8 scale.
 };
 #endif
 
-// Find scale factor that applied to width and height, is best match
+static const int kNumScaleFactors = ARRAY_SIZE(kScaleFactors);
+
+// Find the scale factor that, when applied to width and height, is closest
 // to num_pixels.
 float VideoAdapter::FindClosestScale(int width, int height,
                                      int target_num_pixels) {
@@ -75,8 +77,8 @@ float VideoAdapter::FindClosestScale(int width, int height,
     return 0.f;
   }
   int best_distance = INT_MAX;
-  int best_index = 0;  // Default to unscaled.
-  for (size_t i = 0u; i < ARRAY_SIZE(kScaleFactors); ++i) {
+  int best_index = kNumScaleFactors - 1;  // Default to max scale.
+  for (int i = 0; i < kNumScaleFactors; ++i) {
     int test_num_pixels = static_cast<int>(width * kScaleFactors[i] *
                                            height * kScaleFactors[i]);
     int diff = test_num_pixels - target_num_pixels;
@@ -86,7 +88,7 @@ float VideoAdapter::FindClosestScale(int width, int height,
     if (diff < best_distance) {
       best_distance = diff;
       best_index = i;
-      if (!best_distance) {  // Found exact match
+      if (best_distance == 0) {  // Found exact match.
         break;
       }
     }
@@ -94,24 +96,23 @@ float VideoAdapter::FindClosestScale(int width, int height,
   return kScaleFactors[best_index];
 }
 
-
-// Find scale factor that applied to width and height, produces less than
-// num_pixels.
+// Finds the scale factor that, when applied to width and height, produces
+// fewer than num_pixels.
 float VideoAdapter::FindLowerScale(int width, int height,
                                    int target_num_pixels) {
   if (!target_num_pixels) {
     return 0.f;
   }
   int best_distance = INT_MAX;
-  int best_index = 0;  // Default to unscaled.
-  for (size_t i = 0u; i < ARRAY_SIZE(kScaleFactors); ++i) {
+  int best_index = kNumScaleFactors - 1;  // Default to max scale.
+  for (int i = 0; i < kNumScaleFactors; ++i) {
     int test_num_pixels = static_cast<int>(width * kScaleFactors[i] *
                                            height * kScaleFactors[i]);
     int diff = target_num_pixels - test_num_pixels;
     if (diff >= 0 && diff < best_distance) {
       best_distance = diff;
       best_index = i;
-      if (!best_distance) {  // Found exact match.
+      if (best_distance == 0) {  // Found exact match.
         break;
       }
     }
@@ -138,7 +139,7 @@ float VideoAdapter::FindLowerScale(int width, int height,
 ///////////////////////////////////////////////////////////////////////
 // Implementation of VideoAdapter
 VideoAdapter::VideoAdapter()
-    : output_num_pixels_(0),
+    : output_num_pixels_(INT_MAX),
       black_output_(false),
       is_black_(false),
       interval_next_frame_(0) {
@@ -193,11 +194,9 @@ int VideoAdapter::GetOutputNumPixels() const {
 bool VideoAdapter::AdaptFrame(const VideoFrame* in_frame,
                               const VideoFrame** out_frame) {
   talk_base::CritScope cs(&critical_section_);
-
-  if (!in_frame || !out_frame || input_format_.IsSize0x0()) {
+  if (!in_frame || !out_frame) {
     return false;
   }
-
   // Drop the input frame if necessary.
   bool should_drop = false;
   if (!output_num_pixels_) {
@@ -209,13 +208,14 @@ bool VideoAdapter::AdaptFrame(const VideoFrame* in_frame,
     // TODO(fbarchard): Consider adjusting interval to reflect the adjusted
     // interval between frames after dropping some frames.
     interval_next_frame_ += input_format_.interval;
-    if (interval_next_frame_ >= output_format_.interval) {
-      interval_next_frame_ %= output_format_.interval;
-    } else {
-      should_drop = true;
+    if (output_format_.interval > 0) {
+      if (interval_next_frame_ >= output_format_.interval) {
+        interval_next_frame_ %= output_format_.interval;
+      } else {
+        should_drop = true;
+      }
     }
   }
-
   if (should_drop) {
     *out_frame = NULL;
     return true;
@@ -225,8 +225,9 @@ bool VideoAdapter::AdaptFrame(const VideoFrame* in_frame,
     float scale = VideoAdapter::FindClosestScale(in_frame->GetWidth(),
                                                  in_frame->GetHeight(),
                                                  output_num_pixels_);
-    output_format_.width = static_cast<int>(in_frame->GetWidth() * scale);
-    output_format_.height = static_cast<int>(in_frame->GetHeight() * scale);
+    output_format_.width = static_cast<int>(in_frame->GetWidth() * scale + .5f);
+    output_format_.height = static_cast<int>(in_frame->GetHeight() * scale +
+                                             .5f);
   }
 
   if (!StretchToOutputFrame(in_frame)) {
@@ -293,7 +294,8 @@ CoordinatedVideoAdapter::CoordinatedVideoAdapter()
       view_desired_num_pixels_(INT_MAX),
       view_desired_interval_(0),
       encoder_desired_num_pixels_(INT_MAX),
-      cpu_desired_num_pixels_(INT_MAX) {
+      cpu_desired_num_pixels_(INT_MAX),
+      adapt_reason_(0) {
 }
 
 // Helper function to UPGRADE or DOWNGRADE a number of pixels
@@ -426,12 +428,12 @@ void CoordinatedVideoAdapter::OnCpuLoadUpdated(
         if (is_min) {
           --cpu_downgrade_count_;
         } else {
-         LOG(LS_VERBOSE) << "VAdapt CPU load low but do not upgrade "
+          LOG(LS_VERBOSE) << "VAdapt CPU load low but do not upgrade "
                              "because cpu is not limiting resolution";
         }
       } else {
-          LOG(LS_VERBOSE) << "VAdapt CPU load low but do not upgrade "
-                             "because minimum downgrades reached";
+        LOG(LS_VERBOSE) << "VAdapt CPU load low but do not upgrade "
+                           "because minimum downgrades reached";
       }
       break;
     case KEEP:
@@ -441,8 +443,9 @@ void CoordinatedVideoAdapter::OnCpuLoadUpdated(
   if (KEEP != request) {
     // TODO(fbarchard): compute stepping up/down from OutputNumPixels but
     // clamp to inputpixels / 4 (2 steps)
-    cpu_desired_num_pixels_ = static_cast<int>(
-        input_format().width * input_format().height >> cpu_downgrade_count_);
+    cpu_desired_num_pixels_ =  cpu_downgrade_count_ == 0 ? INT_MAX :
+        static_cast<int>(input_format().width * input_format().height >>
+                         cpu_downgrade_count_);
   }
   int new_width, new_height;
   bool changed = AdaptToMinimumFormat(&new_width, &new_height);
@@ -473,8 +476,8 @@ bool CoordinatedVideoAdapter::IsMinimumFormat(int pixels) {
                              input.height,
                              pixels);
   }
-  new_output.width = static_cast<int>(input.width * scale);
-  new_output.height = static_cast<int>(input.height * scale);
+  new_output.width = static_cast<int>(input.width * scale + .5f);
+  new_output.height = static_cast<int>(input.height * scale + .5f);
   int new_pixels = new_output.width * new_output.height;
   int num_pixels = GetOutputNumPixels();
   return new_pixels <= num_pixels;
@@ -490,11 +493,12 @@ bool CoordinatedVideoAdapter::AdaptToMinimumFormat(int* new_width,
   }
   int old_num_pixels = GetOutputNumPixels();
   // Find resolution that respects ViewRequest or less pixels.
+  int view_desired_num_pixels = view_desired_num_pixels_;
   int min_num_pixels = view_desired_num_pixels_;
   if (!input.IsSize0x0()) {
     float scale = FindLowerScale(input.width, input.height, min_num_pixels);
-    min_num_pixels =
-        static_cast<int>(input.width * input.height * scale * scale);
+    min_num_pixels = view_desired_num_pixels =
+        static_cast<int>(input.width * input.height * scale * scale + .5f);
   }
   // Reduce resolution further, if necessary, based on encoder bandwidth (GD).
   if (encoder_desired_num_pixels_ &&
@@ -509,7 +513,21 @@ bool CoordinatedVideoAdapter::AdaptToMinimumFormat(int* new_width,
     cpu_downgrade_wait_time_ =
       talk_base::TimeAfter(kDefaultDowngradeWaitTimeMs);
   }
-  // prevent going below QQVGA
+
+  // Determine which factors are keeping adapter resolution low.
+  // Caveat: Does not consider framerate.
+  adapt_reason_ = static_cast<AdaptReason>(0);
+  if (view_desired_num_pixels == min_num_pixels) {
+    adapt_reason_ |= ADAPTREASON_VIEW;
+  }
+  if (encoder_desired_num_pixels_ == min_num_pixels) {
+    adapt_reason_ |= ADAPTREASON_BANDWIDTH;
+  }
+  if (cpu_desired_num_pixels_ == min_num_pixels) {
+    adapt_reason_ |= ADAPTREASON_CPU;
+  }
+
+  // Prevent going below QQVGA.
   if (min_num_pixels > 0 && min_num_pixels < kMinNumPixels) {
     min_num_pixels = kMinNumPixels;
   }
@@ -523,21 +541,39 @@ bool CoordinatedVideoAdapter::AdaptToMinimumFormat(int* new_width,
   if (!input.IsSize0x0()) {
     scale = FindClosestScale(input.width, input.height, min_num_pixels);
   }
-  *new_width = new_output.width = static_cast<int>(input.width * scale);
-  *new_height = new_output.height = static_cast<int>(input.height * scale);
+  if (scale == 1.0f) {
+    adapt_reason_ = 0;
+  }
+  *new_width = new_output.width = static_cast<int>(input.width * scale + .5f);
+  *new_height = new_output.height = static_cast<int>(input.height * scale +
+                                                     .5f);
   new_output.interval = view_desired_interval_;
   SetOutputFormat(new_output);
   int new_num_pixels = GetOutputNumPixels();
   bool changed = new_num_pixels != old_num_pixels;
 
+  static const char* kReasons[8] = {
+    "None",
+    "CPU",
+    "BANDWIDTH",
+    "CPU+BANDWIDTH",
+    "VIEW",
+    "CPU+VIEW",
+    "BANDWIDTH+VIEW",
+    "CPU+BANDWIDTH+VIEW",
+  };
+
   LOG(LS_VERBOSE) << "VAdapt Status View: " << view_desired_num_pixels_
                   << " GD: " << encoder_desired_num_pixels_
                   << " CPU: " << cpu_desired_num_pixels_
                   << " Pixels: " << min_num_pixels
+                  << " Input: " << input.width
+                  << "x" << input.height
                   << " Scale: " << scale
                   << " Resolution: " << new_output.width
                   << "x" << new_output.height
-                  << " Changed: " << (changed ? "true" : "false");
+                  << " Changed: " << (changed ? "true" : "false")
+                  << " Reason: " << kReasons[adapt_reason_];
   return changed;
 }
 

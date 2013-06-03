@@ -28,11 +28,15 @@
 package org.appspot.apprtc;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Point;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import org.json.JSONException;
@@ -74,6 +78,7 @@ public class AppRTCDemoActivity extends Activity
       new LinkedList<IceCandidate>();
   // Synchronize on quit[0] to avoid teardown-related crashes.
   private final Boolean[] quit = new Boolean[] { false };
+  private MediaConstraints sdpMediaConstraints;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
@@ -98,19 +103,44 @@ public class AppRTCDemoActivity extends Activity
     abortUnless(PeerConnectionFactory.initializeAndroidGlobals(this),
         "Failed to initializeAndroidGlobals");
 
-    // TODO(fischman): allow this client to act as a room-creator, handing out
-    // the new room URL and acting as a JSEP "answerer".  ATM this only acts as
-    // an offerer and on already-existing rooms with a single present user.
-    // TODO(fischman): also, support &debug=loopback
+    ((AudioManager) getSystemService(AUDIO_SERVICE)).setMode(
+        AudioManager.MODE_IN_COMMUNICATION);
+
+    sdpMediaConstraints = new MediaConstraints();
+    sdpMediaConstraints.mandatory.add(new MediaConstraints.KeyValuePair(
+        "OfferToReceiveAudio", "true"));
+    sdpMediaConstraints.mandatory.add(new MediaConstraints.KeyValuePair(
+        "OfferToReceiveVideo", "true"));
+
     final Intent intent = getIntent();
-    if (!intent.getAction().equals("android.intent.action.VIEW")) {
-      logAndToast("AppRTC must be launched via an intent opening a room URL " +
-          "such as https://apprtc.appspot.com/?r=...  Exiting.");
-      disconnectAndExit();
+    if ("android.intent.action.VIEW".equals(intent.getAction())) {
+      connectToRoom(intent.getData().toString());
       return;
     }
-    appRtcClient.connectToRoom(intent.getData().toString());
+    showGetRoomUI();
+  }
+
+  private void showGetRoomUI() {
+    final EditText roomInput = new EditText(this);
+    roomInput.setText("https://apprtc.appspot.com/?r=");
+    roomInput.setSelection(roomInput.getText().length());
+    DialogInterface.OnClickListener listener =
+        new DialogInterface.OnClickListener() {
+          @Override public void onClick(DialogInterface dialog, int which) {
+            abortUnless(which == DialogInterface.BUTTON_POSITIVE, "lolwat?");
+            dialog.dismiss();
+            connectToRoom(roomInput.getText().toString());
+          }
+        };
+    AlertDialog.Builder builder = new AlertDialog.Builder(this);
+    builder
+        .setMessage("Enter room URL").setView(roomInput)
+        .setPositiveButton("Go!", listener).show();
+  }
+
+  private void connectToRoom(String roomUrl) {
     logAndToast("Connecting to room...");
+    appRtcClient.connectToRoom(roomUrl);
   }
 
   @Override
@@ -167,13 +197,7 @@ public class AppRTCDemoActivity extends Activity
 
     {
       logAndToast("Creating local video source...");
-      VideoCapturer capturer =
-          VideoCapturer.create("Camera 1, Facing front, Orientation 270");
-      if (capturer == null) {
-        capturer =
-            VideoCapturer.create("Camera 0, Facing front, Orientation 270");
-      }
-      abortUnless(capturer != null, "Failed to open capturer");
+      VideoCapturer capturer = getVideoCapturer();
       VideoSource videoSource = factory.createVideoSource(
           capturer, new MediaConstraints());
       MediaStream lMS = factory.createLocalMediaStream("ARDAMS");
@@ -185,6 +209,28 @@ public class AppRTCDemoActivity extends Activity
       pc.addStream(lMS, new MediaConstraints());
     }
     logAndToast("Waiting for ICE candidates...");
+  }
+
+  // Cycle through likely device names for the camera and return the first
+  // capturer that works, or crash if none do.
+  private VideoCapturer getVideoCapturer() {
+    String[] cameraFacing = { "front", "back" };
+    int[] cameraIndex = { 0, 1 };
+    int[] cameraOrientation = { 0, 90, 180, 270 };
+    for (String facing : cameraFacing) {
+      for (int index : cameraIndex) {
+        for (int orientation : cameraOrientation) {
+          String name = "Camera " + index + ", Facing " + facing +
+              ", Orientation " + orientation;
+          VideoCapturer capturer = VideoCapturer.create(name);
+          if (capturer != null) {
+            logAndToast("Using camera: " + name);
+            return capturer;
+          }
+        }
+      }
+    }
+    throw new RuntimeException("Failed to open capturer");
   }
 
   @Override
@@ -282,38 +328,64 @@ public class AppRTCDemoActivity extends Activity
   // Implementation detail: handle offer creation/signaling and answer setting,
   // as well as adding remote ICE candidates once the answer SDP is set.
   private class SDPObserver implements SdpObserver {
-    @Override public void onSuccess(final SessionDescription sdp) {
+    @Override public void onCreateSuccess(final SessionDescription sdp) {
       runOnUiThread(new Runnable() {
           public void run() {
             logAndToast("Sending " + sdp.type);
-            pc.setLocalDescription(sdpObserver, sdp);
             JSONObject json = new JSONObject();
             jsonPut(json, "type", sdp.type.canonicalForm());
             jsonPut(json, "sdp", sdp.description);
             sendMessage(json);
+            pc.setLocalDescription(sdpObserver, sdp);
           }
         });
     }
 
-    @Override public void onSuccess() {
+    @Override public void onSetSuccess() {
       runOnUiThread(new Runnable() {
           public void run() {
-            if (pc.getRemoteDescription() != null) {
-              for (IceCandidate candidate : queuedRemoteCandidates) {
-                pc.addIceCandidate(candidate);
+            if (appRtcClient.isInitiator()) {
+              if (pc.getRemoteDescription() != null) {
+                // We've set our local offer and received & set the remote
+                // answer, so drain candidates.
+                drainRemoteCandidates();
               }
-              queuedRemoteCandidates = null;
+            } else {
+              if (pc.getLocalDescription() == null) {
+                // We just set the remote offer, time to create our answer.
+                logAndToast("Creating answer");
+                pc.createAnswer(SDPObserver.this, sdpMediaConstraints);
+              } else {
+                // Sent our answer and set it as local description; drain
+                // candidates.
+                drainRemoteCandidates();
+              }
             }
           }
         });
     }
 
-    @Override public void onFailure(final String error) {
+    @Override public void onCreateFailure(final String error) {
       runOnUiThread(new Runnable() {
           public void run() {
-            throw new RuntimeException("SDP error: " + error);
+            throw new RuntimeException("createSDP error: " + error);
           }
         });
+    }
+
+    @Override public void onSetFailure(final String error) {
+      runOnUiThread(new Runnable() {
+          public void run() {
+            throw new RuntimeException("setSDP error: " + error);
+          }
+        });
+    }
+
+    private void drainRemoteCandidates() {
+      for (IceCandidate candidate : queuedRemoteCandidates) {
+        pc.addIceCandidate(candidate);
+      }
+      queuedRemoteCandidates = null;
     }
   }
 
@@ -321,13 +393,11 @@ public class AppRTCDemoActivity extends Activity
   // them appropriately.
   private class GAEHandler implements GAEChannelClient.MessageHandler {
     @JavascriptInterface public void onOpen() {
+      if (!appRtcClient.isInitiator()) {
+        return;
+      }
       logAndToast("Creating offer...");
-      MediaConstraints constraints = new MediaConstraints();
-      constraints.mandatory.add(new MediaConstraints.KeyValuePair(
-          "OfferToReceiveAudio", "true"));
-      constraints.mandatory.add(new MediaConstraints.KeyValuePair(
-          "OfferToReceiveVideo", "true"));
-      pc.createOffer(sdpObserver, constraints);
+      pc.createOffer(sdpObserver, sdpMediaConstraints);
     }
 
     @JavascriptInterface public void onMessage(String data) {
@@ -344,11 +414,11 @@ public class AppRTCDemoActivity extends Activity
           } else {
             pc.addIceCandidate(candidate);
           }
-        } else if (type.equals("answer")) {
-          SessionDescription answer = new SessionDescription(
+        } else if (type.equals("answer") || type.equals("offer")) {
+          SessionDescription sdp = new SessionDescription(
               SessionDescription.Type.fromCanonicalForm(type),
               (String) json.get("sdp"));
-          pc.setRemoteDescription(sdpObserver, answer);
+          pc.setRemoteDescription(sdpObserver, sdp);
         } else if (type.equals("bye")) {
           logAndToast("Remote end hung up; dropping PeerConnection");
           disconnectAndExit();

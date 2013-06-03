@@ -122,7 +122,13 @@ const char LOCAL_PORT_TYPE[] = "local";
 const char STUN_PORT_TYPE[] = "stun";
 const char RELAY_PORT_TYPE[] = "relay";
 
-static const char* const PROTO_NAMES[] = { "udp", "tcp", "ssltcp" };
+const char UDP_PROTOCOL_NAME[] = "udp";
+const char TCP_PROTOCOL_NAME[] = "tcp";
+const char SSLTCP_PROTOCOL_NAME[] = "ssltcp";
+
+static const char* const PROTO_NAMES[] = { UDP_PROTOCOL_NAME,
+                                           TCP_PROTOCOL_NAME,
+                                           SSLTCP_PROTOCOL_NAME };
 
 const char* ProtoToString(ProtocolType proto) {
   return PROTO_NAMES[proto];
@@ -143,7 +149,6 @@ Port::Port(talk_base::Thread* thread, talk_base::Network* network,
            const std::string& username_fragment, const std::string& password)
     : thread_(thread),
       factory_(NULL),
-      type_preference_(0),
       send_retransmit_count_attribute_(false),
       network_(network),
       ip_(ip),
@@ -163,14 +168,13 @@ Port::Port(talk_base::Thread* thread, talk_base::Network* network,
 }
 
 Port::Port(talk_base::Thread* thread, const std::string& type,
-           const uint32 preference, talk_base::PacketSocketFactory* factory,
+           talk_base::PacketSocketFactory* factory,
            talk_base::Network* network, const talk_base::IPAddress& ip,
            int min_port, int max_port, const std::string& username_fragment,
            const std::string& password)
     : thread_(thread),
       factory_(factory),
       type_(type),
-      type_preference_(preference),
       send_retransmit_count_attribute_(false),
       network_(network),
       ip_(ip),
@@ -262,7 +266,7 @@ void Port::AddAddress(const talk_base::SocketAddress& address,
   SignalCandidateReady(this, c);
 
   if (final) {
-    SignalAddressReady(this);
+    SignalPortComplete(this);
   }
 }
 
@@ -309,6 +313,13 @@ void Port::OnReadPacket(
                             << msg->type() << ") from unknown address ("
                             << addr.ToString() << ")";
     }
+  }
+}
+
+void Port::OnReadyToSend() {
+  AddressMap::iterator iter = connections_.begin();
+  for (; iter != connections_.end(); ++iter) {
+    iter->second->OnReadyToSend();
   }
 }
 
@@ -491,7 +502,7 @@ bool Port::MaybeIceRoleConflict(
     case ROLE_CONTROLLING:
       if (ROLE_CONTROLLING == remote_ice_role) {
         if (remote_tiebreaker >= tiebreaker_) {
-          SignalRoleConflict();
+          SignalRoleConflict(this);
         } else {
           // Send Role Conflict (487) error response.
           SendBindingErrorResponse(stun_msg, addr,
@@ -503,7 +514,7 @@ bool Port::MaybeIceRoleConflict(
     case ROLE_CONTROLLED:
       if (ROLE_CONTROLLED == remote_ice_role) {
         if (remote_tiebreaker < tiebreaker_) {
-          SignalRoleConflict();
+          SignalRoleConflict(this);
         } else {
           // Send Role Conflict (487) error response.
           SendBindingErrorResponse(stun_msg, addr,
@@ -793,7 +804,6 @@ class ConnectionRequest : public StunRequest {
 
  private:
   Connection* connection_;
-  bool use_candidate_;
 };
 
 //
@@ -805,7 +815,7 @@ Connection::Connection(Port* port, size_t index,
   : port_(port), local_candidate_index_(index),
     remote_candidate_(remote_candidate), read_state_(STATE_READ_INIT),
     write_state_(STATE_WRITE_INIT), connected_(true), pruned_(false),
-    use_candidate_attr_(true), remote_ice_mode_(ICEMODE_FULL),
+    use_candidate_attr_(false), remote_ice_mode_(ICEMODE_FULL),
     requests_(port->thread()), rtt_(DEFAULT_RTT), last_ping_sent_(0),
     last_ping_received_(0), last_data_received_(0),
     last_ping_response_received_(0), reported_(false), state_(STATE_WAITING) {
@@ -1004,6 +1014,12 @@ void Connection::OnReadPacket(const char* data, size_t size) {
         ASSERT(false);
         break;
     }
+  }
+}
+
+void Connection::OnReadyToSend() {
+  if (write_state_ == STATE_WRITABLE) {
+    SignalReadyToSend(this);
   }
 }
 
@@ -1251,7 +1267,7 @@ void Connection::CheckTimeout() {
 }
 
 void Connection::HandleRoleConflictFromPeer() {
-  port_->SignalRoleConflict();
+  port_->SignalRoleConflict(port_);
 }
 
 void Connection::OnMessage(talk_base::Message *pmsg) {

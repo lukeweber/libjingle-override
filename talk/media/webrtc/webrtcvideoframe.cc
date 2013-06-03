@@ -52,25 +52,25 @@ FrameBuffer::FrameBuffer(size_t length) : length_(0) {
 FrameBuffer::~FrameBuffer() {
   // Make sure that the video_frame_ doesn't delete the buffer as it may be
   // shared between multiple WebRtcVideoFrame.
-  WebRtc_UWord8* new_memory = NULL;
-  WebRtc_UWord32 new_length = 0;
-  WebRtc_UWord32 new_size = 0;
+  uint8_t* new_memory = NULL;
+  uint32_t new_length = 0;
+  uint32_t new_size = 0;
   video_frame_.Swap(new_memory, new_length, new_size);
 }
 
 void FrameBuffer::SetData(char* data, size_t length) {
   data_.reset(data);
   length_ = length;
-  WebRtc_UWord8* new_memory = reinterpret_cast<WebRtc_UWord8*>(data);
-  WebRtc_UWord32 new_length = length;
-  WebRtc_UWord32 new_size = length;
+  uint8_t* new_memory = reinterpret_cast<uint8_t*>(data);
+  uint32_t new_length = length;
+  uint32_t new_size = length;
   video_frame_.Swap(new_memory, new_length, new_size);
 }
 
 void FrameBuffer::ReturnData(char** data, size_t* length) {
-  WebRtc_UWord8* old_memory = NULL;
-  WebRtc_UWord32 old_length = 0;
-  WebRtc_UWord32 old_size = 0;
+  uint8_t* old_memory = NULL;
+  uint32_t old_length = 0;
+  uint32_t old_size = 0;
   video_frame_.Swap(old_memory, old_length, old_size);
   data_.release();
   length_ = 0;
@@ -135,12 +135,12 @@ size_t WebRtcVideoFrame::GetWidth() const { return frame()->Width(); }
 size_t WebRtcVideoFrame::GetHeight() const { return frame()->Height(); }
 
 const uint8* WebRtcVideoFrame::GetYPlane() const {
-  WebRtc_UWord8* buffer = frame()->Buffer();
+  uint8_t* buffer = frame()->Buffer();
   return buffer;
 }
 
 const uint8* WebRtcVideoFrame::GetUPlane() const {
-  WebRtc_UWord8* buffer = frame()->Buffer();
+  uint8_t* buffer = frame()->Buffer();
   if (buffer) {
     buffer += (frame()->Width() * frame()->Height());
   }
@@ -148,7 +148,7 @@ const uint8* WebRtcVideoFrame::GetUPlane() const {
 }
 
 const uint8* WebRtcVideoFrame::GetVPlane() const {
-  WebRtc_UWord8* buffer = frame()->Buffer();
+  uint8_t* buffer = frame()->Buffer();
   if (buffer) {
     int uv_size = GetChromaSize();
     buffer += frame()->Width() * frame()->Height() + uv_size;
@@ -157,12 +157,12 @@ const uint8* WebRtcVideoFrame::GetVPlane() const {
 }
 
 uint8* WebRtcVideoFrame::GetYPlane() {
-  WebRtc_UWord8* buffer = frame()->Buffer();
+  uint8_t* buffer = frame()->Buffer();
   return buffer;
 }
 
 uint8* WebRtcVideoFrame::GetUPlane() {
-  WebRtc_UWord8* buffer = frame()->Buffer();
+  uint8_t* buffer = frame()->Buffer();
   if (buffer) {
     buffer += (frame()->Width() * frame()->Height());
   }
@@ -170,7 +170,7 @@ uint8* WebRtcVideoFrame::GetUPlane() {
 }
 
 uint8* WebRtcVideoFrame::GetVPlane() {
-  WebRtc_UWord8* buffer = frame()->Buffer();
+  uint8_t* buffer = frame()->Buffer();
   if (buffer) {
     int uv_size = GetChromaSize();
     buffer += frame()->Width() * frame()->Height() + uv_size;

@@ -128,6 +128,7 @@ class UDPPort : public Port {
   void OnReadPacket(talk_base::AsyncPacketSocket* socket,
                     const char* data, size_t size,
                     const talk_base::SocketAddress& remote_addr);
+  void OnReadyToSend(talk_base::AsyncPacketSocket* socket);
 
   // This method will send STUN binding request if STUN server address is set.
   void MaybePrepareStunCandidate();

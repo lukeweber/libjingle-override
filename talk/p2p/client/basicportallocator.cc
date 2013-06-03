@@ -30,11 +30,11 @@
 #include <string>
 #include <vector>
 
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/common.h"
 #include "talk/base/helpers.h"
 #include "talk/base/host.h"
 #include "talk/base/logging.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/common.h"
 #include "talk/p2p/base/port.h"
 #include "talk/p2p/base/relayport.h"
@@ -72,9 +72,6 @@ const int kNumPhases = 4;
 // Both these values are in bytes.
 const int kLargeSocketSendBufferSize = 128 * 1024;
 const int kNormalSocketSendBufferSize = 64 * 1024;
-
-
-const char UDP_PROTOCOL_NAME[] = "udp";
 
 // Returns the phase in which a given local candidate (or rather, the port that
 // gave rise to that local candidate) would have been created.
@@ -575,14 +572,14 @@ void BasicPortAllocatorSession::AddAllocatedPort(Port* port,
 
   port->SignalCandidateReady.connect(
       this, &BasicPortAllocatorSession::OnCandidateReady);
-  port->SignalAddressReady.connect(this,
-      &BasicPortAllocatorSession::OnPortReady);
+  port->SignalPortComplete.connect(this,
+      &BasicPortAllocatorSession::OnPortComplete);
   port->SignalConnectionCreated.connect(this,
       &BasicPortAllocatorSession::OnConnectionCreated);
   port->SignalDestroyed.connect(this,
       &BasicPortAllocatorSession::OnPortDestroyed);
-  port->SignalAddressError.connect(
-      this, &BasicPortAllocatorSession::OnAddressError);
+  port->SignalPortError.connect(
+      this, &BasicPortAllocatorSession::OnPortError);
   LOG_J(LS_INFO, port) << "Added port to allocator";
 
   if (prepare_address)
@@ -618,30 +615,41 @@ void BasicPortAllocatorSession::OnCandidateReady(
   if (!candidates.empty()) {
     SignalCandidatesReady(this, candidates);
   }
+
+  // Moving to READY state as we have atleast one candidate from the port.
+  // Since this port has atleast one candidate we should forward this port
+  // to listners, to allow connections from this port.
+  if (!data->ready()) {
+    data->set_ready();
+    SignalPortReady(this, port);
+  }
 }
 
-void BasicPortAllocatorSession::OnPortReady(Port* port) {
+void BasicPortAllocatorSession::OnPortComplete(Port* port) {
   ASSERT(talk_base::Thread::Current() == network_thread_);
   PortData* data = FindPort(port);
   ASSERT(data != NULL);
+
   // Ignore any late signals.
   if (data->complete())
     return;
-  data->set_ready();
-  SignalPortReady(this, port);
+
+  // Moving to COMPLETE state.
+  data->set_complete();
   // Send candidate allocation complete signal if this was the last port.
   MaybeSignalCandidatesAllocationDone();
 }
 
-void BasicPortAllocatorSession::OnAddressError(Port* port) {
+void BasicPortAllocatorSession::OnPortError(Port* port) {
   ASSERT(talk_base::Thread::Current() == network_thread_);
   PortData* data = FindPort(port);
   ASSERT(data != NULL);
   // We might have already given up on this port and stopped it.
   if (data->complete())
     return;
-  // SignalAddressError is currently sent from StunPort. But this signal
-  // itself is generic.
+
+  // SignalAddressError is currently sent from StunPort/TurnPort.
+  // But this signal itself is generic.
   data->set_error();
   // Send candidate allocation complete signal if this was the last port.
   MaybeSignalCandidatesAllocationDone();
@@ -690,7 +698,7 @@ void BasicPortAllocatorSession::MaybeSignalCandidatesAllocationDone() {
       return;
   }
 
-  // If all allocated ports are in ready state, session must have got all
+  // If all allocated ports are in complete state, session must have got all
   // expected candidates. Session will trigger candidates allocation complete
   // signal.
   for (std::vector<PortData>::iterator it = ports_.begin();
@@ -1003,7 +1011,7 @@ void AllocationSequence::CreateUDPPorts() {
       port->set_server_addr(config_->stun_address);
     }
 
-    session_->AddAllocatedPort(port, this);
+    session_->AddAllocatedPort(port, this, true);
     port->SignalDestroyed.connect(this, &AllocationSequence::OnPortDestroyed);
   }
 }
@@ -1022,7 +1030,7 @@ void AllocationSequence::CreateTCPPorts() {
                                session_->username(), session_->password(),
                                session_->allocator()->allow_tcp_listen());
   if (port) {
-    session_->AddAllocatedPort(port, this);
+    session_->AddAllocatedPort(port, this, true);
     // Since TCPPort is not created using shared socket, |port| will not be
     // added to the dequeue.
   }
@@ -1057,7 +1065,7 @@ void AllocationSequence::CreateStunPorts() {
                                 session_->username(), session_->password(),
                                 config_->stun_address);
   if (port) {
-    session_->AddAllocatedPort(port, this);
+    session_->AddAllocatedPort(port, this, true);
     // Since StunPort is not created using shared socket, |port| will not be
     // added to the dequeue.
   }
@@ -1127,23 +1135,22 @@ void AllocationSequence::CreateTurnPort(const RelayServerConfig& config) {
   for (relay_port = config.ports.begin();
        relay_port != config.ports.end(); ++relay_port) {
     if (relay_port->proto == PROTO_UDP) {
-    cricket::RelayCredentials credentials(config.credentials.username, config.credentials.password);
-      TurnPort* port = TurnPort::Create(session_->network_thread(),
-                                        session_->socket_factory(),
-                                        network_, ip_,
-                                        session_->allocator()->min_port(),
-                                        session_->allocator()->max_port(),
-                                        session_->username(),
-                                        session_->password(),
-                                        relay_port->address,
-                                        config.credentials);
+        TurnPort* port = TurnPort::Create(session_->network_thread(),
+                                      session_->socket_factory(),
+                                      network_, ip_,
+                                      session_->allocator()->min_port(),
+                                      session_->allocator()->max_port(),
+                                      session_->username(),
+                                      session_->password(),
+                                      *relay_port, config.credentials);
+    if (port) {
       if (port) {
-        session_->AddAllocatedPort(port, this);
+        session_->AddAllocatedPort(port, this, true);
       }
-    } else {
+    } else { //Would be nice is this was supported
       LOG(LS_WARNING) << ProtoToString(relay_port->proto)
                       << " server address: " << relay_port->address.ToString()
-                      << " is not currently supported.";
+                      << " is NOT currently supported.";
     }
   }
 }

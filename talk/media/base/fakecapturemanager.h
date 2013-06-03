@@ -53,6 +53,15 @@ class FakeCaptureManager : public CaptureManager {
     video_capturer->Stop();
     return true;
   }
+  virtual bool RestartVideoCapture(VideoCapturer* video_capturer,
+                                   const VideoFormat& previous_format,
+                                   const VideoFormat& desired_format,
+                                   RestartOptions options) {
+    if (!video_capturer) {
+      return false;
+    }
+    return video_capturer->Restart(desired_format);
+  }
   virtual bool AddVideoRenderer(VideoCapturer* video_capturer,
                                 VideoRenderer* video_renderer) {
     return true;

@@ -93,7 +93,7 @@ class MediaMessagesTest : public testing::Test {
   }
 
   static std::string StreamsXml(const std::string& stream1,
-                               const std::string& stream2) {
+                                const std::string& stream2) {
     return "<streams xmlns='google:jingle'>"
            + stream1
            + stream2 +
@@ -123,6 +123,22 @@ class MediaMessagesTest : public testing::Test {
            "<ssrc>" + ssrc2 + "</ssrc>"
            "</ssrc-group>"
            "</stream>";
+  }
+
+  static std::string HeaderExtensionsXml(const std::string& hdrext1,
+                                         const std::string& hdrext2) {
+    return "<rtp:description xmlns:rtp=\"urn:xmpp:jingle:apps:rtp:1\">"
+           + hdrext1
+           + hdrext2 +
+           "</rtp:description>";
+  }
+
+  static std::string HeaderExtensionXml(const std::string& uri,
+                                        const std::string& id) {
+    return "<rtp:rtp-hdrext"
+           " uri='" + uri + "'"
+           " id='" + id + "'"
+           "/>";
   }
 
   static cricket::SessionDescription* CreateMediaSessionDescription(
@@ -281,6 +297,56 @@ TEST_F(MediaMessagesTest, StreamsFromBadXml) {
   cricket::ParseError parse_error;
   ASSERT_FALSE(cricket::ParseJingleStreams(
       desc_elem.get(), &actual_streams, &parse_error));
+}
+
+// Test serializing/deserializing typical RTP Header Extension xml.
+TEST_F(MediaMessagesTest, HeaderExtensionsToFromXml) {
+  talk_base::scoped_ptr<buzz::XmlElement> expected_desc_elem(
+      buzz::XmlElement::ForStr(
+          HeaderExtensionsXml(
+              HeaderExtensionXml("abc", "123"),
+              HeaderExtensionXml("def", "456"))));
+
+  std::vector<cricket::RtpHeaderExtension> expected_hdrexts;
+  expected_hdrexts.push_back(RtpHeaderExtension("abc", 123));
+  expected_hdrexts.push_back(RtpHeaderExtension("def", 456));
+
+  talk_base::scoped_ptr<buzz::XmlElement> actual_desc_elem(
+      new buzz::XmlElement(QN_JINGLE_RTP_CONTENT));
+  cricket::WriteJingleRtpHeaderExtensions(expected_hdrexts, actual_desc_elem.get());
+
+  ASSERT_TRUE(actual_desc_elem != NULL);
+  EXPECT_EQ(expected_desc_elem->Str(), actual_desc_elem->Str());
+
+  std::vector<cricket::RtpHeaderExtension> actual_hdrexts;
+  cricket::ParseError parse_error;
+  ASSERT_TRUE(cricket::ParseJingleRtpHeaderExtensions(
+      expected_desc_elem.get(), &actual_hdrexts, &parse_error));
+  EXPECT_EQ(2U, actual_hdrexts.size());
+  EXPECT_EQ(expected_hdrexts[0], actual_hdrexts[0]);
+  EXPECT_EQ(expected_hdrexts[1], actual_hdrexts[1]);
+}
+
+// Test deserializing bad RTP header extension xml.
+TEST_F(MediaMessagesTest, HeaderExtensionsFromBadXml) {
+  std::vector<cricket::RtpHeaderExtension> actual_hdrexts;
+  cricket::ParseError parse_error;
+
+  talk_base::scoped_ptr<buzz::XmlElement> desc_elem(
+      buzz::XmlElement::ForStr(
+          HeaderExtensionsXml(
+              HeaderExtensionXml("abc", "123"),
+              HeaderExtensionXml("def", "not-an-id"))));
+  ASSERT_FALSE(cricket::ParseJingleRtpHeaderExtensions(
+      desc_elem.get(), &actual_hdrexts, &parse_error));
+
+  desc_elem.reset(
+      buzz::XmlElement::ForStr(
+          HeaderExtensionsXml(
+              HeaderExtensionXml("abc", "123"),
+              HeaderExtensionXml("def", "-1"))));
+  ASSERT_FALSE(cricket::ParseJingleRtpHeaderExtensions(
+      desc_elem.get(), &actual_hdrexts, &parse_error));
 }
 
 }  // namespace cricket

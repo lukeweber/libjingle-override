@@ -118,19 +118,26 @@ public class AppRTCClient {
     requestQueueDrainInBackground();
   }
 
+  public boolean isInitiator() {
+    return appRTCSignalingParameters.initiator;
+  }
+
   // Struct holding the signaling parameters of an AppRTC room.
   private class AppRTCSignalingParameters {
     public final List<PeerConnection.IceServer> iceServers;
     public final String gaeBaseHref;
     public final String channelToken;
     public final String postMessageUrl;
+    public final boolean initiator;
     public AppRTCSignalingParameters(
         List<PeerConnection.IceServer> iceServers,
-        String gaeBaseHref, String channelToken, String postMessageUrl) {
+        String gaeBaseHref, String channelToken, String postMessageUrl,
+        boolean initiator) {
       this.iceServers = iceServers;
       this.gaeBaseHref = gaeBaseHref;
       this.channelToken = channelToken;
       this.postMessageUrl = postMessageUrl;
+      this.initiator = initiator;
     }
   }
 
@@ -194,10 +201,8 @@ public class AppRTCClient {
 
     @Override
     protected void onPostExecute(AppRTCSignalingParameters params) {
-      String channelUrl = params.gaeBaseHref +
-          "html/android_channel.html?token=" + params.channelToken;
       channelClient =
-          new GAEChannelClient(activity, channelUrl, gaeHandler);
+          new GAEChannelClient(activity, params.channelToken, gaeHandler);
       synchronized (sendQueue) {
         appRTCSignalingParameters = params;
       }
@@ -213,14 +218,8 @@ public class AppRTCClient {
     // want to interop with apprtc).
     private AppRTCSignalingParameters getParametersForRoomUrl(String url)
         throws IOException {
-      final Pattern tokenPattern = Pattern.compile(
-          ".*\n *openChannel\\('([^']*)'\\);\n.*");
-      final Pattern postMessagePattern = Pattern.compile(
-          ".*\n *path = '/(message\\?r=[0-9]+)' \\+ '(&u=[0-9]+)';\n.*");
       final Pattern fullRoomPattern = Pattern.compile(
           ".*\n *Sorry, this room is full\\..*");
-      final Pattern pcConfigPattern = Pattern.compile(
-          ".*\n *var pc_config = (\\{[^\n]*\\});\n.*");
 
       String roomHtml =
           drainStream((new URL(url)).openConnection().getInputStream());
@@ -231,38 +230,69 @@ public class AppRTCClient {
       }
 
       String gaeBaseHref = url.substring(0, url.indexOf('?'));
-
-      Matcher tokenMatcher = tokenPattern.matcher(roomHtml);
-      if (!tokenMatcher.find()) {
-        throw new IOException("Missing channel token in HTML: " + roomHtml);
-      }
-      String token = tokenMatcher.group(1);
-      if (tokenMatcher.find()) {
-        throw new IOException("Too many channel tokens in HTML: " + roomHtml);
-      }
-
-      Matcher postMessageMatcher = postMessagePattern.matcher(roomHtml);
-      if (!postMessageMatcher.find()) {
-        throw new IOException("Missing postMessage URL in HTML: " + roomHtml);
-      }
-      String postMessageUrl =
-          postMessageMatcher.group(1) + postMessageMatcher.group(2);
-      if (postMessageMatcher.find()) {
-        throw new IOException("Too many postMessage URLs in HTML: " + roomHtml);
-      }
-
-      Matcher pcConfigMatcher = pcConfigPattern.matcher(roomHtml);
-      if (!pcConfigMatcher.find()) {
-        throw new IOException("Missing pc_config in HTML: " + roomHtml);
-      }
+      String token = getVarValue(roomHtml, "channelToken", true);
+      String postMessageUrl = "/message?r=" +
+          getVarValue(roomHtml, "roomKey", true) + "&u=" +
+          getVarValue(roomHtml, "me", true);
+      boolean initiator = getVarValue(roomHtml, "initiator", false).equals("1");
       LinkedList<PeerConnection.IceServer> iceServers =
-          iceServersFromPCConfigJSON(pcConfigMatcher.group(1));
-      if (pcConfigMatcher.find()) {
-        throw new IOException("Too many pc_configs in HTML: " + roomHtml);
+          iceServersFromPCConfigJSON(getVarValue(roomHtml, "pcConfig", false));
+
+      boolean isTurnPresent = false;
+      for (PeerConnection.IceServer server : iceServers) {
+        if (server.uri.startsWith("turn:")) {
+          isTurnPresent = true;
+          break;
+        }
+      }
+      if (!isTurnPresent) {
+        iceServers.add(
+            requestTurnServer(getVarValue(roomHtml, "turnUrl", true)));
       }
 
       return new AppRTCSignalingParameters(
-          iceServers, gaeBaseHref, token, postMessageUrl);
+          iceServers, gaeBaseHref, token, postMessageUrl, initiator);
+    }
+
+    // Scan |roomHtml| for declaration & assignment of |varName| and return its
+    // value, optionally stripping outside quotes if |stripQuotes| requests it.
+    private String getVarValue(
+        String roomHtml, String varName, boolean stripQuotes)
+        throws IOException {
+      final Pattern pattern = Pattern.compile(
+          ".*\n *var " + varName + " = ([^\n]*);\n.*");
+      Matcher matcher = pattern.matcher(roomHtml);
+      if (!matcher.find()) {
+        throw new IOException("Missing " + varName + " in HTML: " + roomHtml);
+      }
+      String varValue = matcher.group(1);
+      if (matcher.find()) {
+        throw new IOException("Too many " + varName + " in HTML: " + roomHtml);
+      }
+      if (stripQuotes) {
+        varValue = varValue.substring(1, varValue.length() - 1);
+      }
+      return varValue;
+    }
+
+    // Requests & returns a TURN ICE Server based on a request URL.  Must be run
+    // off the main thread!
+    private PeerConnection.IceServer requestTurnServer(String url) {
+      try {
+        URLConnection connection = (new URL(url)).openConnection();
+        connection.addRequestProperty("user-agent", "Mozilla/5.0");
+        connection.addRequestProperty("origin", "https://apprtc.appspot.com");
+        String response = drainStream(connection.getInputStream());
+        JSONObject responseJSON = new JSONObject(response);
+        String uri = responseJSON.getJSONArray("uris").getString(0);
+        String username = responseJSON.getString("username");
+        String password = responseJSON.getString("password");
+        return new PeerConnection.IceServer(uri, username, password);
+      } catch (JSONException e) {
+        throw new RuntimeException(e);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
     }
   }
 
@@ -280,7 +310,7 @@ public class AppRTCClient {
         String url = server.getString("url");
         String credential =
             server.has("credential") ? server.getString("credential") : "";
-        ret.add(new PeerConnection.IceServer(url, credential));
+        ret.add(new PeerConnection.IceServer(url, "", credential));
       }
       return ret;
     } catch (JSONException e) {

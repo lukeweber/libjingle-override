@@ -75,6 +75,18 @@ TEST(BasicTypesTest, SizeOfConstants) {
   EXPECT_EQ(8u, sizeof(UINT64_C(0x8765432112345678)));
 }
 
+// Test CPU_ macros
+#if !defined(CPU_ARM) && defined(__arm__)
+#error expected CPU_ARM to be defined.
+#endif
+#if !defined(CPU_X86) && (defined(WIN32) || defined(OSX))
+#error expected CPU_X86 to be defined.
+#endif
+#if !defined(ARCH_CPU_LITTLE_ENDIAN) && \
+  (defined(WIN32) || defined(OSX) || defined(CPU_X86))
+#error expected ARCH_CPU_LITTLE_ENDIAN to be defined.
+#endif
+
 // TODO(fbarchard): Test all macros in basictypes.h
 
 }  // namespace talk_base

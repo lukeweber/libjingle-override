@@ -555,6 +555,12 @@ bool ParseJingleAudioContent(const buzz::XmlElement* content_elem,
 
   audio->set_rtcp_mux(content_elem->FirstNamed(QN_JINGLE_RTCP_MUX) != NULL);
 
+  RtpHeaderExtensions hdrexts;
+  if (!ParseJingleRtpHeaderExtensions(content_elem, &hdrexts, error)) {
+    return false;
+  }
+  audio->set_rtp_header_extensions(hdrexts);
+
   *content = audio;
   return true;
 }
@@ -585,13 +591,48 @@ bool ParseJingleVideoContent(const buzz::XmlElement* content_elem,
 
   video->set_rtcp_mux(content_elem->FirstNamed(QN_JINGLE_RTCP_MUX) != NULL);
 
+  RtpHeaderExtensions hdrexts;
+  if (!ParseJingleRtpHeaderExtensions(content_elem, &hdrexts, error)) {
+    return false;
+  }
+  video->set_rtp_header_extensions(hdrexts);
+
   *content = video;
   return true;
 }
 
-bool ParseJingleDataContent(const buzz::XmlElement* content_elem,
-                            ContentDescription** content,
-                            ParseError* error) {
+bool ParseJingleSctpDataContent(const buzz::XmlElement* content_elem,
+                                ContentDescription** content,
+                                ParseError* error) {
+  DataContentDescription* data = new DataContentDescription();
+  data->set_protocol(kMediaProtocolSctp);
+
+  for (const buzz::XmlElement* stream_elem =
+           content_elem->FirstNamed(QN_JINGLE_DRAFT_SCTP_STREAM);
+       stream_elem != NULL;
+       stream_elem = stream_elem->NextNamed(QN_JINGLE_DRAFT_SCTP_STREAM)) {
+    StreamParams stream;
+    stream.groupid = stream_elem->Attr(QN_NICK);
+    stream.id = stream_elem->Attr(QN_NAME);
+    uint32 sid;
+    if (!talk_base::FromString(stream_elem->Attr(QN_SID), &sid)) {
+      return BadParse("Missing or invalid sid.", error);
+    }
+    if (sid > kMaxSctpSid) {
+      return BadParse("SID is greater than max value.", error);
+    }
+
+    stream.ssrcs.push_back(sid);
+    data->mutable_streams().push_back(stream);
+  }
+
+  *content = data;
+  return true;
+}
+
+bool ParseJingleRtpDataContent(const buzz::XmlElement* content_elem,
+                               ContentDescription** content,
+                               ParseError* error) {
   DataContentDescription* data = new DataContentDescription();
 
   for (const buzz::XmlElement* payload_elem =
@@ -633,6 +674,13 @@ bool MediaSessionClient::ParseContent(SignalingProtocol protocol,
       return BadParse("Unknown content type: " + content_type, error);
     }
   } else {
+    const std::string& content_type = content_elem->Name().Namespace();
+    // We use the XMLNS of the <description> element to determine if
+    // it's RTP or SCTP.
+    if (content_type == NS_JINGLE_DRAFT_SCTP) {
+      return ParseJingleSctpDataContent(content_elem, content, error);
+    }
+
     std::string media;
     if (!RequireXmlAttr(content_elem, QN_JINGLE_CONTENT_MEDIA, &media, error))
       return false;
@@ -642,7 +690,7 @@ bool MediaSessionClient::ParseContent(SignalingProtocol protocol,
     } else if (media == JINGLE_CONTENT_MEDIA_VIDEO) {
       return ParseJingleVideoContent(content_elem, content, error);
     } else if (media == JINGLE_CONTENT_MEDIA_DATA) {
-      return ParseJingleDataContent(content_elem, content, error);
+      return ParseJingleRtpDataContent(content_elem, content, error);
     } else {
       return BadParse("Unknown media: " + media, error);
     }
@@ -882,6 +930,8 @@ buzz::XmlElement* CreateJingleAudioContentElem(
     elem->AddElement(new buzz::XmlElement(QN_JINGLE_RTCP_MUX));
   }
 
+  WriteJingleRtpHeaderExtensions(audio->rtp_header_extensions(), elem);
+
   return elem;
 }
 
@@ -912,11 +962,33 @@ buzz::XmlElement* CreateJingleVideoContentElem(
                                          video->bandwidth()));
   }
 
+  WriteJingleRtpHeaderExtensions(video->rtp_header_extensions(), elem);
+
   return elem;
 }
 
-buzz::XmlElement* CreateJingleDataContentElem(
+buzz::XmlElement* CreateJingleSctpDataContentElem(
+    const DataContentDescription* data) {
+  buzz::XmlElement* content_elem =
+      new buzz::XmlElement(QN_JINGLE_DRAFT_SCTP_CONTENT, true);
+  for (std::vector<StreamParams>::const_iterator
+           stream = data->streams().begin();
+       stream != data->streams().end(); ++stream) {
+    buzz::XmlElement* stream_elem =
+      new buzz::XmlElement(QN_JINGLE_DRAFT_SCTP_STREAM, false);
+    AddXmlAttrIfNonEmpty(stream_elem, QN_NICK, stream->groupid);
+    AddXmlAttrIfNonEmpty(stream_elem, QN_NAME, stream->id);
+    if (!stream->ssrcs.empty()) {
+      AddXmlAttr(stream_elem, QN_SID, stream->ssrcs[0]);
+    }
+    content_elem->AddElement(stream_elem);
+  }
+  return content_elem;;
+}
+
+buzz::XmlElement* CreateJingleRtpDataContentElem(
     const DataContentDescription* data, bool crypto_required) {
+
   buzz::XmlElement* elem =
       new buzz::XmlElement(QN_JINGLE_RTP_CONTENT, true);
 
@@ -943,6 +1015,20 @@ buzz::XmlElement* CreateJingleDataContentElem(
   }
 
   return elem;
+}
+
+bool IsSctp(const DataContentDescription* data) {
+  return (data->protocol() == kMediaProtocolSctp ||
+    data->protocol() == kMediaProtocolSctpDtls);
+}
+
+buzz::XmlElement* CreateJingleDataContentElem(
+    const DataContentDescription* data, bool crypto_required) {
+  if (IsSctp(data)) {
+    return CreateJingleSctpDataContentElem(data);
+  } else {
+    return CreateJingleRtpDataContentElem(data, crypto_required);
+  }
 }
 
 bool MediaSessionClient::IsWritable(SignalingProtocol protocol,

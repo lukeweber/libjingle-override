@@ -159,6 +159,17 @@ bool MessageQueue::Peek(Message *pmsg, int cmsWait) {
   return true;
 }
 
+struct MessageDeleter {
+  ~MessageDeleter() {
+    while (!messages.empty()) {
+      ASSERT(NULL == messages.front().phandler);
+      delete messages.front().pdata;
+      messages.pop_front();
+    }
+  }
+  MessageList messages;
+};
+
 bool MessageQueue::Get(Message *pmsg, int cmsWait, bool process_io) {
   // Return and clear peek if present
   // Always return the peek if it exists so there is Peek/Get symmetry
@@ -184,6 +195,7 @@ bool MessageQueue::Get(Message *pmsg, int cmsWait, bool process_io) {
 
     int cmsDelayNext = kForever;
     {
+      MessageDeleter deleter;
       CritScope cs(&crit_);
 
       // Check for delayed messages that have been triggered
@@ -210,8 +222,10 @@ bool MessageQueue::Get(Message *pmsg, int cmsWait, bool process_io) {
         }
         msgq_.pop_front();
         if (MQID_DISPOSE == pmsg->message_id) {
-          ASSERT(NULL == pmsg->phandler);
-          delete pmsg->pdata;
+          // Delete the object, but *not inside the crit scope!*.
+          deleter.messages.push_back(*pmsg);
+          // To be safe, make sure we don't return this message.
+          *pmsg = Message();
           continue;
         } else if (MQID_QUIT == pmsg->message_id){
           return false;

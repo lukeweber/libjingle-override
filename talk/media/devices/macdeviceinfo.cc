@@ -29,7 +29,7 @@
 
 namespace cricket {
 
-bool GetUsbUvcId(const Device& device, std::string* uvc_id) {
+bool GetUsbId(const Device& device, std::string* usb_id) {
   // Both PID and VID are 4 characters.
   const int id_size = 4;
   if (device.id.size() < 2 * id_size) {
@@ -42,10 +42,10 @@ bool GetUsbUvcId(const Device& device, std::string* uvc_id) {
   const size_t pid_location = device.id.size() - id_size;
   std::string id_product = device.id.substr(pid_location, id_size);
 
-  uvc_id->clear();
-  uvc_id->append(id_vendor);
-  uvc_id->append(":");
-  uvc_id->append(id_product);
+  usb_id->clear();
+  usb_id->append(id_vendor);
+  usb_id->append(":");
+  usb_id->append(id_product);
   return true;
 }
 

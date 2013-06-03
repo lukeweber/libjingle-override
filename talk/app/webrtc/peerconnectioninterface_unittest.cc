@@ -227,7 +227,8 @@ class PeerConnectionInterfaceTest : public testing::Test {
  protected:
   virtual void SetUp() {
     pc_factory_ = webrtc::CreatePeerConnectionFactory(
-        talk_base::Thread::Current(), talk_base::Thread::Current(), NULL, NULL);
+        talk_base::Thread::Current(), talk_base::Thread::Current(), NULL, NULL,
+        NULL);
     ASSERT_TRUE(pc_factory_.get() != NULL);
   }
 
@@ -949,7 +950,7 @@ TEST_F(PeerConnectionInterfaceTest, ReceiveFireFoxOffer) {
   MAYBE_SKIP_TEST(talk_base::SSLStreamAdapter::HaveDtlsSrtp);
   FakeConstraints constraints;
   constraints.AddMandatory(webrtc::MediaConstraintsInterface::kEnableDtlsSrtp,
-                           webrtc::MediaConstraintsInterface::kValueTrue);
+                           true);
   CreatePeerConnection(&constraints);
   AddAudioVideoStream(kStreamLabel1, "audio_label", "video_label");
   SessionDescriptionInterface* desc =
