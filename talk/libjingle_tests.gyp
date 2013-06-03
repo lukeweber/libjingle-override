@@ -202,16 +202,16 @@
             'base/win32socketserver_unittest.cc',
             'base/win32toolhelp_unittest.cc',
             'base/win32window_unittest.cc',
+            'base/win32windowpicker_unittest.cc',
             'base/winfirewall_unittest.cc',
-            # TODO(ronghuawu): Reenable this test.
-            # 'base/win32socketserver_unittest.cc',
-            # 'base/win32windowpicker_unittest.cc',
           ],
           'sources!': [
             # TODO(ronghuawu): Fix TestUdpReadyToSendIPv6 on windows bot
-            # then reenable this test.
+            # then reenable these tests.
             'base/physicalsocketserver_unittest.cc',
             'base/socket_unittest.cc',
+            'base/win32socketserver_unittest.cc',
+            'base/win32windowpicker_unittest.cc',
           ],
         }],
         ['OS=="mac"', {
