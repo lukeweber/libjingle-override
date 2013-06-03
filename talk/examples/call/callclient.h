@@ -51,7 +51,6 @@ class MucInviteSendTask;
 class FriendInviteSendTask;
 class DiscoInfoQueryTask;
 class Muc;
-class PresenceStatus;
 class IqTask;
 class MucRoomConfigTask;
 class MucRoomLookupTask;

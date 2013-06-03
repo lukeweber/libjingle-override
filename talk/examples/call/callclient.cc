@@ -643,14 +643,10 @@ void CallClient::OnSpeakerChanged(cricket::Call* call,
   }
 }
 
-<<<<<<< HEAD
-void SetMediaCaps(int media_caps, buzz::Status* status) {
+void SetMediaCaps(int media_caps, buzz::PresenceStatus* status) {
+//void SetMediaCaps(int media_caps, buzz::Status* status) {
   //status->set_voice_capability((media_caps & cricket::AUDIO_RECV) != 0);
   status->set_voice_capability(1);//(media_caps & cricket::AUDIO_RECV) != 0);
-=======
-void SetMediaCaps(int media_caps, buzz::PresenceStatus* status) {
-  status->set_voice_capability((media_caps & cricket::AUDIO_RECV) != 0);
->>>>>>> svn-base
   status->set_video_capability((media_caps & cricket::VIDEO_RECV) != 0);
   status->set_camera_capability((media_caps & cricket::VIDEO_SEND) != 0);
 }

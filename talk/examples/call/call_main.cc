@@ -442,7 +442,7 @@ int main(int argc, char **argv) {
   talk_base::SocketServerScope ss_scope(&ss);
 #endif
 
-  XmppPump pump;
+  buzz::XmppPump pump;
   LOG(LS_WARNING) << "FLAG_turnserver=" << FLAG_turnserver;
   CallClient *client = new CallClient(pump.client(), caps_node, caps_ver, FLAG_turnserver);
 
