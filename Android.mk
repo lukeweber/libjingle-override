@@ -17,7 +17,8 @@ LOCAL_CORE_COMMON_SRC := \
 	talk/base/autodetectproxy.cc \
 	talk/base/bandwidthsmoother.cc \
 	talk/base/base64.cc \
-	talk/base/basicpacketsocketfactory.cc \
+	talk/p2p/base/basicpacketsocketfactory.cc \
+	talk/p2p/base/asyncstuntcpsocket.cc \
 	talk/base/bytebuffer.cc \
 	talk/base/checks.cc \
 	talk/base/common.cc \

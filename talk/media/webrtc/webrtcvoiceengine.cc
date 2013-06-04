@@ -2587,7 +2587,8 @@ bool WebRtcVoiceMediaChannel::GetStats(VoiceMediaInfo* info) {
       if (engine()->voe()->sync()) {
         int playout_buffer_delay_ms = 0;
         engine()->voe()->sync()->GetDelayEstimate(
-            *it, &rinfo.delay_estimate_ms, &playout_buffer_delay_ms);
+            //TODO: also pass in the second parameter
+            *it, rinfo.delay_estimate_ms);//, &playout_buffer_delay_ms);
       }
 
       // Get speech level.
