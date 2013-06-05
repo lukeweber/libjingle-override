@@ -42,14 +42,16 @@ namespace webrtc {
 
 struct DataChannelInit {
   bool reliable;           // Deprecated.
-  uint16 id;               // The stream id, or SID, for SCTP data channels.
+  int  id;                 // The stream id, or SID, for SCTP data channels. -1
+                           // if unset.
   bool ordered;            // True if ordered delivery is required.
-  bool sendOpenMessage;    // True if we should send an in-band signalling in
-                           // the form of an "open" message.
+  bool negotiated;         // True if the channel has been externally negotiated
+                           // and we do not send an in-band signalling in the
+                           // form of an "open" message.
+  int maxRetransmits;      // The max number of retransmissions. -1 if unset.
   int maxRetransmitTime;   // The max period of time in milliseconds in which
                            // retransmissions will be sent.  After this time, no
                            // more retransmissions will be sent. -1 if unset.
-  int maxRetransmitNum;    // The max number of retransmissions. -1 if unset.
   std::string protocol;    // This is set by the application and opaque to the
                            // WebRTC implementation.
 };
