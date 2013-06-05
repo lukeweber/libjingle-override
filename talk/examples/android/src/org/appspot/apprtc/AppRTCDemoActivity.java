@@ -167,7 +167,7 @@ public class AppRTCDemoActivity extends Activity
     PeerConnectionFactory factory = new PeerConnectionFactory();
 
     pc = factory.createPeerConnection(
-        iceServers, new MediaConstraints(), pcObserver);
+        iceServers, appRtcClient.pcConstraints(), pcObserver);
 
     {
       final PeerConnection finalPC = pc;

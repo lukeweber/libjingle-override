@@ -34,6 +34,7 @@ import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.webrtc.MediaConstraints;
 import org.webrtc.PeerConnection;
 
 import java.io.IOException;
@@ -122,6 +123,10 @@ public class AppRTCClient {
     return appRTCSignalingParameters.initiator;
   }
 
+  public MediaConstraints pcConstraints() {
+    return appRTCSignalingParameters.pcConstraints;
+  }
+
   // Struct holding the signaling parameters of an AppRTC room.
   private class AppRTCSignalingParameters {
     public final List<PeerConnection.IceServer> iceServers;
@@ -129,15 +134,18 @@ public class AppRTCClient {
     public final String channelToken;
     public final String postMessageUrl;
     public final boolean initiator;
+    public final MediaConstraints pcConstraints;
+
     public AppRTCSignalingParameters(
         List<PeerConnection.IceServer> iceServers,
         String gaeBaseHref, String channelToken, String postMessageUrl,
-        boolean initiator) {
+        boolean initiator, MediaConstraints pcConstraints) {
       this.iceServers = iceServers;
       this.gaeBaseHref = gaeBaseHref;
       this.channelToken = channelToken;
       this.postMessageUrl = postMessageUrl;
       this.initiator = initiator;
+      this.pcConstraints = pcConstraints;
     }
   }
 
@@ -250,8 +258,42 @@ public class AppRTCClient {
             requestTurnServer(getVarValue(roomHtml, "turnUrl", true)));
       }
 
+      MediaConstraints pcConstraints = constraintsFromJSON(
+          getVarValue(roomHtml, "pcConstraints", false));
+
       return new AppRTCSignalingParameters(
-          iceServers, gaeBaseHref, token, postMessageUrl, initiator);
+          iceServers, gaeBaseHref, token, postMessageUrl, initiator,
+          pcConstraints);
+    }
+
+    private MediaConstraints constraintsFromJSON(String jsonString) {
+      try {
+        MediaConstraints constraints = new MediaConstraints();
+        JSONObject json = new JSONObject(jsonString);
+        if (json.has("mandatory")) {
+          JSONObject mandatoryJSON = json.getJSONObject("mandatory");
+          JSONArray mandatoryKeys = mandatoryJSON.names();
+          for (int i = 0; i < mandatoryKeys.length(); ++i) {
+            String key = (String) mandatoryKeys.getString(i);
+            String value = mandatoryJSON.getString(key);
+            constraints.mandatory.add(
+                new MediaConstraints.KeyValuePair(key, value));
+          }
+        }
+        if (json.has("optional")) {
+          JSONArray optionalJSON = json.getJSONArray("optional");
+          for (int i = 0; i < optionalJSON.length(); ++i) {
+            JSONObject keyValueDict = optionalJSON.getJSONObject(i);
+            String key = keyValueDict.names().getString(0);
+            String value = keyValueDict.getString(key);
+            constraints.optional.add(
+                new MediaConstraints.KeyValuePair(key, value));
+          }
+        }
+        return constraints;
+      } catch (JSONException e) {
+        throw new RuntimeException(e);
+      }
     }
 
     // Scan |roomHtml| for declaration & assignment of |varName| and return its

@@ -1170,6 +1170,14 @@ TEST_F(WebRtcVoiceEngineTestFake, SetSendRtpHeaderExtensions) {
       channel_num, enable, id));
   EXPECT_FALSE(enable);
 
+  // Ensure unknown extentions won't cause an error.
+  extensions.push_back(cricket::RtpHeaderExtension(
+      "urn:ietf:params:unknowextention", 1));
+  EXPECT_TRUE(channel_->SetSendRtpHeaderExtensions(extensions));
+  EXPECT_EQ(0, voe_.GetRTPAudioLevelIndicationStatus(
+      channel_num, enable, id));
+  EXPECT_FALSE(enable);
+
   // Ensure audio levels stay off with an empty list of headers.
   EXPECT_TRUE(channel_->SetSendRtpHeaderExtensions(extensions));
   EXPECT_EQ(0, voe_.GetRTPAudioLevelIndicationStatus(

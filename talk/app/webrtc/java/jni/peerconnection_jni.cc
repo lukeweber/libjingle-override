@@ -62,6 +62,7 @@
 #include "talk/app/webrtc/peerconnectioninterface.h"
 #include "talk/app/webrtc/videosourceinterface.h"
 #include "talk/base/logging.h"
+#include "talk/base/ssladapter.h"
 #include "talk/media/base/videocapturer.h"
 #include "talk/media/base/videorenderer.h"
 #include "talk/media/devices/videorendererfactory.h"
@@ -891,6 +892,8 @@ extern "C" jint JNIEXPORT JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
   g_jvm = jvm;
   CHECK(g_jvm, "JNI_OnLoad handed NULL?");
 
+  CHECK(talk_base::InitializeSSL(), "Failed to InitializeSSL()");
+
   JNIEnv* jni;
   if (jvm->GetEnv(reinterpret_cast<void**>(&jni), JNI_VERSION_1_6) != JNI_OK)
     return -1;
@@ -914,6 +917,7 @@ extern "C" void JNIEXPORT JNICALL JNI_OnUnLoad(JavaVM *jvm, void *reserved) {
   webrtc::Trace::ReturnTrace();
   delete g_class_reference_holder;
   g_class_reference_holder = NULL;
+  CHECK(talk_base::CleanupSSL(), "Failed to CleanupSSL()");
 }
 
 JOW(void, PeerConnection_freePeerConnection)(JNIEnv*, jclass, jlong j_p) {

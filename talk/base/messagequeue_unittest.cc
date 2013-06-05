@@ -106,3 +106,27 @@ TEST_F(MessageQueueTest, DisposeNotLocked) {
   EXPECT_TRUE(deleted);
   EXPECT_FALSE(was_locked);
 }
+
+class DeletedMessageHandler : public MessageHandler {
+ public:
+  explicit DeletedMessageHandler(bool* deleted) : deleted_(deleted) { }
+  ~DeletedMessageHandler() {
+    *deleted_ = true;
+  }
+  void OnMessage(Message* msg) { }
+ private:
+  bool* deleted_;
+};
+
+TEST_F(MessageQueueTest, DiposeHandlerWithPostedMessagePending) {
+  bool deleted = false;
+  DeletedMessageHandler *handler = new DeletedMessageHandler(&deleted);
+  // First, post a dispose.
+  Dispose(handler);
+  // Now, post a message, which should *not* be returned by Get().
+  Post(handler, 1);
+  Message msg;
+  EXPECT_FALSE(Get(&msg, 0));
+  EXPECT_TRUE(deleted);
+}
+

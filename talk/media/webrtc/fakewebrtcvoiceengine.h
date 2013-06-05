@@ -631,16 +631,21 @@ class FakeWebRtcVoiceEngine
   }
   WEBRTC_STUB(GetRemoteSSRC, (int channel, unsigned int& ssrc));
   WEBRTC_FUNC(SetRTPAudioLevelIndicationStatus, (int channel, bool enable,
-      unsigned char ID)) {
+      unsigned char id)) {
     WEBRTC_CHECK_CHANNEL(channel);
-    channels_[channel]->level_header_ext_ = (enable) ? ID : -1;
+    if (enable && (id < 1 || id > 14)) {
+      // [RFC5285] The 4-bit ID is the local identifier of this element in
+      // the range 1-14 inclusive.
+      return -1;
+    }
+    channels_[channel]->level_header_ext_ = (enable) ? id : -1;
     return 0;
   }
   WEBRTC_FUNC(GetRTPAudioLevelIndicationStatus, (int channel, bool& enabled,
-      unsigned char& ID)) {
+      unsigned char& id)) {
     WEBRTC_CHECK_CHANNEL(channel);
     enabled = (channels_[channel]->level_header_ext_ != -1);
-    ID = channels_[channel]->level_header_ext_;
+    id = channels_[channel]->level_header_ext_;
     return 0;
   }
   WEBRTC_STUB(GetRemoteCSRCs, (int channel, unsigned int arrCSRC[15]));
@@ -715,6 +720,9 @@ class FakeWebRtcVoiceEngine
     redPayloadtype = channels_[channel]->fec_type;
     return 0;
   }
+#ifdef USE_WEBRTC_DEV_BRANCH
+  WEBRTC_STUB(SetNACKStatus, (int channel, bool enable, int maxNoPackets));
+#endif
   WEBRTC_STUB(StartRTPDump, (int channel, const char* fileNameUTF8,
                              webrtc::RTPDirections direction));
   WEBRTC_STUB(StopRTPDump, (int channel, webrtc::RTPDirections direction));

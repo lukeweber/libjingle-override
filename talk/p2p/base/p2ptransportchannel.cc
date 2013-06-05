@@ -1069,7 +1069,7 @@ void P2PTransportChannel::PingConnection(Connection* conn) {
     if (remote_ice_mode_ == ICEMODE_FULL && role_ == ROLE_CONTROLLING) {
       use_candidate = (conn == best_connection_) ||
                       (best_connection_ == NULL) ||
-                      (best_connection_->writable()) ||
+                      (!best_connection_->writable()) ||
                       (conn->priority() > best_connection_->priority());
     } else if (remote_ice_mode_ == ICEMODE_LITE && conn == best_connection_) {
       use_candidate = best_connection_->writable();
