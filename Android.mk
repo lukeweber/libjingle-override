@@ -17,8 +17,6 @@ LOCAL_CORE_COMMON_SRC := \
 	talk/base/autodetectproxy.cc \
 	talk/base/bandwidthsmoother.cc \
 	talk/base/base64.cc \
-	talk/p2p/base/basicpacketsocketfactory.cc \
-	talk/p2p/base/asyncstuntcpsocket.cc \
 	talk/base/bytebuffer.cc \
 	talk/base/checks.cc \
 	talk/base/common.cc \
@@ -161,6 +159,8 @@ LOCAL_MEDIA_SRC := \
 	talk/media/webrtc/webrtcvoiceengine.cc
 
 LOCAL_P2P_SRC := \
+	talk/p2p/base/asyncstuntcpsocket.cc \
+	talk/p2p/base/basicpacketsocketfactory.cc \
 	talk/p2p/base/constants.cc \
 	talk/p2p/base/dtlstransportchannel.cc \
 	talk/p2p/base/p2ptransport.cc \
@@ -229,6 +229,7 @@ LOCAL_C_INCLUDES := \
 	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp/include \
 	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp/crypto/include \
 	$(MY_THIRD_PARTY_PATH) \
+	$(MY_THIRD_PARTY_PATH)/webrtc/webrtc \
 	$(MY_THIRD_PARTY_PATH)/webrtc \
 	$(MY_THIRD_PARTY_PATH)/webrtc/modules/interface \
 	$(MY_THIRD_PARTY_PATH)/expat/files/lib \
