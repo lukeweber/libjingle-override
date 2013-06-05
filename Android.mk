@@ -229,8 +229,8 @@ LOCAL_C_INCLUDES := \
 	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp/include \
 	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp/crypto/include \
 	$(MY_THIRD_PARTY_PATH) \
-	$(MY_THIRD_PARTY_PATH)/webrtc/webrtc \
 	$(MY_THIRD_PARTY_PATH)/webrtc \
+	$(MY_THIRD_PARTY_PATH)/webrtc/webrtc \
 	$(MY_THIRD_PARTY_PATH)/webrtc/modules/interface \
 	$(MY_THIRD_PARTY_PATH)/expat/files/lib \
 	$(MY_GTEST_PATH) \
