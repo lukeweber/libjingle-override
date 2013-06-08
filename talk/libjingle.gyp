@@ -135,7 +135,7 @@
                 }],
               ],
               'action': [
-                'build/build_jar.sh', '/usr', '<@(_outputs)',
+                'build/build_jar.sh', '<(java_home)', '<@(_outputs)',
                 '<(INTERMEDIATE_DIR)',
                 '<(build_classpath)',
                 '<@(java_files)'
