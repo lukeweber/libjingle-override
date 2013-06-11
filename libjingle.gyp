@@ -294,6 +294,8 @@
         'talk/base/sslsocketfactory.h',
         'talk/base/sslstreamadapter.cc',
         'talk/base/sslstreamadapter.h',
+        'talk/base/sslidentity.cc',
+        'talk/base/sslidentity.h',
         'talk/base/stream.cc',
         'talk/base/stream.h',
         'talk/base/stringencode.cc',
