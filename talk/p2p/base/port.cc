@@ -291,7 +291,7 @@ void Port::OnReadPacket(
   std::string remote_username;
   if (!GetStunMessage(data, size, addr, msg.accept(), &remote_username)) {
     LOG_J(LS_ERROR, this) << "Received non-STUN packet from unknown address ("
-                          << addr.ToString() << ")";
+                          << addr.ToSensitiveString() << ")";
   } else if (!msg) {
     // STUN message handled already
   } else if (msg->type() == STUN_BINDING_REQUEST) {
@@ -311,7 +311,7 @@ void Port::OnReadPacket(
     if (msg->type() != STUN_BINDING_RESPONSE) {
       LOG_J(LS_ERROR, this) << "Received unexpected STUN message type ("
                             << msg->type() << ") from unknown address ("
-                            << addr.ToString() << ")";
+                            << addr.ToSensitiveString() << ")";
     }
   }
 }
@@ -356,7 +356,7 @@ bool Port::GetStunMessage(const char* data, size_t size,
         (ice_protocol_ == ICEPROTO_RFC5245 &&
             !stun_msg->GetByteString(STUN_ATTR_MESSAGE_INTEGRITY))) {
       LOG_J(LS_ERROR, this) << "Received STUN request without username/M-I "
-                            << "from " << addr.ToString();
+                            << "from " << addr.ToSensitiveString();
       SendBindingErrorResponse(stun_msg.get(), addr, STUN_ERROR_BAD_REQUEST,
                                STUN_ERROR_REASON_BAD_REQUEST);
       return true;
@@ -368,7 +368,8 @@ bool Port::GetStunMessage(const char* data, size_t size,
     if (!ParseStunUsername(stun_msg.get(), &local_ufrag, &remote_ufrag) ||
         local_ufrag != username_fragment()) {
       LOG_J(LS_ERROR, this) << "Received STUN request with bad local username "
-                            << local_ufrag << " from " << addr.ToString();
+                            << local_ufrag << " from "
+                            << addr.ToSensitiveString();
       SendBindingErrorResponse(stun_msg.get(), addr, STUN_ERROR_UNAUTHORIZED,
                                STUN_ERROR_REASON_UNAUTHORIZED);
       return true;
@@ -378,7 +379,7 @@ bool Port::GetStunMessage(const char* data, size_t size,
     if (ice_protocol_ == ICEPROTO_RFC5245 &&
         !stun_msg->ValidateMessageIntegrity(data, size, password_)) {
       LOG_J(LS_ERROR, this) << "Received STUN request with bad M-I "
-                            << "from " << addr.ToString();
+                            << "from " << addr.ToSensitiveString();
       SendBindingErrorResponse(stun_msg.get(), addr, STUN_ERROR_UNAUTHORIZED,
                                STUN_ERROR_REASON_UNAUTHORIZED);
       return true;
@@ -392,11 +393,11 @@ bool Port::GetStunMessage(const char* data, size_t size,
                               << " class=" << error_code->eclass()
                               << " number=" << error_code->number()
                               << " reason='" << error_code->reason() << "'"
-                              << " from " << addr.ToString();
+                              << " from " << addr.ToSensitiveString();
         // Return message to allow error-specific processing
       } else {
         LOG_J(LS_ERROR, this) << "Received STUN binding error without a error "
-                              << "code from " << addr.ToString();
+                              << "code from " << addr.ToSensitiveString();
         return true;
       }
     }
@@ -404,13 +405,14 @@ bool Port::GetStunMessage(const char* data, size_t size,
     out_username->clear();
   } else if (stun_msg->type() == STUN_BINDING_INDICATION) {
     LOG_J(LS_VERBOSE, this) << "Received STUN binding indication:"
-                            << " from " << addr.ToString();
+                            << " from " << addr.ToSensitiveString();
     out_username->clear();
     // No stun attributes will be verified, if it's stun indication message.
     // Returning from end of the this method.
   } else {
     LOG_J(LS_ERROR, this) << "Received STUN packet with invalid type ("
-                          << stun_msg->type() << ") from " << addr.ToString();
+                          << stun_msg->type() << ") from "
+                          << addr.ToSensitiveString();
     return true;
   }
 
@@ -591,7 +593,7 @@ void Port::SendBindingResponse(StunMessage* request,
   response.Write(&buf);
   if (SendTo(buf.Data(), buf.Length(), addr, false) < 0) {
     LOG_J(LS_ERROR, this) << "Failed to send STUN ping response to "
-                          << addr.ToString();
+                          << addr.ToSensitiveString();
   }
 
   // The fact that we received a successful request means that this connection
@@ -645,7 +647,7 @@ void Port::SendBindingErrorResponse(StunMessage* request,
   response.Write(&buf);
   SendTo(buf.Data(), buf.Length(), addr, false);
   LOG_J(LS_INFO, this) << "Sending STUN binding error: reason=" << reason
-                       << " to " << addr.ToString();
+                       << " to " << addr.ToSensitiveString();
 }
 
 void Port::OnMessage(talk_base::Message *pmsg) {
@@ -1151,11 +1153,11 @@ std::string Connection::ToString() const {
      << ":" << local.id() << ":" << local.component()
      << ":" << local.generation()
      << ":" << local.type() << ":" << local.protocol()
-     << ":" << local.address().ToString()
+     << ":" << local.address().ToSensitiveString()
      << "->" << remote.id() << ":" << remote.component()
      << ":" << remote.generation()
      << ":" << remote.type() << ":"
-     << remote.protocol() << ":" << remote.address().ToString()
+     << remote.protocol() << ":" << remote.address().ToSensitiveString()
      << "|"
      << CONNECT_STATE_ABBREV[connected()]
      << READ_STATE_ABBREV[read_state()]
@@ -1168,6 +1170,10 @@ std::string Connection::ToString() const {
     ss << "-]";
   }
   return ss.str();
+}
+
+std::string Connection::ToSensitiveString() const {
+  return ToString();
 }
 
 void Connection::OnConnectionRequestResponse(ConnectionRequest* request,

@@ -188,6 +188,8 @@ class VideoCapturer
     return capture_format_.get();
   }
 
+  // Pause the video capturer.
+  virtual bool Pause(bool paused);
   // Stop the video capturer.
   virtual void Stop() = 0;
   // Check if the video capturer is running.
@@ -195,6 +197,17 @@ class VideoCapturer
   // Restart the video capturer with the new |capture_format|.
   // Default implementation stops and starts the capturer.
   virtual bool Restart(const VideoFormat& capture_format);
+  // TODO(thorcarpenter): This behavior of keeping the camera open just to emit
+  // black frames is a total hack and should be fixed.
+  // When muting, produce black frames then pause the camera.
+  // When unmuting, start the camera. Camera starts unmuted.
+  virtual bool MuteToBlackThenPause(bool muted);
+  virtual bool IsMuted() const {
+    return muted_;
+  }
+  CaptureState capture_state() const {
+    return capture_state_;
+  }
 
   // Adds a video processor that will be applied on VideoFrames returned by
   // |SignalVideoFrame|. Multiple video processors can be added. The video
@@ -300,6 +313,8 @@ class VideoCapturer
   int scaled_width_;  // Current output size from ComputeScale.
   int scaled_height_;
   int num_cores_;  // Number of physical cores.
+  bool muted_;
+  int black_frame_count_down_;
 
   talk_base::CriticalSection crit_;
   VideoProcessors video_processors_;

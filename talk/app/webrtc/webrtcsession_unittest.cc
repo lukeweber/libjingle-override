@@ -81,7 +81,10 @@ using webrtc::StreamCollection;
 using webrtc::kMlineMismatch;
 using webrtc::kSdpWithoutCrypto;
 using webrtc::kSessionError;
-using webrtc::kUpdateStateFailed;
+using webrtc::kSetLocalSdpFailed;
+using webrtc::kSetRemoteSdpFailed;
+using webrtc::kPushDownAnswerTDFailed;
+using webrtc::kPushDownPranswerTDFailed;
 
 static const SocketAddress kClientAddr1("11.11.11.11", 0);
 static const SocketAddress kClientAddr2("22.22.22.22", 0);
@@ -572,7 +575,7 @@ class WebRtcSessionTest : public testing::Test {
                                       SessionDescriptionInterface* desc) {
     std::string error;
     EXPECT_FALSE(session_->SetLocalDescription(desc, &error));
-    EXPECT_NE(std::string::npos, error.find("SetLocalDescription failed"));
+    EXPECT_NE(std::string::npos, error.find(kSetLocalSdpFailed));
     EXPECT_NE(std::string::npos, error.find(expected_error));
   }
   void SetRemoteDescriptionWithoutError(SessionDescriptionInterface* desc) {
@@ -587,7 +590,7 @@ class WebRtcSessionTest : public testing::Test {
                                        SessionDescriptionInterface* desc) {
     std::string error;
     EXPECT_FALSE(session_->SetRemoteDescription(desc, &error));
-    EXPECT_NE(std::string::npos, error.find("SetRemoteDescription failed"));
+    EXPECT_NE(std::string::npos, error.find(kSetRemoteSdpFailed));
     EXPECT_NE(std::string::npos, error.find(expected_error));
   }
 
@@ -2182,10 +2185,15 @@ TEST_F(WebRtcSessionTest, TestIceOfferGIceOnlyAnswer) {
   SetLocalDescriptionWithoutError(ice_only_offer);
   std::string original_offer_sdp;
   EXPECT_TRUE(offer->ToString(&original_offer_sdp));
+  SessionDescriptionInterface* pranswer_with_gice =
+      CreateSessionDescription(JsepSessionDescription::kPrAnswer,
+                               original_offer_sdp, NULL);
+  SetRemoteDescriptionExpectError(kPushDownPranswerTDFailed,
+                                  pranswer_with_gice);
   SessionDescriptionInterface* answer_with_gice =
       CreateSessionDescription(JsepSessionDescription::kAnswer,
                                original_offer_sdp, NULL);
-  SetRemoteDescriptionExpectError(kUpdateStateFailed, answer_with_gice);
+  SetRemoteDescriptionExpectError(kPushDownAnswerTDFailed, answer_with_gice);
 }
 
 // Verifing local offer and remote answer have matching m-lines as per RFC 3264.
@@ -2366,6 +2374,23 @@ TEST_F(WebRtcSessionTest, TestCreateAnswerWithNewUfragAndPassword) {
                              true);
 
   SetLocalDescriptionWithoutError(updated_answer2.release());
+}
+
+TEST_F(WebRtcSessionTest, TestSessionContentError) {
+  Init();
+  mediastream_signaling_.SendAudioVideoStream1();
+  SessionDescriptionInterface* offer = session_->CreateOffer(NULL);
+  const std::string session_id_orig = offer->session_id();
+  const std::string session_version_orig = offer->session_version();
+  SetLocalDescriptionWithoutError(offer);
+
+  video_channel_ = media_engine_->GetVideoChannel(0);
+  video_channel_->set_fail_set_send_codecs(true);
+
+  mediastream_signaling_.SendAudioVideoStream2();
+  SessionDescriptionInterface* answer =
+      CreateRemoteAnswer(session_->local_description());
+  SetRemoteDescriptionExpectError("ERROR_CONTENT", answer);
 }
 
 // Runs the loopback call test with BUNDLE and STUN disabled.

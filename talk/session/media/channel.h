@@ -362,6 +362,7 @@ class VoiceChannel : public BaseChannel {
                const std::string& content_name, bool rtcp);
   ~VoiceChannel();
   bool Init();
+  bool SetRenderer(uint32 ssrc, AudioRenderer* renderer);
 
   // downcasts a MediaChannel
   virtual VoiceMediaChannel* media_channel() const {
@@ -454,6 +455,7 @@ class VoiceChannel : public BaseChannel {
   void OnSrtpError(uint32 ssrc, SrtpFilter::Mode mode, SrtpFilter::Error error);
   // Configuration and setting.
   bool SetChannelOptions_w(const AudioOptions& options);
+  bool SetRenderer_w(uint32 ssrc, AudioRenderer* renderer);
 
   static const int kEarlyMediaTimeout = 1000;
   bool received_media_;

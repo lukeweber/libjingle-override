@@ -803,6 +803,16 @@ bool ChannelManager::StartVideoCapture(
            capture_manager_.get(), capturer, video_format));
 }
 
+bool ChannelManager::MuteToBlackThenPause(
+    VideoCapturer* video_capturer, bool muted) {
+  if (!initialized_) {
+    return false;
+  }
+  worker_thread_->Invoke<void>(
+      Bind(&VideoCapturer::MuteToBlackThenPause, video_capturer, muted));
+  return true;
+}
+
 bool ChannelManager::StopVideoCapture(
     VideoCapturer* capturer, const VideoFormat& video_format) {
   return initialized_ && worker_thread_->Invoke<bool>(

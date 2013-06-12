@@ -57,6 +57,7 @@ class MockAudioProvider : public AudioProviderInterface {
   MOCK_METHOD2(SetAudioPlayout, void(uint32 ssrc, bool enable));
   MOCK_METHOD3(SetAudioSend, void(uint32 ssrc, bool enable,
                                   const cricket::AudioOptions& options));
+  MOCK_METHOD2(SetAudioRenderer, bool(uint32, cricket::AudioRenderer*));
 };
 
 // Helper class to test MediaStreamHandler.
@@ -141,6 +142,7 @@ class MediaStreamHandlerTest : public testing::Test {
   }
 
   void AddRemoteAudioTrack() {
+    EXPECT_CALL(audio_provider_, SetAudioRenderer(kAudioSsrc, _));
     EXPECT_CALL(audio_provider_, SetAudioPlayout(kAudioSsrc, true));
     handlers_.AddRemoteAudioTrack(stream_, stream_->GetAudioTracks()[0],
                                   kAudioSsrc);

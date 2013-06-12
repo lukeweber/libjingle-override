@@ -78,20 +78,16 @@ class TestSessionChannel : public sigslot::has_slots<> {
   bool allocation_complete() { return allocation_complete_; }
   int ports_count() { return ports_count_; }
 
-  void GetInitialPorts() {
-    proxy_session_->GetInitialPorts();
+  void StartGettingPorts() {
+    proxy_session_->StartGettingPorts();
   }
 
-  void StartGetAllPorts() {
-    proxy_session_->StartGetAllPorts();
+  void StopGettingPorts() {
+    proxy_session_->StopGettingPorts();
   }
 
-  void StopGetAllPorts() {
-    proxy_session_->StopGetAllPorts();
-  }
-
-  bool IsGettingAllPorts() {
-    return proxy_session_->IsGettingAllPorts();
+  bool IsGettingPorts() {
+    return proxy_session_->IsGettingPorts();
   }
 
  private:
@@ -121,8 +117,7 @@ class PortAllocatorSessionProxyTest : public testing::Test {
         new PortAllocatorSessionProxy("test content", 1, 0);
     TestSessionChannel* channel = new TestSessionChannel(proxy);
     session_muxer_->RegisterSessionProxy(proxy);
-    channel->GetInitialPorts();
-    channel->StartGetAllPorts();
+    channel->StartGettingPorts();
     return channel;
   }
 
@@ -155,7 +150,7 @@ TEST_F(PortAllocatorSessionProxyTest, TestLateBinding) {
       new PortAllocatorSessionProxy("test content", 2, 0);
   TestSessionChannel* channel2 = new TestSessionChannel(proxy);
   session_muxer_->RegisterSessionProxy(proxy);
-  EXPECT_TRUE(channel2->IsGettingAllPorts());
+  EXPECT_TRUE(channel2->IsGettingPorts());
   EXPECT_EQ_WAIT(1, channel2->candidates_count(), 1000);
   EXPECT_EQ(1, channel2->ports_count());
   EXPECT_TRUE_WAIT(channel2->allocation_complete(), 1000);

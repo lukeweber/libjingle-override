@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2011, Google Inc.
+ * Copyright 2013, Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,42 +25,24 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_APP_WEBRTC_AUDIOTRACK_H_
-#define TALK_APP_WEBRTC_AUDIOTRACK_H_
-
 #include "talk/app/webrtc/audiotrackrenderer.h"
-#include "talk/app/webrtc/mediastreaminterface.h"
-#include "talk/app/webrtc/mediastreamtrack.h"
-#include "talk/app/webrtc/notifier.h"
-#include "talk/base/scoped_ptr.h"
-#include "talk/base/scoped_ref_ptr.h"
+#include "talk/base/common.h"
 
 namespace webrtc {
 
-class AudioTrack : public MediaStreamTrack<AudioTrackInterface> {
- public:
-  static talk_base::scoped_refptr<AudioTrack> Create(
-      const std::string& id, AudioSourceInterface* source);
+AudioTrackRenderer::AudioTrackRenderer() : channel_id_(-1) {
+}
 
-  virtual AudioSourceInterface* GetSource() const {
-    return audio_source_.get();
-  }
+AudioTrackRenderer::~AudioTrackRenderer() {
+}
 
-  virtual cricket::AudioRenderer* FrameInput() {
-    return renderer_.get();
-  }
+void AudioTrackRenderer::SetChannelId(int channel_id) {
+  ASSERT(channel_id_ == -1);
+  channel_id_ = channel_id;
+}
 
-  // Implement MediaStreamTrack
-  virtual std::string kind() const;
-
- protected:
-  AudioTrack(const std::string& label, AudioSourceInterface* audio_source);
-
- private:
-  talk_base::scoped_refptr<AudioSourceInterface> audio_source_;
-  talk_base::scoped_ptr<AudioTrackRenderer> renderer_;
-};
+int AudioTrackRenderer::GetChannelId() const {
+  return channel_id_;
+}
 
 }  // namespace webrtc
-
-#endif  // TALK_APP_WEBRTC_AUDIOTRACK_H_

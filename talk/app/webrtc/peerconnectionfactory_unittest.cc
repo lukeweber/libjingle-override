@@ -140,7 +140,7 @@ TEST(PeerConnectionFactoryTestInternal, CreatePCUsingInternalModules) {
   webrtc::PeerConnectionInterface::IceServers servers;
 
   talk_base::scoped_refptr<PeerConnectionInterface> pc(
-      factory->CreatePeerConnection(servers, NULL, &observer));
+      factory->CreatePeerConnection(servers, NULL, NULL, &observer));
 
   EXPECT_TRUE(pc.get() != NULL);
 }
@@ -158,6 +158,7 @@ TEST_F(PeerConnectionFactoryTest, CreatePCUsingIceServers) {
   talk_base::scoped_refptr<PeerConnectionInterface> pc(
       factory_->CreatePeerConnection(ice_servers, NULL,
                                      allocator_factory_.get(),
+                                     NULL,
                                      &observer_));
   EXPECT_TRUE(pc.get() != NULL);
   StunConfigurations stun_configs;
@@ -187,6 +188,7 @@ TEST_F(PeerConnectionFactoryTest, CreatePCUsingNoUsernameInUri) {
   talk_base::scoped_refptr<PeerConnectionInterface> pc(
       factory_->CreatePeerConnection(ice_servers, NULL,
                                      allocator_factory_.get(),
+                                     NULL,
                                      &observer_));
   EXPECT_TRUE(pc.get() != NULL);
   TurnConfigurations turn_configs;
@@ -207,6 +209,7 @@ TEST_F(PeerConnectionFactoryTest, CreatePCUsingTurnUrlWithTransportParam) {
   talk_base::scoped_refptr<PeerConnectionInterface> pc(
       factory_->CreatePeerConnection(ice_servers, NULL,
                                      allocator_factory_.get(),
+                                     NULL,
                                      &observer_));
   EXPECT_TRUE(pc.get() != NULL);
   TurnConfigurations turn_configs;
@@ -233,6 +236,7 @@ TEST_F(PeerConnectionFactoryTest, CreatePCUsingSecureTurnUrl) {
   talk_base::scoped_refptr<PeerConnectionInterface> pc(
       factory_->CreatePeerConnection(ice_servers, NULL,
                                      allocator_factory_.get(),
+                                     NULL,
                                      &observer_));
   EXPECT_TRUE(pc.get() == NULL);
   TurnConfigurations turn_configs;

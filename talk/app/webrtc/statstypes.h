@@ -116,6 +116,7 @@ class StatsReport {
 
 
   // Internal StatsValue names
+  static const char kStatsValueNameCodecName[];
   static const char kStatsValueNameEchoCancellationQualityMin[];
   static const char kStatsValueNameEchoDelayMedian[];
   static const char kStatsValueNameEchoDelayStdDev[];

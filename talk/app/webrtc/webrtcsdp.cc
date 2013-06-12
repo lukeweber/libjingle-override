@@ -1430,7 +1430,8 @@ void AddFmtpLine(const T& codec, std::string* message) {
   return;
 }
 
-void AddRtcpFbLines(const cricket::VideoCodec& codec, std::string* message) {
+template <class T>
+void AddRtcpFbLines(const T& codec, std::string* message) {
   for (std::vector<cricket::FeedbackParam>::const_iterator iter =
            codec.feedback_params.params().begin();
        iter != codec.feedback_params.params().end(); ++iter) {
@@ -1506,6 +1507,7 @@ void BuildRtpMap(const MediaContentDescription* media_desc,
         os << "/" << it->channels;
       }
       AddLine(os.str(), message);
+      AddRtcpFbLines(*it, message);
       AddFmtpLine(*it, message);
       int minptime = 0;
       if (GetParameter(kCodecParamMinPTime, it->params, &minptime)) {
@@ -2120,7 +2122,8 @@ T GetCodec(const std::vector<T>& codecs, int payload_type) {
 
 // Updates or creates a new codec entry in the audio description.
 template <class T, class U>
-void AddOrReplaceCodec(T* desc, const U& codec) {
+void AddOrReplaceCodec(MediaContentDescription* content_desc, const U& codec) {
+  T* desc = static_cast<T*>(content_desc);
   std::vector<U> codecs = desc->codecs();
   bool found = false;
 
@@ -2142,23 +2145,23 @@ void AddOrReplaceCodec(T* desc, const U& codec) {
 // Adds or updates existing codec corresponding to |payload_type| according
 // to |parameters|.
 template <class T, class U>
-void UpdateCodec(T* content_desc, int payload_type,
+void UpdateCodec(MediaContentDescription* content_desc, int payload_type,
                  const cricket::CodecParameterMap& parameters) {
   // Codec might already have been populated (from rtpmap).
-  U new_codec = GetCodec(content_desc->codecs(), payload_type);
+  U new_codec = GetCodec(static_cast<T*>(content_desc)->codecs(), payload_type);
   AddParameters(parameters, &new_codec);
-  AddOrReplaceCodec(content_desc, new_codec);
+  AddOrReplaceCodec<T, U>(content_desc, new_codec);
 }
 
 // Adds or updates existing codec corresponding to |payload_type| according
 // to |feedback_param|.
 template <class T, class U>
-void UpdateCodec(T* content_desc, int payload_type,
+void UpdateCodec(MediaContentDescription* content_desc, int payload_type,
                  const cricket::FeedbackParam& feedback_param) {
   // Codec might already have been populated (from rtpmap).
-  U new_codec = GetCodec(content_desc->codecs(), payload_type);
+  U new_codec = GetCodec(static_cast<T*>(content_desc)->codecs(), payload_type);
   AddFeedbackParameter(feedback_param, &new_codec);
-  AddOrReplaceCodec(content_desc, new_codec);
+  AddOrReplaceCodec<T, U>(content_desc, new_codec);
 }
 
 bool PopWildcardCodec(std::vector<cricket::VideoCodec>* codecs,
@@ -2592,7 +2595,8 @@ void UpdateCodec(int payload_type, const std::string& name, int clockrate,
   codec.bitrate = bitrate;
   codec.channels = channels;
   codec.preference = preference;
-  AddOrReplaceCodec(audio_desc, codec);
+  AddOrReplaceCodec<AudioContentDescription, cricket::AudioCodec>(audio_desc,
+                                                                  codec);
 }
 
 // Updates or creates a new codec entry in the video description according to
@@ -2608,7 +2612,8 @@ void UpdateCodec(int payload_type, const std::string& name, int width,
   codec.height = height;
   codec.framerate = framerate;
   codec.preference = preference;
-  AddOrReplaceCodec(video_desc, codec);
+  AddOrReplaceCodec<VideoContentDescription, cricket::VideoCodec>(video_desc,
+                                                                  codec);
 }
 
 bool ParseRtpmapAttribute(const std::string& line,
@@ -2761,15 +2766,11 @@ bool ParseFmtpAttributes(const std::string& line, const MediaType media_type,
 
   int int_payload_type = talk_base::FromString<int>(payload_type);
   if (media_type == cricket::MEDIA_TYPE_AUDIO) {
-    AudioContentDescription* desc =
-        static_cast<AudioContentDescription*>(media_desc);
     UpdateCodec<AudioContentDescription, cricket::AudioCodec>(
-        desc, int_payload_type, codec_params);
+        media_desc, int_payload_type, codec_params);
   } else if (media_type == cricket::MEDIA_TYPE_VIDEO) {
-    VideoContentDescription* desc =
-        static_cast<VideoContentDescription*>(media_desc);
     UpdateCodec<VideoContentDescription, cricket::VideoCodec>(
-        desc, int_payload_type, codec_params);
+        media_desc, int_payload_type, codec_params);
   }
   return true;
 }
@@ -2777,12 +2778,10 @@ bool ParseFmtpAttributes(const std::string& line, const MediaType media_type,
 bool ParseRtcpFbAttribute(const std::string& line, const MediaType media_type,
                           MediaContentDescription* media_desc,
                           SdpParseError* error) {
-  if (media_type != cricket::MEDIA_TYPE_VIDEO) {
-    // Currently only parsing rtcp-fb for video is supported.
+  if (media_type != cricket::MEDIA_TYPE_AUDIO &&
+      media_type != cricket::MEDIA_TYPE_VIDEO) {
     return true;
   }
-  VideoContentDescription* video_desc =
-      static_cast<VideoContentDescription*>(media_desc);
   std::vector<std::string> rtcp_fb_fields;
   talk_base::split(line.c_str(), kSdpDelimiterSpace, &rtcp_fb_fields);
   if (rtcp_fb_fields.size() < 2) {
@@ -2802,9 +2801,16 @@ bool ParseRtcpFbAttribute(const std::string& line, const MediaType media_type,
     param.append(*iter);
   }
   const cricket::FeedbackParam feedback_param(id, param);
-  UpdateCodec<VideoContentDescription, cricket::VideoCodec>(video_desc,
-                                                            payload_type,
-                                                            feedback_param);
+
+  if (media_type == cricket::MEDIA_TYPE_AUDIO) {
+    UpdateCodec<AudioContentDescription, cricket::AudioCodec>(media_desc,
+                                                              payload_type,
+                                                              feedback_param);
+  } else if (media_type == cricket::MEDIA_TYPE_VIDEO) {
+    UpdateCodec<VideoContentDescription, cricket::VideoCodec>(media_desc,
+                                                              payload_type,
+                                                              feedback_param);
+  }
   return true;
 }
 

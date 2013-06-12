@@ -36,6 +36,7 @@
 #include "talk/media/base/videocommon.h"
 #include "talk/media/webrtc/webrtccommon.h"
 #include "talk/media/webrtc/webrtcexport.h"
+#include "talk/media/webrtc/webrtcvideoencoderfactory.h"
 #include "talk/session/media/channel.h"
 #include "webrtc/video_engine/include/vie_base.h"
 
@@ -80,7 +81,8 @@ struct CapturedFrame;
 struct Device;
 
 class WebRtcVideoEngine : public sigslot::has_slots<>,
-                          public webrtc::TraceCallback {
+                          public webrtc::TraceCallback,
+                          public WebRtcVideoEncoderFactory::Observer {
  public:
   // Creates the WebRtcVideoEngine with internal VideoCaptureModule.
   WebRtcVideoEngine();
@@ -211,6 +213,9 @@ class WebRtcVideoEngine : public sigslot::has_slots<>,
   // webrtc::TraceCallback implementation.
   virtual void Print(webrtc::TraceLevel level, const char* trace, int length);
   void ClearCapturer();
+
+  // WebRtcVideoEncoderFactory::Observer implementation.
+  virtual void OnCodecsAvailable();
 
   talk_base::Thread* worker_thread_;
   talk_base::scoped_ptr<ViEWrapper> vie_wrapper_;

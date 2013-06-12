@@ -708,6 +708,9 @@ WebRtcVideoEngine::~WebRtcVideoEngine() {
   if (initialized_) {
     Terminate();
   }
+  if (encoder_factory_) {
+    encoder_factory_->RemoveObserver(this);
+  }
   tracing_->SetTraceCallback(NULL);
   // Test to see if the media processor was deregistered properly.
   ASSERT(SignalMediaFrame.is_empty());
@@ -792,6 +795,7 @@ void WebRtcVideoEngine::Terminate() {
   if (vie_wrapper_->base()->SetVoiceEngine(NULL) != 0) {
     LOG_RTCERR0(SetVoiceEngine);
   }
+
   cpu_monitor_->Stop();
 }
 
@@ -1292,6 +1296,7 @@ bool WebRtcVideoEngine::SetCapturer(VideoCapturer* capturer) {
     ClearCapturer();
     return true;
   }
+
   // Hook up signals and install the supplied capturer.
   SignalCaptureStateChange.repeat(capturer->SignalStateChange);
   capturer->SignalFrameCaptured.connect(this,
@@ -1436,18 +1441,33 @@ void WebRtcVideoEngine::SetExternalDecoderFactory(
 
 void WebRtcVideoEngine::SetExternalEncoderFactory(
     WebRtcVideoEncoderFactory* encoder_factory) {
+  if (encoder_factory_ == encoder_factory)
+    return;
+
+  if (encoder_factory_) {
+    encoder_factory_->RemoveObserver(this);
+  }
   encoder_factory_ = encoder_factory;
   if (encoder_factory_) {
-    // Rebuild codec list while reapplying the current default codec format.
-    VideoCodec max_codec(kVideoCodecPrefs[0].payload_type,
-                         kVideoCodecPrefs[0].name,
-                         video_codecs_[0].width,
-                         video_codecs_[0].height,
-                         video_codecs_[0].framerate,
-                         0);
-    if (!RebuildCodecList(max_codec)) {
-      LOG(LS_ERROR) << "Failed to initialize list of supported codec types";
-    }
+    encoder_factory_->AddObserver(this);
+  }
+
+  // Invoke OnCodecAvailable() here in case the list of codecs is already
+  // available when the encoder factory is installed. If not the encoder
+  // factory will invoke the callback later when the codecs become available.
+  OnCodecsAvailable();
+}
+
+void WebRtcVideoEngine::OnCodecsAvailable() {
+  // Rebuild codec list while reapplying the current default codec format.
+  VideoCodec max_codec(kVideoCodecPrefs[0].payload_type,
+                       kVideoCodecPrefs[0].name,
+                       video_codecs_[0].width,
+                       video_codecs_[0].height,
+                       video_codecs_[0].framerate,
+                       0);
+  if (!RebuildCodecList(max_codec)) {
+    LOG(LS_ERROR) << "Failed to initialize list of supported codec types";
   }
 }
 
@@ -2470,13 +2490,13 @@ void WebRtcVideoMediaChannel::OnReadyToSend(bool ready) {
   SetNetworkTransmissionState(ready);
 }
 
-bool WebRtcVideoMediaChannel::MuteStream(uint32 ssrc, bool on) {
+bool WebRtcVideoMediaChannel::MuteStream(uint32 ssrc, bool muted) {
   WebRtcVideoChannelSendInfo* send_channel = GetSendChannel(ssrc);
   if (!send_channel) {
     LOG(LS_ERROR) << "The specified ssrc " << ssrc << " is not in use.";
     return false;
   }
-  send_channel->set_muted(on);
+  send_channel->set_muted(muted);
   return true;
 }
 

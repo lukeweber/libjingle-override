@@ -484,6 +484,7 @@ class Connection : public talk_base::MessageHandler,
 
   // Debugging description of this connection
   std::string ToString() const;
+  std::string ToSensitiveString() const;
 
   bool reported() const { return reported_; }
   void set_reported(bool reported) { reported_ = reported;}

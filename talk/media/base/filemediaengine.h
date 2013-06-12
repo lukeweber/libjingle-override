@@ -193,6 +193,9 @@ class FileVoiceChannel : public VoiceMediaChannel {
   }
   virtual bool SetPlayout(bool playout) { return true; }
   virtual bool SetSend(SendFlags flag);
+  virtual bool SetRenderer(uint32 ssrc, AudioRenderer* renderer) {
+    return false;
+  }
   virtual bool GetActiveStreams(AudioInfo::StreamList* actives) { return true; }
   virtual int GetOutputLevel() { return 0; }
   virtual int GetTimeSinceLastTyping() { return -1; }

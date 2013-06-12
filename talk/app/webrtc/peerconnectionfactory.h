@@ -44,6 +44,7 @@ class PeerConnectionFactory : public PeerConnectionFactoryInterface,
       CreatePeerConnection(
           const PeerConnectionInterface::IceServers& configuration,
           const MediaConstraintsInterface* constraints,
+          DTLSIdentityServiceInterface* dtls_identity_service,
           PeerConnectionObserver* observer);
 
   virtual talk_base::scoped_refptr<PeerConnectionInterface>
@@ -51,6 +52,7 @@ class PeerConnectionFactory : public PeerConnectionFactoryInterface,
           const PeerConnectionInterface::IceServers& configuration,
           const MediaConstraintsInterface* constraints,
           PortAllocatorFactoryInterface* allocator_factory,
+          DTLSIdentityServiceInterface* dtls_identity_service,
           PeerConnectionObserver* observer);
   bool Initialize();
 

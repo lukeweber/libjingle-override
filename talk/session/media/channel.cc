@@ -189,8 +189,16 @@ struct PacketMessageData : public talk_base::MessageData {
   talk_base::Buffer packet;
 };
 
-struct RenderMessageData : public talk_base::MessageData {
-  RenderMessageData(uint32 s, VideoRenderer* r) : ssrc(s), renderer(r) {}
+struct AudioRenderMessageData: public talk_base::MessageData {
+  AudioRenderMessageData(uint32 s, AudioRenderer* r)
+      : ssrc(s), renderer(r), result(false) {}
+  uint32 ssrc;
+  AudioRenderer* renderer;
+  bool result;
+};
+
+struct VideoRenderMessageData : public talk_base::MessageData {
+  VideoRenderMessageData(uint32 s, VideoRenderer* r) : ssrc(s), renderer(r) {}
   uint32 ssrc;
   VideoRenderer* renderer;
 };
@@ -888,8 +896,8 @@ void BaseChannel::ChannelWritable_w() {
   for (std::vector<ConnectionInfo>::const_iterator it = infos.begin();
        it != infos.end(); ++it) {
     if (it->best_connection) {
-      LOG(LS_INFO) << "Using " << it->local_candidate.ToString() << "->"
-                   << it->remote_candidate.ToString();
+      LOG(LS_INFO) << "Using " << it->local_candidate.ToSensitiveString()
+                   << "->" << it->remote_candidate.ToSensitiveString();
       break;
     }
   }
@@ -1421,6 +1429,12 @@ bool VoiceChannel::Init() {
   return true;
 }
 
+bool VoiceChannel::SetRenderer(uint32 ssrc, AudioRenderer* renderer) {
+  AudioRenderMessageData data(ssrc, renderer);
+  Send(MSG_SETRENDERER, &data);
+  return data.result;
+}
+
 bool VoiceChannel::SetRingbackTone(const void* buf, int len) {
   SetRingbackToneMessageData data(buf, len);
   Send(MSG_SETRINGBACKTONE, &data);
@@ -1710,6 +1724,10 @@ bool VoiceChannel::SetChannelOptions_w(const AudioOptions& options) {
   return media_channel()->SetOptions(options);
 }
 
+bool VoiceChannel::SetRenderer_w(uint32 ssrc, AudioRenderer* renderer) {
+  return media_channel()->SetRenderer(ssrc, renderer);
+}
+
 void VoiceChannel::OnMessage(talk_base::Message *pmsg) {
   switch (pmsg->message_id) {
     case MSG_SETRINGBACKTONE: {
@@ -1763,6 +1781,12 @@ void VoiceChannel::OnMessage(talk_base::Message *pmsg) {
       AudioOptionsMessageData* data =
           static_cast<AudioOptionsMessageData*>(pmsg->pdata);
       data->result = SetChannelOptions_w(data->options);
+      break;
+    }
+    case MSG_SETRENDERER: {
+      AudioRenderMessageData* data =
+          static_cast<AudioRenderMessageData*>(pmsg->pdata);
+      data->result = SetRenderer_w(data->ssrc, data->renderer);
       break;
     }
     default:
@@ -1876,7 +1900,7 @@ VideoChannel::~VideoChannel() {
 }
 
 bool VideoChannel::SetRenderer(uint32 ssrc, VideoRenderer* renderer) {
-  RenderMessageData data(ssrc, renderer);
+  VideoRenderMessageData data(ssrc, renderer);
   Send(MSG_SETRENDERER, &data);
   return true;
 }
@@ -2174,8 +2198,8 @@ bool VideoChannel::SetChannelOptions_w(const VideoOptions &options) {
 void VideoChannel::OnMessage(talk_base::Message *pmsg) {
   switch (pmsg->message_id) {
     case MSG_SETRENDERER: {
-      const RenderMessageData* data =
-          static_cast<RenderMessageData*>(pmsg->pdata);
+      const VideoRenderMessageData* data =
+          static_cast<VideoRenderMessageData*>(pmsg->pdata);
       SetRenderer_w(data->ssrc, data->renderer);
       break;
     }

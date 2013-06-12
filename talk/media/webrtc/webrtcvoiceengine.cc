@@ -45,6 +45,7 @@
 #include "talk/base/logging.h"
 #include "talk/base/stringencode.h"
 #include "talk/base/stringutils.h"
+#include "talk/media/base/audiorenderer.h"
 #include "talk/media/base/constants.h"
 #include "talk/media/base/streamparams.h"
 #include "talk/media/base/voiceprocessor.h"
@@ -115,6 +116,9 @@ static const char kIsacCodecName[] = "ISAC";
 static const char kL16CodecName[] = "L16";
 // Codec parameters for Opus.
 static const int kOpusMonoBitrate = 32000;
+// Parameter used for NACK.
+// This value is equivalent to 5 seconds of audio data at 20 ms per packet.
+static const int kNackMaxPackets = 250;
 static const int kOpusStereoBitrate = 64000;
 
 // Dumps an AudioCodec in RFC 2327-ish format.
@@ -178,6 +182,11 @@ static bool FindCodec(const std::vector<AudioCodec>& codecs,
   }
   return false;
 }
+static bool IsNackEnabled(const AudioCodec& codec) {
+  return codec.HasFeedbackParam(FeedbackParam(kRtcpFbParamNack,
+                                              kParamValueEmpty));
+}
+
 
 class WebRtcSoundclipMedia : public SoundclipMedia {
  public:
@@ -1494,6 +1503,7 @@ WebRtcVoiceMediaChannel::WebRtcVoiceMediaChannel(WebRtcVoiceEngine *engine)
       options_(),
       dtmf_allowed_(false),
       desired_playout_(false),
+      nack_enabled_(false),
       playout_(false),
       desired_send_(SEND_NOTHING),
       send_(SEND_NOTHING),
@@ -1644,6 +1654,9 @@ bool WebRtcVoiceMediaChannel::SetSendCodecs(
   // Disable DTMF, VAD, and FEC unless we know the other side wants them.
   dtmf_allowed_ = false;
   engine()->voe()->codec()->SetVADStatus(voe_channel(), false);
+#ifdef USE_WEBRTC_DEV_BRANCH
+  engine()->voe()->rtp()->SetNACKStatus(voe_channel(), false, 0);
+#endif
   engine()->voe()->rtp()->SetFECStatus(voe_channel(), false);
 
   // Scan through the list to figure out the codec to use for sending, along
@@ -1760,6 +1773,8 @@ bool WebRtcVoiceMediaChannel::SetSendCodecs(
         }
       } else {
         send_codec = voe_codec;
+      nack_enabled_ = IsNackEnabled(*it);
+      SetNack(send_ssrc_, voe_channel(), nack_enabled_);
       }
       first = false;
       // Set the codec immediately, since SetVADStatus() depends on whether
@@ -1768,6 +1783,11 @@ bool WebRtcVoiceMediaChannel::SetSendCodecs(
         return false;
     }
   }
+  for (ChannelMap::iterator it = mux_channels_.begin();
+       it != mux_channels_.end(); ++it) {
+    SetNack(it->first, it->second, nack_enabled_);
+  }
+
 
   // If we're being asked to set an empty list of codecs, due to a buggy client,
   // choose the most common format: PCMU
@@ -1781,6 +1801,19 @@ bool WebRtcVoiceMediaChannel::SetSendCodecs(
 
   return true;
 }
+void WebRtcVoiceMediaChannel::SetNack(uint32 ssrc, int channel,
+                                      bool nack_enabled) {
+#ifdef USE_WEBRTC_DEV_BRANCH
+  if (nack_enabled) {
+    LOG(LS_INFO) << "Enabling NACK for stream " << ssrc;
+    engine()->voe()->rtp()->SetNACKStatus(channel, true, kNackMaxPackets);
+  } else {
+    LOG(LS_INFO) << "Disabling NACK for stream " << ssrc;
+    engine()->voe()->rtp()->SetNACKStatus(channel, false, 0);
+  }
+#endif
+}
+
 
 bool WebRtcVoiceMediaChannel::SetSendCodec(
     const webrtc::CodecInst& send_codec) {
@@ -2086,6 +2119,7 @@ bool WebRtcVoiceMediaChannel::AddRecvStream(const StreamParams& sp) {
     LOG(LS_INFO) << "Disabling playback on the default voice channel";
     SetPlayout(voe_channel(), false);
   }
+  SetNack(ssrc, channel, nack_enabled_);
 
   mux_channels_[ssrc] = channel;
 
@@ -2124,6 +2158,17 @@ bool WebRtcVoiceMediaChannel::RemoveRecvStream(uint32 ssrc) {
       SetPlayout(voe_channel(), true);
     }
   }
+  return true;
+}
+
+bool WebRtcVoiceMediaChannel::SetRenderer(uint32 ssrc,
+                                          AudioRenderer* renderer) {
+  ASSERT(renderer != NULL);
+  int channel = GetReceiveChannelNum(ssrc);
+  if (channel == -1)
+    return false;
+
+  renderer->SetChannelId(channel);
   return true;
 }
 

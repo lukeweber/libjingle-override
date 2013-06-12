@@ -33,6 +33,7 @@
 #include "talk/media/base/constants.h"
 #include "talk/media/base/fakemediaprocessor.h"
 #include "talk/media/base/fakenetworkinterface.h"
+#include "talk/media/base/fakevideorenderer.h"
 #include "talk/media/base/mediachannel.h"
 #include "talk/media/base/testutils.h"
 #include "talk/media/base/videoengine_unittest.h"
@@ -178,12 +179,12 @@ class WebRtcVideoEngineTestFake : public testing::Test {
 
  protected:
   cricket::FakeWebRtcVideoEngine vie_;
+  cricket::FakeWebRtcVideoDecoderFactory decoder_factory_;
+  cricket::FakeWebRtcVideoEncoderFactory encoder_factory_;
   talk_base::FakeCpuMonitor* cpu_monitor_;
   cricket::WebRtcVideoEngine engine_;
   cricket::WebRtcVideoMediaChannel* channel_;
   cricket::WebRtcVoiceMediaChannel* voice_channel_;
-  cricket::FakeWebRtcVideoDecoderFactory decoder_factory_;
-  cricket::FakeWebRtcVideoEncoderFactory encoder_factory_;
 };
 
 // Test fixtures to test WebRtcVideoEngine with a real webrtc::VideoEngine.
@@ -1763,6 +1764,22 @@ TEST_F(WebRtcVideoEngineTestFake, DontRegisterEncoderForNonVP8) {
   EXPECT_TRUE(channel_->SetSendCodecs(codecs));
 
   EXPECT_EQ(0, vie_.GetNumExternalEncoderRegistered(channel_num));
+}
+
+TEST_F(WebRtcVideoEngineTestFake, UpdateEncoderCodecsAfterSetFactory) {
+  engine_.SetExternalEncoderFactory(&encoder_factory_);
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+
+  encoder_factory_.AddSupportedVideoCodecType(webrtc::kVideoCodecVP8, "VP8");
+  encoder_factory_.NotifyCodecsAvailable();
+  std::vector<cricket::VideoCodec> codecs;
+  codecs.push_back(kVP8Codec);
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+
+  EXPECT_TRUE(vie_.ExternalEncoderRegistered(channel_num, 100));
+  EXPECT_EQ(1, vie_.GetNumExternalEncoderRegistered(channel_num));
+  EXPECT_EQ(1, encoder_factory_.GetNumCreatedEncoders());
 }
 
 // Tests that OnReadyToSend will be propagated into ViE.

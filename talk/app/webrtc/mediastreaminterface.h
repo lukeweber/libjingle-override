@@ -43,6 +43,7 @@
 
 namespace cricket {
 
+class AudioRenderer;
 class VideoCapturer;
 class VideoRenderer;
 class VideoFrame;
@@ -72,8 +73,8 @@ class NotifierInterface {
 // provide media. A source can be shared with multiple tracks.
 // TODO(perkj): Implement sources for local and remote audio tracks and
 // remote video tracks.
-class MediaSourceInterface :  public talk_base::RefCountInterface,
-                              public NotifierInterface {
+class MediaSourceInterface : public talk_base::RefCountInterface,
+                             public NotifierInterface {
  public:
   enum SourceState {
     kInitializing,
@@ -151,7 +152,14 @@ class AudioSourceInterface : public MediaSourceInterface {
 
 class AudioTrackInterface : public MediaStreamTrackInterface {
  public:
+  // TODO(xians): Figure out if the following interface should be const or not.
   virtual AudioSourceInterface* GetSource() const =  0;
+
+  // Gets a pointer to the frame input of this AudioTrack.
+  // The pointer is valid for the lifetime of this AudioTrack.
+  // TODO(xians): Make the following interface pure virtual once Chrome has its
+  // implementation.
+  virtual cricket::AudioRenderer* FrameInput() { return NULL; }
 
  protected:
   virtual ~AudioTrackInterface() {}

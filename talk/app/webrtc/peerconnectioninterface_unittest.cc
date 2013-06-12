@@ -252,6 +252,7 @@ class PeerConnectionInterfaceTest : public testing::Test {
     port_allocator_factory_ = FakePortAllocatorFactory::Create();
     pc_ = pc_factory_->CreatePeerConnection(servers, constraints,
                                             port_allocator_factory_.get(),
+                                            NULL,
                                             &observer_);
     ASSERT_TRUE(pc_.get() != NULL);
     observer_.SetPeerConnectionInterface(pc_.get());

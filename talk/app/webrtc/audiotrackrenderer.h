@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2011, Google Inc.
+ * Copyright 2013, Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,42 +25,31 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_APP_WEBRTC_AUDIOTRACK_H_
-#define TALK_APP_WEBRTC_AUDIOTRACK_H_
+#ifndef TALK_APP_WEBRTC_AUDIOTRACKRENDERER_H_
+#define TALK_APP_WEBRTC_AUDIOTRACKRENDERER_H_
 
-#include "talk/app/webrtc/audiotrackrenderer.h"
-#include "talk/app/webrtc/mediastreaminterface.h"
-#include "talk/app/webrtc/mediastreamtrack.h"
-#include "talk/app/webrtc/notifier.h"
-#include "talk/base/scoped_ptr.h"
-#include "talk/base/scoped_ref_ptr.h"
+#include "talk/media/base/audiorenderer.h"
 
 namespace webrtc {
 
-class AudioTrack : public MediaStreamTrack<AudioTrackInterface> {
+// Class used for AudioTrack to get the ID of WebRtc voice channel that
+// the AudioTrack is connecting to.
+// Each AudioTrack owns a AudioTrackRenderer instance.
+// SetChannelID() should be called only when a AudioTrack is added to a
+// MediaStream and should not be changed afterwards.
+class AudioTrackRenderer : public cricket::AudioRenderer {
  public:
-  static talk_base::scoped_refptr<AudioTrack> Create(
-      const std::string& id, AudioSourceInterface* source);
+  AudioTrackRenderer();
+  ~AudioTrackRenderer();
 
-  virtual AudioSourceInterface* GetSource() const {
-    return audio_source_.get();
-  }
-
-  virtual cricket::AudioRenderer* FrameInput() {
-    return renderer_.get();
-  }
-
-  // Implement MediaStreamTrack
-  virtual std::string kind() const;
-
- protected:
-  AudioTrack(const std::string& label, AudioSourceInterface* audio_source);
+  // Implements cricket::AudioRenderer.
+  virtual void SetChannelId(int channel_id);
+  virtual int GetChannelId() const;
 
  private:
-  talk_base::scoped_refptr<AudioSourceInterface> audio_source_;
-  talk_base::scoped_ptr<AudioTrackRenderer> renderer_;
+  int channel_id_;
 };
 
 }  // namespace webrtc
 
-#endif  // TALK_APP_WEBRTC_AUDIOTRACK_H_
+#endif  // TALK_APP_WEBRTC_AUDIOTRACKRENDERER_H_

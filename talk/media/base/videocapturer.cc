@@ -44,12 +44,26 @@
 
 namespace cricket {
 
-const uint32 kStateChange = 0;
+namespace {
+
+// TODO(thorcarpenter): This is a BIG hack to flush the system with black
+// frames. Frontends should coordinate to update the video state of a muted
+// user. When all frontends to this consider removing the black frame business.
+const int kNumBlackFramesOnMute = 30;
+
+// MessageHandler constants.
+enum {
+  MSG_DO_PAUSE = 0,
+  MSG_DO_UNPAUSE,
+  MSG_STATE_CHANGE
+};
 
 static const int64 kMaxDistance = ~(static_cast<int64>(1) << 63);
 static const int kYU12Penalty = 16;  // Needs to be higher than MJPG index.
 static const int kDefaultScreencastFps = 5;
 typedef talk_base::TypedMessageData<CaptureState> StateChangeParams;
+
+}  // namespace
 
 /////////////////////////////////////////////////////////////////////
 // Implementation of struct CapturedFrame
@@ -96,6 +110,8 @@ void VideoCapturer::Construct() {
   // TODO(fbarchard): Consider removing cores as a factor for scaling.
   talk_base::SystemInfo system_info;
   num_cores_ = system_info.GetMaxPhysicalCpus();
+  muted_ = false;
+  black_frame_count_down_ = kNumBlackFramesOnMute;
 }
 
 const std::vector<VideoFormat>* VideoCapturer::GetSupportedFormats() const {
@@ -129,6 +145,48 @@ void VideoCapturer::ClearAspectRatio() {
   ratio_h_ = 0;
 }
 
+// Override this to have more control of how your device is started/stopped.
+bool VideoCapturer::Pause(bool pause) {
+  if (pause) {
+    if (capture_state() == CS_PAUSED) {
+      return true;
+    }
+    bool is_running = capture_state() == CS_STARTING ||
+        capture_state() == CS_RUNNING;
+    if (!is_running) {
+      LOG(LS_ERROR) << "Cannot pause a stopped camera.";
+      return false;
+    }
+    LOG(LS_INFO) << "Pausing a camera.";
+    talk_base::scoped_ptr<VideoFormat> capture_format_when_paused(
+        capture_format_ ? new VideoFormat(*capture_format_) : NULL);
+    Stop();
+    SetCaptureState(CS_PAUSED);
+    // If you override this function be sure to restore the capture format
+    // after calling Stop().
+    SetCaptureFormat(capture_format_when_paused.get());
+  } else {  // Unpause.
+    if (capture_state() != CS_PAUSED) {
+      LOG(LS_WARNING) << "Cannot unpause a camera that hasn't been paused.";
+      return false;
+    }
+    if (!capture_format_) {
+      LOG(LS_ERROR) << "Missing capture_format_, cannot unpause a camera.";
+      return false;
+    }
+    if (muted_) {
+      LOG(LS_WARNING) << "Camera cannot be unpaused while muted.";
+      return false;
+    }
+    LOG(LS_INFO) << "Unpausing a camera.";
+    if (!Start(*capture_format_)) {
+      LOG(LS_ERROR) << "Camera failed to start when unpausing.";
+      return false;
+    }
+  }
+  return true;
+}
+
 bool VideoCapturer::Restart(const VideoFormat& capture_format) {
   if (!IsRunning()) {
     return StartCapturing(capture_format);
@@ -141,6 +199,25 @@ bool VideoCapturer::Restart(const VideoFormat& capture_format) {
 
   Stop();
   return StartCapturing(capture_format);
+}
+
+bool VideoCapturer::MuteToBlackThenPause(bool muted) {
+  if (muted == IsMuted()) {
+    return true;
+  }
+
+  LOG(LS_INFO) << (muted ? "Muting" : "Unmuting") << " this video capturer.";
+  muted_ = muted;  // Do this before calling Pause().
+  if (muted) {
+    // Reset black frame count down.
+    black_frame_count_down_ = kNumBlackFramesOnMute;
+    // Following frames will be overritten with black, then the camera will be
+    // paused.
+    return true;
+  }
+  // Start the camera.
+  thread_->Clear(this, MSG_DO_PAUSE);
+  return Pause(false);
 }
 
 void VideoCapturer::SetSupportedFormats(
@@ -231,6 +308,14 @@ std::string VideoCapturer::ToString(const CapturedFrame* captured_frame) const {
 
 void VideoCapturer::OnFrameCaptured(VideoCapturer*,
                                     const CapturedFrame* captured_frame) {
+  if (muted_) {
+    if (black_frame_count_down_ == 0) {
+      thread_->Post(this, MSG_DO_PAUSE, NULL);
+    } else {
+      --black_frame_count_down_;
+    }
+  }
+
   if (SignalVideoFrame.is_empty()) {
     return;
   }
@@ -315,9 +400,12 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
                   << desired_width << " x " << desired_height;
     return;
   }
-  if (!ApplyProcessors(&i420_frame)) {
+  if (!muted_ && !ApplyProcessors(&i420_frame)) {
     // Processor dropped the frame.
     return;
+  }
+  if (muted_) {
+    i420_frame.SetToBlack();
   }
   SignalVideoFrame(this, &i420_frame);
 #endif  // VIDEO_FRAME_NAME
@@ -330,14 +418,29 @@ void VideoCapturer::SetCaptureState(CaptureState state) {
   }
   StateChangeParams* state_params = new StateChangeParams(state);
   capture_state_ = state;
-  thread_->Post(this, kStateChange, state_params);
+  thread_->Post(this, MSG_STATE_CHANGE, state_params);
 }
 
 void VideoCapturer::OnMessage(talk_base::Message* message) {
-  ASSERT(message->message_id == kStateChange);
-  talk_base::scoped_ptr<StateChangeParams> p(
-      static_cast<StateChangeParams*>(message->pdata));
-  SignalStateChange(this, p->data());
+  switch (message->message_id) {
+    case MSG_STATE_CHANGE: {
+      talk_base::scoped_ptr<StateChangeParams> p(
+          static_cast<StateChangeParams*>(message->pdata));
+      SignalStateChange(this, p->data());
+      break;
+    }
+    case MSG_DO_PAUSE: {
+      Pause(true);
+      break;
+    }
+    case MSG_DO_UNPAUSE: {
+      Pause(false);
+      break;
+    }
+    default: {
+      ASSERT(false);
+    }
+  }
 }
 
 // Get the distance between the supported and desired formats.

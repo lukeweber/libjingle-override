@@ -51,6 +51,7 @@ class Timing;
 
 namespace cricket {
 
+class AudioRenderer;
 struct RtpHeader;
 class ScreencastId;
 struct VideoFormat;
@@ -708,6 +709,8 @@ class VoiceMediaChannel : public MediaChannel {
   virtual bool SetPlayout(bool playout) = 0;
   // Starts or stops sending (and potentially capture) of local audio.
   virtual bool SetSend(SendFlags flag) = 0;
+  // Sets the renderer object to be used for the specified audio stream.
+  virtual bool SetRenderer(uint32 ssrc, AudioRenderer* renderer) = 0;
   // Gets current energy levels for all incoming streams.
   virtual bool GetActiveStreams(AudioInfo::StreamList* actives) = 0;
   // Get the current energy level of the stream sent to the speaker.

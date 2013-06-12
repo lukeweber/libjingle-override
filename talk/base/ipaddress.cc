@@ -58,6 +58,8 @@ static const in6_addr kV4CompatibilityPrefix = {{{0}}};
 static const in6_addr kSiteLocalPrefix = {{{0xfe, 0xc0, 0}}};
 static const in6_addr k6BonePrefix = {{{0x3f, 0xfe, 0}}};
 
+bool IPAddress::strip_sensitive_ = false;
+
 static bool IsPrivateV4(uint32 ip);
 static in_addr ExtractMappedAddress(const in6_addr& addr);
 
@@ -154,6 +156,29 @@ std::string IPAddress::ToString() const {
   return std::string(buf);
 }
 
+std::string IPAddress::ToSensitiveString() const {
+  if (!strip_sensitive_)
+    return ToString();
+
+  switch (family_) {
+    case AF_INET: {
+      std::string address = ToString();
+      size_t find_pos = address.rfind('.');
+      if (find_pos == std::string::npos)
+        return std::string();
+      address.resize(find_pos);
+      address += ".x";
+      return address;
+    }
+    case AF_INET6: {
+      // TODO(grunell): Return a string of format 1:2:3:x:x:x:x:x or such
+      // instead of zeroing out.
+      return TruncateIP(*this, 128 - 80).ToString();
+    }
+  }
+  return std::string();
+}
+
 IPAddress IPAddress::Normalized() const {
   if (family_ != AF_INET6) {
     return *this;
@@ -173,6 +198,11 @@ IPAddress IPAddress::AsIPv6Address() const {
   ::memcpy(&v6addr.s6_addr[12], &u_.ip4.s_addr, sizeof(u_.ip4.s_addr));
   return IPAddress(v6addr);
 }
+
+void IPAddress::set_strip_sensitive(bool enable) {
+  strip_sensitive_ = enable;
+}
+
 
 bool IsPrivateV4(uint32 ip_in_host_order) {
   return ((ip_in_host_order >> 24) == 127) ||
@@ -432,4 +462,5 @@ int IPAddressPrecedence(const IPAddress& ip) {
   }
   return 0;
 }
+
 }  // Namespace talk base

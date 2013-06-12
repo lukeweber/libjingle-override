@@ -1127,6 +1127,9 @@ class WebRtcSdpTest : public testing::Test {
         // this parser, and will be added to the SDP when serializing a session
         // description.
         "a=msid-semantic: WMS\r\n"
+        "m=audio 1 RTP/SAVPF 111\r\n"
+        "a=rtpmap:111 opus/48000/2\r\n"
+        "a=rtcp-fb:111 nack\r\n"
         "m=video 3457 RTP/SAVPF 101\r\n"
         "a=rtpmap:101 VP8/90000\r\n"
         "a=rtcp-fb:101 nack\r\n"
@@ -1138,6 +1141,17 @@ class WebRtcSdpTest : public testing::Test {
     // Deserialize
     SdpParseError error;
     EXPECT_TRUE(webrtc::SdpDeserialize(sdp, jdesc_output, &error));
+    const ContentInfo* ac = GetFirstAudioContent(jdesc_output->description());
+    ASSERT_TRUE(ac != NULL);
+    const AudioContentDescription* acd =
+        static_cast<const AudioContentDescription*>(ac->description);
+    ASSERT_FALSE(acd->codecs().empty());
+    cricket::AudioCodec opus = acd->codecs()[0];
+    EXPECT_EQ(111, opus.id);
+    EXPECT_TRUE(opus.HasFeedbackParam(
+        cricket::FeedbackParam(cricket::kRtcpFbParamNack,
+                               cricket::kParamValueEmpty)));
+
     const ContentInfo* vc = GetFirstVideoContent(jdesc_output->description());
     ASSERT_TRUE(vc != NULL);
     const VideoContentDescription* vcd =

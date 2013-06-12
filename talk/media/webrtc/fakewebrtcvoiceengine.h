@@ -85,11 +85,13 @@ class FakeWebRtcVoiceEngine
           file(false),
           vad(false),
           fec(false),
+          nack(false),
           media_processor_registered(false),
           cn8_type(13),
           cn16_type(105),
           dtmf_type(106),
           fec_type(117),
+          nack_max_packets(0),
           send_ssrc(0),
           level_header_ext_(-1) {
       memset(&send_codec, 0, sizeof(send_codec));
@@ -103,11 +105,13 @@ class FakeWebRtcVoiceEngine
     bool file;
     bool vad;
     bool fec;
+    bool nack;
     bool media_processor_registered;
     int cn8_type;
     int cn16_type;
     int dtmf_type;
     int fec_type;
+    int nack_max_packets;
     uint32 send_ssrc;
     int level_header_ext_;
     DtmfInfo dtmf_info;
@@ -172,6 +176,12 @@ class FakeWebRtcVoiceEngine
   }
   bool GetFEC(int channel) {
     return channels_[channel]->fec;
+  }
+  bool GetNACK(int channel) {
+    return channels_[channel]->nack;
+  }
+  int GetNACKMaxPackets(int channel) {
+    return channels_[channel]->nack_max_packets;
   }
   int GetSendCNPayloadType(int channel, bool wideband) {
     return (wideband) ?
@@ -721,7 +731,12 @@ class FakeWebRtcVoiceEngine
     return 0;
   }
 #ifdef USE_WEBRTC_DEV_BRANCH
-  WEBRTC_STUB(SetNACKStatus, (int channel, bool enable, int maxNoPackets));
+  WEBRTC_FUNC(SetNACKStatus, (int channel, bool enable, int maxNoPackets)) {
+    WEBRTC_CHECK_CHANNEL(channel);
+    channels_[channel]->nack = enable;
+    channels_[channel]->nack_max_packets = maxNoPackets;
+    return 0;
+  }
 #endif
   WEBRTC_STUB(StartRTPDump, (int channel, const char* fileNameUTF8,
                              webrtc::RTPDirections direction));

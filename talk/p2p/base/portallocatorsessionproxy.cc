@@ -178,7 +178,7 @@ void PortAllocatorSessionProxy::set_impl(
       this, &PortAllocatorSessionProxy::OnCandidatesAllocationDone);
 }
 
-void PortAllocatorSessionProxy::GetInitialPorts() {
+void PortAllocatorSessionProxy::StartGettingPorts() {
   ASSERT(impl_ != NULL);
   // Since all proxies share a common PortAllocatorSession, this check will
   // prohibit sending multiple STUN ping messages to the stun server, which
@@ -186,28 +186,21 @@ void PortAllocatorSessionProxy::GetInitialPorts() {
   // from the worker thread and are called together from TransportChannel,
   // checking for IsGettingAllPorts() for GetInitialPorts() will not be a
   // problem.
-  if (!impl_->IsGettingAllPorts()) {
-    impl_->GetInitialPorts();
+  if (!impl_->IsGettingPorts()) {
+    impl_->StartGettingPorts();
   }
 }
 
-void PortAllocatorSessionProxy::StartGetAllPorts() {
+void PortAllocatorSessionProxy::StopGettingPorts() {
   ASSERT(impl_ != NULL);
-  if (!impl_->IsGettingAllPorts()) {
-    impl_->StartGetAllPorts();
+  if (impl_->IsGettingPorts()) {
+    impl_->StopGettingPorts();
   }
 }
 
-void PortAllocatorSessionProxy::StopGetAllPorts() {
+bool PortAllocatorSessionProxy::IsGettingPorts() {
   ASSERT(impl_ != NULL);
-  if (impl_->IsGettingAllPorts()) {
-    impl_->StopGetAllPorts();
-  }
-}
-
-bool PortAllocatorSessionProxy::IsGettingAllPorts() {
-  ASSERT(impl_ != NULL);
-  return impl_->IsGettingAllPorts();
+  return impl_->IsGettingPorts();
 }
 
 void PortAllocatorSessionProxy::OnPortReady(PortAllocatorSession* session,

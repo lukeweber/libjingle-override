@@ -119,7 +119,7 @@ void AsyncUDPSocket::OnReadEvent(AsyncSocket* socket) {
     // When doing ICE, this kind of thing will often happen.
     // TODO: Do something better like forwarding the error to the user.
     SocketAddress local_addr = socket_->GetLocalAddress();
-    LOG(LS_INFO) << "AsyncUDPSocket[" << local_addr.ToString() << "] "
+    LOG(LS_INFO) << "AsyncUDPSocket[" << local_addr.ToSensitiveString() << "] "
                  << "receive failed with error " << socket_->GetError();
     return;
   }

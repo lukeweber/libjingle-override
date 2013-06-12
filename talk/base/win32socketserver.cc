@@ -697,7 +697,7 @@ void Win32Socket::OnDnsNotify(HANDLE task, int error) {
     ip = NetworkToHost32(net_ip);
   }
 
-  LOG_F(LS_INFO) << "(" << SocketAddress::IPToString(ip)
+  LOG_F(LS_INFO) << "(" << IPAddress(ip).ToSensitiveString()
                  << ", " << error << ")";
 
   if (error == 0) {

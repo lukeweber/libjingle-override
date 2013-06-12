@@ -8,6 +8,7 @@
 #include "talk/base/thread.h"
 #include "talk/media/base/fakemediaprocessor.h"
 #include "talk/media/base/fakevideocapturer.h"
+#include "talk/media/base/fakevideorenderer.h"
 #include "talk/media/base/testutils.h"
 #include "talk/media/base/videocapturer.h"
 #include "talk/media/base/videoprocessor.h"
@@ -23,9 +24,14 @@
 
 using cricket::FakeVideoCapturer;
 
+namespace {
+
 const int kMsCallbackWait = 500;
 // For HD only the height matters.
 const int kMinHdHeight = 720;
+const uint32 kTimeout = 5000U;
+
+}  // namespace
 
 // Sets the elapsed time in the video frame to 0.
 class VideoProcessor0 : public cricket::VideoProcessor {
@@ -65,6 +71,7 @@ class VideoCapturerTest
   void OnVideoFrame(cricket::VideoCapturer*, const cricket::VideoFrame* frame) {
     ++video_frames_received_;
     last_frame_elapsed_time_ = frame->GetElapsedTime();
+    renderer_.RenderFrame(frame);
   }
   void OnStateChange(cricket::VideoCapturer*,
                      cricket::CaptureState capture_state) {
@@ -83,6 +90,7 @@ class VideoCapturerTest
   int num_state_changes_;
   int video_frames_received_;
   int64 last_frame_elapsed_time_;
+  cricket::FakeVideoRenderer renderer_;
 };
 
 TEST_F(VideoCapturerTest, CaptureState) {
@@ -147,6 +155,43 @@ TEST_F(VideoCapturerTest, TestRestartWithSameFormat) {
   EXPECT_EQ(cricket::CS_RUNNING, capture_state());
   EXPECT_TRUE(capturer_.IsRunning());
   EXPECT_EQ(1, num_state_changes());
+}
+
+TEST_F(VideoCapturerTest, CameraOffOnMute) {
+  EXPECT_EQ(cricket::CS_RUNNING, capturer_.Start(cricket::VideoFormat(
+      640,
+      480,
+      cricket::VideoFormat::FpsToInterval(30),
+      cricket::FOURCC_I420)));
+  EXPECT_TRUE(capturer_.IsRunning());
+  EXPECT_EQ(0, video_frames_received());
+  EXPECT_TRUE(capturer_.CaptureFrame());
+  EXPECT_EQ(1, video_frames_received());
+  EXPECT_FALSE(capturer_.IsMuted());
+
+  // Mute the camera and expect black output frame.
+  capturer_.MuteToBlackThenPause(true);
+  EXPECT_TRUE(capturer_.IsMuted());
+  for (int i = 0; i < 31; ++i) {
+    EXPECT_TRUE(capturer_.CaptureFrame());
+    EXPECT_TRUE(renderer_.black_frame());
+  }
+  EXPECT_EQ(32, video_frames_received());
+  EXPECT_EQ_WAIT(cricket::CS_PAUSED,
+                 capturer_.capture_state(), kTimeout);
+
+  // Verify that the camera is off.
+  EXPECT_FALSE(capturer_.CaptureFrame());
+  EXPECT_EQ(32, video_frames_received());
+
+  // Unmute the camera and expect non-black output frame.
+  capturer_.MuteToBlackThenPause(false);
+  EXPECT_FALSE(capturer_.IsMuted());
+  EXPECT_EQ_WAIT(cricket::CS_RUNNING,
+                 capturer_.capture_state(), kTimeout);
+  EXPECT_TRUE(capturer_.CaptureFrame());
+  EXPECT_FALSE(renderer_.black_frame());
+  EXPECT_EQ(33, video_frames_received());
 }
 
 TEST_F(VideoCapturerTest, TestFourccMatch) {

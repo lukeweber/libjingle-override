@@ -93,20 +93,11 @@ class BasicPortAllocator : public PortAllocator {
     relays_.push_back(relay);
   }
 
-  // Returns the best (highest priority) phase that has produced a port that
-  // produced a writable connection.  If no writable connections have been
-  // produced, this returns -1.
-  int best_writable_phase() const;
-
   virtual PortAllocatorSession* CreateSessionInternal(
       const std::string& content_name,
       int component,
       const std::string& ice_ufrag,
       const std::string& ice_pwd);
-
-  // Called whenever a connection becomes writable with the argument being the
-  // phase that the corresponding port was created in.
-  void AddWritablePhase(int phase);
 
   bool allow_tcp_listen() const {
     return allow_tcp_listen_;
@@ -122,7 +113,6 @@ class BasicPortAllocator : public PortAllocator {
   talk_base::PacketSocketFactory* socket_factory_;
   const talk_base::SocketAddress stun_address_;
   std::vector<RelayServerConfig> relays_;
-  int best_writable_phase_;
   bool allow_tcp_listen_;
 };
 
@@ -143,10 +133,9 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
   talk_base::Thread* network_thread() { return network_thread_; }
   talk_base::PacketSocketFactory* socket_factory() { return socket_factory_; }
 
-  virtual void GetInitialPorts();
-  virtual void StartGetAllPorts();
-  virtual void StopGetAllPorts();
-  virtual bool IsGettingAllPorts() { return running_; }
+  virtual void StartGettingPorts();
+  virtual void StopGettingPorts();
+  virtual bool IsGettingPorts() { return running_; }
 
  protected:
   // Starts the process of getting the port configurations.
@@ -213,8 +202,6 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
   void OnPortError(Port* port);
   void OnProtocolEnabled(AllocationSequence* seq, ProtocolType proto);
   void OnPortDestroyed(PortInterface* port);
-  void OnConnectionCreated(Port* port, Connection* conn);
-  void OnConnectionStateChange(Connection* conn);
   void OnShake();
   void MaybeSignalCandidatesAllocationDone();
   void OnPortAllocationComplete(AllocationSequence* seq);

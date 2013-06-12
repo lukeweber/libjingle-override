@@ -2015,6 +2015,24 @@ void Construct##FOURCC##Rotate##ROTATE() {                                     \
     EXPECT_EQ(0, memcmp(out.get(), ms->GetBuffer(), out_size));
   }
 
+  void CopyToFrame() {
+    T source;
+    talk_base::scoped_ptr<talk_base::MemoryStream> ms(
+        LoadSample(kImageFilename));
+    ASSERT_TRUE(LoadFrame(ms.get(), cricket::FOURCC_I420, kWidth, kHeight,
+                          &source));
+
+    // Create the target frame by loading from a file.
+    T target;
+    ASSERT_TRUE(LoadFrameNoRepeat(&target));
+    EXPECT_FALSE(IsBlack(target));
+
+    // Stretch and check if the stretched target is black.
+    source.CopyToFrame(&target);
+
+    EXPECT_TRUE(IsEqual(source, target, 0));
+  }
+
   void Write() {
     T frame;
     talk_base::scoped_ptr<talk_base::MemoryStream> ms(

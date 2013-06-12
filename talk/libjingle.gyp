@@ -661,6 +661,7 @@
       },
       'sources': [
         'media/base/audioframe.h',
+        'media/base/audiorenderer.h',
         'media/base/capturemanager.cc',
         'media/base/capturemanager.h',
         'media/base/capturerenderadapter.cc',
@@ -966,6 +967,8 @@
       'sources': [
         'app/webrtc/audiotrack.cc',
         'app/webrtc/audiotrack.h',
+        'app/webrtc/audiotrackrenderer.cc',
+        'app/webrtc/audiotrackrenderer.h',
         'app/webrtc/datachannel.cc',
         'app/webrtc/datachannel.h',
         'app/webrtc/datachannelinterface.h',

@@ -9,6 +9,7 @@
 
 #include "talk/base/byteorder.h"
 #include "talk/base/gunit.h"
+#include "talk/media/base/constants.h"
 #include "talk/media/base/fakemediaengine.h"
 #include "talk/media/base/fakemediaprocessor.h"
 #include "talk/media/base/fakertp.h"
@@ -786,6 +787,98 @@ TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecOpusGoodNBitrate1Stereo) {
   EXPECT_STREQ("opus", gcodec.plname);
 }
 
+#ifdef USE_WEBRTC_DEV_BRANCH
+// Test that we can enable NACK with opus.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecEnableNack) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].AddFeedbackParam(cricket::FeedbackParam(cricket::kRtcpFbParamNack,
+                                                    cricket::kParamValueEmpty));
+  EXPECT_FALSE(voe_.GetNACK(channel_num));
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  EXPECT_TRUE(voe_.GetNACK(channel_num));
+}
+
+// Test that we can enable NACK on receive streams.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecEnableNackRecvStreams) {
+  EXPECT_TRUE(SetupEngine());
+  EXPECT_TRUE(channel_->SetOptions(options_conference_));
+  int channel_num1 = voe_.GetLastChannel();
+  EXPECT_TRUE(channel_->AddRecvStream(cricket::StreamParams::CreateLegacy(2)));
+  int channel_num2 = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].AddFeedbackParam(cricket::FeedbackParam(cricket::kRtcpFbParamNack,
+                                                    cricket::kParamValueEmpty));
+  EXPECT_FALSE(voe_.GetNACK(channel_num1));
+  EXPECT_FALSE(voe_.GetNACK(channel_num2));
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  EXPECT_TRUE(voe_.GetNACK(channel_num1));
+  EXPECT_TRUE(voe_.GetNACK(channel_num2));
+}
+
+// Test that we can disable NACK.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecDisableNack) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].AddFeedbackParam(cricket::FeedbackParam(cricket::kRtcpFbParamNack,
+                                                    cricket::kParamValueEmpty));
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  EXPECT_TRUE(voe_.GetNACK(channel_num));
+
+  codecs.clear();
+  codecs.push_back(kOpusCodec);
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  EXPECT_FALSE(voe_.GetNACK(channel_num));
+}
+
+// Test that we can disable NACK on receive streams.
+TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecDisableNackRecvStreams) {
+  EXPECT_TRUE(SetupEngine());
+  EXPECT_TRUE(channel_->SetOptions(options_conference_));
+  int channel_num1 = voe_.GetLastChannel();
+  EXPECT_TRUE(channel_->AddRecvStream(cricket::StreamParams::CreateLegacy(2)));
+  int channel_num2 = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kOpusCodec);
+  codecs[0].AddFeedbackParam(cricket::FeedbackParam(cricket::kRtcpFbParamNack,
+                                                    cricket::kParamValueEmpty));
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  EXPECT_TRUE(voe_.GetNACK(channel_num1));
+  EXPECT_TRUE(voe_.GetNACK(channel_num2));
+
+  codecs.clear();
+  codecs.push_back(kOpusCodec);
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  EXPECT_FALSE(voe_.GetNACK(channel_num1));
+  EXPECT_FALSE(voe_.GetNACK(channel_num2));
+}
+
+// Test that NACK is enabled on a new receive stream.
+TEST_F(WebRtcVoiceEngineTestFake, AddRecvStreamEnableNack) {
+  EXPECT_TRUE(SetupEngine());
+  EXPECT_TRUE(channel_->SetOptions(options_conference_));
+  int channel_num = voe_.GetLastChannel();
+  std::vector<cricket::AudioCodec> codecs;
+  codecs.push_back(kIsacCodec);
+  codecs[0].AddFeedbackParam(cricket::FeedbackParam(cricket::kRtcpFbParamNack,
+                                                    cricket::kParamValueEmpty));
+  codecs.push_back(kCn16000Codec);
+  EXPECT_TRUE(channel_->SetSendCodecs(codecs));
+  EXPECT_TRUE(voe_.GetNACK(channel_num));
+
+  EXPECT_TRUE(channel_->AddRecvStream(cricket::StreamParams::CreateLegacy(2)));
+  channel_num = voe_.GetLastChannel();
+  EXPECT_TRUE(voe_.GetNACK(channel_num));
+  EXPECT_TRUE(channel_->AddRecvStream(cricket::StreamParams::CreateLegacy(3)));
+  channel_num = voe_.GetLastChannel();
+  EXPECT_TRUE(voe_.GetNACK(channel_num));
+}
+#endif
 
 // Test that we can apply CELT with stereo mode but fail with mono mode.
 TEST_F(WebRtcVoiceEngineTestFake, SetSendCodecsCelt) {

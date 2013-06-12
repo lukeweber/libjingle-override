@@ -49,6 +49,7 @@ const char StatsReport::kStatsValueNameBucketDelay[] = "googBucketDelay";
 const char StatsReport::kStatsValueNameBytesReceived[] = "bytesReceived";
 const char StatsReport::kStatsValueNameBytesSent[] = "bytesSent";
 const char StatsReport::kStatsValueNameChannelId[] = "googChannelId";
+const char StatsReport::kStatsValueNameCodecName[] = "googCodecName";
 const char StatsReport::kStatsValueNameComponent[] = "googComponent";
 const char StatsReport::kStatsValueNameContentName[] = "googContentName";
 // Echo metrics from the audio processing module.
@@ -198,6 +199,7 @@ void ExtractStats(const cricket::VoiceSenderInfo& info, StatsReport* report) {
                    info.echo_return_loss);
   report->AddValue(StatsReport::kStatsValueNameEchoReturnLossEnhancement,
                    info.echo_return_loss_enhancement);
+  report->AddValue(StatsReport::kStatsValueNameCodecName, info.codec_name);
 }
 
 void ExtractStats(const cricket::VideoReceiverInfo& info, StatsReport* report) {
@@ -243,6 +245,7 @@ void ExtractStats(const cricket::VideoSenderInfo& info, StatsReport* report) {
   report->AddValue(StatsReport::kStatsValueNameFrameRateSent,
                    info.framerate_sent);
   report->AddValue(StatsReport::kStatsValueNameRtt, info.rtt_ms);
+  report->AddValue(StatsReport::kStatsValueNameCodecName, info.codec_name);
 }
 
 void ExtractStats(const cricket::BandwidthEstimationInfo& info,

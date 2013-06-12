@@ -335,6 +335,45 @@ class PortAllocatorFactoryInterface : public talk_base::RefCountInterface {
   ~PortAllocatorFactoryInterface() {}
 };
 
+// Used to receive callbacks of DTLS identity requests.
+class DTLSIdentityRequestObserver : public talk_base::RefCountInterface {
+ public:
+  virtual void OnFailure(int error) = 0;
+  virtual void OnSuccess(const std::string& certificate,
+                         const std::string& private_key) = 0;
+ protected:
+  virtual ~DTLSIdentityRequestObserver() {}
+};
+
+class DTLSIdentityServiceInterface {
+ public:
+  // Asynchronously request a DTLS identity, including a self-signed certificate
+  // and the private key used to sign the certificate, from the identity store
+  // for the given identity name.
+  // DTLSIdentityRequestObserver::OnSuccess will be called with the identity if
+  // the request succeeded; DTLSIdentityRequestObserver::OnFailure will be
+  // called with an error code if the request failed.
+  //
+  // Only one request can be made at a time. If a second request is called
+  // before the first one completes, RequestIdentity will abort and return
+  // false.
+  //
+  // |identity_name| is an internal name selected by the client to identify an
+  // identity within an origin. E.g. an web site may cache the certificates used
+  // to communicate with differnent peers under different identity names.
+  //
+  // |common_name| is the common name used to generate the certificate. If the
+  // certificate already exists in the store, |common_name| is ignored.
+  //
+  // |observer| is the object to receive success or failure callbacks.
+  //
+  // Returns true if either OnFailure or OnSuccess will be called.
+  virtual bool RequestIdentity(
+      const std::string& identity_name,
+      const std::string& common_name,
+      DTLSIdentityRequestObserver* observer) = 0;
+};
+
 // PeerConnectionFactoryInterface is the factory interface use for creating
 // PeerConnection, MediaStream and media tracks.
 // PeerConnectionFactoryInterface will create required libjingle threads,
@@ -350,12 +389,14 @@ class PeerConnectionFactoryInterface : public talk_base::RefCountInterface {
      CreatePeerConnection(
          const PeerConnectionInterface::IceServers& configuration,
          const MediaConstraintsInterface* constraints,
+         DTLSIdentityServiceInterface* dtls_identity_service,
          PeerConnectionObserver* observer) = 0;
   virtual talk_base::scoped_refptr<PeerConnectionInterface>
       CreatePeerConnection(
           const PeerConnectionInterface::IceServers& configuration,
           const MediaConstraintsInterface* constraints,
           PortAllocatorFactoryInterface* allocator_factory,
+          DTLSIdentityServiceInterface* dtls_identity_service,
           PeerConnectionObserver* observer) = 0;
   virtual talk_base::scoped_refptr<MediaStreamInterface>
       CreateLocalMediaStream(const std::string& label) = 0;

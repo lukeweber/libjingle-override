@@ -139,7 +139,7 @@ int TCPPort::SendTo(const void* data, size_t size,
   }
   if (!socket) {
     LOG_J(LS_ERROR, this) << "Attempted to send to an unknown destination, "
-                          << addr.ToString();
+                          << addr.ToSensitiveString();
     return -1;  // TODO: Set error_
   }
 
@@ -183,7 +183,7 @@ void TCPPort::OnNewConnection(talk_base::AsyncPacketSocket* socket,
   incoming.socket->SignalReadyToSend.connect(this, &TCPPort::OnReadyToSend);
 
   LOG_J(LS_VERBOSE, this) << "Accepted connection from "
-                          << incoming.addr.ToString();
+                          << incoming.addr.ToSensitiveString();
   incoming_.push_back(incoming);
 }
 
@@ -232,13 +232,14 @@ TCPConnection::TCPConnection(TCPPort* port, const Candidate& candidate,
         candidate.address(), port->proxy(), port->user_agent(), opts);
     if (socket_) {
       LOG_J(LS_VERBOSE, this) << "Connecting from "
-                              << socket_->GetLocalAddress().ToString() << " to "
-                              << candidate.address().ToString();
+                              << socket_->GetLocalAddress().ToSensitiveString()
+                              << " to "
+                              << candidate.address().ToSensitiveString();
       set_connected(false);
       socket_->SignalConnect.connect(this, &TCPConnection::OnConnect);
     } else {
       LOG_J(LS_WARNING, this) << "Failed to create connection to "
-                              << candidate.address().ToString();
+                              << candidate.address().ToSensitiveString();
     }
   } else {
     // Incoming connections should match the network address.
@@ -283,7 +284,7 @@ int TCPConnection::GetError() {
 void TCPConnection::OnConnect(talk_base::AsyncPacketSocket* socket) {
   ASSERT(socket == socket_);
   LOG_J(LS_VERBOSE, this) << "Connection established to "
-                          << socket->GetRemoteAddress().ToString();
+                          << socket->GetRemoteAddress().ToSensitiveString();
   set_connected(true);
 }
 

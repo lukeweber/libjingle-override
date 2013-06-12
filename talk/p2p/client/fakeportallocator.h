@@ -37,11 +37,7 @@ class FakePortAllocatorSession : public PortAllocatorSession {
     network_.AddIP(talk_base::IPAddress(INADDR_LOOPBACK));
   }
 
-  virtual void GetInitialPorts() {
-    GetPortConfigurations();
-  }
-
-  virtual void GetPortConfigurations() {
+  virtual void StartGettingPorts() {
     if (!port_) {
       port_.reset(cricket::UDPPort::Create(worker_thread_, factory_,
                       &network_, network_.ip(), 0, 0,
@@ -50,11 +46,11 @@ class FakePortAllocatorSession : public PortAllocatorSession {
       AddPort(port_.get());
     }
     ++port_config_count_;
+    running_ = true;
   }
 
-  virtual void StartGetAllPorts() { running_ = true; }
-  virtual void StopGetAllPorts() { running_ = false; }
-  virtual bool IsGettingAllPorts() { return running_; }
+  virtual void StopGettingPorts() { running_ = false; }
+  virtual bool IsGettingPorts() { return running_; }
   int port_config_count() { return port_config_count_; }
 
   void AddPort(cricket::Port* port) {

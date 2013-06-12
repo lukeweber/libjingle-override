@@ -58,6 +58,11 @@ const uint32 PORTALLOCATOR_USE_LARGE_SOCKET_SEND_BUFFERS = 0x400;
 
 const uint32 kDefaultPortAllocatorFlags = 0;
 
+const uint32 kDefaultStepDelay = 1000;  // 1 sec step delay.
+// As per RFC 5245 Appendix B.1, STUN transactions need to be paced at certain
+// internal. Less than 20ms is not acceptable. We choose 50ms as our default.
+const uint32 kMinimumStepDelay = 50;
+
 class PortAllocatorSessionMuxer;
 
 class PortAllocatorSession : public sigslot::has_slots<> {
@@ -78,13 +83,10 @@ class PortAllocatorSession : public sigslot::has_slots<> {
   std::string content_name() const { return content_name_; }
   int component() const { return component_; }
 
-  // Prepares an initial set of ports to try.
-  virtual void GetInitialPorts() = 0;
-
-  // Starts and stops the flow of additional ports to try.
-  virtual void StartGetAllPorts() = 0;
-  virtual void StopGetAllPorts() = 0;
-  virtual bool IsGettingAllPorts() = 0;
+  // Starts gathering STUN and Relay configurations.
+  virtual void StartGettingPorts() = 0;
+  virtual void StopGettingPorts() = 0;
+  virtual bool IsGettingPorts() = 0;
 
   sigslot::signal2<PortAllocatorSession*, PortInterface*> SignalPortReady;
   sigslot::signal2<PortAllocatorSession*,
@@ -114,7 +116,9 @@ class PortAllocator : public sigslot::has_slots<> {
   PortAllocator() :
       flags_(kDefaultPortAllocatorFlags),
       min_port_(0),
-      max_port_(0) {
+      max_port_(0),
+      step_delay_(kDefaultStepDelay) {
+    // This will allow us to have old behavior on non webrtc clients.
   }
   virtual ~PortAllocator();
 
@@ -151,6 +155,12 @@ class PortAllocator : public sigslot::has_slots<> {
     return true;
   }
 
+  void set_step_delay(uint32 delay) {
+    ASSERT(delay >= kMinimumStepDelay);
+    step_delay_ = delay;
+  }
+  uint32 step_delay() const { return step_delay_; }
+
  protected:
   virtual PortAllocatorSession* CreateSessionInternal(
       const std::string& content_name,
@@ -165,6 +175,7 @@ class PortAllocator : public sigslot::has_slots<> {
   talk_base::ProxyInfo proxy_;
   int min_port_;
   int max_port_;
+  uint32 step_delay_;
   SessionMuxerMap muxers_;
 };
 

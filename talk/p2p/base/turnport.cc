@@ -213,8 +213,8 @@ void TurnPort::PrepareAddress() {
     ResolveTurnAddress(server_address_.address);
   } else {
     LOG_J(LS_INFO, this) << "Trying to connect to TURN server via "
-                         << ProtoToString(server_address_.proto)
-                         << " @ " << server_address_.address.ToString();
+                         << ProtoToString(server_address_.proto) << " @ "
+                         << server_address_.address.ToSensitiveString();
     if (server_address_.proto == PROTO_UDP) {
       socket_.reset(socket_factory()->CreateUdpSocket(
           talk_base::SocketAddress(ip(), 0), min_port(), max_port()));
@@ -435,7 +435,8 @@ void TurnPort::HandleDataIndication(const char* data, size_t size) {
   talk_base::SocketAddress ext_addr(addr_attr->GetAddress());
   if (!HasPermission(ext_addr.ipaddr())) {
     LOG_J(LS_WARNING, this) << "Received TURN data indication with invalid "
-                            << "peer address, addr=" << ext_addr.ToString();
+                            << "peer address, addr="
+                            << ext_addr.ToSensitiveString();
     return;
   }
 
@@ -877,14 +878,16 @@ int TurnEntry::Send(const void* data, size_t size, bool payload) {
 }
 
 void TurnEntry::OnCreatePermissionSuccess() {
-  LOG_J(LS_INFO, port_) << "Create permission for " << ext_addr_.ToString()
+  LOG_J(LS_INFO, port_) << "Create permission for "
+                        << ext_addr_.ToSensitiveString()
                         << " succeeded";
   // For success result code will be 0.
   port_->SignalCreatePermissionResult(port_, ext_addr_, 0);
 }
 
 void TurnEntry::OnCreatePermissionError(StunMessage* response, int code) {
-  LOG_J(LS_WARNING, port_) << "Create permission for " << ext_addr_.ToString()
+  LOG_J(LS_WARNING, port_) << "Create permission for "
+                           << ext_addr_.ToSensitiveString()
                            << " failed, code=" << code;
   if (code == STUN_ERROR_STALE_NONCE) {
     if (port_->UpdateNonce(response)) {
@@ -897,7 +900,7 @@ void TurnEntry::OnCreatePermissionError(StunMessage* response, int code) {
 }
 
 void TurnEntry::OnChannelBindSuccess() {
-  LOG_J(LS_INFO, port_) << "Channel bind for " << ext_addr_.ToString()
+  LOG_J(LS_INFO, port_) << "Channel bind for " << ext_addr_.ToSensitiveString()
                         << " succeeded";
   ASSERT(state_ == STATE_BINDING || state_ == STATE_BOUND);
   state_ = STATE_BOUND;
@@ -906,7 +909,8 @@ void TurnEntry::OnChannelBindSuccess() {
 void TurnEntry::OnChannelBindError(StunMessage* response, int code) {
   // TODO(mallinath) - Implement handling of error response for channel
   // bind request as per http://tools.ietf.org/html/rfc5766#section-11.3
-  LOG_J(LS_WARNING, port_) << "Channel bind for " << ext_addr_.ToString()
+  LOG_J(LS_WARNING, port_) << "Channel bind for "
+                           << ext_addr_.ToSensitiveString()
                            << " failed, code=" << code;
   if (code == STUN_ERROR_STALE_NONCE) {
     if (port_->UpdateNonce(response)) {

@@ -30,10 +30,11 @@
 
 namespace cricket {
 
-struct AudioOptions;
-struct VideoOptions;
+class AudioRenderer;
 class VideoCapturer;
 class VideoRenderer;
+struct AudioOptions;
+struct VideoOptions;
 
 }  // namespace cricket
 
@@ -49,6 +50,9 @@ class AudioProviderInterface {
   // When |enable| is true |options| should be applied to the audio track.
   virtual void SetAudioSend(uint32 ssrc, bool enable,
                             const cricket::AudioOptions& options) = 0;
+  // Sets the renderer to be used for the specified |ssrc|.
+  virtual bool SetAudioRenderer(uint32 ssrc,
+                                cricket::AudioRenderer* renderer) = 0;
 
  protected:
   virtual ~AudioProviderInterface() {}

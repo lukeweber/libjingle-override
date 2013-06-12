@@ -392,6 +392,7 @@ class WebRtcVoiceMediaChannel
   virtual bool RemoveSendStream(uint32 ssrc);
   virtual bool AddRecvStream(const StreamParams& sp);
   virtual bool RemoveRecvStream(uint32 ssrc);
+  virtual bool SetRenderer(uint32 ssrc, AudioRenderer* renderer);
   virtual bool GetActiveStreams(AudioInfo::StreamList* actives);
   virtual int GetOutputLevel();
   virtual int GetTimeSinceLastTyping();
@@ -436,6 +437,7 @@ class WebRtcVoiceMediaChannel
   static Error WebRtcErrorToChannelError(int err_code);
 
  private:
+  void SetNack(uint32 ssrc, int channel, bool nack_enabled);
   bool SetSendCodec(const webrtc::CodecInst& send_codec);
   bool ChangePlayout(bool playout);
   bool ChangeSend(SendFlags send);
@@ -448,6 +450,7 @@ class WebRtcVoiceMediaChannel
   AudioOptions options_;
   bool dtmf_allowed_;
   bool desired_playout_;
+  bool nack_enabled_;
   bool playout_;
   SendFlags desired_send_;
   SendFlags send_;

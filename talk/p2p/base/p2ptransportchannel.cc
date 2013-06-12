@@ -197,8 +197,7 @@ void P2PTransportChannel::AddAllocatorSession(PortAllocatorSession* session) {
       this, &P2PTransportChannel::OnCandidatesReady);
   session->SignalCandidatesAllocationDone.connect(
       this, &P2PTransportChannel::OnCandidatesAllocationDone);
-  session->GetInitialPorts();
-  session->StartGetAllPorts();
+  session->StartGettingPorts();
 }
 
 void P2PTransportChannel::SetRole(TransportRole role) {
@@ -673,7 +672,7 @@ void P2PTransportChannel::RememberRemoteCandidate(
   while (i < remote_candidates_.size()) {
     if (remote_candidates_[i].generation() < remote_candidate.generation()) {
       LOG(INFO) << "Pruning candidate from old generation: "
-                << remote_candidates_[i].address().ToString();
+                << remote_candidates_[i].address().ToSensitiveString();
       remote_candidates_.erase(remote_candidates_.begin() + i);
     } else {
       i += 1;
@@ -684,7 +683,7 @@ void P2PTransportChannel::RememberRemoteCandidate(
   for (uint32 i = 0; i < remote_candidates_.size(); ++i) {
     if (remote_candidates_[i].IsEquivalent(remote_candidate)) {
       LOG(INFO) << "Duplicate candidate: "
-                << remote_candidate.address().ToString();
+                << remote_candidate.address().ToSensitiveString();
       return;
     }
   }
@@ -926,8 +925,8 @@ void P2PTransportChannel::HandleWritable() {
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   if (!writable()) {
     for (uint32 i = 0; i < allocator_sessions_.size(); ++i) {
-      if (allocator_sessions_[i]->IsGettingAllPorts()) {
-        allocator_sessions_[i]->StopGetAllPorts();
+      if (allocator_sessions_[i]->IsGettingPorts()) {
+        allocator_sessions_[i]->StopGettingPorts();
       }
     }
   }

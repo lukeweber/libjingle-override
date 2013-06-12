@@ -60,6 +60,8 @@ namespace webrtc {
 class IceRestartAnswerLatch;
 class MediaStreamSignaling;
 
+extern const char kSetLocalSdpFailed[];
+extern const char kSetRemoteSdpFailed[];
 extern const char kCreateChannelFailed[];
 extern const char kInvalidCandidates[];
 extern const char kInvalidSdp[];
@@ -67,6 +69,9 @@ extern const char kMlineMismatch[];
 extern const char kSdpWithoutCrypto[];
 extern const char kSessionError[];
 extern const char kUpdateStateFailed[];
+extern const char kPushDownOfferTDFailed[];
+extern const char kPushDownPranswerTDFailed[];
+extern const char kPushDownAnswerTDFailed[];
 
 // ICE state callback interface.
 class IceObserver {
@@ -154,6 +159,8 @@ class WebRtcSession : public cricket::BaseSession,
   virtual void SetAudioPlayout(uint32 ssrc, bool enable) OVERRIDE;
   virtual void SetAudioSend(uint32 ssrc, bool enable,
                             const cricket::AudioOptions& options) OVERRIDE;
+  virtual bool SetAudioRenderer(uint32 ssrc,
+                                cricket::AudioRenderer* renderer) OVERRIDE;
 
   // Implements VideoMediaProviderInterface.
   virtual bool SetCaptureDevice(uint32 ssrc,
@@ -186,7 +193,8 @@ class WebRtcSession : public cricket::BaseSession,
   // candidates allocation.
   bool StartCandidatesAllocation();
   bool UpdateSessionState(Action action, cricket::ContentSource source,
-                          const cricket::SessionDescription* desc);
+                          const cricket::SessionDescription* desc,
+                          std::string* err_desc);
   static Action GetAction(const std::string& type);
 
   // Transport related callbacks, override from cricket::BaseSession.

@@ -301,6 +301,8 @@ bool PeerConnection::DoInitialize(
   port_allocator_->set_flags(cricket::PORTALLOCATOR_ENABLE_BUNDLE |
                              cricket::PORTALLOCATOR_ENABLE_SHARED_UFRAG |
                              cricket::PORTALLOCATOR_ENABLE_SHARED_SOCKET);
+  // No step delay is used while allocating ports.
+  port_allocator_->set_step_delay(cricket::kMinimumStepDelay);
 
   mediastream_signaling_.reset(new MediaStreamSignaling(
       factory_->signaling_thread(), this));

@@ -294,6 +294,10 @@ class FakeVoiceMediaChannel : public RtpHelper<VoiceMediaChannel> {
     output_scalings_.erase(ssrc);
     return true;
   }
+  virtual bool SetRenderer(uint32 ssrc, AudioRenderer* renderer) {
+    // TODO(xians): Implement this.
+    return false;
+  }
 
   virtual bool GetActiveStreams(AudioInfo::StreamList* streams) { return true; }
   virtual int GetOutputLevel() { return 0; }

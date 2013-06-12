@@ -83,20 +83,57 @@ talk_base::StreamResult VideoFrame::Write(talk_base::StreamInterface* stream,
   return result;
 }
 
+bool VideoFrame::CopyToPlanes(
+    uint8* dst_y, uint8* dst_u, uint8* dst_v,
+    int32 dst_pitch_y, int32 dst_pitch_u, int32 dst_pitch_v) const {
+#if !defined(DISABLE_YUV)
+  int32 src_width = GetWidth();
+  int32 src_height = GetHeight();
+  return libyuv::I420Copy(GetYPlane(), GetYPitch(),
+                          GetUPlane(), GetUPitch(),
+                          GetVPlane(), GetVPitch(),
+                          dst_y, dst_pitch_y,
+                          dst_u, dst_pitch_u,
+                          dst_v, dst_pitch_v,
+                          src_width, src_height) == 0;
+#else
+  int uv_size = GetUPitch() * GetChromaHeight();
+  memcpy(dst_y, GetYPlane(), GetWidth() * GetHeight());
+  memcpy(dst_u, GetUPlane(), uv_size);
+  memcpy(dst_v, GetVPlane(), uv_size);
+  return true;
+#endif
+}
+
+void VideoFrame::CopyToFrame(VideoFrame* dst) const {
+  if (!dst) {
+    LOG(LS_ERROR) << "NULL dst pointer.";
+    return;
+  }
+
+  CopyToPlanes(dst->GetYPlane(), dst->GetUPlane(), dst->GetVPlane(),
+               dst->GetYPitch(), dst->GetUPitch(), dst->GetVPitch());
+}
+
 // TODO(fbarchard): Handle odd width/height with rounding.
 void VideoFrame::StretchToPlanes(
     uint8* dst_y, uint8* dst_u, uint8* dst_v,
     int32 dst_pitch_y, int32 dst_pitch_u, int32 dst_pitch_v,
     size_t width, size_t height, bool interpolate, bool vert_crop) const {
-#if !defined(DISABLE_YUV)
-  if (!GetYPlane() || !GetUPlane() || !GetVPlane())
+  if (!GetYPlane() || !GetUPlane() || !GetVPlane()) {
+    LOG(LS_ERROR) << "NULL plane pointer.";
     return;
+  }
 
+  size_t src_width = GetWidth();
+  size_t src_height = GetHeight();
+  if (width == src_width && height == src_height) {
+    CopyToPlanes(dst_y, dst_u, dst_v, dst_pitch_y, dst_pitch_u, dst_pitch_v);
+    return;
+  }
   const uint8* src_y = GetYPlane();
   const uint8* src_u = GetUPlane();
   const uint8* src_v = GetVPlane();
-  int32 src_width = GetWidth();
-  int32 src_height = GetHeight();
 
   if (vert_crop) {
     // Adjust the input width:height ratio to be the same as the output ratio.
@@ -118,21 +155,24 @@ void VideoFrame::StretchToPlanes(
     }
   }
 
+  // TODO(fbarchard): Implement a simple scale for non-libyuv.
+#if !defined(DISABLE_YUV)
   // Scale to the output I420 frame.
   libyuv::Scale(src_y, src_u, src_v,
                 GetYPitch(), GetUPitch(), GetVPitch(),
                 src_width, src_height,
                 dst_y, dst_u, dst_v, dst_pitch_y, dst_pitch_u, dst_pitch_v,
                 width, height, interpolate);
-#else
-  ASSERT(false);  // Scaling requested but is not implemented.
 #endif
 }
 
 size_t VideoFrame::StretchToBuffer(size_t dst_width, size_t dst_height,
                                    uint8* dst_buffer, size_t size,
                                    bool interpolate, bool vert_crop) const {
-  if (!dst_buffer) return 0;
+  if (!dst_buffer) {
+    LOG(LS_ERROR) << "NULL dst_buffer pointer.";
+    return 0;
+  }
 
   size_t needed = SizeOf(dst_width, dst_height);
   if (needed <= size) {
@@ -146,9 +186,12 @@ size_t VideoFrame::StretchToBuffer(size_t dst_width, size_t dst_height,
   return needed;
 }
 
-void VideoFrame::StretchToFrame(VideoFrame *dst,
+void VideoFrame::StretchToFrame(VideoFrame* dst,
                                 bool interpolate, bool vert_crop) const {
-  if (!dst) return;
+  if (!dst) {
+    LOG(LS_ERROR) << "NULL dst pointer.";
+    return;
+  }
 
   StretchToPlanes(dst->GetYPlane(), dst->GetUPlane(), dst->GetVPlane(),
                   dst->GetYPitch(), dst->GetUPitch(), dst->GetVPitch(),

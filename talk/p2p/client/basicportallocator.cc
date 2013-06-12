@@ -70,36 +70,6 @@ const int kNumPhases = 4;
 const int kLargeSocketSendBufferSize = 128 * 1024;
 const int kNormalSocketSendBufferSize = 64 * 1024;
 
-// Returns the phase in which a given local candidate (or rather, the port that
-// gave rise to that local candidate) would have been created.
-int LocalCandidateToPhase(const cricket::Candidate& candidate) {
-  cricket::ProtocolType proto;
-  bool result = cricket::StringToProto(candidate.protocol().c_str(), &proto);
-  if (result) {
-    if (candidate.type() == cricket::LOCAL_PORT_TYPE) {
-      switch (proto) {
-      case cricket::PROTO_UDP: return PHASE_UDP;
-      case cricket::PROTO_TCP: return PHASE_TCP;
-      default: ASSERT(false);
-      }
-    } else if (candidate.type() == cricket::STUN_PORT_TYPE) {
-      return PHASE_UDP;
-    } else if (candidate.type() == cricket::RELAY_PORT_TYPE) {
-      switch (proto) {
-      case cricket::PROTO_UDP: return PHASE_RELAY;
-      case cricket::PROTO_TCP: return PHASE_TCP;
-      case cricket::PROTO_SSLTCP: return PHASE_SSLTCP;
-      default: ASSERT(false);
-      }
-    } else {
-      ASSERT(false);
-    }
-  } else {
-    ASSERT(false);
-  }
-  return PHASE_UDP;  // reached only with assert failure
-}
-
 const int SHAKE_MIN_DELAY = 45 * 1000;  // 45 seconds
 const int SHAKE_MAX_DELAY = 90 * 1000;  // 90 seconds
 
@@ -188,13 +158,12 @@ class AllocationSequence : public talk_base::MessageHandler,
   talk_base::IPAddress ip_;
   PortConfiguration* config_;
   State state_;
-  int step_;
-  int step_of_phase_[kNumPhases];
   uint32 flags_;
   ProtocolList protocols_;
   talk_base::scoped_ptr<talk_base::AsyncPacketSocket> udp_socket_;
   // Keeping a list of all UDP based ports.
   std::deque<Port*> ports;
+  int phase_;
 };
 
 // BasicPortAllocator
@@ -248,21 +217,10 @@ BasicPortAllocator::BasicPortAllocator(
 }
 
 void BasicPortAllocator::Construct() {
-  best_writable_phase_ = -1;
   allow_tcp_listen_ = true;
 }
 
 BasicPortAllocator::~BasicPortAllocator() {
-}
-
-int BasicPortAllocator::best_writable_phase() const {
-  // If we are configured with an HTTP proxy, the best bet is to use the relay
-  if ((best_writable_phase_ == -1)
-      && ((proxy().type == talk_base::PROXY_HTTPS)
-          || (proxy().type == talk_base::PROXY_UNKNOWN))) {
-    return PHASE_RELAY;
-  }
-  return best_writable_phase_;
 }
 
 PortAllocatorSession *BasicPortAllocator::CreateSessionInternal(
@@ -270,11 +228,6 @@ PortAllocatorSession *BasicPortAllocator::CreateSessionInternal(
     const std::string& ice_ufrag, const std::string& ice_pwd) {
   return new BasicPortAllocatorSession(this, content_name, component,
                                        ice_ufrag, ice_pwd);
-}
-
-void BasicPortAllocator::AddWritablePhase(int phase) {
-  if ((best_writable_phase_ == -1) || (phase < best_writable_phase_))
-    best_writable_phase_ = phase;
 }
 
 // BasicPortAllocatorSession
@@ -314,7 +267,7 @@ BasicPortAllocatorSession::~BasicPortAllocatorSession() {
     delete sequences_[i];
 }
 
-void BasicPortAllocatorSession::GetInitialPorts() {
+void BasicPortAllocatorSession::StartGettingPorts() {
   network_thread_ = talk_base::Thread::Current();
   if (!socket_factory_) {
     owned_socket_factory_.reset(
@@ -322,24 +275,14 @@ void BasicPortAllocatorSession::GetInitialPorts() {
     socket_factory_ = owned_socket_factory_.get();
   }
 
+  running_ = true;
   network_thread_->Post(this, MSG_CONFIG_START);
 
   if (flags() & PORTALLOCATOR_ENABLE_SHAKER)
     network_thread_->PostDelayed(ShakeDelay(), this, MSG_SHAKE);
 }
 
-void BasicPortAllocatorSession::StartGetAllPorts() {
-  ASSERT(talk_base::Thread::Current() == network_thread_);
-  running_ = true;
-  if (allocation_started_)
-    network_thread_->PostDelayed(ALLOCATE_DELAY, this, MSG_ALLOCATE);
-  for (uint32 i = 0; i < sequences_.size(); ++i)
-    sequences_[i]->Start();
-  for (size_t i = 0; i < ports_.size(); ++i)
-    ports_[i].port()->Start();
-}
-
-void BasicPortAllocatorSession::StopGetAllPorts() {
+void BasicPortAllocatorSession::StopGettingPorts() {
   ASSERT(talk_base::Thread::Current() == network_thread_);
   running_ = false;
   network_thread_->Clear(this, MSG_ALLOCATE);
@@ -563,8 +506,6 @@ void BasicPortAllocatorSession::AddAllocatedPort(Port* port,
       this, &BasicPortAllocatorSession::OnCandidateReady);
   port->SignalPortComplete.connect(this,
       &BasicPortAllocatorSession::OnPortComplete);
-  port->SignalConnectionCreated.connect(this,
-      &BasicPortAllocatorSession::OnConnectionCreated);
   port->SignalDestroyed.connect(this,
       &BasicPortAllocatorSession::OnPortDestroyed);
   port->SignalPortError.connect(
@@ -715,18 +656,6 @@ void BasicPortAllocatorSession::OnPortDestroyed(
   ASSERT(false);
 }
 
-void BasicPortAllocatorSession::OnConnectionCreated(Port* port,
-                                                    Connection* conn) {
-  conn->SignalStateChange.connect(this,
-    &BasicPortAllocatorSession::OnConnectionStateChange);
-}
-
-void BasicPortAllocatorSession::OnConnectionStateChange(Connection* conn) {
-  if (conn->write_state() == Connection::STATE_WRITABLE)
-    allocator_->AddWritablePhase(
-      LocalCandidateToPhase(conn->local_candidate()));
-}
-
 void BasicPortAllocatorSession::OnShake() {
   LOG(INFO) << ">>>>> SHAKE <<<<< >>>>> SHAKE <<<<< >>>>> SHAKE <<<<<";
 
@@ -779,16 +708,9 @@ AllocationSequence::AllocationSequence(BasicPortAllocatorSession* session,
       ip_(network->ip()),
       config_(config),
       state_(kInit),
-      step_(0),
       flags_(flags),
-      udp_socket_(NULL) {
-  // All of the phases up until the best-writable phase so far run in step 0.
-  // The other phases follow sequentially in the steps after that.  If there is
-  // no best-writable so far, then only phase 0 occurs in step 0.
-  int last_phase_in_step_zero =
-      talk_base::_max(0, session->allocator()->best_writable_phase());
-  for (int phase = 0; phase < kNumPhases; ++phase)
-    step_of_phase_[phase] = talk_base::_max(0, phase - last_phase_in_step_zero);
+      udp_socket_(NULL),
+      phase_(0) {
 }
 
 bool AllocationSequence::Init() {
@@ -811,8 +733,6 @@ bool AllocationSequence::Init() {
     // Continuing if |udp_socket_| is NULL, as local TCP and RelayPort using TCP
     // are next available options to setup a communication channel.
   }
-  // Immediately perform phase 0.
-  OnMessage(NULL);
   return true;
 }
 
@@ -851,9 +771,7 @@ void AllocationSequence::DisableEquivalentPhases(talk_base::Network* network,
 
 void AllocationSequence::Start() {
   state_ = kRunning;
-  session_->network_thread()->PostDelayed(ALLOCATION_STEP_DELAY,
-                                          this,
-                                          MSG_ALLOCATION_PHASE);
+  session_->network_thread()->Post(this, MSG_ALLOCATION_PHASE);
 }
 
 void AllocationSequence::Stop() {
@@ -866,23 +784,17 @@ void AllocationSequence::Stop() {
 
 void AllocationSequence::OnMessage(talk_base::Message* msg) {
   ASSERT(talk_base::Thread::Current() == session_->network_thread());
-  if (msg)
-    ASSERT(msg->message_id == MSG_ALLOCATION_PHASE);
+  ASSERT(msg->message_id == MSG_ALLOCATION_PHASE);
 
   const char* const PHASE_NAMES[kNumPhases] = {
     "Udp", "Relay", "Tcp", "SslTcp"
   };
 
   // Perform all of the phases in the current step.
-  for (int phase = 0; phase < kNumPhases; phase++) {
+  LOG_J(LS_INFO, network_) << "Allocation Phase="
+                           << PHASE_NAMES[phase_];
 
-    if (step_of_phase_[phase] != step_)
-      continue;
-
-    LOG_J(LS_INFO, network_) << "Allocation Phase=" << PHASE_NAMES[phase]
-                             << " (Step=" << step_ << ")";
-
-    switch (phase) {
+  switch (phase_) {
     case PHASE_UDP:
       CreateUDPPorts();
       CreateStunPorts();
@@ -905,22 +817,18 @@ void AllocationSequence::OnMessage(talk_base::Message* msg) {
 
     default:
       ASSERT(false);
-    }
-
-    // If all phases in AllocationSequence are completed, no allocation
-    // steps needed further. Canceling  pending signal.
-    if (phase == kNumPhases - 1) {
-      session_->network_thread()->Clear(this, MSG_ALLOCATION_PHASE);
-      state_ = kCompleted;
-      SignalPortAllocationComplete(this);
-    }
   }
 
-  step_ += 1;
   if (state() == kRunning) {
-    session_->network_thread()->PostDelayed(ALLOCATION_STEP_DELAY,
-                                            this,
-                                            MSG_ALLOCATION_PHASE);
+    ++phase_;
+    session_->network_thread()->PostDelayed(
+        session_->allocator()->step_delay(),
+        this, MSG_ALLOCATION_PHASE);
+  } else {
+    // If all phases in AllocationSequence are completed, no allocation
+    // steps needed further. Canceling  pending signal.
+    session_->network_thread()->Clear(this, MSG_ALLOCATION_PHASE);
+    SignalPortAllocationComplete(this);
   }
 }
 

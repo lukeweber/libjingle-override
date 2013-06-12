@@ -224,7 +224,7 @@ void RelayPort::AddExternalAddress(const ProtocolAddress& addr) {
        it != external_addr_.end(); ++it) {
     if ((it->address == addr.address) && (it->proto == addr.proto)) {
       LOG(INFO) << "Redundant relay address: " << proto_name
-                << " @ " << addr.address.ToString();
+                << " @ " << addr.address.ToSensitiveString();
       return;
     }
   }
@@ -467,7 +467,7 @@ void RelayEntry::Connect() {
 
   // Try to set up our new socket.
   LOG(LS_INFO) << "Connecting to relay via " << ProtoToString(ra->proto) <<
-      " @ " << ra->address.ToString();
+      " @ " << ra->address.ToSensitiveString();
 
   talk_base::AsyncPacketSocket* socket = NULL;
 
@@ -534,7 +534,7 @@ void RelayEntry::OnConnect(const talk_base::SocketAddress& mapped_addr,
   // We are connected, notify our parent.
   ProtocolType proto = PROTO_UDP;
   LOG(INFO) << "Relay allocate succeeded: " << ProtoToString(proto)
-            << " @ " << mapped_addr.ToString();
+            << " @ " << mapped_addr.ToSensitiveString();
   connected_ = true;
 
   // In case of Gturn related address is set to null socket address.
@@ -654,7 +654,7 @@ void RelayEntry::OnMessage(talk_base::Message *pmsg) {
 
 void RelayEntry::OnSocketConnect(talk_base::AsyncPacketSocket* socket) {
   LOG(INFO) << "relay tcp connected to " <<
-      socket->GetRemoteAddress().ToString();
+      socket->GetRemoteAddress().ToSensitiveString();
   if (current_connection_ != NULL) {
     current_connection_->SendAllocateRequest(this, 0);
   }

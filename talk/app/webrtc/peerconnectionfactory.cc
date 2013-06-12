@@ -275,6 +275,7 @@ PeerConnectionFactory::CreatePeerConnection(
     const PeerConnectionInterface::IceServers& configuration,
     const MediaConstraintsInterface* constraints,
     PortAllocatorFactoryInterface* allocator_factory,
+    DTLSIdentityServiceInterface* dtls_identity_service,
     PeerConnectionObserver* observer) {
   CreatePeerConnectionParams params(configuration, constraints,
                                     allocator_factory, observer);
@@ -286,8 +287,10 @@ scoped_refptr<PeerConnectionInterface>
 PeerConnectionFactory::CreatePeerConnection(
     const PeerConnectionInterface::IceServers& configuration,
     const MediaConstraintsInterface* constraints,
+    DTLSIdentityServiceInterface* dtls_identity_service,
     PeerConnectionObserver* observer) {
-  return CreatePeerConnection(configuration, constraints, NULL, observer);
+  return CreatePeerConnection(
+      configuration, constraints, NULL, dtls_identity_service, observer);
 }
 
 talk_base::scoped_refptr<PeerConnectionInterface>

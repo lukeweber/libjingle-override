@@ -71,11 +71,13 @@ static const std::string kIPv4AnyAddrString = "0.0.0.0";
 static const std::string kIPv4LoopbackAddrString = "127.0.0.1";
 static const std::string kIPv4RFC1918AddrString = "192.168.7.1";
 static const std::string kIPv4PublicAddrString = "1.2.3.4";
+static const std::string kIPv4PublicAddrAnonymizedString = "1.2.3.x";
 static const std::string kIPv6AnyAddrString = "::";
 static const std::string kIPv6LoopbackAddrString = "::1";
 static const std::string kIPv6LinkLocalAddrString = "fe80::be30:5bff:fee5:c3";
 static const std::string kIPv6PublicAddrString =
     "2401:fa00:4:1000:be30:5bff:fee5:c3";
+static const std::string kIPv6PublicAddrAnonymizedString = "2401:fa00:4::";
 static const std::string kIPv4MappedAnyAddrString = "::ffff:0:0";
 static const std::string kIPv4MappedRFC1918AddrString = "::ffff:c0a8:701";
 static const std::string kIPv4MappedLoopbackAddrString = "::ffff:7f00:1";
@@ -864,4 +866,23 @@ TEST(IPAddressTest, TestCategorizeIPv6) {
   EXPECT_FALSE(IPIsV4Compatibility(teredo_addr));
   EXPECT_FALSE(IPIsV4Mapped(teredo_addr));
 }
+
+TEST(IPAddressTest, TestToSensitiveString) {
+  IPAddress addr_v4 = IPAddress(kIPv4PublicAddr);
+  EXPECT_EQ(kIPv4PublicAddrString, addr_v4.ToString());
+  EXPECT_EQ(kIPv4PublicAddrString, addr_v4.ToSensitiveString());
+  IPAddress::set_strip_sensitive(true);
+  EXPECT_EQ(kIPv4PublicAddrString, addr_v4.ToString());
+  EXPECT_EQ(kIPv4PublicAddrAnonymizedString, addr_v4.ToSensitiveString());
+  IPAddress::set_strip_sensitive(false);
+
+  IPAddress addr_v6 = IPAddress(kIPv6PublicAddr);
+  EXPECT_EQ(kIPv6PublicAddrString, addr_v6.ToString());
+  EXPECT_EQ(kIPv6PublicAddrString, addr_v6.ToSensitiveString());
+  IPAddress::set_strip_sensitive(true);
+  EXPECT_EQ(kIPv6PublicAddrString, addr_v6.ToString());
+  EXPECT_EQ(kIPv6PublicAddrAnonymizedString, addr_v6.ToSensitiveString());
+  IPAddress::set_strip_sensitive(false);
+}
+
 }  // namespace talk_base

@@ -707,7 +707,7 @@ class JsepTestClient
     ice_server.uri = "stun:stun.l.google.com:19302";
     ice_servers.push_back(ice_server);
     return peer_connection_factory()->CreatePeerConnection(
-        ice_servers, constraints, factory, this);
+        ice_servers, constraints, factory, NULL, this);
   }
 
   void HandleIncomingOffer(const std::string& msg) {

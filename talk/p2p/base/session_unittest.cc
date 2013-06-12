@@ -624,7 +624,7 @@ class TestPortAllocatorSession : public cricket::PortAllocatorSession {
       delete ports_[i];
   }
 
-  virtual void GetInitialPorts() {
+  virtual void StartGettingPorts() {
     for (int i = 0; i < kNumPorts; i++) {
       int index = port_offset_ + i;
       ports_[i] = cricket::UDPPort::Create(
@@ -633,11 +633,11 @@ class TestPortAllocatorSession : public cricket::PortAllocatorSession {
           GetUsername(index), GetPassword(index));
       AddPort(ports_[i]);
     }
+    running_ = true;
   }
 
-  virtual void StartGetAllPorts() { running_ = true; }
-  virtual void StopGetAllPorts() { running_ = false; }
-  virtual bool IsGettingAllPorts() { return running_; }
+  virtual void StopGettingPorts() { running_ = false; }
+  virtual bool IsGettingPorts() { return running_; }
 
   void AddPort(cricket::Port* port) {
     port->set_component(component_);

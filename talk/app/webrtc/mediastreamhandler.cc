@@ -95,6 +95,7 @@ RemoteAudioTrackHandler::RemoteAudioTrackHandler(
       audio_track_(track),
       provider_(provider) {
   OnEnabledChanged();
+  provider_->SetAudioRenderer(ssrc, audio_track_->FrameInput());
 }
 
 RemoteAudioTrackHandler::~RemoteAudioTrackHandler() {

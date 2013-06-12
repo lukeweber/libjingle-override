@@ -264,7 +264,7 @@ AsyncHttpsProxySocket::~AsyncHttpsProxySocket() {
 int AsyncHttpsProxySocket::Connect(const SocketAddress& addr) {
   int ret;
   LOG(LS_VERBOSE) << "AsyncHttpsProxySocket::Connect("
-                  << proxy_.ToString() << ")";
+                  << proxy_.ToSensitiveString() << ")";
   dest_ = addr;
   state_ = PS_INIT;
   if (ShouldIssueConnect()) {
