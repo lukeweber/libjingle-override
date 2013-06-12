@@ -649,7 +649,7 @@
         '<(DEPTH)/third_party/webrtc/modules/modules.gyp:video_capture_module',
         '<(DEPTH)/third_party/webrtc/modules/modules.gyp:video_render_module',
         '<(DEPTH)/third_party/webrtc/video_engine/video_engine.gyp:video_engine_core',
-        '<(DEPTH)/third_party/webrtc/voice_engine/voice_engine.gyp:voice_engine_core',
+        '<(DEPTH)/third_party/webrtc/voice_engine/voice_engine.gyp:voice_engine',
         '<(DEPTH)/third_party/webrtc/system_wrappers/source/system_wrappers.gyp:system_wrappers',
         'libjingle',
         'libjingle_sound',
