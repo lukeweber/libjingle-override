@@ -290,6 +290,8 @@
         'talk/base/socketstream.h',
         'talk/base/ssladapter.cc',
         'talk/base/ssladapter.h',
+        'talk/base/sslidentity.cc',
+        'talk/base/sslidentity.h',
         'talk/base/sslsocketfactory.cc',
         'talk/base/sslsocketfactory.h',
         'talk/base/sslstreamadapter.cc',
