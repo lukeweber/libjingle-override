@@ -159,7 +159,7 @@ LOCAL_MEDIA_SRC := \
 	talk/media/webrtc/webrtcvoiceengine.cc
 
 LOCAL_P2P_SRC := \
-    talk/p2p/base/asyncstuntcpsocket.cc \
+	talk/p2p/base/asyncstuntcpsocket.cc \
 	talk/p2p/base/basicpacketsocketfactory.cc \
 	talk/p2p/base/constants.cc \
 	talk/p2p/base/dtlstransportchannel.cc \
