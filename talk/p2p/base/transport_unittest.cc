@@ -289,3 +289,16 @@ TEST_F(TransportTest, TestP2PTransportWriteAndParseCandidate) {
                                           &parsed_candidate, &parse_error));
   EXPECT_TRUE(test_candidate3.IsEquivalent(parsed_candidate));
 }
+
+TEST_F(TransportTest, TestGetStats) {
+  EXPECT_TRUE(SetupChannel());
+  cricket::TransportStats stats;
+  EXPECT_TRUE(transport_->GetStats(&stats));
+  // Note that this tests the behavior of a FakeTransportChannel.
+  ASSERT_EQ(1U, stats.channel_stats.size());
+  EXPECT_EQ(1, stats.channel_stats[0].component);
+  transport_->ConnectChannels();
+  EXPECT_TRUE(transport_->GetStats(&stats));
+  ASSERT_EQ(1U, stats.channel_stats.size());
+  EXPECT_EQ(1, stats.channel_stats[0].component);
+}

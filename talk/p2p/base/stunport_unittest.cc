@@ -25,10 +25,10 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/gunit.h"
 #include "talk/base/helpers.h"
 #include "talk/base/socketaddress.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/stunport.h"
 #include "talk/p2p/base/teststunserver.h"
 
@@ -65,10 +65,10 @@ class StunPortTest : public testing::Test,
         kLocalAddr.ipaddr(), 0, 0, talk_base::CreateRandomString(16),
         talk_base::CreateRandomString(22), server_addr));
     stun_port_->set_stun_keepalive_delay(stun_keepalive_delay_);
-    stun_port_->SignalAddressReady.connect(this,
-        &StunPortTest::OnAddressReady);
-    stun_port_->SignalAddressError.connect(this,
-        &StunPortTest::OnAddressError);
+    stun_port_->SignalPortComplete.connect(this,
+        &StunPortTest::OnPortComplete);
+    stun_port_->SignalPortError.connect(this,
+        &StunPortTest::OnPortError);
   }
 
   void PrepareAddress() {
@@ -81,11 +81,11 @@ class StunPortTest : public testing::Test,
     talk_base::InitRandom(NULL, 0);
   }
 
-  void OnAddressReady(cricket::Port* port) {
+  void OnPortComplete(cricket::Port* port) {
     done_ = true;
     error_ = false;
   }
-  void OnAddressError(cricket::Port* port) {
+  void OnPortError(cricket::Port* port) {
     done_ = true;
     error_ = true;
   }

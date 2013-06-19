@@ -91,7 +91,7 @@ struct SSLFingerprint {
            digest == other.digest;
   }
 
-  std::string GetRfc4752Fingerprint() const {
+  std::string GetRfc4572Fingerprint() const {
     std::string fingerprint =
         talk_base::hex_encode_with_delimiter(
             digest.data(), digest.length(), ':');

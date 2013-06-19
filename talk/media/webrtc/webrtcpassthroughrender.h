@@ -41,113 +41,110 @@ class WebRtcPassthroughRender : public webrtc::VideoRender {
   WebRtcPassthroughRender();
   virtual ~WebRtcPassthroughRender();
 
-  virtual WebRtc_Word32 Version(WebRtc_Word8* version,
-      WebRtc_UWord32& remainingBufferInBytes,
-      WebRtc_UWord32& position) const {
+  virtual int32_t Version(int8_t* version,
+                          uint32_t& remainingBufferInBytes,
+                          uint32_t& position) const {
     return 0;
   }
 
-  virtual WebRtc_Word32 ChangeUniqueId(const WebRtc_Word32 id) {
+  virtual int32_t ChangeUniqueId(const int32_t id) {
     return 0;
   }
 
-  virtual WebRtc_Word32 TimeUntilNextProcess() { return 0; }
+  virtual int32_t TimeUntilNextProcess() { return 0; }
 
-  virtual WebRtc_Word32 Process() { return 0; }
+  virtual int32_t Process() { return 0; }
 
   virtual void* Window() {
     talk_base::CritScope cs(&render_critical_);
     return window_;
   }
 
-  virtual WebRtc_Word32 ChangeWindow(void* window) {
+  virtual int32_t ChangeWindow(void* window) {
     talk_base::CritScope cs(&render_critical_);
     window_ = window;
     return 0;
   }
 
   virtual webrtc::VideoRenderCallback* AddIncomingRenderStream(
-      const WebRtc_UWord32 stream_id,
-      const WebRtc_UWord32 zOrder,
+      const uint32_t stream_id,
+      const uint32_t zOrder,
       const float left, const float top,
       const float right, const float bottom);
 
-  virtual WebRtc_Word32 DeleteIncomingRenderStream(
-      const WebRtc_UWord32 stream_id);
+  virtual int32_t DeleteIncomingRenderStream(const uint32_t stream_id);
 
-  virtual WebRtc_Word32 AddExternalRenderCallback(
-      const WebRtc_UWord32 stream_id,
+  virtual int32_t AddExternalRenderCallback(
+      const uint32_t stream_id,
       webrtc::VideoRenderCallback* render_object);
 
-  virtual WebRtc_Word32 GetIncomingRenderStreamProperties(
-      const WebRtc_UWord32 stream_id,
-      WebRtc_UWord32& zOrder,
+  virtual int32_t GetIncomingRenderStreamProperties(
+      const uint32_t stream_id,
+      uint32_t& zOrder,
       float& left, float& top,
       float& right, float& bottom) const {
     return -1;
   }
 
-  virtual WebRtc_UWord32 GetIncomingFrameRate(
-      const WebRtc_UWord32 stream_id) {
+  virtual uint32_t GetIncomingFrameRate(
+      const uint32_t stream_id) {
     return 0;
   }
 
-  virtual WebRtc_UWord32 GetNumIncomingRenderStreams() const {
+  virtual uint32_t GetNumIncomingRenderStreams() const {
     return stream_render_map_.size();
   }
 
-  virtual bool HasIncomingRenderStream(const WebRtc_UWord32 stream_id) const;
+  virtual bool HasIncomingRenderStream(const uint32_t stream_id) const;
 
-  virtual WebRtc_Word32 RegisterRawFrameCallback(
-      const WebRtc_UWord32 stream_id,
+  virtual int32_t RegisterRawFrameCallback(
+      const uint32_t stream_id,
       webrtc::VideoRenderCallback* callback_obj) {
     return -1;
   }
 
-  virtual WebRtc_Word32 GetLastRenderedFrame(
-      const WebRtc_UWord32 stream_id,
+  virtual int32_t GetLastRenderedFrame(
+      const uint32_t stream_id,
       webrtc::I420VideoFrame &frame) const {
     return -1;
   }
 
-  virtual WebRtc_Word32 StartRender(
-      const WebRtc_UWord32 stream_id);
+  virtual int32_t StartRender(
+      const uint32_t stream_id);
 
-  virtual WebRtc_Word32 StopRender(
-      const WebRtc_UWord32 stream_id);
+  virtual int32_t StopRender(
+      const uint32_t stream_id);
 
-  virtual WebRtc_Word32 ResetRender() { return 0; }
+  virtual int32_t ResetRender() { return 0; }
 
   virtual webrtc::RawVideoType PreferredVideoType() const;
 
   virtual bool IsFullScreen() { return false; }
 
-  virtual WebRtc_Word32 GetScreenResolution(
-      WebRtc_UWord32& screenWidth,
-      WebRtc_UWord32& screenHeight) const {
+  virtual int32_t GetScreenResolution(uint32_t& screenWidth,
+                                      uint32_t& screenHeight) const {
     return -1;
   }
 
-  virtual WebRtc_UWord32 RenderFrameRate(
-      const WebRtc_UWord32 stream_id) {
+  virtual uint32_t RenderFrameRate(
+      const uint32_t stream_id) {
     return 0;
   }
 
-  virtual WebRtc_Word32 SetStreamCropping(
-      const WebRtc_UWord32 stream_id,
+  virtual int32_t SetStreamCropping(
+      const uint32_t stream_id,
       const float left, const float top,
       const float right,
       const float bottom) {
     return -1;
   }
 
-  virtual WebRtc_Word32 SetExpectedRenderDelay(WebRtc_UWord32 stream_id,
-                                               WebRtc_Word32 delay_ms) {
+  virtual int32_t SetExpectedRenderDelay(uint32_t stream_id, int32_t delay_ms) {
     return -1;
   }
 
-  virtual WebRtc_Word32 ConfigureRenderer(
-      const WebRtc_UWord32 stream_id,
+  virtual int32_t ConfigureRenderer(
+      const uint32_t stream_id,
       const unsigned int zOrder,
       const float left, const float top,
       const float right,
@@ -155,55 +152,55 @@ class WebRtcPassthroughRender : public webrtc::VideoRender {
     return -1;
   }
 
-  virtual WebRtc_Word32 SetTransparentBackground(const bool enable) {
+  virtual int32_t SetTransparentBackground(const bool enable) {
     return -1;
   }
 
-  virtual WebRtc_Word32 FullScreenRender(void* window, const bool enable) {
+  virtual int32_t FullScreenRender(void* window, const bool enable) {
     return -1;
   }
 
-  virtual WebRtc_Word32 SetBitmap(const void* bitMap,
-      const WebRtc_UWord8 pictureId, const void* colorKey,
+  virtual int32_t SetBitmap(const void* bitMap,
+      const uint8_t pictureId, const void* colorKey,
       const float left, const float top,
       const float right, const float bottom) {
     return -1;
   }
 
-  virtual WebRtc_Word32 SetText(const WebRtc_UWord8 textId,
-      const WebRtc_UWord8* text,
-      const WebRtc_Word32 textLength,
-      const WebRtc_UWord32 textColorRef,
-      const WebRtc_UWord32 backgroundColorRef,
+  virtual int32_t SetText(const uint8_t textId,
+      const uint8_t* text,
+      const int32_t textLength,
+      const uint32_t textColorRef,
+      const uint32_t backgroundColorRef,
       const float left, const float top,
       const float right, const float bottom) {
     return -1;
   }
 
-  virtual WebRtc_Word32 SetStartImage(
-      const WebRtc_UWord32 stream_id,
+  virtual int32_t SetStartImage(
+      const uint32_t stream_id,
       const webrtc::I420VideoFrame& videoFrame) {
     return -1;
   }
 
-  virtual WebRtc_Word32 SetTimeoutImage(
-      const WebRtc_UWord32 stream_id,
+  virtual int32_t SetTimeoutImage(
+      const uint32_t stream_id,
       const webrtc::I420VideoFrame& videoFrame,
-      const WebRtc_UWord32 timeout) {
+      const uint32_t timeout) {
     return -1;
   }
 
-  virtual WebRtc_Word32 MirrorRenderStream(const int renderId,
-                                           const bool enable,
-                                           const bool mirrorXAxis,
-                                           const bool mirrorYAxis) {
+  virtual int32_t MirrorRenderStream(const int renderId,
+                                     const bool enable,
+                                     const bool mirrorXAxis,
+                                     const bool mirrorYAxis) {
     return -1;
   }
 
  private:
-  typedef std::map<WebRtc_UWord32, PassthroughStream*> StreamMap;
+  typedef std::map<uint32_t, PassthroughStream*> StreamMap;
 
-  PassthroughStream* FindStream(const WebRtc_UWord32 stream_id) const;
+  PassthroughStream* FindStream(const uint32_t stream_id) const;
 
   void* window_;
   StreamMap stream_render_map_;

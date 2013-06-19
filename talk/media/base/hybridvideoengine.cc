@@ -294,6 +294,15 @@ void HybridVideoMediaChannel::OnRtcpReceived(talk_base::Buffer* packet) {
   }
 }
 
+void HybridVideoMediaChannel::OnReadyToSend(bool ready) {
+  if (channel1_) {
+    channel1_->OnReadyToSend(ready);
+  }
+  if (channel2_) {
+    channel2_->OnReadyToSend(ready);
+  }
+}
+
 void HybridVideoMediaChannel::UpdateAspectRatio(int ratio_w, int ratio_h) {
   if (active_channel_) active_channel_->UpdateAspectRatio(ratio_w, ratio_h);
 }

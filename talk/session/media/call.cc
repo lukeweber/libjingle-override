@@ -30,6 +30,7 @@
 #include "talk/base/logging.h"
 #include "talk/base/thread.h"
 #include "talk/base/window.h"
+#include "talk/media/base/constants.h"
 #include "talk/media/base/screencastid.h"
 #include "talk/p2p/base/parsing.h"
 #include "talk/session/media/call.h"
@@ -128,8 +129,9 @@ void Call::AcceptSession(Session* session,
                          const cricket::CallOptions& options) {
   MediaSessionMap::iterator it = media_session_map_.find(session->id());
   if (it != media_session_map_.end()) {
-    it->second.session->Accept(
-        session_client_->CreateAnswer(session->remote_description(), options));
+    const SessionDescription* answer = session_client_->CreateAnswer(
+        session->remote_description(), options);
+    it->second.session->Accept(answer);
   }
 }
 
@@ -290,17 +292,28 @@ bool Call::AddSession(Session* session, const SessionDescription* offer) {
     }
   }
 
-  // If desired, create data channel
+  // If desired, create data channel.
   if (has_data_ && succeeded) {
-    bool rtcp = false;
-    media_session.data_channel =
-        session_client_->channel_manager()->CreateDataChannel(
-            session, data_offer->name, rtcp);
-    if (media_session.data_channel) {
-      media_session.data_channel->SignalDataReceived.connect(
-          this, &Call::OnDataReceived);
-    } else {
+    const DataContentDescription* data = GetFirstDataContentDescription(offer);
+    if (data == NULL) {
       succeeded = false;
+    } else {
+      DataChannelType data_channel_type = DCT_RTP;
+      if ((data->protocol() == kMediaProtocolSctp) ||
+          (data->protocol() == kMediaProtocolSctpDtls)) {
+        data_channel_type = DCT_SCTP;
+      }
+
+      bool rtcp = false;
+      media_session.data_channel =
+          session_client_->channel_manager()->CreateDataChannel(
+              session, data_offer->name, rtcp, data_channel_type);
+      if (media_session.data_channel) {
+        media_session.data_channel->SignalDataReceived.connect(
+            this, &Call::OnDataReceived);
+      } else {
+        succeeded = false;
+      }
     }
   }
 
@@ -434,16 +447,17 @@ void Call::MuteVideo(bool mute) {
   }
 }
 
-void Call::SendData(Session* session,
+bool Call::SendData(Session* session,
                     const SendDataParams& params,
-                    const std::string& data) {
+                    const talk_base::Buffer& payload,
+                    SendDataResult* result) {
   DataChannel* data_channel = GetDataChannel(session);
   if (!data_channel) {
     LOG(LS_WARNING) << "Could not send data: no data channel.";
-    return;
+    return false;
   }
 
-  data_channel->SendData(params, data);
+  return data_channel->SendData(params, payload, result);
 }
 
 void Call::PressDTMF(int event) {
@@ -773,8 +787,8 @@ void Call::OnMediaMonitor(VideoChannel* channel, const VideoMediaInfo& info) {
 
 void Call::OnDataReceived(DataChannel* channel,
                           const ReceiveDataParams& params,
-                          const std::string& data) {
-  SignalDataReceived(this, params, data);
+                          const talk_base::Buffer& payload) {
+  SignalDataReceived(this, params, payload);
 }
 
 uint32 Call::id() {

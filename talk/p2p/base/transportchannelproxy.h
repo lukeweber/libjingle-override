@@ -85,6 +85,7 @@ class TransportChannelProxy : public TransportChannel,
   void OnWritableState(TransportChannel* channel);
   void OnReadPacket(TransportChannel* channel, const char* data, size_t size,
                     int flags);
+  void OnReadyToSend(TransportChannel* channel);
   void OnRouteChange(TransportChannel* channel, const Candidate& candidate);
 
   void OnMessage(talk_base::Message* message);

@@ -249,6 +249,13 @@ class FakeTransportChannel : public TransportChannelImpl,
     }
   }
 
+  virtual bool GetStats(ConnectionInfos* infos) OVERRIDE {
+    ConnectionInfo info;
+    infos->clear();
+    infos->push_back(info);
+    return true;
+  }
+
  private:
   enum State { STATE_INIT, STATE_CONNECTING, STATE_CONNECTED };
   Transport* transport_;

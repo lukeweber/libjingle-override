@@ -156,12 +156,11 @@ class Candidate {
   }
 
   std::string ToString() const {
-    std::ostringstream ost;
-    ost << "Cand[" << id_ << ":" << component_ << ":"
-        << type_ << ":" << protocol_ << ":"
-        << network_name_ << ":" << address_.ToString() << ":"
-        << username_ << ":" << password_ << "]";
-    return ost.str();
+    return ToStringInternal(false);
+  }
+
+  std::string ToSensitiveString() const {
+    return ToStringInternal(true);
   }
 
   uint32 GetPriority(uint32 type_preference) const {
@@ -174,6 +173,17 @@ class Candidate {
   }
 
  private:
+  std::string ToStringInternal(bool sensitive) const {
+    std::ostringstream ost;
+    std::string address = sensitive ? address_.ToSensitiveString() :
+                                      address_.ToString();
+    ost << "Cand[" << id_ << ":" << component_ << ":"
+        << type_ << ":" << protocol_ << ":"
+        << network_name_ << ":" << address << ":"
+        << username_ << ":" << password_ << "]";
+    return ost.str();
+  }
+
   std::string id_;
   int component_;
   std::string protocol_;

@@ -25,6 +25,11 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+// support GCC compiler
+#ifndef __has_feature
+#  define __has_feature(x) 0
+#endif
+
 #include "talk/media/devices/devicemanager.h"
 
 #import <assert.h>
@@ -59,7 +64,9 @@
 
 - (void)dealloc {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
+#if !__has_feature(objc_arc)
   [super dealloc];
+#endif
 }
 - (void)onDevicesChanged:(NSNotification *)notification {
   manager_->SignalDevicesChange();
@@ -70,46 +77,63 @@ namespace cricket {
 
 DeviceWatcherImpl* CreateDeviceWatcherCallback(
     DeviceManagerInterface* manager) {
+  DeviceWatcherImpl* impl;
+#if !__has_feature(objc_arc)
   NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
-  DeviceWatcherImpl* impl = [[DeviceWatcherImpl alloc] init:manager];
+#else
+  @autoreleasepool
+#endif
+  {
+    impl = [[DeviceWatcherImpl alloc] init:manager];
+  }
+#if !__has_feature(objc_arc)
   [pool drain];
+#endif
   return impl;
 }
 
 void ReleaseDeviceWatcherCallback(DeviceWatcherImpl* watcher) {
+#if !__has_feature(objc_arc)
   NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
   [watcher release];
   [pool drain];
+#endif
 }
 
 bool GetQTKitVideoDevices(std::vector<Device>* devices) {
+#if !__has_feature(objc_arc)
   NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
+#else
+  @autoreleasepool
+#endif
+  {
+    NSArray* qt_capture_devices =
+        [QTCaptureDevice inputDevicesWithMediaType:QTMediaTypeVideo];
+    NSUInteger count = [qt_capture_devices count];
+    LOG(LS_INFO) << count << " capture device(s) found:";
+    for (QTCaptureDevice* qt_capture_device in qt_capture_devices) {
+      static NSString* const kFormat = @"localizedDisplayName: \"%@\", "
+          @"modelUniqueID: \"%@\", uniqueID \"%@\", isConnected: %d, "
+          @"isOpen: %d, isInUseByAnotherApplication: %d";
+      NSString* info = [NSString stringWithFormat:kFormat,
+          [qt_capture_device localizedDisplayName],
+          [qt_capture_device modelUniqueID],
+          [qt_capture_device uniqueID],
+          [qt_capture_device isConnected],
+          [qt_capture_device isOpen],
+          [qt_capture_device isInUseByAnotherApplication]];
+      LOG(LS_INFO) << [info UTF8String];
 
-  NSArray* qt_capture_devices =
-      [QTCaptureDevice inputDevicesWithMediaType:QTMediaTypeVideo];
-  NSUInteger count = [qt_capture_devices count];
-  LOG(LS_INFO) << count << " capture device(s) found:";
-  for (QTCaptureDevice* qt_capture_device in qt_capture_devices) {
-    static NSString* const kFormat = @"localizedDisplayName: \"%@\", "
-        @"modelUniqueID: \"%@\", uniqueID \"%@\", isConnected: %d, isOpen: %d, "
-        @"isInUseByAnotherApplication: %d";
-    NSString* info = [NSString stringWithFormat:kFormat,
-        [qt_capture_device localizedDisplayName],
-        [qt_capture_device modelUniqueID],
-        [qt_capture_device uniqueID],
-        [qt_capture_device isConnected],
-        [qt_capture_device isOpen],
-        [qt_capture_device isInUseByAnotherApplication]];
-    LOG(LS_INFO) << [info UTF8String];
-
-    std::string name([[qt_capture_device localizedDisplayName]
-                         UTF8String]);
-    devices->push_back(Device(name,
-       [[qt_capture_device uniqueID]
-           UTF8String]));
+      std::string name([[qt_capture_device localizedDisplayName]
+                           UTF8String]);
+      devices->push_back(Device(name,
+         [[qt_capture_device uniqueID]
+             UTF8String]));
+    }
   }
-
+#if !__has_feature(objc_arc)
   [pool drain];
+#endif
   return true;
 }
 

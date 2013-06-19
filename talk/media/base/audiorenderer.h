@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2011, Google Inc.
+ * Copyright 2013 Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,42 +25,21 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TALK_BASE_BASICPACKETSOCKETFACTORY_H_
-#define TALK_BASE_BASICPACKETSOCKETFACTORY_H_
+#ifndef TALK_MEDIA_BASE_AUDIORENDERER_H_
+#define TALK_MEDIA_BASE_AUDIORENDERER_H_
 
-#include "talk/base/packetsocketfactory.h"
+namespace cricket {
 
-namespace talk_base {
-
-class AsyncSocket;
-class SocketFactory;
-class Thread;
-
-class BasicPacketSocketFactory : public PacketSocketFactory {
+// Abstract interface for holding the voice channel ID.
+class AudioRenderer {
  public:
-  BasicPacketSocketFactory();
-  explicit BasicPacketSocketFactory(Thread* thread);
-  explicit BasicPacketSocketFactory(SocketFactory* socket_factory);
-  virtual ~BasicPacketSocketFactory();
+  virtual void SetChannelId(int channel_id) = 0;
+  virtual int GetChannelId() const = 0;
 
-  virtual AsyncPacketSocket* CreateUdpSocket(
-      const SocketAddress& local_address, int min_port, int max_port);
-  virtual AsyncPacketSocket* CreateServerTcpSocket(
-      const SocketAddress& local_address, int min_port, int max_port, bool ssl);
-  virtual AsyncPacketSocket* CreateClientTcpSocket(
-      const SocketAddress& local_address, const SocketAddress& remote_address,
-      const ProxyInfo& proxy_info, const std::string& user_agent, bool ssl);
-
- private:
-  int BindSocket(AsyncSocket* socket, const SocketAddress& local_address,
-                 int min_port, int max_port);
-
-  SocketFactory* socket_factory();
-
-  Thread* thread_;
-  SocketFactory* socket_factory_;
+ protected:
+  virtual ~AudioRenderer() {}
 };
 
-}  // namespace talk_base
+}  // namespace cricket
 
-#endif  // TALK_BASE_BASICPACKETSOCKETFACTORY_H_
+#endif  // TALK_MEDIA_BASE_AUDIORENDERER_H_

@@ -58,9 +58,11 @@
 
 #include <map>
 
+#include "talk/app/webrtc/mediaconstraintsinterface.h"
 #include "talk/app/webrtc/peerconnectioninterface.h"
 #include "talk/app/webrtc/videosourceinterface.h"
 #include "talk/base/logging.h"
+#include "talk/base/ssladapter.h"
 #include "talk/media/base/videocapturer.h"
 #include "talk/media/base/videorenderer.h"
 #include "talk/media/devices/videorendererfactory.h"
@@ -85,7 +87,6 @@ using webrtc::PeerConnectionInterface;
 using webrtc::PeerConnectionObserver;
 using webrtc::SessionDescriptionInterface;
 using webrtc::SetSessionDescriptionObserver;
-using webrtc::StatsElement;
 using webrtc::StatsObserver;
 using webrtc::StatsReport;
 using webrtc::VideoRendererInterface;
@@ -165,9 +166,7 @@ class ClassReferenceHolder {
     LoadClass(jni, "org/webrtc/SessionDescription");
     LoadClass(jni, "org/webrtc/SessionDescription$Type");
     LoadClass(jni, "org/webrtc/StatsReport");
-    LoadClass(jni, "org/webrtc/StatsReport$Type");
-    LoadClass(jni, "org/webrtc/StatsReport$Element");
-    LoadClass(jni, "org/webrtc/StatsReport$Element$Value");
+    LoadClass(jni, "org/webrtc/StatsReport$Value");
     LoadClass(jni, "org/webrtc/VideoRenderer$I420Frame");
     LoadClass(jni, "org/webrtc/VideoTrack");
   }
@@ -211,8 +210,8 @@ static ClassReferenceHolder* g_class_reference_holder = NULL;
 // JNIEnv-helper methods that CHECK success: no Java exception thrown and found
 // object/class/method/field is non-null.
 jmethodID GetMethodID(
-    JNIEnv* jni, jclass c, const char* name, const char* signature) {
-  jmethodID m = jni->GetMethodID(c, name, signature);
+    JNIEnv* jni, jclass c, const std::string& name, const char* signature) {
+  jmethodID m = jni->GetMethodID(c, name.c_str(), signature);
   CHECK_EXCEPTION(jni,
                   "error during GetMethodID: " << name << ", " << signature);
   CHECK(m, name << ", " << signature);
@@ -642,23 +641,26 @@ class SdpObserverWrapper : public T {
   }
 
   virtual void OnSuccess() {
-    jmethodID m = GetMethodID(jni(), j_observer_class_, "onSuccess", "()V");
+    jmethodID m = GetMethodID(jni(), j_observer_class_, "onSetSuccess", "()V");
     jni()->CallVoidMethod(j_observer_global_, m);
     CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
   virtual void OnSuccess(SessionDescriptionInterface* desc) {
     jmethodID m = GetMethodID(
-        jni(), j_observer_class_, "onSuccess",
+        jni(), j_observer_class_, "onCreateSuccess",
         "(Lorg/webrtc/SessionDescription;)V");
     ScopedLocalRef<jobject> j_sdp(jni(), JavaSdpFromNativeSdp(jni(), desc));
     jni()->CallVoidMethod(j_observer_global_, m, *j_sdp);
     CHECK_EXCEPTION(jni(), "error during CallVoidMethod");
   }
 
-  virtual void OnFailure(const std::string& error) {
+ protected:
+  // Common implementation for failure of Set & Create types, distinguished by
+  // |op| being "Set" or "Create".
+  void OnFailure(const std::string& op, const std::string& error) {
     jmethodID m = GetMethodID(jni(),
-        j_observer_class_, "onFailure", "(Ljava/lang/String;)V");
+        j_observer_class_, "on" + op + "Failure", "(Ljava/lang/String;)V");
     ScopedLocalRef<jstring> j_error_string(
         jni(), JavaStringFromStdString(jni(), error));
     jni()->CallVoidMethod(j_observer_global_, m, *j_error_string);
@@ -675,9 +677,29 @@ class SdpObserverWrapper : public T {
   const jclass j_observer_class_;
 };
 
-typedef SdpObserverWrapper<CreateSessionDescriptionObserver>
-    CreateSdpObserverWrapper;
-typedef SdpObserverWrapper<SetSessionDescriptionObserver> SetSdpObserverWrapper;
+class CreateSdpObserverWrapper
+    : public SdpObserverWrapper<CreateSessionDescriptionObserver> {
+ public:
+  CreateSdpObserverWrapper(JNIEnv* jni, jobject j_observer,
+                           ConstraintsWrapper* constraints)
+      : SdpObserverWrapper(jni, j_observer, constraints) {}
+
+  virtual void OnFailure(const std::string& error) {
+    SdpObserverWrapper::OnFailure(std::string("Create"), error);
+  }
+};
+
+class SetSdpObserverWrapper
+    : public SdpObserverWrapper<SetSessionDescriptionObserver> {
+ public:
+  SetSdpObserverWrapper(JNIEnv* jni, jobject j_observer,
+                        ConstraintsWrapper* constraints)
+      : SdpObserverWrapper(jni, j_observer, constraints) {}
+
+  virtual void OnFailure(const std::string& error) {
+    SdpObserverWrapper::OnFailure(std::string("Set"), error);
+  }
+};
 
 // Adapter for a Java StatsObserver presenting a C++ StatsObserver and
 // dispatching the callback from C++ back to Java.
@@ -690,16 +712,10 @@ class StatsObserverWrapper : public StatsObserver {
         j_stats_report_class_(FindClass(jni, "org/webrtc/StatsReport")),
         j_stats_report_ctor_(GetMethodID(
             jni, j_stats_report_class_, "<init>",
-            "(Ljava/lang/String;Lorg/webrtc/StatsReport$Type;"
-            "Lorg/webrtc/StatsReport$Element;"
-            "Lorg/webrtc/StatsReport$Element;)V")),
-        j_element_class_(FindClass(
-            jni, "org/webrtc/StatsReport$Element")),
-        j_element_ctor_(GetMethodID(
-            jni, j_element_class_, "<init>",
-            "(D[Lorg/webrtc/StatsReport$Element$Value;)V")),
+            "(Ljava/lang/String;Ljava/lang/String;D"
+            "[Lorg/webrtc/StatsReport$Value;)V")),
         j_value_class_(FindClass(
-            jni, "org/webrtc/StatsReport$Element$Value")),
+            jni, "org/webrtc/StatsReport$Value")),
         j_value_ctor_(GetMethodID(
             jni, j_value_class_, "<init>",
             "(Ljava/lang/String;Ljava/lang/String;)V")) {
@@ -728,36 +744,32 @@ class StatsObserverWrapper : public StatsObserver {
       const StatsReport& report = reports[i];
       ScopedLocalRef<jstring> j_id(
           jni, JavaStringFromStdString(jni, report.id));
-      int type_index = report.type == StatsReport::kStatsReportTypeSsrc ? 0 :
-          report.type == StatsReport::kStatsReportTypeBwe ? 1 : -1;
-      CHECK(type_index >= 0, "Unexpected report type: " << report.type);
-      ScopedLocalRef<jobject> j_type(jni, JavaEnumFromIndex(
-          jni, "StatsReport$Type", type_index));
-      ScopedLocalRef<jobject> j_local(jni, ElementToJava(jni, report.local));
-      ScopedLocalRef<jobject> j_remote(jni, ElementToJava(jni, report.remote));
+      ScopedLocalRef<jstring> j_type(
+          jni, JavaStringFromStdString(jni, report.type));
+      ScopedLocalRef<jobjectArray> j_values(
+          jni, ValuesToJava(jni, report.values));
       ScopedLocalRef<jobject> j_report(jni, jni->NewObject(
           j_stats_report_class_, j_stats_report_ctor_, *j_id, *j_type,
-          *j_local, *j_remote));
+          report.timestamp, *j_values));
       jni->SetObjectArrayElement(reports_array, i, *j_report);
     }
     return reports_array;
   }
 
-  jobject ElementToJava(JNIEnv* jni, const StatsElement& element) {
-    ScopedLocalRef<jobjectArray> j_values(jni, jni->NewObjectArray(
-        element.values.size(), j_value_class_, NULL));
-    for (int i = 0; i < element.values.size(); ++i) {
-      const StatsElement::Value& value = element.values[i];
+  jobjectArray ValuesToJava(JNIEnv* jni, const StatsReport::Values& values) {
+    jobjectArray j_values = jni->NewObjectArray(
+        values.size(), j_value_class_, NULL);
+    for (int i = 0; i < values.size(); ++i) {
+      const StatsReport::Value& value = values[i];
       ScopedLocalRef<jstring> j_name(
           jni, JavaStringFromStdString(jni, value.name));
       ScopedLocalRef<jstring> j_value(
           jni, JavaStringFromStdString(jni, value.value));
       ScopedLocalRef<jobject> j_element_value(jni, jni->NewObject(
           j_value_class_, j_value_ctor_, *j_name, *j_value));
-      jni->SetObjectArrayElement(*j_values, i, *j_element_value);
+      jni->SetObjectArrayElement(j_values, i, *j_element_value);
     }
-    return jni->NewObject(
-        j_element_class_, j_element_ctor_, element.timestamp, *j_values);
+    return j_values;
   }
 
   JNIEnv* jni() {
@@ -768,8 +780,6 @@ class StatsObserverWrapper : public StatsObserver {
   const jclass j_observer_class_;
   const jclass j_stats_report_class_;
   const jmethodID j_stats_report_ctor_;
-  const jclass j_element_class_;
-  const jmethodID j_element_ctor_;
   const jclass j_value_class_;
   const jmethodID j_value_ctor_;
 };
@@ -882,6 +892,8 @@ extern "C" jint JNIEXPORT JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
   g_jvm = jvm;
   CHECK(g_jvm, "JNI_OnLoad handed NULL?");
 
+  CHECK(talk_base::InitializeSSL(), "Failed to InitializeSSL()");
+
   JNIEnv* jni;
   if (jvm->GetEnv(reinterpret_cast<void**>(&jni), JNI_VERSION_1_6) != JNI_OK)
     return -1;
@@ -895,13 +907,17 @@ extern "C" jint JNIEXPORT JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
         "SetLevelFilter failed");
 #endif  // ANDROID
 
+  // Uncomment to get sensitive logs emitted (to stderr or logcat).
+  // talk_base::LogMessage::LogToDebug(talk_base::LS_SENSITIVE);
+
   return JNI_VERSION_1_6;
 }
 
-extern "C" jint JNIEXPORT JNICALL JNI_OnUnLoad(JavaVM *jvm, void *reserved) {
+extern "C" void JNIEXPORT JNICALL JNI_OnUnLoad(JavaVM *jvm, void *reserved) {
   webrtc::Trace::ReturnTrace();
   delete g_class_reference_holder;
   g_class_reference_holder = NULL;
+  CHECK(talk_base::CleanupSSL(), "Failed to CleanupSSL()");
 }
 
 JOW(void, PeerConnection_freePeerConnection)(JNIEnv*, jclass, jlong j_p) {
@@ -1064,14 +1080,19 @@ static void JavaIceServersToJsepIceServers(
     jclass j_ice_server_class = GetObjectClass(jni, j_ice_server);
     jfieldID j_ice_server_uri_id =
         GetFieldID(jni, j_ice_server_class, "uri", "Ljava/lang/String;");
+    jfieldID j_ice_server_username_id =
+        GetFieldID(jni, j_ice_server_class, "username", "Ljava/lang/String;");
     jfieldID j_ice_server_password_id =
         GetFieldID(jni, j_ice_server_class, "password", "Ljava/lang/String;");
     jstring uri = reinterpret_cast<jstring>(
         GetObjectField(jni, j_ice_server, j_ice_server_uri_id));
+    jstring username = reinterpret_cast<jstring>(
+        GetObjectField(jni, j_ice_server, j_ice_server_username_id));
     jstring password = reinterpret_cast<jstring>(
         GetObjectField(jni, j_ice_server, j_ice_server_password_id));
     PeerConnectionInterface::IceServer server;
     server.uri = JavaToStdString(jni, uri);
+    server.username = JavaToStdString(jni, username);
     server.password = JavaToStdString(jni, password);
     ice_servers->push_back(server);
   }
@@ -1088,7 +1109,7 @@ JOW(jlong, PeerConnectionFactory_nativeCreatePeerConnection)(
   PCOJava* observer = reinterpret_cast<PCOJava*>(observer_p);
   observer->SetConstraints(new ConstraintsWrapper(jni, j_constraints));
   talk_base::scoped_refptr<PeerConnectionInterface> pc(f->CreatePeerConnection(
-      servers, observer->constraints(), observer));
+      servers, observer->constraints(), NULL, observer));
   return (jlong)pc.release();
 }
 
@@ -1183,8 +1204,7 @@ JOW(jboolean, PeerConnection_updateIce)(
   JavaIceServersToJsepIceServers(jni, j_ice_servers, &ice_servers);
   talk_base::scoped_ptr<ConstraintsWrapper> constraints(
       new ConstraintsWrapper(jni, j_constraints));
-  CHECK(ExtractNativePC(jni, j_pc)->UpdateIce(
-      ice_servers, constraints.get()), "");
+  return ExtractNativePC(jni, j_pc)->UpdateIce(ice_servers, constraints.get());
 }
 
 JOW(jboolean, PeerConnection_nativeAddIceCandidate)(
@@ -1194,7 +1214,7 @@ JOW(jboolean, PeerConnection_nativeAddIceCandidate)(
   std::string sdp = JavaToStdString(jni, j_candidate_sdp);
   talk_base::scoped_ptr<IceCandidateInterface> candidate(
       webrtc::CreateIceCandidate(sdp_mid, j_sdp_mline_index, sdp, NULL));
-  CHECK(ExtractNativePC(jni, j_pc)->AddIceCandidate(candidate.get()), "");
+  return ExtractNativePC(jni, j_pc)->AddIceCandidate(candidate.get());
 }
 
 JOW(jboolean, PeerConnection_nativeAddLocalStream)(

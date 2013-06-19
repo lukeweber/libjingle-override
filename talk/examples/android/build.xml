@@ -33,8 +33,8 @@
          This must be done before we load project.properties since
          the proguard config can use sdk.dir -->
     <property environment="env" />
-    <condition property="sdk.dir" value="${env.ANDROID_HOME}">
-        <isset property="env.ANDROID_HOME" />
+    <condition property="sdk.dir" value="${env.ANDROID_SDK_ROOT}">
+        <isset property="env.ANDROID_SDK_ROOT" />
     </condition>
 
     <!-- The project.properties file is created and updated by the 'android'

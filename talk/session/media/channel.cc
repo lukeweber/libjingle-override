@@ -189,8 +189,16 @@ struct PacketMessageData : public talk_base::MessageData {
   talk_base::Buffer packet;
 };
 
-struct RenderMessageData : public talk_base::MessageData {
-  RenderMessageData(uint32 s, VideoRenderer* r) : ssrc(s), renderer(r) {}
+struct AudioRenderMessageData: public talk_base::MessageData {
+  AudioRenderMessageData(uint32 s, AudioRenderer* r)
+      : ssrc(s), renderer(r), result(false) {}
+  uint32 ssrc;
+  AudioRenderer* renderer;
+  bool result;
+};
+
+struct VideoRenderMessageData : public talk_base::MessageData {
+  VideoRenderMessageData(uint32 s, VideoRenderer* r) : ssrc(s), renderer(r) {}
   uint32 ssrc;
   VideoRenderer* renderer;
 };
@@ -352,45 +360,6 @@ static bool ValidPacket(bool rtcp, const talk_base::Buffer* packet) {
       packet->length() <= kMaxRtpPacketLen);
 }
 
-
-// Returns true if the |state| requires a action on the current local
-// content description. |action| will contain the necessary action.
-static bool LocalStateChanged(BaseSession::State state,
-                              ContentAction* action) {
-  switch (state) {
-    case Session::STATE_SENTINITIATE:
-      *action = CA_OFFER;
-      return true;
-    case Session::STATE_SENTPRACCEPT:
-      *action = CA_PRANSWER;
-      return true;
-    case Session::STATE_SENTACCEPT:
-      *action = CA_ANSWER;
-      return true;
-    default:
-      return false;
-  }
-}
-
-// Returns true if the |state| requires a action on the current remote content
-// description. |action| will contain the necessary action.
-static bool RemoteStateChanged(BaseSession::State state,
-                               ContentAction* action) {
-  switch (state) {
-    case Session::STATE_RECEIVEDINITIATE:
-      *action = CA_OFFER;
-      return true;
-    case Session::STATE_RECEIVEDPRACCEPT:
-      *action = CA_PRANSWER;
-      return true;
-    case Session::STATE_RECEIVEDACCEPT:
-      *action = CA_ANSWER;
-      return true;
-    default:
-      return false;
-  }
-}
-
 static bool IsReceiveContentDirection(MediaContentDirection direction) {
   return direction == MD_SENDRECV || direction == MD_RECVONLY;
 }
@@ -420,6 +389,8 @@ BaseChannel::BaseChannel(talk_base::Thread* thread,
       rtcp_transport_channel_(NULL),
       enabled_(false),
       writable_(false),
+      rtp_ready_to_send_(false),
+      rtcp_ready_to_send_(false),
       optimistic_data_send_(false),
       was_ever_writable_(false),
       local_content_direction_(MD_INACTIVE),
@@ -465,10 +436,14 @@ bool BaseChannel::Init(TransportChannel* transport_channel,
       this, &BaseChannel::OnWritableState);
   transport_channel_->SignalReadPacket.connect(
       this, &BaseChannel::OnChannelRead);
+  transport_channel_->SignalReadyToSend.connect(
+      this, &BaseChannel::OnReadyToSend);
 
-  session_->SignalState.connect(this, &BaseChannel::OnSessionState);
+  session_->SignalNewLocalDescription.connect(
+      this, &BaseChannel::OnNewLocalDescription);
+  session_->SignalNewRemoteDescription.connect(
+      this, &BaseChannel::OnNewRemoteDescription);
 
-  OnSessionState(session(), session()->state());
   set_rtcp_transport_channel(rtcp_transport_channel);
   return true;
 }
@@ -554,6 +529,8 @@ void BaseChannel::set_rtcp_transport_channel(TransportChannel* channel) {
           this, &BaseChannel::OnWritableState);
       rtcp_transport_channel_->SignalReadPacket.connect(
           this, &BaseChannel::OnChannelRead);
+      rtcp_transport_channel_->SignalReadyToSend.connect(
+          this, &BaseChannel::OnReadyToSend);
     }
   }
 }
@@ -609,6 +586,30 @@ void BaseChannel::OnChannelRead(TransportChannel* channel,
   bool rtcp = PacketIsRtcp(channel, data, len);
   talk_base::Buffer packet(data, len);
   HandlePacket(rtcp, &packet);
+}
+
+void BaseChannel::OnReadyToSend(TransportChannel* channel) {
+  SetReadyToSend(channel, true);
+}
+
+void BaseChannel::SetReadyToSend(TransportChannel* channel, bool ready) {
+  ASSERT(channel == transport_channel_ || channel == rtcp_transport_channel_);
+  if (channel == transport_channel_) {
+    rtp_ready_to_send_ = ready;
+  }
+  if (channel == rtcp_transport_channel_) {
+    rtcp_ready_to_send_ = ready;
+  }
+
+  if (!ready) {
+    // Notify the MediaChannel when either rtp or rtcp channel can't send.
+    media_channel_->OnReadyToSend(false);
+  } else if (rtp_ready_to_send_ &&
+             // In the case of rtcp mux |rtcp_transport_channel_| will be null.
+             (rtcp_ready_to_send_ || !rtcp_transport_channel_)) {
+    // Notify the MediaChannel when both rtp and rtcp channel can send.
+    media_channel_->OnReadyToSend(true);
+  }
 }
 
 bool BaseChannel::PacketIsRtcp(const TransportChannel* channel,
@@ -696,8 +697,9 @@ bool BaseChannel::SendPacket(bool rtcp, talk_base::Buffer* packet) {
     packet->SetLength(len);
   } else if (secure_required_) {
     // This is a double check for something that supposedly can't happen.
-    LOG(LS_ERROR) <<
-        "Trying to send insecure packet when crypto is required by policy";
+    LOG(LS_ERROR) << "Can't send outgoing " << PacketType(rtcp)
+                  << " packet when SRTP is inactive and crypto is required";
+
     ASSERT(false);
     return false;
   }
@@ -709,23 +711,25 @@ bool BaseChannel::SendPacket(bool rtcp, talk_base::Buffer* packet) {
   }
 
   // Bon voyage.
-  return (channel->SendPacket(packet->data(), packet->length(),
-      (secure() && secure_dtls()) ? PF_SRTP_BYPASS : 0)
-      == static_cast<int>(packet->length()));
+  int ret = channel->SendPacket(packet->data(), packet->length(),
+      (secure() && secure_dtls()) ? PF_SRTP_BYPASS : 0);
+  if (ret != static_cast<int>(packet->length())) {
+    if (channel->GetError() == EWOULDBLOCK) {
+      LOG(LS_WARNING) << "Got EWOULDBLOCK from socket.";
+      SetReadyToSend(channel, false);
+    }
+    return false;
+  }
+  return true;
 }
 
-void BaseChannel::HandlePacket(bool rtcp, talk_base::Buffer* packet) {
-  if (!has_received_packet_) {
-    has_received_packet_ = true;
-    signaling_thread()->Post(this, MSG_FIRSTPACKETRECEIVED);
-  }
-
-  // Protect ourselvs against crazy data.
+bool BaseChannel::WantsPacket(bool rtcp, talk_base::Buffer* packet) {
+  // Protect ourselves against crazy data.
   if (!ValidPacket(rtcp, packet)) {
     LOG(LS_ERROR) << "Dropping incoming " << content_name_ << " "
                   << PacketType(rtcp) << " packet: wrong size="
                   << packet->length();
-    return;
+    return false;
   }
 
   // If this channel is suppose to handle RTP data, that is determined by
@@ -733,7 +737,20 @@ void BaseChannel::HandlePacket(bool rtcp, talk_base::Buffer* packet) {
   // double decryption.
   if (ssrc_filter_.IsActive() &&
       !ssrc_filter_.DemuxPacket(packet->data(), packet->length(), rtcp)) {
+    return false;
+  }
+
+  return true;
+}
+
+void BaseChannel::HandlePacket(bool rtcp, talk_base::Buffer* packet) {
+  if (!WantsPacket(rtcp, packet)) {
     return;
+  }
+
+  if (!has_received_packet_) {
+    has_received_packet_ = true;
+    signaling_thread()->Post(this, MSG_FIRSTPACKETRECEIVED);
   }
 
   // Signal to the media sink before unprotecting the packet.
@@ -772,10 +789,18 @@ void BaseChannel::HandlePacket(bool rtcp, talk_base::Buffer* packet) {
 
     packet->SetLength(len);
   } else if (secure_required_) {
-    // This is a double check for something that supposedly can't happen.
-    LOG(LS_ERROR) <<
-        "Trying to receive insecure packet when crypto is required by policy";
-    ASSERT(false);
+    // Our session description indicates that SRTP is required, but we got a
+    // packet before our SRTP filter is active. This means either that
+    // a) we got SRTP packets before we received the SDES keys, in which case
+    //    we can't decrypt it anyway, or
+    // b) we got SRTP packets before DTLS completed on both the RTP and RTCP
+    //    channels, so we haven't yet extracted keys, even if DTLS did complete
+    //    on the channel that the packets are being sent on. It's really good
+    //    practice to wait for both RTP and RTCP to be good to go before sending
+    //    media, to prevent weird failure modes, so it's fine for us to just eat
+    //    packets here. This is all sidestepped if RTCP mux is used anyway.
+    LOG(LS_WARNING) << "Can't process incoming " << PacketType(rtcp)
+                    << " packet when SRTP is inactive and crypto is required";
     return;
   }
 
@@ -793,29 +818,29 @@ void BaseChannel::HandlePacket(bool rtcp, talk_base::Buffer* packet) {
   }
 }
 
-
-void BaseChannel::OnSessionState(BaseSession* session,
-                                 BaseSession::State state) {
-  const ContentInfo* content_info = NULL;
-  const MediaContentDescription* content_desc = NULL;
-  ContentAction action;
-  if (LocalStateChanged(state, &action)) {
-    content_info = GetFirstContent(session->local_description());
-    content_desc = GetContentDescription(content_info);
-    if (content_desc && content_info && !content_info->rejected &&
-        !SetLocalContent(content_desc, action)) {
-      LOG(LS_ERROR) << "Failure in SetLocalContent with action " << action;
-      session->SetError(BaseSession::ERROR_CONTENT);
-    }
+void BaseChannel::OnNewLocalDescription(
+    BaseSession* session, ContentAction action) {
+  const ContentInfo* content_info =
+      GetFirstContent(session->local_description());
+  const MediaContentDescription* content_desc =
+      GetContentDescription(content_info);
+  if (content_desc && content_info && !content_info->rejected &&
+      !SetLocalContent(content_desc, action)) {
+    LOG(LS_ERROR) << "Failure in SetLocalContent with action " << action;
+    session->SetError(BaseSession::ERROR_CONTENT);
   }
-  if (RemoteStateChanged(state, &action)) {
-    content_info = GetFirstContent(session->remote_description());
-    content_desc = GetContentDescription(content_info);
-    if (content_desc && content_info && !content_info->rejected &&
-        !SetRemoteContent(content_desc, action)) {
-      LOG(LS_ERROR) << "Failure in SetRemoteContent with  action " << action;
-      session->SetError(BaseSession::ERROR_CONTENT);
-    }
+}
+
+void BaseChannel::OnNewRemoteDescription(
+    BaseSession* session, ContentAction action) {
+  const ContentInfo* content_info =
+      GetFirstContent(session->remote_description());
+  const MediaContentDescription* content_desc =
+      GetContentDescription(content_info);
+  if (content_desc && content_info && !content_info->rejected &&
+      !SetRemoteContent(content_desc, action)) {
+    LOG(LS_ERROR) << "Failure in SetRemoteContent with  action " << action;
+    session->SetError(BaseSession::ERROR_CONTENT);
   }
 }
 
@@ -871,8 +896,8 @@ void BaseChannel::ChannelWritable_w() {
   for (std::vector<ConnectionInfo>::const_iterator it = infos.begin();
        it != infos.end(); ++it) {
     if (it->best_connection) {
-      LOG(LS_INFO) << "Using " << it->local_candidate.ToString() << "->"
-                   << it->remote_candidate.ToString();
+      LOG(LS_INFO) << "Using " << it->local_candidate.ToSensitiveString()
+                   << "->" << it->remote_candidate.ToSensitiveString();
       break;
     }
   }
@@ -1408,6 +1433,12 @@ bool VoiceChannel::Init() {
   return true;
 }
 
+bool VoiceChannel::SetRenderer(uint32 ssrc, AudioRenderer* renderer) {
+  AudioRenderMessageData data(ssrc, renderer);
+  Send(MSG_SETRENDERER, &data);
+  return data.result;
+}
+
 bool VoiceChannel::SetRingbackTone(const void* buf, int len) {
   SetRingbackToneMessageData data(buf, len);
   Send(MSG_SETRINGBACKTONE, &data);
@@ -1697,6 +1728,10 @@ bool VoiceChannel::SetChannelOptions_w(const AudioOptions& options) {
   return media_channel()->SetOptions(options);
 }
 
+bool VoiceChannel::SetRenderer_w(uint32 ssrc, AudioRenderer* renderer) {
+  return media_channel()->SetRenderer(ssrc, renderer);
+}
+
 void VoiceChannel::OnMessage(talk_base::Message *pmsg) {
   switch (pmsg->message_id) {
     case MSG_SETRINGBACKTONE: {
@@ -1750,6 +1785,12 @@ void VoiceChannel::OnMessage(talk_base::Message *pmsg) {
       AudioOptionsMessageData* data =
           static_cast<AudioOptionsMessageData*>(pmsg->pdata);
       data->result = SetChannelOptions_w(data->options);
+      break;
+    }
+    case MSG_SETRENDERER: {
+      AudioRenderMessageData* data =
+          static_cast<AudioRenderMessageData*>(pmsg->pdata);
+      data->result = SetRenderer_w(data->ssrc, data->renderer);
       break;
     }
     default:
@@ -1867,7 +1908,7 @@ VideoChannel::~VideoChannel() {
 }
 
 bool VideoChannel::SetRenderer(uint32 ssrc, VideoRenderer* renderer) {
-  RenderMessageData data(ssrc, renderer);
+  VideoRenderMessageData data(ssrc, renderer);
   Send(MSG_SETRENDERER, &data);
   return true;
 }
@@ -2165,8 +2206,8 @@ bool VideoChannel::SetChannelOptions_w(const VideoOptions &options) {
 void VideoChannel::OnMessage(talk_base::Message *pmsg) {
   switch (pmsg->message_id) {
     case MSG_SETRENDERER: {
-      const RenderMessageData* data =
-          static_cast<RenderMessageData*>(pmsg->pdata);
+      const VideoRenderMessageData* data =
+          static_cast<VideoRenderMessageData*>(pmsg->pdata);
       SetRenderer_w(data->ssrc, data->renderer);
       break;
     }
@@ -2350,7 +2391,8 @@ DataChannel::DataChannel(talk_base::Thread* thread,
                          const std::string& content_name,
                          bool rtcp)
     // MediaEngine is NULL
-    : BaseChannel(thread, NULL, media_channel, session, content_name, rtcp) {
+    : BaseChannel(thread, NULL, media_channel, session, content_name, rtcp),
+      data_channel_type_(cricket::DCT_NONE) {
 }
 
 DataChannel::~DataChannel() {
@@ -2376,12 +2418,12 @@ bool DataChannel::Init() {
   return true;
 }
 
-bool DataChannel::SendData(
-    const SendDataParams& params,
-    const std::string& data) {
-  SendDataMessageData message_data(params, data);
+bool DataChannel::SendData(const SendDataParams& params,
+                           const talk_base::Buffer& payload,
+                           SendDataResult* result) {
+  SendDataMessageData message_data(params, &payload, result);
   Send(MSG_SENDDATA, &message_data);
-  return true;
+  return message_data.succeeded;
 }
 
 const ContentInfo* DataChannel::GetFirstContent(
@@ -2389,10 +2431,58 @@ const ContentInfo* DataChannel::GetFirstContent(
   return GetFirstDataContent(sdesc);
 }
 
+
+static bool IsRtpPacket(const talk_base::Buffer* packet) {
+  int version;
+  if (!GetRtpVersion(packet->data(), packet->length(), &version)) {
+    return false;
+  }
+
+  return version == 2;
+}
+
+bool DataChannel::WantsPacket(bool rtcp, talk_base::Buffer* packet) {
+  if (data_channel_type_ == DCT_SCTP) {
+    // TODO(pthatcher): Do this in a more robust way by checking for
+    // SCTP or DTLS.
+    return !IsRtpPacket(packet);
+  } else if (data_channel_type_ == DCT_RTP) {
+    return BaseChannel::WantsPacket(rtcp, packet);
+  }
+  return false;
+}
+
 // Sets the maximum bandwidth.  Anything over this will be dropped.
 bool DataChannel::SetMaxSendBandwidth_w(int max_bps) {
   LOG(LS_INFO) << "DataChannel: Setting max bandwidth to " << max_bps;
   return media_channel()->SetSendBandwidth(false, max_bps);
+}
+
+bool DataChannel::SetDataChannelType(DataChannelType new_data_channel_type) {
+  // It hasn't been set before, so set it now.
+  if (data_channel_type_ == DCT_NONE) {
+    data_channel_type_ = new_data_channel_type;
+    return true;
+  }
+
+  // It's been set before, but doesn't match.  That's bad.
+  if (data_channel_type_ != new_data_channel_type) {
+    LOG(LS_WARNING) << "Data channel type mismatch."
+                    << " Expected " << data_channel_type_
+                    << " Got " << new_data_channel_type;
+    return false;
+  }
+
+  // It's hasn't changed.  Nothing to do.
+  return true;
+}
+
+bool DataChannel::SetDataChannelTypeFromContent(
+    const DataContentDescription* content) {
+  bool is_sctp = ((content->protocol() == kMediaProtocolSctp) ||
+                  (content->protocol() == kMediaProtocolSctpDtls));
+  DataChannelType data_channel_type = is_sctp ? DCT_SCTP : DCT_RTP;
+  return SetDataChannelType(data_channel_type);
 }
 
 bool DataChannel::SetLocalContent_w(const MediaContentDescription* content,
@@ -2405,10 +2495,23 @@ bool DataChannel::SetLocalContent_w(const MediaContentDescription* content,
   ASSERT(data != NULL);
   if (!data) return false;
 
-  bool ret = SetBaseLocalContent_w(content, action);
+  bool ret = false;
+  if (!SetDataChannelTypeFromContent(data)) {
+    return false;
+  }
 
-  if (action != CA_UPDATE || data->has_codecs()) {
-    ret &= media_channel()->SetRecvCodecs(data->codecs());
+  if (data_channel_type_ == DCT_SCTP) {
+    // SCTP data channels don't need the rest of the stuff.
+    ret = UpdateLocalStreams_w(data->streams(), action);
+    if (ret) {
+      set_local_content_direction(content->direction());
+    }
+  } else {
+    ret = SetBaseLocalContent_w(content, action);
+
+    if (action != CA_UPDATE || data->has_codecs()) {
+      ret &= media_channel()->SetRecvCodecs(data->codecs());
+    }
   }
 
   // If everything worked, see if we can start receiving.
@@ -2429,27 +2532,40 @@ bool DataChannel::SetRemoteContent_w(const MediaContentDescription* content,
   ASSERT(data != NULL);
   if (!data) return false;
 
-  // If the remote data doesn't have codecs and isn't an update, it
-  // must be empty, so ignore it.
-  if (action != CA_UPDATE && !data->has_codecs()) {
-    return true;
-  }
-  LOG(LS_INFO) << "Setting remote data description";
-
   bool ret = true;
-  // Set remote video codecs (what the other side wants to receive).
-  if (action != CA_UPDATE || data->has_codecs()) {
-    ret &= media_channel()->SetSendCodecs(data->codecs());
+  if (!SetDataChannelTypeFromContent(data)) {
+    return false;
   }
 
-  if (ret) {
-    ret &= SetBaseRemoteContent_w(content, action);
-  }
+  if (data_channel_type_ == DCT_SCTP) {
+    LOG(LS_INFO) << "Setting SCTP remote data description";
+    // SCTP data channels don't need the rest of the stuff.
+    ret = UpdateRemoteStreams_w(content->streams(), action);
+    if (ret) {
+      set_remote_content_direction(content->direction());
+    }
+  } else {
+    // If the remote data doesn't have codecs and isn't an update, it
+    // must be empty, so ignore it.
+    if (action != CA_UPDATE && !data->has_codecs()) {
+      return true;
+    }
+    LOG(LS_INFO) << "Setting remote data description";
 
-  if (action != CA_UPDATE) {
-    int bandwidth_bps = data->bandwidth();
-    bool auto_bandwidth = (bandwidth_bps == kAutoBandwidth);
-    ret &= media_channel()->SetSendBandwidth(auto_bandwidth, bandwidth_bps);
+    // Set remote video codecs (what the other side wants to receive).
+    if (action != CA_UPDATE || data->has_codecs()) {
+      ret &= media_channel()->SetSendCodecs(data->codecs());
+    }
+
+    if (ret) {
+      ret &= SetBaseRemoteContent_w(content, action);
+    }
+
+    if (action != CA_UPDATE) {
+      int bandwidth_bps = data->bandwidth();
+      bool auto_bandwidth = (bandwidth_bps == kAutoBandwidth);
+      ret &= media_channel()->SetSendBandwidth(auto_bandwidth, bandwidth_bps);
+    }
   }
 
   // If everything worked, see if we can start sending.
@@ -2492,16 +2608,16 @@ void DataChannel::OnMessage(talk_base::Message *pmsg) {
       break;
     }
     case MSG_SENDDATA: {
-      SendDataMessageData* data =
+      SendDataMessageData* msg =
           static_cast<SendDataMessageData*>(pmsg->pdata);
-      // TODO(pthatcher): use return value?
-      media_channel()->SendData(data->params, data->data);
+      msg->succeeded = media_channel()->SendData(
+          msg->params, *(msg->payload), msg->result);
       break;
     }
     case MSG_DATARECEIVED: {
       DataReceivedMessageData* data =
           static_cast<DataReceivedMessageData*>(pmsg->pdata);
-      SignalDataReceived(this, data->params, data->data);
+      SignalDataReceived(this, data->params, data->payload);
       delete data;
       break;
     }

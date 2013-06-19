@@ -123,11 +123,18 @@ class SocketAddress {
   // is preferred. IPv6 addresses are enclosed in square brackets ('[' and ']').
   std::string HostAsURIString() const;
 
+  // Same as HostAsURIString but anonymizes IP addresses by hiding the last
+  // part.
+  std::string HostAsSensitiveURIString() const;
+
   // Returns the port as a string.
   std::string PortAsString() const;
 
   // Returns hostname:port or [hostname]:port.
   std::string ToString() const;
+
+  // Same as ToString but anonymizes it by hiding the last part.
+  std::string ToSensitiveString() const;
 
   // Parses hostname:port and [hostname]:port.
   bool FromString(const std::string& str);
@@ -192,6 +199,10 @@ class SocketAddress {
   // IP is given as an integer in host byte order. V4 only, to be deprecated.
   // TODO: Deprecate this.
   static std::string IPToString(uint32 ip_as_host_order_integer);
+
+  // Same as IPToString but anonymizes it by hiding the last part.
+  // TODO: Deprecate this.
+  static std::string IPToSensitiveString(uint32 ip_as_host_order_integer);
 
   // Converts the IP address given in dotted form into compact form.
   // Only dotted names (A.B.C.D) are  converted.

@@ -74,11 +74,20 @@ const int kPreferredStereo = 0;
 const int kPreferredUseInbandFec = 0;
 
 const char* kRtcpFbParamNack = "nack";
+const char* kRtcpFbParamRemb = "goog-remb";
 
 const char* kRtcpFbParamCcm = "ccm";
 const char* kRtcpFbCcmParamFir = "fir";
 const char* kCodecParamMaxBitrate = "x-google-max-bitrate";
 const char* kCodecParamMinBitrate = "x-google-min-bitrate";
 const char* kCodecParamMaxQuantization = "x-google-max-quantization";
+
+const int kGoogleRtpDataCodecId = 101;
+const char kGoogleRtpDataCodecName[] = "google-data";
+
+const int kGoogleSctpDataCodecId = 108;
+const char kGoogleSctpDataCodecName[] = "google-sctp-data";
+
+const char kComfortNoiseCodecName[] = "CN";
 
 }  // namespace cricket

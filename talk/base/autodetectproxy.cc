@@ -162,7 +162,7 @@ void AutoDetectProxy::Next() {
   }
 
   LOG(LS_VERBOSE) << "AutoDetectProxy connecting to "
-                  << proxy_.address.ToString();
+                  << proxy_.address.ToSensitiveString();
 
   if (socket_) {
     Thread::Current()->Clear(this, MSG_TIMEOUT);
@@ -213,7 +213,8 @@ void AutoDetectProxy::Complete(ProxyType type) {
 
   proxy_.type = type;
   LoggingSeverity sev = (proxy_.type == PROXY_UNKNOWN) ? LS_ERROR : LS_INFO;
-  LOG_V(sev) << "AutoDetectProxy detected " << proxy_.address.ToString()
+  LOG_V(sev) << "AutoDetectProxy detected "
+             << proxy_.address.ToSensitiveString()
              << " as type " << proxy_.type;
 
   Thread::Current()->Quit();

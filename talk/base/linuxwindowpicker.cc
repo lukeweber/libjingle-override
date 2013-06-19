@@ -212,12 +212,14 @@ class XWindowEnumerator {
       return false;
     }
     XErrorSuppressor error_suppressor(display_);
+    Window default_root_window = XDefaultRootWindow(display_);
     int num_screens = XScreenCount(display_);
     for (int i = 0; i < num_screens; ++i) {
       Window root_window = XRootWindow(display_, i);
       DesktopId id(DesktopId(root_window, i));
       // TODO: Figure out an appropriate desktop title.
       DesktopDescription desc(id, "");
+      desc.set_primary(root_window == default_root_window);
       descriptions->push_back(desc);
     }
     return num_screens > 0;

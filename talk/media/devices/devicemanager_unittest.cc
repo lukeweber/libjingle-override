@@ -362,6 +362,8 @@ TEST(DeviceManagerTest, GetVideoCaptureDevices_KUnknown) {
 }
 #endif  // LINUX
 
+// TODO(noahric): These are flaky on windows on headless machines.
+#ifndef WIN32
 TEST(DeviceManagerTest, GetWindows) {
   if (!talk_base::WindowPickerFactory::IsSupported()) {
     LOG(LS_INFO) << "skipping test: window capturing is not supported with "
@@ -403,6 +405,7 @@ TEST(DeviceManagerTest, GetDesktops) {
       descriptions.front().id()));
   EXPECT_FALSE(capturer.get() == NULL);
 }
+#endif  // !WIN32
 
 TEST_F(DeviceManagerTestFake, CaptureConstraintsWhitelisted) {
   const Device device("white", "white_id");
@@ -422,7 +425,7 @@ TEST_F(DeviceManagerTestFake, CaptureConstraintsNotWhitelisted) {
   cricket::VideoFormat best_format;
   capturer->set_enable_camera_list(true);
   EXPECT_TRUE(capturer->GetBestCaptureFormat(kHdFormat, &best_format));
-  EXPECT_EQ(kVgaFormat, best_format);
+  EXPECT_EQ(kHdFormat, best_format);
 }
 
 TEST_F(DeviceManagerTestFake, CaptureConstraintsUnWhitelisted) {
@@ -434,7 +437,7 @@ TEST_F(DeviceManagerTestFake, CaptureConstraintsUnWhitelisted) {
   cricket::VideoFormat best_format;
   capturer->set_enable_camera_list(true);
   EXPECT_TRUE(capturer->GetBestCaptureFormat(kHdFormat, &best_format));
-  EXPECT_EQ(kVgaFormat, best_format);
+  EXPECT_EQ(kHdFormat, best_format);
 }
 
 TEST_F(DeviceManagerTestFake, CaptureConstraintsWildcard) {

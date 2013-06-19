@@ -25,7 +25,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/crc32.h"
 #include "talk/base/gunit.h"
 #include "talk/base/helpers.h"
@@ -39,6 +38,7 @@
 #include "talk/base/stringutils.h"
 #include "talk/base/thread.h"
 #include "talk/base/virtualsocketserver.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/portproxy.h"
 #include "talk/p2p/base/relayport.h"
 #include "talk/p2p/base/stunport.h"
@@ -121,7 +121,7 @@ class TestPort : public Port {
            talk_base::PacketSocketFactory* factory, talk_base::Network* network,
            const talk_base::IPAddress& ip, int min_port, int max_port,
            const std::string& username_fragment, const std::string& password)
-      : Port(thread, type, ICE_TYPE_PREFERENCE_HOST, factory, network, ip,
+      : Port(thread, type, factory, network, ip,
              min_port, max_port, username_fragment, password) {
   }
   ~TestPort() {}
@@ -146,24 +146,29 @@ class TestPort : public Port {
 
   virtual void PrepareAddress() {
     talk_base::SocketAddress addr(ip(), min_port());
-    AddAddress(addr, addr, "udp", Type(), type_preference(), true);
+    AddAddress(addr, addr, "udp", Type(), ICE_TYPE_PREFERENCE_HOST, true);
   }
 
   // Exposed for testing candidate building.
   void AddCandidateAddress(const talk_base::SocketAddress& addr) {
-    AddAddress(addr, addr, "udp", Type(), type_preference(), false);
+    AddAddress(addr, addr, "udp", Type(), type_preference_, false);
   }
   void AddCandidateAddress(const talk_base::SocketAddress& addr,
                            const talk_base::SocketAddress& base_address,
                            const std::string& type,
+                           int type_preference,
                            bool final) {
-    AddAddress(addr, base_address, "udp", type, type_preference(), final);
+    AddAddress(addr, base_address, "udp", type,
+               type_preference, final);
   }
 
   virtual Connection* CreateConnection(const Candidate& remote_candidate,
                                        CandidateOrigin origin) {
     Connection* conn = new ProxyConnection(this, 0, remote_candidate);
     AddConnection(conn);
+    // Set use-candidate attribute flag as this will add USE-CANDIDATE attribute
+    // in STUN binding requests.
+    conn->set_use_candidate_attr(true);
     return conn;
   }
   virtual int SendTo(
@@ -197,22 +202,27 @@ class TestPort : public Port {
     last_stun_buf_.reset();
     last_stun_msg_.reset();
   }
+  void set_type_preference(int type_preference) {
+    type_preference_ = type_preference;
+  }
 
  private:
   talk_base::scoped_ptr<ByteBuffer> last_stun_buf_;
   talk_base::scoped_ptr<IceMessage> last_stun_msg_;
+  int type_preference_;
 };
 
 class TestChannel : public sigslot::has_slots<> {
  public:
   TestChannel(Port* p1, Port* p2)
-      : src_(p1), dst_(p2), address_count_(0), conn_(NULL),
-        remote_request_(NULL), nominated_(false) {
-    src_->SignalAddressReady.connect(this, &TestChannel::OnPortReady);
+      : ice_mode_(ICEMODE_FULL), src_(p1), dst_(p2), complete_count_(0),
+	conn_(NULL), remote_request_(NULL), nominated_(false) {
+    src_->SignalPortComplete.connect(
+        this, &TestChannel::OnPortComplete);
     src_->SignalUnknownAddress.connect(this, &TestChannel::OnUnknownAddress);
   }
 
-  int address_count() { return address_count_; }
+  int complete_count() { return complete_count_; }
   Connection* conn() { return conn_; }
   const SocketAddress& remote_address() { return remote_address_; }
   const std::string remote_fragment() { return remote_frag_; }
@@ -254,8 +264,8 @@ class TestChannel : public sigslot::has_slots<> {
     conn_->Destroy();
   }
 
-  void OnPortReady(Port* port) {
-    address_count_++;
+  void OnPortComplete(Port* port) {
+    complete_count_++;
   }
   void SetIceMode(IceMode ice_mode) {
     ice_mode_ = ice_mode;
@@ -299,12 +309,11 @@ class TestChannel : public sigslot::has_slots<> {
   bool nominated() const { return nominated_; }
 
  private:
-  talk_base::Thread* thread_;
   IceMode ice_mode_;
   talk_base::scoped_ptr<Port> src_;
   Port* dst_;
 
-  int address_count_;
+  int complete_count_;
   Connection* conn_;
   SocketAddress remote_address_;
   talk_base::scoped_ptr<StunMessage> remote_request_;
@@ -449,7 +458,8 @@ class PortTest : public testing::Test, public sigslot::has_slots<> {
                            ProtocolType int_proto, ProtocolType ext_proto) {
     TurnPort* port = TurnPort::Create(main_, socket_factory, &network_,
                                       addr.ipaddr(), 0, 0,
-                                      username_, password_, kTurnUdpIntAddr,
+                                      username_, password_, ProtocolAddress(
+                                          kTurnUdpIntAddr, PROTO_UDP),
                                       kRelayCredentials);
     port->SetIceProtocolType(ice_protocol_);
     return port;
@@ -548,7 +558,7 @@ class PortTest : public testing::Test, public sigslot::has_slots<> {
     return port;
   }
 
-  void OnRoleConflict() {
+  void OnRoleConflict(PortInterface* port) {
     role_conflict_ = true;
   }
   bool role_conflict() const { return role_conflict_; }
@@ -590,14 +600,14 @@ void PortTest::TestConnectivity(const char* name1, Port* port1,
   // Set up channels.
   TestChannel ch1(port1, port2);
   TestChannel ch2(port2, port1);
-  EXPECT_EQ(0, ch1.address_count());
-  EXPECT_EQ(0, ch2.address_count());
+  EXPECT_EQ(0, ch1.complete_count());
+  EXPECT_EQ(0, ch2.complete_count());
 
   // Acquire addresses.
   ch1.Start();
   ch2.Start();
-  ASSERT_EQ_WAIT(1, ch1.address_count(), kTimeout);
-  ASSERT_EQ_WAIT(1, ch2.address_count(), kTimeout);
+  ASSERT_EQ_WAIT(1, ch1.complete_count(), kTimeout);
+  ASSERT_EQ_WAIT(1, ch2.complete_count(), kTimeout);
 
   // Send a ping from src to dst. This may or may not make it.
   ch1.CreateConnection();
@@ -729,7 +739,7 @@ class FakePacketSocketFactory : public talk_base::PacketSocketFactory {
 
   virtual AsyncPacketSocket* CreateServerTcpSocket(
       const SocketAddress& local_address, int min_port, int max_port,
-      bool ssl) {
+      int opts) {
     EXPECT_TRUE(next_server_tcp_socket_ != NULL);
     AsyncPacketSocket* result = next_server_tcp_socket_;
     next_server_tcp_socket_ = NULL;
@@ -741,7 +751,7 @@ class FakePacketSocketFactory : public talk_base::PacketSocketFactory {
   virtual AsyncPacketSocket* CreateClientTcpSocket(
       const SocketAddress& local_address, const SocketAddress& remote_address,
       const talk_base::ProxyInfo& proxy_info,
-      const std::string& user_agent, bool ssl) {
+      const std::string& user_agent, int opts) {
     EXPECT_TRUE(next_client_tcp_socket_ != NULL);
     AsyncPacketSocket* result = next_client_tcp_socket_;
     next_client_tcp_socket_ = NULL;
@@ -1935,9 +1945,11 @@ TEST_F(PortTest, TestFoundation) {
   talk_base::scoped_ptr<TestPort> testport(
       CreateTestPort(kLocalAddr1, "name", "pass"));
   testport->AddCandidateAddress(kLocalAddr1, kLocalAddr1,
-                                LOCAL_PORT_TYPE, false);
+                                LOCAL_PORT_TYPE,
+                                cricket::ICE_TYPE_PREFERENCE_HOST, false);
   testport->AddCandidateAddress(kLocalAddr2, kLocalAddr1,
-                                STUN_PORT_TYPE, true);
+                                STUN_PORT_TYPE,
+                                cricket::ICE_TYPE_PREFERENCE_SRFLX, true);
   EXPECT_NE(testport->Candidates()[0].foundation(),
             testport->Candidates()[1].foundation());
 }
@@ -2063,7 +2075,7 @@ TEST_F(PortTest, TestConnectionPriority) {
   rport->AddCandidateAddress(SocketAddress("10.1.1.100", 1234));
 
   EXPECT_EQ(0x7E001E85U, lport->Candidates()[0].priority());
-  EXPECT_EQ(0x1EE9U, rport->Candidates()[0].priority());
+  EXPECT_EQ(0x2001EE9U, rport->Candidates()[0].priority());
 
   // RFC 5245
   // pair priority = 2^32*MIN(G,D) + 2*MAX(G,D) + (G>D?1:0)
@@ -2072,9 +2084,9 @@ TEST_F(PortTest, TestConnectionPriority) {
   Connection* lconn = lport->CreateConnection(
       rport->Candidates()[0], Port::ORIGIN_MESSAGE);
 #if defined(WIN32)
-  EXPECT_EQ(0x1EE9FC003D0BU, lconn->priority());
+  EXPECT_EQ(0x2001EE9FC003D0BU, lconn->priority());
 #else
-  EXPECT_EQ(0x1EE9FC003D0BLLU, lconn->priority());
+  EXPECT_EQ(0x2001EE9FC003D0BLLU, lconn->priority());
 #endif
 
   lport->SetRole(cricket::ROLE_CONTROLLED);
@@ -2082,9 +2094,9 @@ TEST_F(PortTest, TestConnectionPriority) {
   Connection* rconn = rport->CreateConnection(
       lport->Candidates()[0], Port::ORIGIN_MESSAGE);
 #if defined(WIN32)
-  EXPECT_EQ(0x1EE9FC003D0AU, rconn->priority());
+  EXPECT_EQ(0x2001EE9FC003D0AU, rconn->priority());
 #else
-  EXPECT_EQ(0x1EE9FC003D0ALLU, rconn->priority());
+  EXPECT_EQ(0x2001EE9FC003D0ALLU, rconn->priority());
 #endif
 }
 
@@ -2099,8 +2111,8 @@ TEST_F(PortTest, TestWritableState) {
   // Acquire addresses.
   ch1.Start();
   ch2.Start();
-  ASSERT_EQ_WAIT(1, ch1.address_count(), kTimeout);
-  ASSERT_EQ_WAIT(1, ch2.address_count(), kTimeout);
+  ASSERT_EQ_WAIT(1, ch1.complete_count(), kTimeout);
+  ASSERT_EQ_WAIT(1, ch2.complete_count(), kTimeout);
 
   // Send a ping from src to dst.
   ch1.CreateConnection();
@@ -2200,7 +2212,7 @@ TEST_F(PortTest, TestIceLiteConnectivity) {
   ch1.Start();
   ice_lite_port->PrepareAddress();
 
-  ASSERT_EQ_WAIT(1, ch1.address_count(), kTimeout);
+  ASSERT_EQ_WAIT(1, ch1.complete_count(), kTimeout);
   ASSERT_FALSE(ice_lite_port->Candidates().empty());
 
   ch1.CreateConnection();

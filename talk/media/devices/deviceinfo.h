@@ -25,13 +25,18 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef TALK_MEDIA_DEVICES_DEVICEINFO_H_
+#define TALK_MEDIA_DEVICES_DEVICEINFO_H_
+
 #include <string>
 
 #include "talk/media/devices/devicemanager.h"
 
 namespace cricket {
 
-bool GetUsbUvcId(const Device& device, std::string* uvc_id);
+bool GetUsbId(const Device& device, std::string* usb_id);
 bool GetUsbVersion(const Device& device, std::string* usb_version);
 
 }  // namespace cricket
+
+#endif  // TALK_MEDIA_DEVICES_DEVICEINFO_H_

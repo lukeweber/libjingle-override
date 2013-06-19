@@ -91,7 +91,7 @@ TEST(Url, EnsuresNonEmptyPath) {
   Url<char> url(TEST_PROTOCOL TEST_HOST);
   EXPECT_TRUE(url.valid());
   EXPECT_STREQ("/", url.path().c_str());
-  
+
   url.clear();
   EXPECT_STREQ("/", url.path().c_str());
   url.set_path("");
@@ -114,6 +114,26 @@ TEST(Url, GetQueryAttributes) {
   value.clear();
   EXPECT_FALSE(url.get_attribute("Query", &value));
   EXPECT_TRUE(value.empty());
+}
+
+TEST(Url, SkipsUserAndPassword) {
+  Url<char> url("https://mail.google.com:pwd@badsite.com:12345/asdf");
+  EXPECT_TRUE(url.valid());
+  EXPECT_TRUE(url.secure());
+  EXPECT_STREQ("badsite.com", url.host().c_str());
+  EXPECT_EQ(12345, url.port());
+  EXPECT_STREQ("/asdf", url.path().c_str());
+  EXPECT_STREQ("badsite.com:12345", url.address().c_str());
+}
+
+TEST(Url, SkipsUser) {
+  Url<char> url("https://mail.google.com@badsite.com:12345/asdf");
+  EXPECT_TRUE(url.valid());
+  EXPECT_TRUE(url.secure());
+  EXPECT_STREQ("badsite.com", url.host().c_str());
+  EXPECT_EQ(12345, url.port());
+  EXPECT_STREQ("/asdf", url.path().c_str());
+  EXPECT_STREQ("badsite.com:12345", url.address().c_str());
 }
 
 TEST(HttpResponseData, parseLeaderHttp1_0) {

@@ -99,6 +99,9 @@ class IPAddress {
   // Wraps inet_ntop.
   std::string ToString() const;
 
+  // Same as ToString but anonymizes it by hiding the last part.
+  std::string ToSensitiveString() const;
+
   // Returns an unmapped address from a possibly-mapped address.
   // Returns the same address if this isn't a mapped address.
   IPAddress Normalized() const;
@@ -110,12 +113,16 @@ class IPAddress {
   // For socketaddress' benefit. Returns the IP in host byte order.
   uint32 v4AddressAsHostOrderInteger() const;
 
+  static void set_strip_sensitive(bool enable);
+
  private:
   int family_;
   union {
     in_addr ip4;
     in6_addr ip6;
   } u_;
+
+  static bool strip_sensitive_;
 };
 
 bool IPFromAddrInfo(struct addrinfo* info, IPAddress* out);
@@ -140,10 +147,12 @@ int IPAddressPrecedence(const IPAddress& ip);
 
 // Returns 'ip' truncated to be 'length' bits long.
 IPAddress TruncateIP(const IPAddress& ip, int length);
+
 // Returns the number of contiguously set bits, counting from the MSB in network
 // byte order, in this IPAddress. Bits after the first 0 encountered are not
 // counted.
 int CountIPMaskBits(IPAddress mask);
+
 }  // namespace talk_base
 
 #endif  // TALK_BASE_IPADDRESS_H_

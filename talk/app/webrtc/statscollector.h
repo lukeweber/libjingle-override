@@ -66,25 +66,28 @@ class StatsCollector {
   bool GetStats(MediaStreamTrackInterface* track, StatsReports* reports);
 
   WebRtcSession* session() { return session_; }
-  // Prepare a report for the given label and ssrc. Used internally.
-  StatsReport* PrepareReport(const std::string& label, uint32 ssrc);
+  // Prepare an SSRC report for the given ssrc. Used internally.
+  StatsReport* PrepareReport(uint32 ssrc, const std::string& transport);
+  // Extracts the ID of a Transport belonging to an SSRC. Used internally.
+  bool GetTransportIdFromProxy(const std::string& proxy,
+                               std::string* transport_id);
 
  private:
   bool CopySelectedReports(const std::string& selector, StatsReports* reports);
 
+  void ExtractSessionInfo();
   void ExtractVoiceInfo();
   void ExtractVideoInfo();
   double GetTimeNow();
+  void BuildSsrcToTransportId();
 
-  // |track_reports_| contain the last gathered stats for all tracks.
-  // The reason for this is so that GetStats can return statistics about a track
-  // even if it no longer is active.
-  std::map<std::string, webrtc::StatsReport> track_reports_;
-  webrtc::StatsReport bandwidth_estimation_report_;
+  // A map from the report id to the report.
+  std::map<std::string, webrtc::StatsReport> reports_;
   // Raw pointer to the session the statistics are gathered from.
   WebRtcSession* session_;
   double stats_gathering_started_;
   talk_base::Timing timing_;
+  cricket::ProxyTransportMap proxy_to_transport_;
 };
 
 }  // namespace webrtc

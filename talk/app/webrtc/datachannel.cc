@@ -112,8 +112,10 @@ bool DataChannel::Send(const DataBuffer& buffer) {
   }
   cricket::SendDataParams send_params;
   send_params.ssrc = send_ssrc_;
-  send_buffer_.assign(buffer.data.data(), buffer.data.length());
-  return session_->data_channel()->SendData(send_params, send_buffer_);
+  cricket::SendDataResult send_result;
+  // TODO(pthatcher): Use send_result.would_block for buffering.
+  return session_->data_channel()->SendData(
+      send_params, buffer.data, &send_result);
 }
 
 void DataChannel::SetReceiveSsrc(uint32 receive_ssrc) {
@@ -227,10 +229,10 @@ void DataChannel::ClearQueuedData() {
 
 void DataChannel::OnDataReceived(cricket::DataChannel* channel,
                                  const cricket::ReceiveDataParams& params,
-                                 const::std::string& data) {
+                                 const talk_base::Buffer& payload) {
   if (params.ssrc == receive_ssrc_) {
-    talk_base::scoped_ptr<DataBuffer> buffer(new DataBuffer);
-    buffer->data.SetData(data.c_str(), data.length());
+    bool binary = false;
+    talk_base::scoped_ptr<DataBuffer> buffer(new DataBuffer(payload, binary));
     if (was_ever_writable_ && observer_) {
       observer_->OnMessage(*buffer.get());
     } else {

@@ -6,8 +6,8 @@
 #define TALK_P2P_CLIENT_FAKEPORTALLOCATOR_H_
 
 #include <string>
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/scoped_ptr.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/base/portallocator.h"
 #include "talk/p2p/base/udpport.h"
 
@@ -37,11 +37,7 @@ class FakePortAllocatorSession : public PortAllocatorSession {
     network_.AddIP(talk_base::IPAddress(INADDR_LOOPBACK));
   }
 
-  virtual void GetInitialPorts() {
-    GetPortConfigurations();
-  }
-
-  virtual void GetPortConfigurations() {
+  virtual void StartGettingPorts() {
     if (!port_) {
       port_.reset(cricket::UDPPort::Create(worker_thread_, factory_,
                       &network_, network_.ip(), 0, 0,
@@ -50,22 +46,22 @@ class FakePortAllocatorSession : public PortAllocatorSession {
       AddPort(port_.get());
     }
     ++port_config_count_;
+    running_ = true;
   }
 
-  virtual void StartGetAllPorts() { running_ = true; }
-  virtual void StopGetAllPorts() { running_ = false; }
-  virtual bool IsGettingAllPorts() { return running_; }
+  virtual void StopGettingPorts() { running_ = false; }
+  virtual bool IsGettingPorts() { return running_; }
   int port_config_count() { return port_config_count_; }
 
   void AddPort(cricket::Port* port) {
     port->set_component(component_);
     port->set_generation(0);
-    port->SignalAddressReady.connect(
-        this, &FakePortAllocatorSession::OnAddressReady);
+    port->SignalPortComplete.connect(
+        this, &FakePortAllocatorSession::OnPortComplete);
     port->PrepareAddress();
     SignalPortReady(this, port);
   }
-  void OnAddressReady(cricket::Port* port) {
+  void OnPortComplete(cricket::Port* port) {
     SignalCandidatesReady(this, port->Candidates());
     SignalCandidatesAllocationDone(this);
   }

@@ -282,6 +282,23 @@ bool ParseJingleStream(const buzz::XmlElement* stream_elem,
   return true;
 }
 
+bool ParseJingleRtpHeaderExtensions(const buzz::XmlElement* parent_elem,
+                                    std::vector<RtpHeaderExtension>* hdrexts,
+                                    ParseError* error) {
+  for (const buzz::XmlElement* hdrext_elem =
+           parent_elem->FirstNamed(QN_JINGLE_RTP_HDREXT);
+       hdrext_elem != NULL;
+       hdrext_elem = hdrext_elem->NextNamed(QN_JINGLE_RTP_HDREXT)) {
+    std::string uri = hdrext_elem->Attr(QN_URI);
+    int id = GetXmlAttr(hdrext_elem, QN_ID, 0);
+    if (id <= 0) {
+      return BadParse("Invalid RTP header extension id.", error);
+    }
+    hdrexts->push_back(RtpHeaderExtension(uri, id));
+  }
+  return true;
+}
+
 bool HasJingleStreams(const buzz::XmlElement* desc_elem) {
   const buzz::XmlElement* streams_elem =
       desc_elem->FirstNamed(QN_JINGLE_DRAFT_STREAMS);
@@ -359,5 +376,19 @@ void WriteJingleStreams(const std::vector<StreamParams>& streams,
 
   parent_elem->AddElement(streams_elem);
 }
+
+void WriteJingleRtpHeaderExtensions(
+    const std::vector<RtpHeaderExtension>& hdrexts,
+    buzz::XmlElement* parent_elem) {
+  for (std::vector<RtpHeaderExtension>::const_iterator hdrext = hdrexts.begin();
+       hdrext != hdrexts.end(); ++hdrext) {
+    buzz::XmlElement* hdrext_elem =
+      new buzz::XmlElement(QN_JINGLE_RTP_HDREXT, false);
+    AddXmlAttr(hdrext_elem, QN_URI, hdrext->uri);
+    AddXmlAttr(hdrext_elem, QN_ID, hdrext->id);
+    parent_elem->AddElement(hdrext_elem);
+  }
+}
+
 
 }  // namespace cricket

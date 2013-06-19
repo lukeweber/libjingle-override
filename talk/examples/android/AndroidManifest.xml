@@ -34,9 +34,6 @@
         <category android:name="android.intent.category.BROWSABLE" />
         <data android:scheme="https" android:host="apprtc.appspot.com" />
         <data android:scheme="http" android:host="apprtc.appspot.com" />
-        <!--AMI: remove the following! -->
-        <data android:scheme="https" android:host="rtcami.appspot.com" />
-        <data android:scheme="http" android:host="rtcami.appspot.com" />
       </intent-filter>
     </activity>
   </application>

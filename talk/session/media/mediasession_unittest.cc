@@ -87,11 +87,12 @@ using cricket::CS_AES_CM_128_HMAC_SHA1_32;
 using cricket::CS_AES_CM_128_HMAC_SHA1_80;
 
 static const AudioCodec kAudioCodecs1[] = {
-  AudioCodec(103, "ISAC",   16000, -1,    1, 5),
-  AudioCodec(102, "iLBC",   8000,  13300, 1, 4),
-  AudioCodec(0,   "PCMU",   8000,  64000, 1, 3),
-  AudioCodec(8,   "PCMA",   8000,  64000, 1, 2),
-  AudioCodec(117, "red",    8000,  0,     1, 1),
+  AudioCodec(103, "ISAC",   16000, -1,    1, 6),
+  AudioCodec(102, "iLBC",   8000,  13300, 1, 5),
+  AudioCodec(0,   "PCMU",   8000,  64000, 1, 4),
+  AudioCodec(8,   "PCMA",   8000,  64000, 1, 3),
+  AudioCodec(117, "red",    8000,  0,     1, 2),
+  AudioCodec(107, "CN",     48000, 0,     1, 1)
 };
 
 static const AudioCodec kAudioCodecs2[] = {
@@ -285,7 +286,7 @@ class MediaSessionDescriptionFactoryTest : public testing::Test {
       EXPECT_TRUE(ti_video == NULL);
     }
     const TransportInfo* ti_data = desc->GetTransportInfoByName("data");
-    if (options.has_data) {
+    if (options.has_data()) {
       EXPECT_TRUE(ti_data != NULL);
       if (options.bundle_enabled) {
         EXPECT_EQ(ti_audio->description.ice_ufrag,
@@ -313,7 +314,7 @@ class MediaSessionDescriptionFactoryTest : public testing::Test {
     MediaSessionOptions options;
     options.has_audio = true;
     options.has_video = true;
-    options.has_data = true;
+    options.data_channel_type = cricket::DCT_RTP;
     talk_base::scoped_ptr<SessionDescription> ref_desc;
     talk_base::scoped_ptr<SessionDescription> desc;
     if (offer) {
@@ -355,6 +356,51 @@ class MediaSessionDescriptionFactoryTest : public testing::Test {
       }
     }
     EXPECT_TRUE(found);
+  }
+
+  // This test that the audio and video media direction is set to
+  // |expected_direction_in_answer| in an answer if the offer direction is set
+  // to |direction_in_offer|.
+  void TestMediaDirectionInAnswer(
+      cricket::MediaContentDirection direction_in_offer,
+      cricket::MediaContentDirection expected_direction_in_answer) {
+    MediaSessionOptions opts;
+    opts.has_video = true;
+    talk_base::scoped_ptr<SessionDescription> offer(
+        f1_.CreateOffer(opts, NULL));
+    ASSERT_TRUE(offer.get() != NULL);
+    ContentInfo* ac_offer= offer->GetContentByName("audio");
+    ASSERT_TRUE(ac_offer != NULL);
+    AudioContentDescription* acd_offer =
+        static_cast<AudioContentDescription*>(ac_offer->description);
+    acd_offer->set_direction(direction_in_offer);
+    ContentInfo* vc_offer= offer->GetContentByName("video");
+    ASSERT_TRUE(vc_offer != NULL);
+    VideoContentDescription* vcd_offer =
+        static_cast<VideoContentDescription*>(vc_offer->description);
+    vcd_offer->set_direction(direction_in_offer);
+
+    talk_base::scoped_ptr<SessionDescription> answer(
+        f2_.CreateAnswer(offer.get(), opts, NULL));
+    const AudioContentDescription* acd_answer =
+        GetFirstAudioContentDescription(answer.get());
+    EXPECT_EQ(expected_direction_in_answer, acd_answer->direction());
+    const VideoContentDescription* vcd_answer =
+        GetFirstVideoContentDescription(answer.get());
+    EXPECT_EQ(expected_direction_in_answer, vcd_answer->direction());
+  }
+
+  bool VerifyNoCNCodecs(const cricket::ContentInfo* content) {
+    const cricket::ContentDescription* description = content->description;
+    ASSERT(description != NULL);
+    const cricket::AudioContentDescription* audio_content_desc =
+        static_cast<const cricket::AudioContentDescription*> (description);
+    ASSERT(audio_content_desc != NULL);
+    for (size_t i = 0; i < audio_content_desc->codecs().size(); ++i) {
+      if (audio_content_desc->codecs()[i].name == "CN")
+        return false;
+    }
+    return true;
   }
 
  protected:
@@ -435,7 +481,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestBundleOfferWithSameCodecPlType) {
   MediaSessionOptions opts;
   opts.has_audio = true;
   opts.has_video = true;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   opts.bundle_enabled = true;
   talk_base::scoped_ptr<SessionDescription>
   offer(f2_.CreateOffer(opts, NULL));
@@ -465,7 +511,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   MediaSessionOptions opts;
   opts.has_audio = true;
   opts.has_video = false;
-  opts.has_data = false;
+  opts.data_channel_type = cricket::DCT_NONE;
   opts.bundle_enabled = true;
   talk_base::scoped_ptr<SessionDescription> offer(f1_.CreateOffer(opts, NULL));
   talk_base::scoped_ptr<SessionDescription> answer(
@@ -474,7 +520,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   MediaSessionOptions updated_opts;
   updated_opts.has_audio = true;
   updated_opts.has_video = true;
-  updated_opts.has_data = true;
+  updated_opts.data_channel_type = cricket::DCT_RTP;
   updated_opts.bundle_enabled = true;
   talk_base::scoped_ptr<SessionDescription> updated_offer(f1_.CreateOffer(
       updated_opts, answer.get()));
@@ -499,7 +545,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
 // Create a typical data offer, and ensure it matches what we expect.
 TEST_F(MediaSessionDescriptionFactoryTest, TestCreateDataOffer) {
   MediaSessionOptions opts;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   f1_.set_secure(SEC_ENABLED);
   talk_base::scoped_ptr<SessionDescription>
       offer(f1_.CreateOffer(opts, NULL));
@@ -614,7 +660,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateVideoAnswer) {
 
 TEST_F(MediaSessionDescriptionFactoryTest, TestCreateDataAnswer) {
   MediaSessionOptions opts;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   f1_.set_secure(SEC_ENABLED);
   f2_.set_secure(SEC_ENABLED);
   talk_base::scoped_ptr<SessionDescription> offer(f1_.CreateOffer(opts, NULL));
@@ -645,11 +691,35 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateDataAnswer) {
   EXPECT_EQ(std::string(cricket::kMediaProtocolSavpf), vcd->protocol());
 }
 
+// This test that the media direction is set to send/receive in an answer if
+// the offer is send receive.
+TEST_F(MediaSessionDescriptionFactoryTest, CreateAnswerToSendReceiveOffer) {
+  TestMediaDirectionInAnswer(cricket::MD_SENDRECV, cricket::MD_SENDRECV);
+}
+
+// This test that the media direction is set to receive only in an answer if
+// the offer is send only.
+TEST_F(MediaSessionDescriptionFactoryTest, CreateAnswerToSendOnlyOffer) {
+  TestMediaDirectionInAnswer(cricket::MD_SENDONLY, cricket::MD_RECVONLY);
+}
+
+// This test that the media direction is set to send only in an answer if
+// the offer is recv only.
+TEST_F(MediaSessionDescriptionFactoryTest, CreateAnswerToRecvOnlyOffer) {
+  TestMediaDirectionInAnswer(cricket::MD_RECVONLY, cricket::MD_SENDONLY);
+}
+
+// This test that the media direction is set to inactive in an answer if
+// the offer is inactive.
+TEST_F(MediaSessionDescriptionFactoryTest, CreateAnswerToInactiveOffer) {
+  TestMediaDirectionInAnswer(cricket::MD_INACTIVE, cricket::MD_INACTIVE);
+}
+
 // Test that a data content with an unknown protocol is rejected in an answer.
 TEST_F(MediaSessionDescriptionFactoryTest,
        CreateDataAnswerToOfferWithUnknownProtocol) {
   MediaSessionOptions opts;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   opts.has_audio = false;
   f1_.set_secure(SEC_ENABLED);
   f2_.set_secure(SEC_ENABLED);
@@ -736,7 +806,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
        TestCreateAnswerWithoutLegacyStreams) {
   MediaSessionOptions opts;
   opts.has_video = true;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   f1_.set_add_legacy_streams(false);
   f2_.set_add_legacy_streams(false);
   talk_base::scoped_ptr<SessionDescription> offer(f1_.CreateOffer(opts, NULL));
@@ -763,7 +833,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
 TEST_F(MediaSessionDescriptionFactoryTest, TestPartial) {
   MediaSessionOptions opts;
   opts.has_video = true;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   f1_.set_secure(SEC_ENABLED);
   talk_base::scoped_ptr<SessionDescription>
       offer(f1_.CreateOffer(opts, NULL));
@@ -803,8 +873,8 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateVideoAnswerRtcpMux) {
   MediaSessionOptions answer_opts;
   answer_opts.has_video = true;
   offer_opts.has_video = true;
-  answer_opts.has_data = true;
-  offer_opts.has_data = true;
+  answer_opts.data_channel_type = cricket::DCT_RTP;
+  offer_opts.data_channel_type = cricket::DCT_RTP;
 
   talk_base::scoped_ptr<SessionDescription> offer(NULL);
   talk_base::scoped_ptr<SessionDescription> answer(NULL);
@@ -902,7 +972,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateAudioAnswerToVideo) {
 // Create an audio-only answer to an offer with data.
 TEST_F(MediaSessionDescriptionFactoryTest, TestCreateNoDataAnswerToDataOffer) {
   MediaSessionOptions opts;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   talk_base::scoped_ptr<SessionDescription>
       offer(f1_.CreateOffer(opts, NULL));
   ASSERT_TRUE(offer.get() != NULL);
@@ -921,7 +991,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
        CreateAnswerToOfferWithRejectedMedia) {
   MediaSessionOptions opts;
   opts.has_video = true;
-  opts.has_data = true;
+  opts.data_channel_type = cricket::DCT_RTP;
   talk_base::scoped_ptr<SessionDescription>
       offer(f1_.CreateOffer(opts, NULL));
   ASSERT_TRUE(offer.get() != NULL);
@@ -958,6 +1028,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoOffer) {
   opts.AddStream(MEDIA_TYPE_VIDEO, kVideoTrack1, kMediaStream1);
   opts.AddStream(MEDIA_TYPE_AUDIO, kAudioTrack1, kMediaStream1);
   opts.AddStream(MEDIA_TYPE_AUDIO, kAudioTrack2, kMediaStream1);
+  opts.data_channel_type = cricket::DCT_RTP;
   opts.AddStream(MEDIA_TYPE_DATA, kDataTrack1, kMediaStream1);
   opts.AddStream(MEDIA_TYPE_DATA, kDataTrack2, kMediaStream1);
 
@@ -1094,7 +1165,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoOffer) {
 TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoAnswer) {
   MediaSessionOptions offer_opts;
   offer_opts.has_video = true;
-  offer_opts.has_data = true;
+  offer_opts.data_channel_type = cricket::DCT_RTP;
   f1_.set_secure(SEC_ENABLED);
   f2_.set_secure(SEC_ENABLED);
   talk_base::scoped_ptr<SessionDescription> offer(f1_.CreateOffer(offer_opts,
@@ -1104,6 +1175,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCreateMultiStreamVideoAnswer) {
   opts.AddStream(MEDIA_TYPE_VIDEO, kVideoTrack1, kMediaStream1);
   opts.AddStream(MEDIA_TYPE_AUDIO, kAudioTrack1, kMediaStream1);
   opts.AddStream(MEDIA_TYPE_AUDIO, kAudioTrack2, kMediaStream1);
+  opts.data_channel_type = cricket::DCT_RTP;
   opts.AddStream(MEDIA_TYPE_DATA, kDataTrack1, kMediaStream1);
   opts.AddStream(MEDIA_TYPE_DATA, kDataTrack2, kMediaStream1);
 
@@ -1337,7 +1409,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
 // codec have the same default payload type as an audio codec that is already in
 // use, the added codecs payload types are changed.
 TEST_F(MediaSessionDescriptionFactoryTest,
-       RespondentCreatesOfferWithVideoAndRtxAfterCreatingAudiAnswer) {
+       RespondentCreatesOfferWithVideoAndRtxAfterCreatingAudioAnswer) {
   std::vector<VideoCodec> f1_codecs = MAKE_VECTOR(kVideoCodecs1);
   VideoCodec rtx_f1;
   rtx_f1.id = 126;
@@ -1399,6 +1471,61 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   int pt_referenced_by_rtx = talk_base::FromString<int>(
       rtx.params[cricket::kCodecParamAssociatedPayloadType]);
   EXPECT_EQ(new_h264_pl_type, pt_referenced_by_rtx);
+}
+
+// Test that RTX is ignored when there is no associated payload type parameter.
+TEST_F(MediaSessionDescriptionFactoryTest, RtxWithoutApt) {
+  MediaSessionOptions opts;
+  opts.has_video = true;
+  opts.has_audio = false;
+  std::vector<VideoCodec> f1_codecs = MAKE_VECTOR(kVideoCodecs1);
+  VideoCodec rtx_f1;
+  rtx_f1.id = 126;
+  rtx_f1.name = cricket::kRtxCodecName;
+
+  f1_codecs.push_back(rtx_f1);
+  f1_.set_video_codecs(f1_codecs);
+
+  std::vector<VideoCodec> f2_codecs = MAKE_VECTOR(kVideoCodecs2);
+  VideoCodec rtx_f2;
+  rtx_f2.id = 127;
+  rtx_f2.name = cricket::kRtxCodecName;
+
+  // This creates rtx for H264 with the payload type |f2_| uses.
+  rtx_f2.SetParam(cricket::kCodecParamAssociatedPayloadType,
+                  talk_base::ToString<int>(kVideoCodecs2[0].id));
+  f2_codecs.push_back(rtx_f2);
+  f2_.set_video_codecs(f2_codecs);
+
+  talk_base::scoped_ptr<SessionDescription> offer(f1_.CreateOffer(opts, NULL));
+  ASSERT_TRUE(offer.get() != NULL);
+  // kCodecParamAssociatedPayloadType will always be added to the offer when RTX
+  // is selected. Manually remove kCodecParamAssociatedPayloadType so that it
+  // is possible to test that that RTX is dropped when
+  // kCodecParamAssociatedPayloadType is missing in the offer.
+  VideoContentDescription* desc =
+      static_cast<cricket::VideoContentDescription*>(
+          offer->GetContentDescriptionByName(cricket::CN_VIDEO));
+  ASSERT_TRUE(desc != NULL);
+  std::vector<VideoCodec> codecs = desc->codecs();
+  for (std::vector<VideoCodec>::iterator iter = codecs.begin();
+       iter != codecs.end(); ++iter) {
+    if (iter->name.find(cricket::kRtxCodecName) == 0) {
+      iter->params.clear();
+    }
+  }
+  desc->set_codecs(codecs);
+
+  talk_base::scoped_ptr<SessionDescription> answer(
+      f2_.CreateAnswer(offer.get(), opts, NULL));
+
+  const VideoContentDescription* vcd =
+      GetFirstVideoContentDescription(answer.get());
+
+  for (std::vector<VideoCodec>::const_iterator iter = vcd->codecs().begin();
+       iter != vcd->codecs().end(); ++iter) {
+    ASSERT_STRNE(iter->name.c_str(), cricket::kRtxCodecName);
+  }
 }
 
 // Create an updated offer after creating an answer to the original offer and
@@ -1508,7 +1635,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestTransportInfoOfferMultimedia) {
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   TestTransportInfo(true, options, false);
 }
 
@@ -1517,7 +1644,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   TestTransportInfo(true, options, true);
 }
 
@@ -1525,7 +1652,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestTransportInfoOfferBundle) {
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   options.bundle_enabled = true;
   TestTransportInfo(true, options, false);
 }
@@ -1535,7 +1662,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   options.bundle_enabled = true;
   TestTransportInfo(true, options, true);
 }
@@ -1557,7 +1684,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestTransportInfoAnswerMultimedia) {
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   TestTransportInfo(false, options, false);
 }
 
@@ -1566,7 +1693,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   TestTransportInfo(false, options, true);
 }
 
@@ -1574,7 +1701,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestTransportInfoAnswerBundle) {
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   options.bundle_enabled = true;
   TestTransportInfo(false, options, false);
 }
@@ -1584,7 +1711,7 @@ TEST_F(MediaSessionDescriptionFactoryTest,
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
   options.bundle_enabled = true;
   TestTransportInfo(false, options, true);
 }
@@ -1710,7 +1837,7 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCryptoOfferDtlsButNotSdes) {
   MediaSessionOptions options;
   options.has_audio = true;
   options.has_video = true;
-  options.has_data = true;
+  options.data_channel_type = cricket::DCT_RTP;
 
   talk_base::scoped_ptr<SessionDescription> offer, answer;
 
@@ -1753,4 +1880,26 @@ TEST_F(MediaSessionDescriptionFactoryTest, TestCryptoOfferDtlsButNotSdes) {
   EXPECT_TRUE(data_answer_trans_desc->identity_fingerprint.get() != NULL);
 }
 
+// Verifies if vad_enabled option is set to false, CN codecs are not present in
+// offer or answer.
+TEST_F(MediaSessionDescriptionFactoryTest, TestVADEnableOption) {
+  MediaSessionOptions options;
+  options.has_audio = true;
+  options.has_video = true;
+  talk_base::scoped_ptr<SessionDescription> offer(
+      f1_.CreateOffer(options, NULL));
+  ASSERT_TRUE(offer.get() != NULL);
+  const ContentInfo* audio_content = offer->GetContentByName("audio");
+  EXPECT_FALSE(VerifyNoCNCodecs(audio_content));
 
+  options.vad_enabled = false;
+  offer.reset(f1_.CreateOffer(options, NULL));
+  ASSERT_TRUE(offer.get() != NULL);
+  audio_content = offer->GetContentByName("audio");
+  EXPECT_TRUE(VerifyNoCNCodecs(audio_content));
+  talk_base::scoped_ptr<SessionDescription> answer(
+      f1_.CreateAnswer(offer.get(), options, NULL));
+  ASSERT_TRUE(answer.get() != NULL);
+  audio_content = answer->GetContentByName("audio");
+  EXPECT_TRUE(VerifyNoCNCodecs(audio_content));
+}

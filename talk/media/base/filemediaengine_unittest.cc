@@ -211,7 +211,7 @@ class FileMediaEngineTest : public testing::Test {
 
 TEST_F(FileMediaEngineTest, TestDefaultImplementation) {
   EXPECT_TRUE(CreateEngineAndChannels("", "", "", "", 1));
-  EXPECT_TRUE(engine_->Init());
+  EXPECT_TRUE(engine_->Init(talk_base::Thread::Current()));
   EXPECT_EQ(0, engine_->GetCapabilities());
   EXPECT_TRUE(NULL == voice_channel_.get());
   EXPECT_TRUE(NULL == video_channel_.get());

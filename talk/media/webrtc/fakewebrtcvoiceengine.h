@@ -85,11 +85,13 @@ class FakeWebRtcVoiceEngine
           file(false),
           vad(false),
           fec(false),
+          nack(false),
           media_processor_registered(false),
           cn8_type(13),
           cn16_type(105),
           dtmf_type(106),
           fec_type(117),
+          nack_max_packets(0),
           send_ssrc(0),
           level_header_ext_(-1) {
       memset(&send_codec, 0, sizeof(send_codec));
@@ -103,11 +105,13 @@ class FakeWebRtcVoiceEngine
     bool file;
     bool vad;
     bool fec;
+    bool nack;
     bool media_processor_registered;
     int cn8_type;
     int cn16_type;
     int dtmf_type;
     int fec_type;
+    int nack_max_packets;
     uint32 send_ssrc;
     int level_header_ext_;
     DtmfInfo dtmf_info;
@@ -172,6 +176,12 @@ class FakeWebRtcVoiceEngine
   }
   bool GetFEC(int channel) {
     return channels_[channel]->fec;
+  }
+  bool GetNACK(int channel) {
+    return channels_[channel]->nack;
+  }
+  int GetNACKMaxPackets(int channel) {
+    return channels_[channel]->nack_max_packets;
   }
   int GetSendCNPayloadType(int channel, bool wideband) {
     return (wideband) ?
@@ -268,16 +278,6 @@ class FakeWebRtcVoiceEngine
     channels_.erase(channel);
     return 0;
   }
-  WEBRTC_STUB(SetLocalReceiver, (int channel, int port, int RTCPport,
-                                 const char ipaddr[64],
-                                 const char multiCastAddr[64]));
-  WEBRTC_STUB(GetLocalReceiver, (int channel, int& port, int& RTCPport,
-                                 char ipaddr[64]));
-  WEBRTC_STUB(SetSendDestination, (int channel, int port,
-                                   const char ipaddr[64],
-                                   int sourcePort, int RTCPport));
-  WEBRTC_STUB(GetSendDestination, (int channel, int& port, char ipaddr[64],
-                                   int& sourcePort, int& RTCPport));
   WEBRTC_STUB(StartReceive, (int channel));
   WEBRTC_FUNC(StartPlayout, (int channel)) {
     if (playout_fail_channel_ != channel) {
@@ -555,7 +555,6 @@ class FakeWebRtcVoiceEngine
 
   // webrtc::VoEHardware
   WEBRTC_STUB(GetCPULoad, (int&));
-  WEBRTC_STUB(GetSystemCPULoad, (int&));
   WEBRTC_FUNC(GetNumOfRecordingDevices, (int& num)) {
     return GetNumDevices(num);
   }
@@ -610,24 +609,7 @@ class FakeWebRtcVoiceEngine
   }
   WEBRTC_STUB(ReceivedRTCPPacket, (int channel, const void* data,
                                    unsigned int length));
-  WEBRTC_STUB(GetSourceInfo, (int channel, int& rtpPort, int& rtcpPort,
-                              char ipaddr[64]));
-  WEBRTC_STUB(GetLocalIP, (char ipaddr[64], bool ipv6));
-  WEBRTC_STUB(EnableIPv6, (int channel));
   // Not using WEBRTC_STUB due to bool return value
-  virtual bool IPv6IsEnabled(int channel) { return true; }
-  WEBRTC_STUB(SetSourceFilter, (int channel, int rtpPort, int rtcpPort,
-                                const char ipaddr[64]));
-  WEBRTC_STUB(GetSourceFilter, (int channel, int& rtpPort, int& rtcpPort,
-                                char ipaddr[64]));
-  WEBRTC_STUB(SetSendTOS, (int channel, int priority,
-                           int DSCP, bool useSetSockopt));
-  WEBRTC_STUB(GetSendTOS, (int channel, int& priority,
-                           int& DSCP, bool& useSetSockopt));
-  WEBRTC_STUB(SetSendGQoS, (int channel, bool enable, int serviceType,
-                            int overrideDSCP));
-  WEBRTC_STUB(GetSendGQoS, (int channel, bool& enabled, int& serviceType,
-                            int& overrideDSCP));
   WEBRTC_STUB(SetPacketTimeoutNotification, (int channel, bool enable,
                                              int timeoutSeconds));
   WEBRTC_STUB(GetPacketTimeoutNotification, (int channel, bool& enable,
@@ -639,9 +621,6 @@ class FakeWebRtcVoiceEngine
                                              int& sampleTimeSeconds));
   WEBRTC_STUB(SetPeriodicDeadOrAliveStatus, (int channel, bool enable,
                                              int sampleTimeSeconds));
-  WEBRTC_STUB(SendUDPPacket, (int channel, const void* data,
-                              unsigned int length, int& transmittedBytes,
-                              bool useRtcpSocket));
 
   // webrtc::VoERTP_RTCP
   WEBRTC_STUB(RegisterRTPObserver, (int channel,
@@ -662,16 +641,21 @@ class FakeWebRtcVoiceEngine
   }
   WEBRTC_STUB(GetRemoteSSRC, (int channel, unsigned int& ssrc));
   WEBRTC_FUNC(SetRTPAudioLevelIndicationStatus, (int channel, bool enable,
-      unsigned char ID)) {
+      unsigned char id)) {
     WEBRTC_CHECK_CHANNEL(channel);
-    channels_[channel]->level_header_ext_ = (enable) ? ID : -1;
+    if (enable && (id < 1 || id > 14)) {
+      // [RFC5285] The 4-bit ID is the local identifier of this element in
+      // the range 1-14 inclusive.
+      return -1;
+    }
+    channels_[channel]->level_header_ext_ = (enable) ? id : -1;
     return 0;
   }
   WEBRTC_FUNC(GetRTPAudioLevelIndicationStatus, (int channel, bool& enabled,
-      unsigned char& ID)) {
+      unsigned char& id)) {
     WEBRTC_CHECK_CHANNEL(channel);
     enabled = (channels_[channel]->level_header_ext_ != -1);
-    ID = channels_[channel]->level_header_ext_;
+    id = channels_[channel]->level_header_ext_;
     return 0;
   }
   WEBRTC_STUB(GetRemoteCSRCs, (int channel, unsigned int arrCSRC[15]));
@@ -705,11 +689,19 @@ class FakeWebRtcVoiceEngine
     }
     return 0;
   }
+#ifdef USE_WEBRTC_DEV_BRANCH
+  WEBRTC_STUB(SendApplicationDefinedRTCPPacket, (int channel,
+                                                 unsigned char subType,
+                                                 unsigned int name,
+                                                 const char* data,
+                                                 unsigned short dataLength));
+#else
   WEBRTC_STUB(SendApplicationDefinedRTCPPacket, (int channel,
                                                  const unsigned char subType,
                                                  unsigned int name,
                                                  const char* data,
                                                  unsigned short dataLength));
+#endif
   WEBRTC_STUB(GetRTPStatistics, (int channel, unsigned int& averageJitterMs,
                                  unsigned int& maxJitterMs,
                                  unsigned int& discardedPackets));
@@ -738,6 +730,14 @@ class FakeWebRtcVoiceEngine
     redPayloadtype = channels_[channel]->fec_type;
     return 0;
   }
+#ifdef USE_WEBRTC_DEV_BRANCH
+  WEBRTC_FUNC(SetNACKStatus, (int channel, bool enable, int maxNoPackets)) {
+    WEBRTC_CHECK_CHANNEL(channel);
+    channels_[channel]->nack = enable;
+    channels_[channel]->nack_max_packets = maxNoPackets;
+    return 0;
+  }
+#endif
   WEBRTC_STUB(StartRTPDump, (int channel, const char* fileNameUTF8,
                              webrtc::RTPDirections direction));
   WEBRTC_STUB(StopRTPDump, (int channel, webrtc::RTPDirections direction));
@@ -756,7 +756,11 @@ class FakeWebRtcVoiceEngine
   WEBRTC_STUB(SetInitSequenceNumber, (int channel, short sequenceNumber));
   WEBRTC_STUB(SetMinimumPlayoutDelay, (int channel, int delayMs));
   WEBRTC_STUB(SetInitialPlayoutDelay, (int channel, int delay_ms));
-  WEBRTC_STUB(GetDelayEstimate, (int channel, int& delayMs));
+  WEBRTC_STUB(GetDelayEstimate, (int channel, int* jitter_buffer_delay_ms,
+                                 int* playout_buffer_delay_ms));
+#ifdef USE_WEBRTC_DEV_BRANCH
+  WEBRTC_STUB_CONST(GetLeastRequiredDelayMs, (int channel));
+#endif
 
   // webrtc::VoEVolumeControl
   WEBRTC_STUB(SetSpeakerVolume, (unsigned int));
@@ -819,7 +823,11 @@ class FakeWebRtcVoiceEngine
     return 0;
   }
 
+#ifdef USE_WEBRTC_DEV_BRANCH
+  WEBRTC_FUNC(SetAgcConfig, (webrtc::AgcConfig config)) {
+#else
   WEBRTC_FUNC(SetAgcConfig, (const webrtc::AgcConfig config)) {
+#endif
     agc_config_ = config;
     return 0;
   }
@@ -858,7 +866,11 @@ class FakeWebRtcVoiceEngine
                                webrtc::AgcModes mode));
   WEBRTC_STUB(GetRxAgcStatus, (int channel, bool& enabled,
                                webrtc::AgcModes& mode));
+#ifdef USE_WEBRTC_DEV_BRANCH
+  WEBRTC_STUB(SetRxAgcConfig, (int channel, webrtc::AgcConfig config));
+#else
   WEBRTC_STUB(SetRxAgcConfig, (int channel, const webrtc::AgcConfig config));
+#endif
   WEBRTC_STUB(GetRxAgcConfig, (int channel, webrtc::AgcConfig& config));
 
   WEBRTC_STUB(RegisterRxVadObserver, (int, webrtc::VoERxVadCallback&));
@@ -940,10 +952,10 @@ class FakeWebRtcVoiceEngine
   WEBRTC_STUB(SetExternalRecordingStatus, (bool enable));
   WEBRTC_STUB(SetExternalPlayoutStatus, (bool enable));
   WEBRTC_STUB(ExternalRecordingInsertData,
-              (const WebRtc_Word16 speechData10ms[], int lengthSamples,
+              (const int16_t speechData10ms[], int lengthSamples,
                int samplingFreqHz, int current_delay_ms));
   WEBRTC_STUB(ExternalPlayoutGetData,
-              (WebRtc_Word16 speechData10ms[], int samplingFreqHz,
+              (int16_t speechData10ms[], int samplingFreqHz,
                int current_delay_ms, int& lengthSamples));
   WEBRTC_STUB(GetAudioFrame, (int channel, int desired_sample_rate_hz,
                               webrtc::AudioFrame* frame));

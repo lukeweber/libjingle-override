@@ -107,6 +107,17 @@ class VideoFrame {
   // nothing is written.
   virtual size_t CopyToBuffer(uint8 *buffer, size_t size) const = 0;
 
+  // Writes the frame into the given planes, stretched to the given width and
+  // height. The parameter "interpolate" controls whether to interpolate or just
+  // take the nearest-point. The parameter "crop" controls whether to crop this
+  // frame to the aspect ratio of the given dimensions before stretching.
+  virtual bool CopyToPlanes(
+      uint8* dst_y, uint8* dst_u, uint8* dst_v,
+      int32 dst_pitch_y, int32 dst_pitch_u, int32 dst_pitch_v) const;
+
+  // Writes the frame into the target VideoFrame.
+  virtual void CopyToFrame(VideoFrame* target) const;
+
   // Writes the frame into the given stream and returns the StreamResult.
   // See talk/base/stream.h for a description of StreamResult and error.
   // Error may be NULL. If a non-success value is returned from

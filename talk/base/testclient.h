@@ -83,6 +83,11 @@ class TestClient : public sigslot::has_slots<> {
   // Checks that no packets have arrived or will arrive in the next second.
   bool CheckNoPacket();
 
+  int GetError();
+  int SetOption(Socket::Option opt, int value);
+
+  bool ready_to_send() const;
+
  private:
   static const int kTimeout = 1000;
   // Workaround for the fact that AsyncPacketSocket::GetConnState doesn't exist.
@@ -90,10 +95,12 @@ class TestClient : public sigslot::has_slots<> {
   // Slot for packets read on the socket.
   void OnPacket(AsyncPacketSocket* socket, const char* buf, size_t len,
                 const SocketAddress& remote_addr);
+  void OnReadyToSend(AsyncPacketSocket* socket);
 
   CriticalSection crit_;
   AsyncPacketSocket* socket_;
   std::vector<Packet*>* packets_;
+  bool ready_to_send_;
   DISALLOW_EVIL_CONSTRUCTORS(TestClient);
 };
 

@@ -42,14 +42,10 @@ using webrtc::MediaSourceInterface;
 
 TEST(LocalAudioSourceTest, SetValidOptions) {
   webrtc::FakeConstraints constraints;
-  constraints.AddMandatory(
-      MediaConstraintsInterface::kEchoCancellation, "false");
-  constraints.AddOptional(
-      MediaConstraintsInterface::kAutoGainControl, "true");
-  constraints.AddMandatory(
-      MediaConstraintsInterface::kNoiseSuppression, "false");
-  constraints.AddOptional(
-      MediaConstraintsInterface::kHighpassFilter, "true");
+  constraints.AddMandatory(MediaConstraintsInterface::kEchoCancellation, false);
+  constraints.AddOptional(MediaConstraintsInterface::kAutoGainControl, true);
+  constraints.AddMandatory(MediaConstraintsInterface::kNoiseSuppression, false);
+  constraints.AddOptional(MediaConstraintsInterface::kHighpassFilter, true);
 
   talk_base::scoped_refptr<LocalAudioSource> source =
       LocalAudioSource::Create(&constraints);
@@ -75,10 +71,8 @@ TEST(LocalAudioSourceTest, OptionNotSet) {
 
 TEST(LocalAudioSourceTest, MandatoryOverridesOptional) {
   webrtc::FakeConstraints constraints;
-  constraints.AddMandatory(
-      MediaConstraintsInterface::kEchoCancellation, "false");
-  constraints.AddOptional(
-      MediaConstraintsInterface::kEchoCancellation, "true");
+  constraints.AddMandatory(MediaConstraintsInterface::kEchoCancellation, false);
+  constraints.AddOptional(MediaConstraintsInterface::kEchoCancellation, true);
 
   talk_base::scoped_refptr<LocalAudioSource> source =
       LocalAudioSource::Create(&constraints);
@@ -90,9 +84,8 @@ TEST(LocalAudioSourceTest, MandatoryOverridesOptional) {
 
 TEST(LocalAudioSourceTest, InvalidOptional) {
   webrtc::FakeConstraints constraints;
-  constraints.AddOptional(
-      MediaConstraintsInterface::kHighpassFilter, "false");
-  constraints.AddOptional("invalidKey", "false");
+  constraints.AddOptional(MediaConstraintsInterface::kHighpassFilter, false);
+  constraints.AddOptional("invalidKey", false);
 
   talk_base::scoped_refptr<LocalAudioSource> source =
       LocalAudioSource::Create(&constraints);
@@ -105,9 +98,8 @@ TEST(LocalAudioSourceTest, InvalidOptional) {
 
 TEST(LocalAudioSourceTest, InvalidMandatory) {
   webrtc::FakeConstraints constraints;
-  constraints.AddMandatory(
-      MediaConstraintsInterface::kHighpassFilter, "false");
-  constraints.AddMandatory("invalidKey", "false");
+  constraints.AddMandatory(MediaConstraintsInterface::kHighpassFilter, false);
+  constraints.AddMandatory("invalidKey", false);
 
   talk_base::scoped_refptr<LocalAudioSource> source =
       LocalAudioSource::Create(&constraints);

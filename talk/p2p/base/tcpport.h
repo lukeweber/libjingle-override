@@ -102,6 +102,8 @@ class TCPPort : public Port {
                     const char* data, size_t size,
                     const talk_base::SocketAddress& remote_addr);
 
+  void OnReadyToSend(talk_base::AsyncPacketSocket* socket);
+
   void OnAddressReady(talk_base::AsyncPacketSocket* socket,
                       const talk_base::SocketAddress& address);
 
@@ -133,6 +135,7 @@ class TCPConnection : public Connection {
   void OnReadPacket(talk_base::AsyncPacketSocket* socket,
                     const char* data, size_t size,
                     const talk_base::SocketAddress& remote_addr);
+  void OnReadyToSend(talk_base::AsyncPacketSocket* socket);
 
   talk_base::AsyncPacketSocket* socket_;
   int error_;

@@ -104,7 +104,7 @@ class StunBindingRequest : public StunRequest {
 
   virtual void OnTimeout() {
     LOG(LS_ERROR) << "Binding request timed out from "
-      << port_->GetLocalAddress().ToString()
+      << port_->GetLocalAddress().ToSensitiveString()
       << " (" << port_->Network()->name() << ")";
 
     port_->OnStunBindingOrResolveRequestFailed();
@@ -143,8 +143,7 @@ UDPPort::UDPPort(talk_base::Thread* thread,
                    talk_base::Network* network,
                    const talk_base::IPAddress& ip, int min_port, int max_port,
                    const std::string& username, const std::string& password)
-    : Port(thread, LOCAL_PORT_TYPE, ICE_TYPE_PREFERENCE_HOST,
-           factory, network, ip, min_port, max_port,
+    : Port(thread, LOCAL_PORT_TYPE, factory, network, ip, min_port, max_port,
            username, password),
       requests_(thread),
       socket_(NULL),
@@ -165,6 +164,7 @@ bool UDPPort::Init() {
     }
     socket_->SignalReadPacket.connect(this, &UDPPort::OnReadPacket);
   }
+  socket_->SignalReadyToSend.connect(this, &UDPPort::OnReadyToSend);
   socket_->SignalAddressReady.connect(this, &UDPPort::OnLocalAddressReady);
   requests_.SignalSendPacket.connect(this, &UDPPort::OnSendPacket);
   return true;
@@ -240,7 +240,7 @@ int UDPPort::GetError() {
 
 void UDPPort::OnLocalAddressReady(talk_base::AsyncPacketSocket* socket,
                                   const talk_base::SocketAddress& address) {
-  AddAddress(address, address, "udp", LOCAL_PORT_TYPE,
+  AddAddress(address, address, UDP_PROTOCOL_NAME, LOCAL_PORT_TYPE,
              ICE_TYPE_PREFERENCE_HOST, false);
   MaybePrepareStunCandidate();
 }
@@ -265,6 +265,10 @@ void UDPPort::OnReadPacket(talk_base::AsyncPacketSocket* socket,
   } else {
     Port::OnReadPacket(data, size, remote_addr, PROTO_UDP);
   }
+}
+
+void UDPPort::OnReadyToSend(talk_base::AsyncPacketSocket* socket) {
+  Port::OnReadyToSend();
 }
 
 void UDPPort::SendStunBindingRequest() {
@@ -315,7 +319,7 @@ void UDPPort::OnStunBindingRequestSucceeded(
     // Setting related address before STUN candidate is added. For STUN
     // related address is local socket address.
     set_related_address(socket_->GetLocalAddress());
-    AddAddress(stun_addr, socket_->GetLocalAddress(), "udp",
+    AddAddress(stun_addr, socket_->GetLocalAddress(), UDP_PROTOCOL_NAME,
                STUN_PORT_TYPE, ICE_TYPE_PREFERENCE_PRFLX, false);
   }
   SetResult(true);
@@ -333,9 +337,9 @@ void UDPPort::SetResult(bool success) {
   // Setting ready status.
   ready_ = true;
   if (success) {
-    SignalAddressReady(this);
+    SignalPortComplete(this);
   } else {
-    SignalAddressError(this);
+    SignalPortError(this);
   }
 }
 

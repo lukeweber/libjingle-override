@@ -45,8 +45,8 @@ class FirewallSocket : public AsyncSocketAdapter {
     if (type_ == SOCK_STREAM) {
       if (!server_->Check(FP_TCP, GetLocalAddress(), addr)) {
         LOG(LS_VERBOSE) << "FirewallSocket outbound TCP connection from "
-                        << GetLocalAddress().ToString() << " to "
-                        << addr.ToString() << " denied";
+                        << GetLocalAddress().ToSensitiveString() << " to "
+                        << addr.ToSensitiveString() << " denied";
         // TODO: Handle this asynchronously.
         SetError(EHOSTUNREACH);
         return SOCKET_ERROR;
@@ -61,8 +61,8 @@ class FirewallSocket : public AsyncSocketAdapter {
     if (type_ == SOCK_DGRAM) {
       if (!server_->Check(FP_UDP, GetLocalAddress(), addr)) {
         LOG(LS_VERBOSE) << "FirewallSocket outbound UDP packet from "
-                        << GetLocalAddress().ToString() << " to "
-                        << addr.ToString() << " dropped";
+                        << GetLocalAddress().ToSensitiveString() << " to "
+                        << addr.ToSensitiveString() << " dropped";
         return static_cast<int>(cb);
       }
     }
@@ -81,8 +81,8 @@ class FirewallSocket : public AsyncSocketAdapter {
         if (server_->Check(FP_UDP, *paddr, GetLocalAddress()))
           return res;
         LOG(LS_VERBOSE) << "FirewallSocket inbound UDP packet from "
-                        << paddr->ToString() << " to "
-                        << GetLocalAddress().ToString() << " dropped";
+                        << paddr->ToSensitiveString() << " to "
+                        << GetLocalAddress().ToSensitiveString() << " dropped";
       }
     }
     return AsyncSocketAdapter::RecvFrom(pv, cb, paddr);
@@ -107,8 +107,8 @@ class FirewallSocket : public AsyncSocketAdapter {
       sock->Close();
       delete sock;
       LOG(LS_VERBOSE) << "FirewallSocket inbound TCP connection from "
-                      << addr.ToString() << " to "
-                      << GetLocalAddress().ToString() << " denied";
+                      << addr.ToSensitiveString() << " to "
+                      << GetLocalAddress().ToSensitiveString() << " denied";
     }
     return 0;
   }

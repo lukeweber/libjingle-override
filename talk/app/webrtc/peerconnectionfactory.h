@@ -44,6 +44,7 @@ class PeerConnectionFactory : public PeerConnectionFactoryInterface,
       CreatePeerConnection(
           const PeerConnectionInterface::IceServers& configuration,
           const MediaConstraintsInterface* constraints,
+          DTLSIdentityServiceInterface* dtls_identity_service,
           PeerConnectionObserver* observer);
 
   virtual talk_base::scoped_refptr<PeerConnectionInterface>
@@ -51,6 +52,7 @@ class PeerConnectionFactory : public PeerConnectionFactoryInterface,
           const PeerConnectionInterface::IceServers& configuration,
           const MediaConstraintsInterface* constraints,
           PortAllocatorFactoryInterface* allocator_factory,
+          DTLSIdentityServiceInterface* dtls_identity_service,
           PeerConnectionObserver* observer);
   bool Initialize();
 
@@ -82,6 +84,7 @@ class PeerConnectionFactory : public PeerConnectionFactoryInterface,
       talk_base::Thread* worker_thread,
       talk_base::Thread* signaling_thread,
       AudioDeviceModule* default_adm,
+      cricket::WebRtcVideoEncoderFactory* video_encoder_factory,
       cricket::WebRtcVideoDecoderFactory* video_decoder_factory);
   virtual ~PeerConnectionFactory();
 
@@ -109,6 +112,10 @@ class PeerConnectionFactory : public PeerConnectionFactoryInterface,
   // External Audio device used for audio playback.
   talk_base::scoped_refptr<AudioDeviceModule> default_adm_;
   talk_base::scoped_ptr<cricket::ChannelManager> channel_manager_;
+  // External Video encoder factory. This can be NULL if the client has not
+  // injected any. In that case, video engine will use the internal SW encoder.
+  talk_base::scoped_ptr<cricket::WebRtcVideoEncoderFactory>
+      video_encoder_factory_;
   // External Video decoder factory. This can be NULL if the client has not
   // injected any. In that case, video engine will use the internal SW decoder.
   talk_base::scoped_ptr<cricket::WebRtcVideoDecoderFactory>

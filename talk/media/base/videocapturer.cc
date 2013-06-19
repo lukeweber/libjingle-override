@@ -29,11 +29,12 @@
 
 #include <algorithm>
 
-#if defined(HAVE_YUV)
+#if !defined(DISABLE_YUV)
 #include "libyuv/scale_argb.h"
 #endif
 #include "talk/base/common.h"
 #include "talk/base/logging.h"
+#include "talk/base/systeminfo.h"
 #include "talk/media/base/videoprocessor.h"
 
 #if defined(HAVE_WEBRTC_VIDEO)
@@ -46,12 +47,26 @@
 
 namespace cricket {
 
-const uint32 kStateChange = 0;
+namespace {
+
+// TODO(thorcarpenter): This is a BIG hack to flush the system with black
+// frames. Frontends should coordinate to update the video state of a muted
+// user. When all frontends to this consider removing the black frame business.
+const int kNumBlackFramesOnMute = 30;
+
+// MessageHandler constants.
+enum {
+  MSG_DO_PAUSE = 0,
+  MSG_DO_UNPAUSE,
+  MSG_STATE_CHANGE
+};
 
 static const int64 kMaxDistance = ~(static_cast<int64>(1) << 63);
-static const int64 kMinDesirableFps = static_cast<int64>(14);
 static const int kYU12Penalty = 16;  // Needs to be higher than MJPG index.
+static const int kDefaultScreencastFps = 5;
 typedef talk_base::TypedMessageData<CaptureState> StateChangeParams;
+
+}  // namespace
 
 /////////////////////////////////////////////////////////////////////
 // Implementation of struct CapturedFrame
@@ -93,6 +108,13 @@ void VideoCapturer::Construct() {
   enable_camera_list_ = false;
   capture_state_ = CS_STOPPED;
   SignalFrameCaptured.connect(this, &VideoCapturer::OnFrameCaptured);
+  scaled_width_ = 0;
+  scaled_height_ = 0;
+  // TODO(fbarchard): Consider removing cores as a factor for scaling.
+  talk_base::SystemInfo system_info;
+  num_cores_ = system_info.GetMaxPhysicalCpus();
+  muted_ = false;
+  black_frame_count_down_ = kNumBlackFramesOnMute;
 }
 
 const std::vector<VideoFormat>* VideoCapturer::GetSupportedFormats() const {
@@ -124,6 +146,81 @@ void VideoCapturer::UpdateAspectRatio(int ratio_w, int ratio_h) {
 void VideoCapturer::ClearAspectRatio() {
   ratio_w_ = 0;
   ratio_h_ = 0;
+}
+
+// Override this to have more control of how your device is started/stopped.
+bool VideoCapturer::Pause(bool pause) {
+  if (pause) {
+    if (capture_state() == CS_PAUSED) {
+      return true;
+    }
+    bool is_running = capture_state() == CS_STARTING ||
+        capture_state() == CS_RUNNING;
+    if (!is_running) {
+      LOG(LS_ERROR) << "Cannot pause a stopped camera.";
+      return false;
+    }
+    LOG(LS_INFO) << "Pausing a camera.";
+    talk_base::scoped_ptr<VideoFormat> capture_format_when_paused(
+        capture_format_ ? new VideoFormat(*capture_format_) : NULL);
+    Stop();
+    SetCaptureState(CS_PAUSED);
+    // If you override this function be sure to restore the capture format
+    // after calling Stop().
+    SetCaptureFormat(capture_format_when_paused.get());
+  } else {  // Unpause.
+    if (capture_state() != CS_PAUSED) {
+      LOG(LS_WARNING) << "Cannot unpause a camera that hasn't been paused.";
+      return false;
+    }
+    if (!capture_format_) {
+      LOG(LS_ERROR) << "Missing capture_format_, cannot unpause a camera.";
+      return false;
+    }
+    if (muted_) {
+      LOG(LS_WARNING) << "Camera cannot be unpaused while muted.";
+      return false;
+    }
+    LOG(LS_INFO) << "Unpausing a camera.";
+    if (!Start(*capture_format_)) {
+      LOG(LS_ERROR) << "Camera failed to start when unpausing.";
+      return false;
+    }
+  }
+  return true;
+}
+
+bool VideoCapturer::Restart(const VideoFormat& capture_format) {
+  if (!IsRunning()) {
+    return StartCapturing(capture_format);
+  }
+
+  if (GetCaptureFormat() != NULL && *GetCaptureFormat() == capture_format) {
+    // The reqested format is the same; nothing to do.
+    return true;
+  }
+
+  Stop();
+  return StartCapturing(capture_format);
+}
+
+bool VideoCapturer::MuteToBlackThenPause(bool muted) {
+  if (muted == IsMuted()) {
+    return true;
+  }
+
+  LOG(LS_INFO) << (muted ? "Muting" : "Unmuting") << " this video capturer.";
+  muted_ = muted;  // Do this before calling Pause().
+  if (muted) {
+    // Reset black frame count down.
+    black_frame_count_down_ = kNumBlackFramesOnMute;
+    // Following frames will be overritten with black, then the camera will be
+    // paused.
+    return true;
+  }
+  // Start the camera.
+  thread_->Clear(this, MSG_DO_PAUSE);
+  return Pause(false);
 }
 
 void VideoCapturer::SetSupportedFormats(
@@ -191,6 +288,7 @@ bool VideoCapturer::RemoveVideoProcessor(VideoProcessor* video_processor) {
 
 void VideoCapturer::ConstrainSupportedFormats(const VideoFormat& max_format) {
   max_format_.reset(new VideoFormat(max_format));
+  LOG(LS_VERBOSE) << " ConstrainSupportedFormats " << max_format.ToString();
   UpdateFilteredSupportedFormats();
 }
 
@@ -213,6 +311,14 @@ std::string VideoCapturer::ToString(const CapturedFrame* captured_frame) const {
 
 void VideoCapturer::OnFrameCaptured(VideoCapturer*,
                                     const CapturedFrame* captured_frame) {
+  if (muted_) {
+    if (black_frame_count_down_ == 0) {
+      thread_->Post(this, MSG_DO_PAUSE, NULL);
+    } else {
+      --black_frame_count_down_;
+    }
+  }
+
   if (SignalVideoFrame.is_empty()) {
     return;
   }
@@ -220,11 +326,24 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
 #define VIDEO_FRAME_NAME WebRtcVideoFrame
 #endif
 #if defined(VIDEO_FRAME_NAME)
-#if defined(HAVE_YUV)
+#if !defined(DISABLE_YUV)
   if (IsScreencast()) {
     int scaled_width, scaled_height;
-    ComputeScale(captured_frame->width, captured_frame->height, &scaled_width,
-                 &scaled_height);
+    int desired_screencast_fps = capture_format_.get() ?
+        VideoFormat::IntervalToFps(capture_format_->interval) :
+        kDefaultScreencastFps;
+    ComputeScale(captured_frame->width, captured_frame->height,
+                 desired_screencast_fps, num_cores_,
+                 &scaled_width, &scaled_height);
+
+    if (scaled_width != scaled_width_ || scaled_height != scaled_height_) {
+      LOG(LS_VERBOSE) << "Scaling Screencast from "
+                      << captured_frame->width << "x"
+                      << captured_frame->height << " to "
+                      << scaled_width << "x" << scaled_height;
+      scaled_width_ = scaled_width;
+      scaled_height_ = scaled_height;
+    }
     if (FOURCC_ARGB == captured_frame->fourcc &&
         (scaled_width != captured_frame->height ||
          scaled_height != captured_frame->height)) {
@@ -245,7 +364,7 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
       scaled_frame->data_size = scaled_width * 4 * scaled_height;
     }
   }
-#endif  // HAVE_YUV
+#endif  // !DISABLE_YUV
         // Size to crop captured frame to.  This adjusts the captured frames
         // aspect ratio to match the final view aspect ratio, considering pixel
   // aspect ratio and rotation.  The final size may be scaled down by video
@@ -284,9 +403,12 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
                   << desired_width << " x " << desired_height;
     return;
   }
-  if (!ApplyProcessors(&i420_frame)) {
+  if (!muted_ && !ApplyProcessors(&i420_frame)) {
     // Processor dropped the frame.
     return;
+  }
+  if (muted_) {
+    i420_frame.SetToBlack();
   }
   SignalVideoFrame(this, &i420_frame);
 #endif  // VIDEO_FRAME_NAME
@@ -299,14 +421,29 @@ void VideoCapturer::SetCaptureState(CaptureState state) {
   }
   StateChangeParams* state_params = new StateChangeParams(state);
   capture_state_ = state;
-  thread_->Post(this, kStateChange, state_params);
+  thread_->Post(this, MSG_STATE_CHANGE, state_params);
 }
 
 void VideoCapturer::OnMessage(talk_base::Message* message) {
-  ASSERT(message->message_id == kStateChange);
-  talk_base::scoped_ptr<StateChangeParams> p(
-      static_cast<StateChangeParams*>(message->pdata));
-  SignalStateChange(this, p->data());
+  switch (message->message_id) {
+    case MSG_STATE_CHANGE: {
+      talk_base::scoped_ptr<StateChangeParams> p(
+          static_cast<StateChangeParams*>(message->pdata));
+      SignalStateChange(this, p->data());
+      break;
+    }
+    case MSG_DO_PAUSE: {
+      Pause(true);
+      break;
+    }
+    case MSG_DO_UNPAUSE: {
+      Pause(false);
+      break;
+    }
+    default: {
+      ASSERT(false);
+    }
+  }
 }
 
 // Get the distance between the supported and desired formats.
@@ -381,11 +518,16 @@ int64 VideoCapturer::GetFormatDistance(const VideoFormat& desired,
   if (delta_h < 0) {
     delta_h = delta_h * kDownPenalty;
   }
+  // Require camera fps to be at least 80% of what is requested if resolution
+  // matches.
+  // Require camera fps to be at least 96% of what is requested, or higher,
+  // if resolution differs. 96% allows for slight variations in fps. e.g. 29.97
   if (delta_fps < 0) {
-    // For same resolution, prefer higher framerate but accept lower.
-    // Otherwise prefer higher resolution.
+    int64 min_desirable_fps = delta_w ?
+    VideoFormat::IntervalToFps(desired.interval) * 29 / 30 :
+    VideoFormat::IntervalToFps(desired.interval) * 24 / 30;
     delta_fps = -delta_fps;
-    if (supported_fps < kMinDesirableFps) {
+    if (supported_fps < min_desirable_fps) {
       distance |= static_cast<int64>(1) << 62;
     } else {
       distance |= static_cast<int64>(1) << 15;

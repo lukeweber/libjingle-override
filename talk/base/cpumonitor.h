@@ -113,6 +113,7 @@ class CpuMonitor
  public:
   explicit CpuMonitor(Thread* thread);
   virtual ~CpuMonitor();
+  void set_thread(Thread* thread);
 
   bool Start(int period_ms);
   void Stop();

@@ -34,13 +34,13 @@
 #include "talk/base/criticalsection.h"
 #include "talk/base/sigslotrepeater.h"
 #include "talk/base/thread.h"
+#include "talk/media/base/capturemanager.h"
 #include "talk/media/base/mediaengine.h"
 #include "talk/p2p/base/session.h"
 #include "talk/session/media/voicechannel.h"
 
 namespace cricket {
 
-class CaptureManager;
 class Soundclip;
 class VideoProcessor;
 class VoiceChannel;
@@ -118,7 +118,8 @@ class ChannelManager : public talk_base::MessageHandler,
   // Destroys a video channel created with the Create API.
   void DestroyVideoChannel(VideoChannel* video_channel);
   DataChannel* CreateDataChannel(
-      BaseSession* session, const std::string& content_name, bool rtcp);
+      BaseSession* session, const std::string& content_name,
+      bool rtcp, DataChannelType data_channel_type);
   // Destroys a data channel created with the Create API.
   void DestroyDataChannel(DataChannel* data_channel);
 
@@ -183,13 +184,22 @@ class ChannelManager : public talk_base::MessageHandler,
                                 VoiceProcessor* processor,
                                 MediaProcessorDirection direction);
   // The following are done in the new "CaptureManager" style that
-  // all local video capturers, processors, and managers should move
-  // to.
-  // TODO(pthatcher): Add more of the CaptureManager interface.
+  // all local video capturers, processors, and managers should move to.
+  // TODO(pthatcher): Make methods nicer by having start return a handle that
+  // can be used for stop and restart, rather than needing to pass around
+  // formats a a pseudo-handle.
   bool StartVideoCapture(VideoCapturer* video_capturer,
                          const VideoFormat& video_format);
+  // When muting, produce black frames then pause the camera.
+  // When unmuting, start the camera. Camera starts unmuted.
+  bool MuteToBlackThenPause(VideoCapturer* video_capturer, bool muted);
   bool StopVideoCapture(VideoCapturer* video_capturer,
                         const VideoFormat& video_format);
+  bool RestartVideoCapture(VideoCapturer* video_capturer,
+                           const VideoFormat& previous_format,
+                           const VideoFormat& desired_format,
+                           CaptureManager::RestartOptions options);
+
   bool AddVideoRenderer(VideoCapturer* capturer, VideoRenderer* renderer);
   bool RemoveVideoRenderer(VideoCapturer* capturer, VideoRenderer* renderer);
 
@@ -198,7 +208,7 @@ class ChannelManager : public talk_base::MessageHandler,
   bool GetAudioInputDevices(std::vector<std::string>* names);
   bool GetAudioOutputDevices(std::vector<std::string>* names);
   bool GetVideoCaptureDevices(std::vector<std::string>* names);
-  void SetVideoCaptureDeviceMaxFormat(const std::string& uvc_id,
+  void SetVideoCaptureDeviceMaxFormat(const std::string& usb_id,
                                       const VideoFormat& max_format);
 
   sigslot::repeater0<> SignalDevicesChange;
@@ -231,7 +241,6 @@ class ChannelManager : public talk_base::MessageHandler,
                  DeviceManagerInterface* dm,
                  CaptureManager* cm,
                  talk_base::Thread* worker_thread);
-  bool Send(uint32 id, talk_base::MessageData* pdata);
   void Terminate_w();
   VoiceChannel* CreateVoiceChannel_w(
       BaseSession* session, const std::string& content_name, bool rtcp);
@@ -241,47 +250,21 @@ class ChannelManager : public talk_base::MessageHandler,
       VoiceChannel* voice_channel);
   void DestroyVideoChannel_w(VideoChannel* video_channel);
   DataChannel* CreateDataChannel_w(
-      BaseSession* session, const std::string& content_name, bool rtcp);
+      BaseSession* session, const std::string& content_name,
+      bool rtcp, DataChannelType data_channel_type);
   void DestroyDataChannel_w(DataChannel* data_channel);
   Soundclip* CreateSoundclip_w();
   void DestroySoundclip_w(Soundclip* soundclip);
   bool SetAudioOptions_w(int opts, int delay_offset, const Device* in_dev,
                          const Device* out_dev);
-  bool GetOutputVolume_w(int* level);
-  bool SetOutputVolume_w(int level);
-  bool SetLocalMonitor_w(bool enable);
   bool SetCaptureDevice_w(const Device* cam_device);
-  bool SetDefaultVideoEncoderConfig_w(const VideoEncoderConfig& config);
-  bool SetLocalRenderer_w(VideoRenderer* renderer);
-  bool SetVideoCapturer_w(VideoCapturer* capturer);
-  bool SetVideoCapture_w(bool capture);
-  void SetMediaLogging(bool video, int level, const char* filter);
-  void SetMediaLogging_w(bool video, int level, const char* filter);
   void OnVideoCaptureStateChange(VideoCapturer* capturer,
                                  CaptureState result);
   bool RegisterVideoProcessor_w(VideoCapturer* capturer,
                                 VideoProcessor* processor);
   bool UnregisterVideoProcessor_w(VideoCapturer* capturer,
                                   VideoProcessor* processor);
-  bool RegisterVoiceProcessor_w(uint32 ssrc,
-                                VoiceProcessor* processor,
-                                MediaProcessorDirection direction);
-  bool UnregisterVoiceProcessor_w(uint32 ssrc,
-                                  VoiceProcessor* processor,
-                                  MediaProcessorDirection direction);
-  // The following are done in the new "CaptureManager" style that
-  // all local video capturers, processors, and managers should move
-  // to.
-  // TODO(pthatcher): Add more of the CaptureManager interface.
-  bool StartVideoCapture_w(VideoCapturer* video_capturer,
-                           const VideoFormat& video_format);
-  bool StopVideoCapture_w(VideoCapturer* video_capturer,
-                          const VideoFormat& video_format);
-  bool AddVideoRenderer_w(VideoCapturer* capturer, VideoRenderer* renderer);
-  bool RemoveVideoRenderer_w(VideoCapturer* capturer, VideoRenderer* renderer);
-  VideoFormat GetStartCaptureFormat_w();
-
-  void OnMessage(talk_base::Message *message);
+  virtual void OnMessage(talk_base::Message *message);
 
   talk_base::scoped_ptr<MediaEngineInterface> media_engine_;
   talk_base::scoped_ptr<DataEngineInterface> data_media_engine_;

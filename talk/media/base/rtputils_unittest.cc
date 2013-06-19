@@ -75,6 +75,10 @@ static const unsigned char kNonCompoundRtcpSDESPacket[] = {
 };
 
 TEST(RtpUtilsTest, GetRtp) {
+  int ver;
+  EXPECT_TRUE(GetRtpVersion(kPcmuFrame, sizeof(kPcmuFrame), &ver));
+  EXPECT_EQ(2, ver);
+
   int pt;
   EXPECT_TRUE(GetRtpPayloadType(kPcmuFrame, sizeof(kPcmuFrame), &pt));
   EXPECT_EQ(0, pt);

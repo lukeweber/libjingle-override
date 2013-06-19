@@ -35,7 +35,8 @@ namespace cricket {
 class CpuInfo {
  public:
   // The following flags must match libyuv/cpu_id.h values.
-  static const int kCpuInitialized = 0x1;
+  // Internal flag to indicate cpuid requires initialization.
+  static const int kCpuInit = 0x1;
 
   // These flags are only valid on ARM processors.
   static const int kCpuHasARM = 0x2;
@@ -49,7 +50,13 @@ class CpuInfo {
   static const int kCpuHasSSE41 = 0x80;
   static const int kCpuHasSSE42 = 0x100;
   static const int kCpuHasAVX = 0x200;
-  // 0x400 reserved for AVX2.
+  static const int kCpuHasAVX2 = 0x400;
+  static const int kCpuHasERMS = 0x800;
+
+  // These flags are only valid on MIPS processors.
+  static const int kCpuHasMIPS = 0x1000;
+  static const int kCpuHasMIPS_DSP = 0x2000;
+  static const int kCpuHasMIPS_DSPR2 = 0x4000;
 
   // Detect CPU has SSE2 etc.
   static bool TestCpuFlag(int flag);

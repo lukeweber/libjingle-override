@@ -43,6 +43,7 @@
 
 namespace cricket {
 
+class AudioRenderer;
 class VideoCapturer;
 class VideoRenderer;
 class VideoFrame;
@@ -72,8 +73,8 @@ class NotifierInterface {
 // provide media. A source can be shared with multiple tracks.
 // TODO(perkj): Implement sources for local and remote audio tracks and
 // remote video tracks.
-class MediaSourceInterface :  public talk_base::RefCountInterface,
-                              public NotifierInterface {
+class MediaSourceInterface : public talk_base::RefCountInterface,
+                             public NotifierInterface {
  public:
   enum SourceState {
     kInitializing,
@@ -151,7 +152,14 @@ class AudioSourceInterface : public MediaSourceInterface {
 
 class AudioTrackInterface : public MediaStreamTrackInterface {
  public:
+  // TODO(xians): Figure out if the following interface should be const or not.
   virtual AudioSourceInterface* GetSource() const =  0;
+
+  // Gets a pointer to the frame input of this AudioTrack.
+  // The pointer is valid for the lifetime of this AudioTrack.
+  // TODO(xians): Make the following interface pure virtual once Chrome has its
+  // implementation.
+  virtual cricket::AudioRenderer* FrameInput() { return NULL; }
 
  protected:
   virtual ~AudioTrackInterface() {}
@@ -181,70 +189,6 @@ class MediaStreamInterface : public talk_base::RefCountInterface,
 
  protected:
   virtual ~MediaStreamInterface() {}
-};
-
-// MediaConstraintsInterface
-// Interface used for passing arguments about media constraints
-// to the MediaStream and PeerConnection implementation.
-class MediaConstraintsInterface {
- public:
-  struct Constraint {
-    Constraint() {}
-    Constraint(const std::string& key, const std::string value)
-        : key(key), value(value) {
-    }
-    std::string key;
-    std::string value;
-  };
-  typedef std::vector<Constraint> Constraints;
-
-  virtual const Constraints& GetMandatory() const = 0;
-  virtual const Constraints& GetOptional() const = 0;
-
-
-  // Constraint keys used by a local video source.
-  // Specified by draft-alvestrand-constraints-resolution-00b
-  static const char kMinAspectRatio[];  // minAspectRatio
-  static const char kMaxAspectRatio[];  // maxAspectRatio
-  static const char kMaxWidth[];  // maxWidth
-  static const char kMinWidth[];  // minWidth
-  static const char kMaxHeight[];  // maxHeight
-  static const char kMinHeight[];  // minHeight
-  static const char kMaxFrameRate[];  // maxFrameRate
-  static const char kMinFrameRate[];  // minFrameRate
-
-  // Constraint keys used by a local audio source.
-  // These keys are google specific.
-  static const char kEchoCancellation[];  // googEchoCancellation
-  static const char kAutoGainControl[];  // googAutoGainControl
-  static const char kExperimentalAutoGainControl[];  // googAutoGainControl2
-  static const char kNoiseSuppression[];  // googNoiseSuppression
-  static const char kHighpassFilter[];  // googHighpassFilter
-
-  // Google-specific constraint keys for a local video source
-  static const char kNoiseReduction[];  // googNoiseReduction
-  static const char kLeakyBucket[];  // googLeakyBucket
-
-  // Constraint keys for CreateOffer / CreateAnswer
-  // Specified by the W3C PeerConnection spec
-  static const char kOfferToReceiveVideo[];  // OfferToReceiveVideo
-  static const char kOfferToReceiveAudio[];  // OfferToReceiveAudio
-  static const char kIceRestart[];  // IceRestart
-  // These keys are google specific.
-  static const char kUseRtpMux[];  // googUseRtpMUX
-
-  // Constraints values.
-  static const char kValueTrue[];  // true
-  static const char kValueFalse[];  // false
-
-  // Temporary pseudo-constraints used to enable DTLS-SRTP
-  static const char kEnableDtlsSrtp[];  // Enable DTLS-SRTP
-  // Temporary pseudo-constraints used to enable DataChannels
-  static const char kEnableRtpDataChannels[];  // Enable DataChannels
-
- protected:
-  // Dtor protected as objects shouldn't be deleted via this interface
-  virtual ~MediaConstraintsInterface() {}
 };
 
 }  // namespace webrtc

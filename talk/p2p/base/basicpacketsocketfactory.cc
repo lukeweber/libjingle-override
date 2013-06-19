@@ -25,13 +25,15 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "talk/base/basicpacketsocketfactory.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 
 #include "talk/base/asyncudpsocket.h"
 #include "talk/base/asynctcpsocket.h"
 #include "talk/base/logging.h"
 #include "talk/base/socketadapters.h"
 #include "talk/base/thread.h"
+#include "talk/p2p/base/asyncstuntcpsocket.h"
+#include "talk/p2p/base/stun.h"
 
 namespace talk_base {
 
@@ -73,7 +75,7 @@ AsyncPacketSocket* BasicPacketSocketFactory::CreateUdpSocket(
 }
 
 AsyncPacketSocket* BasicPacketSocketFactory::CreateServerTcpSocket(
-    const SocketAddress& local_address, int min_port, int max_port, bool ssl) {
+    const SocketAddress& local_address, int min_port, int max_port, int opts) {
   talk_base::AsyncSocket* socket =
       socket_factory()->CreateAsyncSocket(local_address.family(),
                                           SOCK_STREAM);
@@ -89,7 +91,7 @@ AsyncPacketSocket* BasicPacketSocketFactory::CreateServerTcpSocket(
   }
 
   // If using SSLTCP, wrap the TCP socket in a pseudo-SSL socket.
-  if (ssl) {
+  if (opts & PacketSocketFactory::OPT_SSLTCP) {
     socket = new talk_base::AsyncSSLSocket(socket);
   }
 
@@ -97,12 +99,15 @@ AsyncPacketSocket* BasicPacketSocketFactory::CreateServerTcpSocket(
   // See http://go/gtalktcpnodelayexperiment
   socket->SetOption(talk_base::Socket::OPT_NODELAY, 1);
 
+  if (opts & PacketSocketFactory::OPT_STUN)
+    return new cricket::AsyncStunTCPSocket(socket, true);
+
   return new talk_base::AsyncTCPSocket(socket, true);
 }
 
 AsyncPacketSocket* BasicPacketSocketFactory::CreateClientTcpSocket(
     const SocketAddress& local_address, const SocketAddress& remote_address,
-    const ProxyInfo& proxy_info, const std::string& user_agent, bool ssl) {
+    const ProxyInfo& proxy_info, const std::string& user_agent, int opts) {
   talk_base::AsyncSocket* socket =
       socket_factory()->CreateAsyncSocket(local_address.family(), SOCK_STREAM);
   if (!socket) {
@@ -127,7 +132,7 @@ AsyncPacketSocket* BasicPacketSocketFactory::CreateClientTcpSocket(
   }
 
   // If using SSLTCP, wrap the TCP socket in a pseudo-SSL socket.
-  if (ssl) {
+  if (opts & PacketSocketFactory::OPT_SSLTCP) {
     socket = new talk_base::AsyncSSLSocket(socket);
   }
 
@@ -138,9 +143,13 @@ AsyncPacketSocket* BasicPacketSocketFactory::CreateClientTcpSocket(
     return NULL;
   }
 
-  // Finally, wrap that socket in a TCP packet socket.
-  talk_base::AsyncTCPSocket* tcp_socket =
-      new talk_base::AsyncTCPSocket(socket, false);
+  // Finally, wrap that socket in a TCP or STUN TCP packet socket.
+  AsyncPacketSocket* tcp_socket;
+  if (opts & PacketSocketFactory::OPT_STUN) {
+    tcp_socket = new cricket::AsyncStunTCPSocket(socket, false);
+  } else {
+    tcp_socket = new talk_base::AsyncTCPSocket(socket, false);
+  }
 
   // Set TCP_NODELAY (via OPT_NODELAY) for improved performance.
   // See http://go/gtalktcpnodelayexperiment

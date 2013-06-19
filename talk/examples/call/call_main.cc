@@ -248,7 +248,8 @@ int main(int argc, char **argv) {
   DEFINE_string(videooutput, NULL, "RTP dump file for video output.");
   DEFINE_string(turnserver, "", "Override a specific turn server.");
   DEFINE_bool(render, true, "Renders the video.");
-  DEFINE_bool(datachannel, false, "Enable an RTP data channel.");
+  DEFINE_string(datachannel, "",
+                "Enable a data channel, and choose the type: rtp or sctp.");
   DEFINE_bool(d, false, "Turn on debugging.");
   DEFINE_string(log, "", "Turn on debugging to a file.");
   DEFINE_bool(debugsrtp, false, "Enable debugging for srtp.");
@@ -283,7 +284,7 @@ int main(int argc, char **argv) {
   std::string caps_ver = FLAG_capsver;
   bool debugsrtp = FLAG_debugsrtp;
   bool render = FLAG_render;
-  bool data_channel_enabled = FLAG_datachannel;
+  std::string data_channel = FLAG_datachannel;
   bool multisession_enabled = FLAG_multisession;
   talk_base::SSLIdentity* ssl_identity = NULL;
   bool show_roster_messages = FLAG_roster;
@@ -410,6 +411,16 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  cricket::DataChannelType data_channel_type = cricket::DCT_NONE;
+  if (data_channel == "rtp") {
+    data_channel_type = cricket::DCT_RTP;
+  } else if (data_channel == "sctp") {
+    data_channel_type = cricket::DCT_SCTP;
+  } else if (!data_channel.empty()) {
+    Print("Invalid data channel type.  Must be rtp or sctp.\n");
+    return 1;
+  }
+
   cricket::SecurePolicy sdes_policy, dtls_policy;
   if (!GetSecurePolicy(sdes, &sdes_policy)) {
     Print("Invalid SDES policy. Must be enable, disable, or require.\n");
@@ -467,7 +478,7 @@ int main(int argc, char **argv) {
   client->SetSecurePolicy(sdes_policy, dtls_policy);
   client->SetSslIdentity(ssl_identity);
   client->SetRender(render);
-  client->SetDataChannelEnabled(data_channel_enabled);
+  client->SetDataChannelType(data_channel_type);
   client->SetMultiSessionEnabled(multisession_enabled);
   client->SetShowRosterMessages(show_roster_messages);
   console->Start();

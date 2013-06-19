@@ -79,6 +79,9 @@ class AsyncPacketSocket : public sigslot::has_slots<> {
   sigslot::signal4<AsyncPacketSocket*, const char*, size_t,
                    const SocketAddress&> SignalReadPacket;
 
+  // Emitted when the socket is currently able to send.
+  sigslot::signal1<AsyncPacketSocket*> SignalReadyToSend;
+
   // Emitted after address for the socket is allocated, i.e. binding
   // is finished. State of the socket is changed from BINDING to BOUND
   // (for UDP and server TCP sockets) or CONNECTING (for client TCP

@@ -21,6 +21,7 @@
       'WEBRTC_RELATIVE_PATH',
       'USE_WEBRTC_DEV_BRANCH',
       '_USE_32BIT_TIME_T',
+      'DISABLE_YUV',
     ],
     'configurations': {
       'Debug': {
@@ -184,7 +185,7 @@
         # the same place as the chromium logging.
         'talk/base/logging.cc',
         'talk/base/logging.h',
-
+        
         'talk/base/asyncfile.cc',
         'talk/base/asyncfile.h',
         'talk/base/asynchttprequest.cc',
@@ -201,8 +202,6 @@
         'talk/base/base64.cc',
         'talk/base/base64.h',
         'talk/base/basicdefs.h',
-        'talk/base/basicpacketsocketfactory.cc',
-        'talk/base/basicpacketsocketfactory.h',
         'talk/base/bytebuffer.cc',
         'talk/base/bytebuffer.h',
         'talk/base/byteorder.h',
@@ -304,6 +303,8 @@
         'talk/base/stringencode.h',
         'talk/base/stringutils.cc',
         'talk/base/stringutils.h',
+        'talk/base/systeminfo.cc',
+        'talk/base/systeminfo.h',
         'talk/base/task.cc',
         'talk/base/task.h',
         'talk/base/taskparent.cc',
@@ -456,6 +457,10 @@
       'target_name': 'libjingle_p2p',
       'type': 'static_library',
       'sources': [
+        'talk/p2p/base/asyncstuntcpsocket.cc',
+        'talk/p2p/base/asyncstuntcpsocket.h',
+        'talk/p2p/base/basicpacketsocketfactory.cc',
+        'talk/p2p/base/basicpacketsocketfactory.h',
         'talk/p2p/base/candidate.h',
         'talk/p2p/base/common.h',
         'talk/p2p/base/constants.cc',
@@ -673,7 +678,7 @@
         '<(DEPTH)/third_party/webrtc/modules/modules.gyp:video_capture_module',
         '<(DEPTH)/third_party/webrtc/modules/modules.gyp:video_render_module',
         '<(DEPTH)/third_party/webrtc/video_engine/video_engine.gyp:video_engine_core',
-        '<(DEPTH)/third_party/webrtc/voice_engine/voice_engine.gyp:voice_engine_core',
+        '<(DEPTH)/third_party/webrtc/voice_engine/voice_engine.gyp:voice_engine',
         '<(DEPTH)/third_party/webrtc/system_wrappers/source/system_wrappers.gyp:system_wrappers',
         'libjingle',
         'libjingle_p2p',
@@ -774,7 +779,7 @@
         #'<(DEPTH)/third_party/webrtc/modules/modules.gyp:video_capture_module',
         #'<(DEPTH)/third_party/webrtc/modules/modules.gyp:video_render_module',
         #'<(DEPTH)/third_party/webrtc/video_engine/video_engine.gyp:video_engine_core',
-        '<(DEPTH)/third_party/webrtc/voice_engine/voice_engine.gyp:voice_engine_core',
+        '<(DEPTH)/third_party/webrtc/voice_engine/voice_engine.gyp:voice_engine',
         '<(DEPTH)/third_party/webrtc/system_wrappers/source/system_wrappers.gyp:system_wrappers',
         'libjingle',
         'libjingle_p2p',

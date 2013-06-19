@@ -90,10 +90,9 @@ class PortAllocatorSessionProxy : public PortAllocatorSession {
   void set_impl(PortAllocatorSession* session);
 
   // Forwards call to the actual PortAllocatorSession.
-  virtual void GetInitialPorts();
-  virtual void StartGetAllPorts();
-  virtual void StopGetAllPorts();
-  virtual bool IsGettingAllPorts();
+  virtual void StartGettingPorts();
+  virtual void StopGettingPorts();
+  virtual bool IsGettingPorts();
 
   virtual void set_generation(uint32 generation) {
     ASSERT(impl_ != NULL);

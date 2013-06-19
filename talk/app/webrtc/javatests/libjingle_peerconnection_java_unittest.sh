@@ -1,7 +1,7 @@
-#!/usr/bin/env python
+#!/bin/bash
 #
 # libjingle
-# Copyright 2004--2010, Google Inc.
+# Copyright 2013, Google Inc.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -25,35 +25,23 @@
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import os
-import re
-import sys
+# Wrapper script for running the Java tests under this directory.
 
-"""
-Copied from Chrome's src/tools/valgrind/tsan/PRESUBMIT.py
+# Exit with error immediately if any subcommand fails.
+set -e
 
-See http://dev.chromium.org/developers/how-tos/depottools/presubmit-scripts
-for more details on the presubmit API built into gcl.
-"""
+# Change directory to the PRODUCT_DIR (e.g. out/Debug).
+cd -P $(dirname $0)
 
-def CheckChange(input_api, output_api):
-  """Checks the TSan suppressions files for bad suppressions."""
+export CLASSPATH=`pwd`/junit-4.11.jar
+CLASSPATH=$CLASSPATH:`pwd`/libjingle_peerconnection_test.jar
+CLASSPATH=$CLASSPATH:`pwd`/libjingle_peerconnection.jar
 
-  # Add the path to the Chrome valgrind dir to the import path:
-  tools_vg_path = os.path.join(input_api.PresubmitLocalPath(), '..', '..',
-                               'valgrind')
-  sys.path.append(tools_vg_path)
-  import suppressions
+export LD_LIBRARY_PATH=`pwd`
 
-  return suppressions.PresubmitCheck(input_api, output_api)
+# The RHS value is replaced by the build action that copies this script to
+# <(PRODUCT_DIR).
+export JAVA_HOME=GYP_JAVA_HOME
 
-def CheckChangeOnUpload(input_api, output_api):
-  return CheckChange(input_api, output_api)
-
-def CheckChangeOnCommit(input_api, output_api):
-  return CheckChange(input_api, output_api)
-
-def GetPreferredTrySlaves():
-  # We don't have any tsan slaves yet, so there's no use for this method.
-  # When we have, the slave name(s) should be put into this list.
-  return []
+${JAVA_HOME}/bin/java -Xcheck:jni -classpath $CLASSPATH \
+    junit.textui.TestRunner org.webrtc.PeerConnectionTest

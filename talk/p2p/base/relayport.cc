@@ -158,6 +158,9 @@ class RelayEntry : public talk_base::MessageHandler,
                     const char* data, size_t size,
                     const talk_base::SocketAddress& remote_addr);
 
+  // Called when the socket is currently able to send.
+  void OnReadyToSend(talk_base::AsyncPacketSocket* socket);
+
   // Sends the given data on the socket to the server with no wrapping.  This
   // returns the number of bytes written or -1 if an error occurred.
   int SendPacket(const void* data, size_t size);
@@ -188,8 +191,7 @@ RelayPort::RelayPort(
     talk_base::Network* network, const talk_base::IPAddress& ip,
     int min_port, int max_port, const std::string& username,
     const std::string& password)
-    : Port(thread, RELAY_PORT_TYPE, ICE_TYPE_PREFERENCE_RELAY,
-           factory, network, ip, min_port, max_port,
+    : Port(thread, RELAY_PORT_TYPE, factory, network, ip, min_port, max_port,
            username, password),
       ready_(false),
       error_(0) {
@@ -222,7 +224,7 @@ void RelayPort::AddExternalAddress(const ProtocolAddress& addr) {
        it != external_addr_.end(); ++it) {
     if ((it->address == addr.address) && (it->proto == addr.proto)) {
       LOG(INFO) << "Redundant relay address: " << proto_name
-                << " @ " << addr.address.ToString();
+                << " @ " << addr.address.ToSensitiveString();
       return;
     }
   }
@@ -239,7 +241,7 @@ void RelayPort::SetReady() {
                  RELAY_PORT_TYPE, ICE_TYPE_PREFERENCE_RELAY, false);
     }
     ready_ = true;
-    SignalAddressReady(this);
+    SignalPortComplete(this);
   }
 }
 
@@ -269,7 +271,8 @@ void RelayPort::PrepareAddress() {
 Connection* RelayPort::CreateConnection(const Candidate& address,
                                         CandidateOrigin origin) {
   // We only create conns to non-udp sockets if they are incoming on this port
-  if ((address.protocol() != "udp") && (origin != ORIGIN_THIS_PORT)) {
+  if ((address.protocol() != UDP_PROTOCOL_NAME) &&
+      (origin != ORIGIN_THIS_PORT)) {
     return 0;
   }
 
@@ -464,7 +467,7 @@ void RelayEntry::Connect() {
 
   // Try to set up our new socket.
   LOG(LS_INFO) << "Connecting to relay via " << ProtoToString(ra->proto) <<
-      " @ " << ra->address.ToString();
+      " @ " << ra->address.ToSensitiveString();
 
   talk_base::AsyncPacketSocket* socket = NULL;
 
@@ -474,9 +477,11 @@ void RelayEntry::Connect() {
         talk_base::SocketAddress(port_->ip(), 0),
         port_->min_port(), port_->max_port());
   } else if (ra->proto == PROTO_TCP || ra->proto == PROTO_SSLTCP) {
+    int opts = (ra->proto == PROTO_SSLTCP) ?
+     talk_base::PacketSocketFactory::OPT_SSLTCP : 0;
     socket = port_->socket_factory()->CreateClientTcpSocket(
         talk_base::SocketAddress(port_->ip(), 0), ra->address,
-        port_->proxy(), port_->user_agent(), ra->proto == PROTO_SSLTCP);
+        port_->proxy(), port_->user_agent(), opts);
   } else {
     LOG(LS_WARNING) << "Unknown protocol (" << ra->proto << ")";
   }
@@ -493,6 +498,7 @@ void RelayEntry::Connect() {
 
   // Otherwise, create the new connection and configure any socket options.
   socket->SignalReadPacket.connect(this, &RelayEntry::OnReadPacket);
+  socket->SignalReadyToSend.connect(this, &RelayEntry::OnReadyToSend);
   current_connection_ = new RelayConnection(ra, socket, port()->thread());
   for (size_t i = 0; i < port_->options().size(); ++i) {
     current_connection_->SetSocketOption(port_->options()[i].first,
@@ -528,7 +534,7 @@ void RelayEntry::OnConnect(const talk_base::SocketAddress& mapped_addr,
   // We are connected, notify our parent.
   ProtocolType proto = PROTO_UDP;
   LOG(INFO) << "Relay allocate succeeded: " << ProtoToString(proto)
-            << " @ " << mapped_addr.ToString();
+            << " @ " << mapped_addr.ToSensitiveString();
   connected_ = true;
 
   // In case of Gturn related address is set to null socket address.
@@ -648,7 +654,7 @@ void RelayEntry::OnMessage(talk_base::Message *pmsg) {
 
 void RelayEntry::OnSocketConnect(talk_base::AsyncPacketSocket* socket) {
   LOG(INFO) << "relay tcp connected to " <<
-      socket->GetRemoteAddress().ToString();
+      socket->GetRemoteAddress().ToSensitiveString();
   if (current_connection_ != NULL) {
     current_connection_->SendAllocateRequest(this, 0);
   }
@@ -730,6 +736,12 @@ void RelayEntry::OnReadPacket(talk_base::AsyncPacketSocket* socket,
   // Process the actual data and remote address in the normal manner.
   port_->OnReadPacket(data_attr->bytes(), data_attr->length(), remote_addr2,
                       PROTO_UDP);
+}
+
+void RelayEntry::OnReadyToSend(talk_base::AsyncPacketSocket* socket) {
+  if (connected()) {
+    port_->OnReadyToSend();
+  }
 }
 
 int RelayEntry::SendPacket(const void* data, size_t size) {

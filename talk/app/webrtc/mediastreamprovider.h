@@ -30,10 +30,11 @@
 
 namespace cricket {
 
-struct AudioOptions;
-struct VideoOptions;
+class AudioRenderer;
 class VideoCapturer;
 class VideoRenderer;
+struct AudioOptions;
+struct VideoOptions;
 
 }  // namespace cricket
 
@@ -43,12 +44,15 @@ namespace webrtc {
 // to change the settings of an audio track connected to certain PeerConnection.
 class AudioProviderInterface {
  public:
-  // Enable/disable the audio playout of a remote audio track with name |name|.
-  virtual void SetAudioPlayout(const std::string& name, bool enable) = 0;
-  // Enable/disable sending audio on the local audio track with name |name|.
+  // Enable/disable the audio playout of a remote audio track with |ssrc|.
+  virtual void SetAudioPlayout(uint32 ssrc, bool enable) = 0;
+  // Enable/disable sending audio on the local audio track with |ssrc|.
   // When |enable| is true |options| should be applied to the audio track.
-  virtual void SetAudioSend(const std::string& name, bool enable,
+  virtual void SetAudioSend(uint32 ssrc, bool enable,
                             const cricket::AudioOptions& options) = 0;
+  // Sets the renderer to be used for the specified |ssrc|.
+  virtual bool SetAudioRenderer(uint32 ssrc,
+                                cricket::AudioRenderer* renderer) = 0;
 
  protected:
   virtual ~AudioProviderInterface() {}
@@ -59,14 +63,13 @@ class AudioProviderInterface {
 // PeerConnection.
 class VideoProviderInterface {
  public:
-  virtual bool SetCaptureDevice(const std::string& name,
+  virtual bool SetCaptureDevice(uint32 ssrc,
                                 cricket::VideoCapturer* camera) = 0;
-  // Enable/disable the video playout of a remote video track with name |name|.
-  virtual void SetVideoPlayout(const std::string& name,
-                               bool enable,
+  // Enable/disable the video playout of a remote video track with |ssrc|.
+  virtual void SetVideoPlayout(uint32 ssrc, bool enable,
                                cricket::VideoRenderer* renderer) = 0;
-  // Enable sending video on the local video track with name |name|.
-  virtual void SetVideoSend(const std::string& name, bool enable,
+  // Enable sending video on the local video track with |ssrc|.
+  virtual void SetVideoSend(uint32 ssrc, bool enable,
                             const cricket::VideoOptions* options) = 0;
 
  protected:

@@ -71,6 +71,14 @@ BOOL CALLBACK Win32WindowPicker::MonitorEnumProc(HMONITOR h_monitor,
   DesktopId id(h_monitor, static_cast<int>(desktop_desc->size()));
   // TODO: Figure out an appropriate desktop title.
   DesktopDescription desc(id, "");
+
+  // Determine whether it's the primary monitor.
+  MONITORINFO monitor_info = {0};
+  monitor_info.cbSize = sizeof(monitor_info);
+  bool primary = (GetMonitorInfo(h_monitor, &monitor_info) &&
+      (monitor_info.dwFlags & MONITORINFOF_PRIMARY) != 0);
+  desc.set_primary(primary);
+
   desktop_desc->push_back(desc);
   return TRUE;
 }

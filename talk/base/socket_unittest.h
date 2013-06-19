@@ -69,6 +69,8 @@ class SocketTest : public testing::Test {
   void TestSingleFlowControlCallbackIPv6();
   void TestUdpIPv4();
   void TestUdpIPv6();
+  void TestUdpReadyToSendIPv4();
+  void TestUdpReadyToSendIPv6();
   void TestGetSetOptionsIPv4();
   void TestGetSetOptionsIPv6();
 
@@ -89,6 +91,7 @@ class SocketTest : public testing::Test {
   void TcpInternal(const IPAddress& loopback);
   void SingleFlowControlCallbackInternal(const IPAddress& loopback);
   void UdpInternal(const IPAddress& loopback);
+  void UdpReadyToSend(const IPAddress& loopback);
   void GetSetOptionsInternal(const IPAddress& loopback);
 
   static const int kTimeout = 5000;  // ms

@@ -8,6 +8,7 @@
 #include "talk/base/thread.h"
 #include "talk/media/base/fakemediaprocessor.h"
 #include "talk/media/base/fakevideocapturer.h"
+#include "talk/media/base/fakevideorenderer.h"
 #include "talk/media/base/testutils.h"
 #include "talk/media/base/videocapturer.h"
 #include "talk/media/base/videoprocessor.h"
@@ -23,9 +24,14 @@
 
 using cricket::FakeVideoCapturer;
 
+namespace {
+
 const int kMsCallbackWait = 500;
 // For HD only the height matters.
 const int kMinHdHeight = 720;
+const uint32 kTimeout = 5000U;
+
+}  // namespace
 
 // Sets the elapsed time in the video frame to 0.
 class VideoProcessor0 : public cricket::VideoProcessor {
@@ -65,6 +71,7 @@ class VideoCapturerTest
   void OnVideoFrame(cricket::VideoCapturer*, const cricket::VideoFrame* frame) {
     ++video_frames_received_;
     last_frame_elapsed_time_ = frame->GetElapsedTime();
+    renderer_.RenderFrame(frame);
   }
   void OnStateChange(cricket::VideoCapturer*,
                      cricket::CaptureState capture_state) {
@@ -83,6 +90,7 @@ class VideoCapturerTest
   int num_state_changes_;
   int video_frames_received_;
   int64 last_frame_elapsed_time_;
+  cricket::FakeVideoRenderer renderer_;
 };
 
 TEST_F(VideoCapturerTest, CaptureState) {
@@ -100,6 +108,90 @@ TEST_F(VideoCapturerTest, CaptureState) {
   capturer_.Stop();
   talk_base::Thread::Current()->ProcessMessages(100);
   EXPECT_EQ(2, num_state_changes());
+}
+
+TEST_F(VideoCapturerTest, TestRestart) {
+  EXPECT_EQ(cricket::CS_RUNNING, capturer_.Start(cricket::VideoFormat(
+      640,
+      480,
+      cricket::VideoFormat::FpsToInterval(30),
+      cricket::FOURCC_I420)));
+  EXPECT_TRUE(capturer_.IsRunning());
+  EXPECT_EQ_WAIT(cricket::CS_RUNNING, capture_state(), kMsCallbackWait);
+  EXPECT_EQ(1, num_state_changes());
+  EXPECT_TRUE(capturer_.Restart(cricket::VideoFormat(
+      320,
+      240,
+      cricket::VideoFormat::FpsToInterval(30),
+      cricket::FOURCC_I420)));
+  EXPECT_EQ_WAIT(cricket::CS_RUNNING, capture_state(), kMsCallbackWait);
+  EXPECT_TRUE(capturer_.IsRunning());
+  EXPECT_GE(1, num_state_changes());
+  capturer_.Stop();
+  talk_base::Thread::Current()->ProcessMessages(100);
+  EXPECT_FALSE(capturer_.IsRunning());
+}
+
+TEST_F(VideoCapturerTest, TestStartingWithRestart) {
+  EXPECT_FALSE(capturer_.IsRunning());
+  EXPECT_TRUE(capturer_.Restart(cricket::VideoFormat(
+      640,
+      480,
+      cricket::VideoFormat::FpsToInterval(30),
+      cricket::FOURCC_I420)));
+  EXPECT_TRUE(capturer_.IsRunning());
+  EXPECT_EQ_WAIT(cricket::CS_RUNNING, capture_state(), kMsCallbackWait);
+}
+
+TEST_F(VideoCapturerTest, TestRestartWithSameFormat) {
+  cricket::VideoFormat format(640, 480,
+                              cricket::VideoFormat::FpsToInterval(30),
+                              cricket::FOURCC_I420);
+  EXPECT_EQ(cricket::CS_RUNNING, capturer_.Start(format));
+  EXPECT_TRUE(capturer_.IsRunning());
+  EXPECT_EQ_WAIT(cricket::CS_RUNNING, capture_state(), kMsCallbackWait);
+  EXPECT_EQ(1, num_state_changes());
+  EXPECT_TRUE(capturer_.Restart(format));
+  EXPECT_EQ(cricket::CS_RUNNING, capture_state());
+  EXPECT_TRUE(capturer_.IsRunning());
+  EXPECT_EQ(1, num_state_changes());
+}
+
+TEST_F(VideoCapturerTest, CameraOffOnMute) {
+  EXPECT_EQ(cricket::CS_RUNNING, capturer_.Start(cricket::VideoFormat(
+      640,
+      480,
+      cricket::VideoFormat::FpsToInterval(30),
+      cricket::FOURCC_I420)));
+  EXPECT_TRUE(capturer_.IsRunning());
+  EXPECT_EQ(0, video_frames_received());
+  EXPECT_TRUE(capturer_.CaptureFrame());
+  EXPECT_EQ(1, video_frames_received());
+  EXPECT_FALSE(capturer_.IsMuted());
+
+  // Mute the camera and expect black output frame.
+  capturer_.MuteToBlackThenPause(true);
+  EXPECT_TRUE(capturer_.IsMuted());
+  for (int i = 0; i < 31; ++i) {
+    EXPECT_TRUE(capturer_.CaptureFrame());
+    EXPECT_TRUE(renderer_.black_frame());
+  }
+  EXPECT_EQ(32, video_frames_received());
+  EXPECT_EQ_WAIT(cricket::CS_PAUSED,
+                 capturer_.capture_state(), kTimeout);
+
+  // Verify that the camera is off.
+  EXPECT_FALSE(capturer_.CaptureFrame());
+  EXPECT_EQ(32, video_frames_received());
+
+  // Unmute the camera and expect non-black output frame.
+  capturer_.MuteToBlackThenPause(false);
+  EXPECT_FALSE(capturer_.IsMuted());
+  EXPECT_EQ_WAIT(cricket::CS_RUNNING,
+                 capturer_.capture_state(), kTimeout);
+  EXPECT_TRUE(capturer_.CaptureFrame());
+  EXPECT_FALSE(renderer_.black_frame());
+  EXPECT_EQ(33, video_frames_received());
 }
 
 TEST_F(VideoCapturerTest, TestFourccMatch) {
@@ -124,7 +216,7 @@ TEST_F(VideoCapturerTest, TestResolutionMatch) {
                                cricket::VideoFormat::FpsToInterval(30),
                                cricket::FOURCC_ANY);
   cricket::VideoFormat best;
-  // Ask for FHD 1920x1080. Get HD 1280x720 which is the highest.
+  // Ask for 1920x1080. Get HD 1280x720 which is the highest.
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
   EXPECT_EQ(1280, best.width);
   EXPECT_EQ(720, best.height);
@@ -164,31 +256,43 @@ TEST_F(VideoCapturerTest, TestResolutionMatch) {
 }
 
 TEST_F(VideoCapturerTest, TestHDResolutionMatch) {
-  // Add some HD formats
+  // Add some HD formats typical of a mediocre HD webcam.
   std::vector<cricket::VideoFormat> formats;
   formats.push_back(cricket::VideoFormat(320, 240,
       cricket::VideoFormat::FpsToInterval(30), cricket::FOURCC_I420));
   formats.push_back(cricket::VideoFormat(640, 480,
       cricket::VideoFormat::FpsToInterval(30), cricket::FOURCC_I420));
   formats.push_back(cricket::VideoFormat(960, 544,
-      cricket::VideoFormat::FpsToInterval(30), cricket::FOURCC_I420));
-  formats.push_back(cricket::VideoFormat(2592, 1944,
+      cricket::VideoFormat::FpsToInterval(24), cricket::FOURCC_I420));
+  formats.push_back(cricket::VideoFormat(1280, 720,
       cricket::VideoFormat::FpsToInterval(15), cricket::FOURCC_I420));
+  formats.push_back(cricket::VideoFormat(2592, 1944,
+      cricket::VideoFormat::FpsToInterval(7), cricket::FOURCC_I420));
   capturer_.ResetSupportedFormats(formats);
 
   cricket::VideoFormat desired(960, 720,
                                cricket::VideoFormat::FpsToInterval(30),
                                cricket::FOURCC_ANY);
   cricket::VideoFormat best;
-  // Ask for 960x720. Get qHD
+  // Ask for 960x720 30 fps. Get qHD 24 fps
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
   EXPECT_EQ(960, best.width);
   EXPECT_EQ(544, best.height);
-  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(30), best.interval);
+  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(24), best.interval);
+
+  desired.width = 960;
+  desired.height = 544;
+  desired.interval = cricket::VideoFormat::FpsToInterval(30);
+  // Ask for qHD 30 fps. Get qHD 24 fps
+  EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
+  EXPECT_EQ(960, best.width);
+  EXPECT_EQ(544, best.height);
+  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(24), best.interval);
 
   desired.width = 360;
   desired.height = 250;
-  // Ask for a litter higher than QVGA. Get QVGA.
+  desired.interval = cricket::VideoFormat::FpsToInterval(30);
+  // Ask for a little higher than QVGA. Get QVGA.
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
   EXPECT_EQ(320, best.width);
   EXPECT_EQ(240, best.height);
@@ -220,19 +324,29 @@ TEST_F(VideoCapturerTest, TestHDResolutionMatch) {
 
   desired.width = 1280;
   desired.height = 720;
-  // Ask for HD. Get qHD.
+  // Ask for HD. 720p fps is too low. Get VGA which has 30 fps.
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
-  EXPECT_EQ(960, best.width);
-  EXPECT_EQ(544, best.height);
+  EXPECT_EQ(640, best.width);
+  EXPECT_EQ(480, best.height);
   EXPECT_EQ(cricket::VideoFormat::FpsToInterval(30), best.interval);
+
+  desired.width = 1280;
+  desired.height = 720;
+  desired.interval = cricket::VideoFormat::FpsToInterval(15);
+  // Ask for HD 15 fps. Fps matches. Get HD
+  EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
+  EXPECT_EQ(1280, best.width);
+  EXPECT_EQ(720, best.height);
+  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(15), best.interval);
 
   desired.width = 1920;
   desired.height = 1080;
-  // Ask for 1080p. Get 2592x1944x15.
+  desired.interval = cricket::VideoFormat::FpsToInterval(30);
+  // Ask for 1080p. Fps of HD formats is too low. Get VGA which can do 30 fps.
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(desired, &best));
-  EXPECT_EQ(2592, best.width);
-  EXPECT_EQ(1944, best.height);
-  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(15), best.interval);
+  EXPECT_EQ(640, best.width);
+  EXPECT_EQ(480, best.height);
+  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(30), best.interval);
 }
 
 // Some cameras support 320x240 and 320x640. Verify we choose 320x240.
@@ -296,11 +410,10 @@ TEST_F(VideoCapturerTest, TestPoorFpsFormats) {
     EXPECT_EQ(required_formats[i].height, best.height);
   }
 
-  // Increase framerate of 320x240.  Expect low fps VGA avoided.
-  // Except on Mac, where QVGA is avoid due to aspect ratio.
+  // Increase framerate of 320x240. Expect low fps VGA avoided.
   supported_formats.clear();
   supported_formats.push_back(cricket::VideoFormat(320, 240,
-      cricket::VideoFormat::FpsToInterval(15), cricket::FOURCC_I420));
+      cricket::VideoFormat::FpsToInterval(30), cricket::FOURCC_I420));
   supported_formats.push_back(cricket::VideoFormat(640, 480,
       cricket::VideoFormat::FpsToInterval(7), cricket::FOURCC_I420));
   supported_formats.push_back(cricket::VideoFormat(1280, 720,
@@ -337,9 +450,9 @@ TEST_F(VideoCapturerTest, TestSameSizeDifferentFpsFormats) {
 }
 
 // Some cameras support the correct resolution but at a lower fps than
-// we'd like.  This tests we get the expected resolution and fps.
+// we'd like. This tests we get the expected resolution and fps.
 TEST_F(VideoCapturerTest, TestFpsFormats) {
-  // We have VGA but low fps.  Choose VGA, not HD
+  // We have VGA but low fps. Choose VGA, not HD
   std::vector<cricket::VideoFormat> supported_formats;
   supported_formats.push_back(cricket::VideoFormat(1280, 720,
       cricket::VideoFormat::FpsToInterval(30), cricket::FOURCC_I420));
@@ -360,17 +473,17 @@ TEST_F(VideoCapturerTest, TestFpsFormats) {
       cricket::VideoFormat::FpsToInterval(10), cricket::FOURCC_ANY));
   cricket::VideoFormat best;
 
-  // expect 30 fps to choose 15 fps format
+  // expect 30 fps to choose 30 fps format
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(required_formats[0], &best));
   EXPECT_EQ(640, best.width);
-  EXPECT_EQ(480, best.height);
-  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(15), best.interval);
+  EXPECT_EQ(400, best.height);
+  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(30), best.interval);
 
-  // expect 20 fps to choose 15 fps format
+  // expect 20 fps to choose 20 fps format
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(required_formats[1], &best));
   EXPECT_EQ(640, best.width);
-  EXPECT_EQ(480, best.height);
-  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(15), best.interval);
+  EXPECT_EQ(400, best.height);
+  EXPECT_EQ(cricket::VideoFormat::FpsToInterval(20), best.interval);
 
   // expect 10 fps to choose 15 fps format but set fps to 10
   EXPECT_TRUE(capturer_.GetBestCaptureFormat(required_formats[2], &best));
@@ -378,7 +491,7 @@ TEST_F(VideoCapturerTest, TestFpsFormats) {
   EXPECT_EQ(480, best.height);
   EXPECT_EQ(cricket::VideoFormat::FpsToInterval(10), best.interval);
 
-  // We have VGA 60 fps and 15 fps.  Choose best fps.
+  // We have VGA 60 fps and 15 fps. Choose best fps.
   supported_formats.clear();
   supported_formats.push_back(cricket::VideoFormat(1280, 720,
       cricket::VideoFormat::FpsToInterval(30), cricket::FOURCC_I420));
@@ -554,14 +667,14 @@ TEST_F(VideoCapturerTest, Whitelist) {
   std::vector<cricket::VideoFormat> formats = *capturer_.GetSupportedFormats();
   formats.push_back(hd_format);
 
-  // Enable whitelist.  Expect HD not in list.
+  // Enable whitelist. Expect HD not in list.
   capturer_.set_enable_camera_list(true);
   capturer_.ResetSupportedFormats(formats);
   EXPECT_TRUE(HdFormatInList(*capturer_.GetSupportedFormats()));
   capturer_.ConstrainSupportedFormats(vga_format);
   EXPECT_FALSE(HdFormatInList(*capturer_.GetSupportedFormats()));
 
-  // Disable whitelist.  Expect HD in list.
+  // Disable whitelist. Expect HD in list.
   capturer_.set_enable_camera_list(false);
   capturer_.ResetSupportedFormats(formats);
   EXPECT_TRUE(HdFormatInList(*capturer_.GetSupportedFormats()));

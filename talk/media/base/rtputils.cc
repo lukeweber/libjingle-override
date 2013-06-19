@@ -142,6 +142,16 @@ bool GetRtpHeaderLen(const void* data, size_t len, size_t* value) {
   return true;
 }
 
+bool GetRtpVersion(const void* data, size_t len, int* version) {
+  if (len == 0) {
+    return false;
+  }
+
+  const uint8 first = static_cast<const uint8*>(data)[0];
+  *version = static_cast<int>((first >> 6) & 0x3);
+  return true;
+}
+
 bool GetRtpHeader(const void* data, size_t len, RtpHeader* header) {
   return (GetRtpPayloadType(data, len, &(header->payload_type)) &&
           GetRtpSeqNum(data, len, &(header->seq_num)) &&

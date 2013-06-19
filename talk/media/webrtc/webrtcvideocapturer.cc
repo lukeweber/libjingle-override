@@ -175,8 +175,8 @@ bool WebRtcVideoCapturer::Init(const Device& device) {
   // Enumerate the supported formats.
   // TODO(juberti): Find out why this starts/stops the camera...
   std::vector<VideoFormat> supported;
-  WebRtc_Word32 num_caps = info->NumberOfCapabilities(vcm_id);
-  for (WebRtc_Word32 i = 0; i < num_caps; ++i) {
+  int32_t num_caps = info->NumberOfCapabilities(vcm_id);
+  for (int32_t i = 0; i < num_caps; ++i) {
     webrtc::VideoCaptureCapability cap;
     if (info->GetCapability(vcm_id, i, cap) != -1) {
       VideoFormat format;
@@ -311,7 +311,7 @@ bool WebRtcVideoCapturer::GetPreferredFourccs(
   return true;
 }
 
-void WebRtcVideoCapturer::OnIncomingCapturedFrame(const WebRtc_Word32 id,
+void WebRtcVideoCapturer::OnIncomingCapturedFrame(const int32_t id,
     webrtc::I420VideoFrame& sample) {
   ASSERT(IsRunning());
 
@@ -339,8 +339,8 @@ void WebRtcVideoCapturer::OnIncomingCapturedFrame(const WebRtc_Word32 id,
   SignalFrameCaptured(this, &frame);
 }
 
-void WebRtcVideoCapturer::OnCaptureDelayChanged(
-    const WebRtc_Word32 id, const WebRtc_Word32 delay) {
+void WebRtcVideoCapturer::OnCaptureDelayChanged(const int32_t id,
+                                                const int32_t delay) {
   LOG(LS_INFO) << "Capture delay changed to " << delay << " ms";
 }
 

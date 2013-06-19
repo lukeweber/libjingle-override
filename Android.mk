@@ -17,7 +17,6 @@ LOCAL_CORE_COMMON_SRC := \
 	talk/base/autodetectproxy.cc \
 	talk/base/bandwidthsmoother.cc \
 	talk/base/base64.cc \
-	talk/base/basicpacketsocketfactory.cc \
 	talk/base/bytebuffer.cc \
 	talk/base/checks.cc \
 	talk/base/common.cc \
@@ -160,6 +159,8 @@ LOCAL_MEDIA_SRC := \
 	talk/media/webrtc/webrtcvoiceengine.cc
 
 LOCAL_P2P_SRC := \
+    talk/p2p/base/asyncstuntcpsocket.cc \
+	talk/p2p/base/basicpacketsocketfactory.cc \
 	talk/p2p/base/constants.cc \
 	talk/p2p/base/dtlstransportchannel.cc \
 	talk/p2p/base/p2ptransport.cc \
@@ -267,7 +268,8 @@ LOCAL_CFLAGS += \
 	-DHAVE_UINT16_T \
 	-DHAVE_UINT8_T \
 	-DHAVE_UINT_T \
-	-DUSE_WEBRTC_313_BRANCH
+	-DUSE_WEBRTC_313_BRANCH \
+	-DDISABLE_YUV
 
 include $(BUILD_STATIC_LIBRARY)
 

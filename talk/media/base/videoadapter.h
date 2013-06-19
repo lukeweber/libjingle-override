@@ -91,6 +91,12 @@ class CoordinatedVideoAdapter
     : public VideoAdapter, public sigslot::has_slots<>  {
  public:
   enum AdaptRequest { UPGRADE, KEEP, DOWNGRADE };
+  enum {
+    ADAPTREASON_CPU = 1,
+    ADAPTREASON_BANDWIDTH = 2,
+    ADAPTREASON_VIEW = 4
+  };
+  typedef int AdaptReason;
 
   CoordinatedVideoAdapter();
   virtual ~CoordinatedVideoAdapter() {}
@@ -107,6 +113,11 @@ class CoordinatedVideoAdapter
   // Enable or disable video adaptation to fast switch View
   void set_view_switch(bool enable) { view_switch_ = enable; }
   bool view_switch() const { return view_switch_; }
+
+  CoordinatedVideoAdapter::AdaptReason adapt_reason() const {
+    return adapt_reason_;
+  }
+
   // When the video is decreased, set the waiting time for CPU adaptation to
   // decrease video again.
   void set_cpu_downgrade_wait_time(uint32 cpu_downgrade_wait_time) {
@@ -189,6 +200,7 @@ class CoordinatedVideoAdapter
   int64 view_desired_interval_;
   int encoder_desired_num_pixels_;
   int cpu_desired_num_pixels_;
+  CoordinatedVideoAdapter::AdaptReason adapt_reason_;
   // The critical section to protect handling requests.
   talk_base::CriticalSection request_critical_section_;
 

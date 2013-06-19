@@ -103,20 +103,11 @@ class BasicPortAllocator : public PortAllocator {
     relays_.clear();
   }
 
-  // Returns the best (highest priority) phase that has produced a port that
-  // produced a writable connection.  If no writable connections have been
-  // produced, this returns -1.
-  int best_writable_phase() const;
-
   virtual PortAllocatorSession* CreateSessionInternal(
       const std::string& content_name,
       int component,
       const std::string& ice_ufrag,
       const std::string& ice_pwd);
-
-  // Called whenever a connection becomes writable with the argument being the
-  // phase that the corresponding port was created in.
-  void AddWritablePhase(int phase);
 
   bool allow_tcp_listen() const {
     return allow_tcp_listen_;
@@ -131,7 +122,6 @@ class BasicPortAllocator : public PortAllocator {
   talk_base::PacketSocketFactory* socket_factory_;
   const talk_base::SocketAddress stun_address_;
   std::vector<RelayServerConfig> relays_;
-  int best_writable_phase_;
   bool allow_tcp_listen_;
 };
 
@@ -152,10 +142,9 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
   talk_base::Thread* network_thread() { return network_thread_; }
   talk_base::PacketSocketFactory* socket_factory() { return socket_factory_; }
 
-  virtual void GetInitialPorts();
-  virtual void StartGetAllPorts();
-  virtual void StopGetAllPorts();
-  virtual bool IsGettingAllPorts() { return running_; }
+  virtual void StartGettingPorts();
+  virtual void StopGettingPorts();
+  virtual bool IsGettingPorts() { return running_; }
   virtual std::string GetClassname() const { return "BasicPortAllocatorSession"; }
 
  protected:
@@ -182,17 +171,25 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
     bool ready() const { return state_ == STATE_READY; }
     bool complete() const {
       // Returns true if candidate allocation has completed one way or another.
-      return ((state_ == STATE_READY) || (state_ == STATE_ERROR));
+      return ((state_ == STATE_COMPLETE) || (state_ == STATE_ERROR));
     }
 
     void set_ready() { ASSERT(state_ == STATE_INIT); state_ = STATE_READY; }
-    void set_error() { ASSERT(state_ == STATE_INIT); state_ = STATE_ERROR; }
-    
+    void set_complete() {
+      ASSERT(state_ == STATE_READY);
+      state_ = STATE_COMPLETE;
+    }
+    void set_error() {
+      ASSERT(state_ == STATE_INIT || state_ == STATE_READY);
+      state_ = STATE_ERROR;
+    }
+
    private:
     enum State {
-      STATE_INIT,   // No candidates allocated yet.
-      STATE_READY,  // All candidates allocated and ready for process.
-      STATE_ERROR   // Error in gathering candidates.
+      STATE_INIT,      // No candidates allocated yet.
+      STATE_READY,     // At least one candidate is ready for process.
+      STATE_COMPLETE,  // All candidates allocated and ready for process.
+      STATE_ERROR      // Error in gathering candidates.
     };
     Port* port_;
     AllocationSequence* sequence_;
@@ -209,14 +206,12 @@ class BasicPortAllocatorSession : public PortAllocatorSession,
   void DisableEquivalentPhases(talk_base::Network* network,
                                PortConfiguration* config, uint32* flags);
   void AddAllocatedPort(Port* port, AllocationSequence* seq,
-                        bool prepare_address = true);
+                        bool prepare_address);
   void OnCandidateReady(Port* port, const Candidate& c);
-  void OnPortReady(Port* port);
+  void OnPortComplete(Port* port);
+  void OnPortError(Port* port);
   void OnProtocolEnabled(AllocationSequence* seq, ProtocolType proto);
   void OnPortDestroyed(PortInterface* port);
-  void OnAddressError(Port* port);
-  void OnConnectionCreated(Port* port, Connection* conn);
-  void OnConnectionStateChange(Connection* conn);
   void OnShake();
   void MaybeSignalCandidatesAllocationDone();
   void OnPortAllocationComplete(AllocationSequence* seq);

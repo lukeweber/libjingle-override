@@ -7,7 +7,6 @@
 
 #include "talk/base/asynchttprequest.h"
 #include "talk/base/autodetectproxy.h"
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/helpers.h"
 #include "talk/base/httpcommon.h"
 #include "talk/base/httpcommon-inl.h"
@@ -247,7 +246,7 @@ void ConnectivityChecker::OnConfigReady(
   CreateRelayPorts(username, password, config, proxy_info);
 }
 
-void ConnectivityChecker::OnRelayAddressReady(Port* port) {
+void ConnectivityChecker::OnRelayPortComplete(Port* port) {
   ASSERT(worker_ == talk_base::Thread::Current());
   RelayPort* relay_port = reinterpret_cast<RelayPort*>(port);
   const ProtocolAddress* address = relay_port->ServerAddress(0);
@@ -281,7 +280,7 @@ void ConnectivityChecker::OnRelayAddressReady(Port* port) {
   }
 }
 
-void ConnectivityChecker::OnStunAddressReady(Port* port) {
+void ConnectivityChecker::OnStunPortComplete(Port* port) {
   ASSERT(worker_ == talk_base::Thread::Current());
   const std::vector<Candidate> candidates = port->Candidates();
   Candidate c = candidates[0];
@@ -299,7 +298,7 @@ void ConnectivityChecker::OnStunAddressReady(Port* port) {
   }
 }
 
-void ConnectivityChecker::OnStunAddressError(Port* port) {
+void ConnectivityChecker::OnStunPortError(Port* port) {
   ASSERT(worker_ == talk_base::Thread::Current());
   LOG(LS_ERROR) << "Stun address error.";
   talk_base::IPAddress ip = port->Network()->ip();
@@ -311,7 +310,7 @@ void ConnectivityChecker::OnStunAddressError(Port* port) {
   }
 }
 
-void ConnectivityChecker::OnRelayAddressError(Port* port) {
+void ConnectivityChecker::OnRelayPortError(Port* port) {
   ASSERT(worker_ == talk_base::Thread::Current());
   LOG(LS_ERROR) << "Relay address error.";
 }
@@ -390,10 +389,10 @@ void ConnectivityChecker::CreateRelayPorts(
           nic_info->media_server_address = port->ServerAddress(0)->address;
 
           // Listen to network events.
-          port->SignalAddressReady.connect(
-              this, &ConnectivityChecker::OnRelayAddressReady);
-          port->SignalAddressError.connect(
-              this, &ConnectivityChecker::OnRelayAddressError);
+          port->SignalPortComplete.connect(
+              this, &ConnectivityChecker::OnRelayPortComplete);
+          port->SignalPortError.connect(
+              this, &ConnectivityChecker::OnRelayPortError);
 
           port->set_proxy(user_agent_, proxy_info);
 
@@ -426,10 +425,10 @@ void ConnectivityChecker::AllocatePorts() {
       if (port) {
 
         // Listen to network events.
-        port->SignalAddressReady.connect(
-            this, &ConnectivityChecker::OnStunAddressReady);
-        port->SignalAddressError.connect(
-            this, &ConnectivityChecker::OnStunAddressError);
+        port->SignalPortComplete.connect(
+            this, &ConnectivityChecker::OnStunPortComplete);
+        port->SignalPortError.connect(
+            this, &ConnectivityChecker::OnStunPortError);
 
         port->set_proxy(user_agent_, proxy_info);
         port->PrepareAddress();

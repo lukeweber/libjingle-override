@@ -320,7 +320,10 @@ bool SrtpFilter::DoSetAnswer(const std::vector<CryptoParams>& answer_params,
 
 void SrtpFilter::CreateSrtpSessions() {
   send_session_.reset(new SrtpSession());
+  applied_send_params_ = CryptoParams();
   recv_session_.reset(new SrtpSession());
+  applied_recv_params_ = CryptoParams();
+
   SignalSrtpError.repeat(send_session_->SignalSrtpError);
   SignalSrtpError.repeat(recv_session_->SignalSrtpError);
 
@@ -357,6 +360,18 @@ bool SrtpFilter::NegotiateParams(const std::vector<CryptoParams>& answer_params,
 
 bool SrtpFilter::ApplyParams(const CryptoParams& send_params,
                              const CryptoParams& recv_params) {
+  // TODO(jiayl): Split this method to apply send and receive CryptoParams
+  // independently, so that we can skip one method when either send or receive
+  // CryptoParams is unchanged.
+  if (applied_send_params_.cipher_suite == send_params.cipher_suite &&
+      applied_send_params_.key_params == send_params.key_params &&
+      applied_recv_params_.cipher_suite == recv_params.cipher_suite &&
+      applied_recv_params_.key_params == recv_params.key_params) {
+    LOG(LS_INFO) << "Applying the same SRTP parameters again. No-op.";
+
+    // We do not want to reset the ROC if the keys are the same. So just return.
+    return true;
+  }
   // TODO(juberti): Zero these buffers after use.
   bool ret;
   uint8 send_key[SRTP_MASTER_KEY_LEN], recv_key[SRTP_MASTER_KEY_LEN];
@@ -373,6 +388,8 @@ bool SrtpFilter::ApplyParams(const CryptoParams& send_params,
     LOG(LS_INFO) << "SRTP activated with negotiated parameters:"
                  << " send cipher_suite " << send_params.cipher_suite
                  << " recv cipher_suite " << recv_params.cipher_suite;
+    applied_send_params_ = send_params;
+    applied_recv_params_ = recv_params;
   } else {
     LOG(LS_WARNING) << "Failed to apply negotiated SRTP parameters";
   }

@@ -171,6 +171,21 @@ void SocketTest::TestUdpIPv6() {
   UdpInternal(kIPv6Loopback);
 }
 
+void SocketTest::TestUdpReadyToSendIPv4() {
+#if !defined(OSX)
+  // TODO(ronghuawu): Enable this test (currently failed on build bots) on mac.
+  UdpReadyToSend(kIPv4Loopback);
+#endif
+}
+
+void SocketTest::TestUdpReadyToSendIPv6() {
+#if defined(WIN32)
+  // TODO(ronghuawu): Enable this test (currently flakey) on mac and linux.
+  MAYBE_SKIP_IPV6;
+  UdpReadyToSend(kIPv6Loopback);
+#endif
+}
+
 void SocketTest::TestGetSetOptionsIPv4() {
   GetSetOptionsInternal(kIPv4Loopback);
 }
@@ -895,6 +910,50 @@ void SocketTest::UdpInternal(const IPAddress& loopback) {
 
     addr2 = addr4;
   }
+}
+
+void SocketTest::UdpReadyToSend(const IPAddress& loopback) {
+  SocketAddress empty = EmptySocketAddressWithFamily(loopback.family());
+  // RFC 5737 - The blocks 192.0.2.0/24 (TEST-NET-1) ... are provided for use in
+  // documentation.
+  // RFC 3849 - 2001:DB8::/32 as a documentation-only prefix.
+  std::string dest = (loopback.family() == AF_INET6) ?
+      "2001:db8::1" : "192.0.2.0";
+  SocketAddress test_addr(dest, 2345);
+
+  // Test send
+  scoped_ptr<TestClient> client(
+      new TestClient(AsyncUDPSocket::Create(ss_, empty)));
+  int test_packet_size = 1200;
+  talk_base::scoped_array<char> test_packet(new char[test_packet_size]);
+  // Set the send buffer size to the same size as the test packet to have a
+  // better chance to get EWOULDBLOCK.
+  int send_buffer_size = test_packet_size;
+#if defined(LINUX)
+  send_buffer_size /= 2;
+#endif
+  client->SetOption(talk_base::Socket::OPT_SNDBUF, send_buffer_size);
+
+  int error = 0;
+  uint32 start_ms = Time();
+  int sent_packet_num = 0;
+  int expected_error = EWOULDBLOCK;
+  while (start_ms + kTimeout > Time()) {
+    int ret = client->SendTo(test_packet.get(), test_packet_size, test_addr);
+    ++sent_packet_num;
+    if (ret != test_packet_size) {
+      error = client->GetError();
+      if (error == expected_error) {
+        LOG(LS_INFO) << "Got expected error code after sending "
+                     << sent_packet_num << " packets.";
+        break;
+      }
+    }
+  }
+  EXPECT_EQ(expected_error, error);
+  EXPECT_FALSE(client->ready_to_send());
+  EXPECT_TRUE_WAIT(client->ready_to_send(), kTimeout);
+  LOG(LS_INFO) << "Got SignalReadyToSend";
 }
 
 void SocketTest::GetSetOptionsInternal(const IPAddress& loopback) {

@@ -55,7 +55,8 @@ template <class Base> class RtpHelper : public Base {
         playout_(false),
         fail_set_send_codecs_(false),
         fail_set_recv_codecs_(false),
-        send_ssrc_(0) {}
+        send_ssrc_(0),
+        ready_to_send_(false) {}
   const std::vector<RtpHeaderExtension>& recv_extensions() {
     return recv_extensions_;
   }
@@ -182,6 +183,10 @@ template <class Base> class RtpHelper : public Base {
     return send_streams_[0].cname;
   }
 
+  bool ready_to_send() const {
+    return ready_to_send_;
+  }
+
  protected:
   bool set_sending(bool send) {
     sending_ = send;
@@ -193,6 +198,9 @@ template <class Base> class RtpHelper : public Base {
   }
   virtual void OnRtcpReceived(talk_base::Buffer* packet) {
     rtcp_packets_.push_back(std::string(packet->data(), packet->length()));
+  }
+  virtual void OnReadyToSend(bool ready) {
+    ready_to_send_ = ready;
   }
   bool fail_set_send_codecs() const { return fail_set_send_codecs_; }
   bool fail_set_recv_codecs() const { return fail_set_recv_codecs_; }
@@ -211,6 +219,7 @@ template <class Base> class RtpHelper : public Base {
   bool fail_set_recv_codecs_;
   uint32 send_ssrc_;
   std::string rtcp_cname_;
+  bool ready_to_send_;
 };
 
 class FakeVoiceMediaChannel : public RtpHelper<VoiceMediaChannel> {
@@ -284,6 +293,10 @@ class FakeVoiceMediaChannel : public RtpHelper<VoiceMediaChannel> {
       return false;
     output_scalings_.erase(ssrc);
     return true;
+  }
+  virtual bool SetRenderer(uint32 ssrc, AudioRenderer* renderer) {
+    // TODO(xians): Implement this.
+    return false;
   }
 
   virtual bool GetActiveStreams(AudioInfo::StreamList* streams) { return true; }
@@ -596,9 +609,11 @@ class FakeDataMediaChannel : public RtpHelper<DataMediaChannel> {
     return true;
   }
 
-  virtual bool SendData(const SendDataParams& params, const std::string& data) {
+  virtual bool SendData(const SendDataParams& params,
+                        const talk_base::Buffer& payload,
+                        SendDataResult* result) {
     last_sent_data_params_ = params;
-    last_sent_data_ = data;
+    last_sent_data_ = std::string(payload.data(), payload.length());
     return true;
   }
 
@@ -623,8 +638,7 @@ class FakeBaseEngine {
         options_(0),
         options_changed_(false),
         fail_create_channel_(false) {}
-
-  bool Init() { return true; }
+  bool Init(talk_base::Thread* worker_thread) { return true; }
   void Terminate() {}
 
   bool SetOptions(int options) {
@@ -667,7 +681,6 @@ class FakeVoiceEngine : public FakeBaseEngine {
     // sanity checks against that.
     codecs_.push_back(AudioCodec(101, "fake_audio_codec", 0, 0, 1, 0));
   }
-
   int GetCapabilities() { return AUDIO_SEND | AUDIO_RECV; }
 
   VoiceMediaChannel* CreateChannel() {
@@ -763,7 +776,6 @@ class FakeVideoEngine : public FakeBaseEngine {
     // sanity checks against that.
     codecs_.push_back(VideoCodec(0, "fake_video_codec", 0, 0, 0, 0));
   }
-
   int GetCapabilities() { return VIDEO_SEND | VIDEO_RECV; }
   bool SetDefaultEncoderConfig(const VideoEncoderConfig& config) {
     default_encoder_config_ = config;
@@ -933,7 +945,10 @@ inline FakeVideoMediaChannel::~FakeVideoMediaChannel() {
 
 class FakeDataEngine : public DataEngineInterface {
  public:
-  virtual DataMediaChannel* CreateChannel() {
+  FakeDataEngine() : last_channel_type_(DCT_NONE) {}
+
+  virtual DataMediaChannel* CreateChannel(DataChannelType data_channel_type) {
+    last_channel_type_ = data_channel_type;
     FakeDataMediaChannel* ch = new FakeDataMediaChannel(this);
     channels_.push_back(ch);
     return ch;
@@ -953,9 +968,12 @@ class FakeDataEngine : public DataEngineInterface {
 
   virtual const std::vector<DataCodec>& data_codecs() { return data_codecs_; }
 
+  DataChannelType last_channel_type() const { return last_channel_type_; }
+
  private:
   std::vector<FakeDataMediaChannel*> channels_;
   std::vector<DataCodec> data_codecs_;
+  DataChannelType last_channel_type_;
 };
 
 }  // namespace cricket

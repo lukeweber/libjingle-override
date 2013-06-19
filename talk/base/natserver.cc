@@ -141,7 +141,7 @@ void NATServer::OnExternalPacket(
 
   // Allow the NAT to reject this packet.
   if (Filter(iter->second, remote_addr)) {
-    LOG(LS_INFO) << "Packet from " << remote_addr.ToString()
+    LOG(LS_INFO) << "Packet from " << remote_addr.ToSensitiveString()
                  << " was filtered out by the NAT.";
     return;
   }

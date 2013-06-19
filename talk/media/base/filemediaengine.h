@@ -78,7 +78,9 @@ class FileMediaEngine : public MediaEngineInterface {
   }
 
   // Implement pure virtual methods of MediaEngine.
-  virtual bool Init() { return true; }
+  virtual bool Init(talk_base::Thread* worker_thread) {
+    return true;
+  }
   virtual void Terminate() {}
   virtual int GetCapabilities();
   virtual VoiceMediaChannel* CreateChannel();
@@ -191,6 +193,9 @@ class FileVoiceChannel : public VoiceMediaChannel {
   }
   virtual bool SetPlayout(bool playout) { return true; }
   virtual bool SetSend(SendFlags flag);
+  virtual bool SetRenderer(uint32 ssrc, AudioRenderer* renderer) {
+    return false;
+  }
   virtual bool GetActiveStreams(AudioInfo::StreamList* actives) { return true; }
   virtual int GetOutputLevel() { return 0; }
   virtual int GetTimeSinceLastTyping() { return -1; }
@@ -216,6 +221,7 @@ class FileVoiceChannel : public VoiceMediaChannel {
   // Implement pure virtual methods of MediaChannel.
   virtual void OnPacketReceived(talk_base::Buffer* packet);
   virtual void OnRtcpReceived(talk_base::Buffer* packet) {}
+  virtual void OnReadyToSend(bool ready) {}
   virtual bool AddSendStream(const StreamParams& sp);
   virtual bool RemoveSendStream(uint32 ssrc);
   virtual bool AddRecvStream(const StreamParams& sp) { return true; }
@@ -280,6 +286,7 @@ class FileVideoChannel : public VideoMediaChannel {
   // Implement pure virtual methods of MediaChannel.
   virtual void OnPacketReceived(talk_base::Buffer* packet);
   virtual void OnRtcpReceived(talk_base::Buffer* packet) {}
+  virtual void OnReadyToSend(bool ready) {}
   virtual bool AddSendStream(const StreamParams& sp);
   virtual bool RemoveSendStream(uint32 ssrc);
   virtual bool AddRecvStream(const StreamParams& sp) { return true; }

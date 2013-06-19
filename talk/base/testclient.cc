@@ -35,9 +35,11 @@ namespace talk_base {
 //         Callers can retrieve received packets from any thread by calling
 //         NextPacket.
 
-TestClient::TestClient(AsyncPacketSocket* socket) : socket_(socket) {
+TestClient::TestClient(AsyncPacketSocket* socket)
+    : socket_(socket), ready_to_send_(false) {
   packets_ = new std::vector<Packet*>();
   socket_->SignalReadPacket.connect(this, &TestClient::OnPacket);
+  socket_->SignalReadyToSend.connect(this, &TestClient::OnReadyToSend);
 }
 
 TestClient::~TestClient() {
@@ -112,10 +114,26 @@ bool TestClient::CheckNoPacket() {
   return res;
 }
 
+int TestClient::GetError() {
+  return socket_->GetError();
+}
+
+int TestClient::SetOption(Socket::Option opt, int value) {
+  return socket_->SetOption(opt, value);
+}
+
+bool TestClient::ready_to_send() const {
+  return ready_to_send_;
+}
+
 void TestClient::OnPacket(AsyncPacketSocket* socket, const char* buf,
                           size_t size, const SocketAddress& remote_addr) {
   CritScope cs(&crit_);
   packets_->push_back(new Packet(remote_addr, buf, size));
+}
+
+void TestClient::OnReadyToSend(AsyncPacketSocket* socket) {
+  ready_to_send_ = true;
 }
 
 TestClient::Packet::Packet(const SocketAddress& a, const char* b, size_t s)

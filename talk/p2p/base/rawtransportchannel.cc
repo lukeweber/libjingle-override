@@ -115,7 +115,7 @@ void RawTransportChannel::Connect() {
       this, &RawTransportChannel::OnCandidatesReady);
 
   // The initial ports will include stun.
-  allocator_session_->GetInitialPorts();
+  allocator_session_->StartGettingPorts();
 }
 
 void RawTransportChannel::Reset() {
@@ -199,12 +199,6 @@ void RawTransportChannel::OnCandidatesReady(
     // We will need to use relay.
     use_relay_ = true;
 
-    // If we weren't given a relay port, we'll need to request it.
-    if (relay_port_ == NULL) {
-      allocator_session_->StartGetAllPorts();
-      return;
-    }
-
     // If we already have a relay address, we're good.  Otherwise, we will need
     // to wait until one arrives.
     if (relay_port_->candidates().size() > 0)
@@ -227,7 +221,7 @@ void RawTransportChannel::SetPort(PortInterface* port) {
   port_ = port;
 
   // We don't need any ports other than the one we picked.
-  allocator_session_->StopGetAllPorts();
+  allocator_session_->StopGettingPorts();
   worker_thread_->Post(
       this, MSG_DESTROY_UNUSED_PORTS, NULL);
 

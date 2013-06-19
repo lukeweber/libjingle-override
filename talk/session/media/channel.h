@@ -222,6 +222,9 @@ class BaseChannel
   // Used to alert when the channel becomes writable
   sigslot::signal0<> SignalAudioPlayout;
 
+  // Made public for easier testing.
+  void SetReadyToSend(TransportChannel* channel, bool ready);
+
  protected:
   MediaEngineInterface* media_engine() const { return media_engine_; }
   virtual MediaChannel* media_channel() const { return media_channel_; }
@@ -256,14 +259,17 @@ class BaseChannel
   void OnWritableState(TransportChannel* channel);
   virtual void OnChannelRead(TransportChannel* channel, const char* data,
                              size_t len, int flags);
+  void OnReadyToSend(TransportChannel* channel);
 
   bool PacketIsRtcp(const TransportChannel* channel, const char* data,
                     size_t len);
   bool SendPacket(bool rtcp, talk_base::Buffer* packet);
+  virtual bool WantsPacket(bool rtcp, talk_base::Buffer* packet);
   void HandlePacket(bool rtcp, talk_base::Buffer* packet);
 
-  // Setting the send codec based on the remote description.
-  void OnSessionState(BaseSession* session, BaseSession::State state);
+  // Apply the new local/remote session description.
+  void OnNewLocalDescription(BaseSession* session, ContentAction action);
+  void OnNewRemoteDescription(BaseSession* session, ContentAction action);
 
   void EnableMedia_w();
   void DisableMedia_w();
@@ -338,6 +344,8 @@ class BaseChannel
   talk_base::scoped_ptr<SocketMonitor> socket_monitor_;
   bool enabled_;
   bool writable_;
+  bool rtp_ready_to_send_;
+  bool rtcp_ready_to_send_;
   bool optimistic_data_send_;
   bool was_ever_writable_;
   MediaContentDirection local_content_direction_;
@@ -357,6 +365,7 @@ class VoiceChannel : public BaseChannel {
                const std::string& content_name, bool rtcp);
   ~VoiceChannel();
   bool Init();
+  bool SetRenderer(uint32 ssrc, AudioRenderer* renderer);
 
   // downcasts a MediaChannel
   virtual VoiceMediaChannel* media_channel() const {
@@ -450,6 +459,7 @@ class VoiceChannel : public BaseChannel {
   void OnSrtpError(uint32 ssrc, SrtpFilter::Mode mode, SrtpFilter::Error error);
   // Configuration and setting.
   bool SetChannelOptions_w(const AudioOptions& options);
+  bool SetRenderer_w(uint32 ssrc, AudioRenderer* renderer);
 
   static const int kEarlyMediaTimeout = 1000;
   bool received_media_;
@@ -589,7 +599,9 @@ class DataChannel : public BaseChannel {
     return static_cast<DataMediaChannel*>(BaseChannel::media_channel());
   }
 
-  bool SendData(const SendDataParams& params, const std::string& data);
+  bool SendData(const SendDataParams& params,
+                const talk_base::Buffer& payload,
+                SendDataResult* result);
 
   void StartMediaMonitor(int cms);
   void StopMediaMonitor();
@@ -601,7 +613,7 @@ class DataChannel : public BaseChannel {
       SignalMediaError;
   sigslot::signal3<DataChannel*,
                    const ReceiveDataParams&,
-                   const std::string&>
+                   const talk_base::Buffer&>
       SignalDataReceived;
   // Signal for notifying when the channel becomes ready to send data.
   // That occurs when the channel is enabled, the transport is writable and
@@ -611,12 +623,19 @@ class DataChannel : public BaseChannel {
 
  private:
   struct SendDataMessageData : public talk_base::MessageData {
-    SendDataMessageData(const SendDataParams& params, const std::string& data)
+    SendDataMessageData(const SendDataParams& params,
+                        const talk_base::Buffer* payload,
+                        SendDataResult* result)
         : params(params),
-          data(data) {
+          payload(payload),
+          result(result),
+          succeeded(false) {
     }
-    const SendDataParams params;
-    const std::string data;
+
+    const SendDataParams& params;
+    const talk_base::Buffer* payload;
+    SendDataResult* result;
+    bool succeeded;
   };
 
   struct DataReceivedMessageData : public talk_base::MessageData {
@@ -626,20 +645,28 @@ class DataChannel : public BaseChannel {
     DataReceivedMessageData(
         const ReceiveDataParams& params, const char* data, size_t len)
         : params(params),
-          data(data, len) {
+          payload(data, len) {
     }
     const ReceiveDataParams params;
-    const std::string data;
+    const talk_base::Buffer payload;
   };
 
   // overrides from BaseChannel
   virtual const ContentInfo* GetFirstContent(const SessionDescription* sdesc);
+  // If data_channel_type_ is DCT_NONE, set it.  Otherwise, check that
+  // it's the same as what was set previously.  Returns false if it's
+  // set to one type one type and changed to another type later.
+  bool SetDataChannelType(DataChannelType new_data_channel_type);
+  // Same as SetDataChannelType, but extracts the type from the
+  // DataContentDescription.
+  bool SetDataChannelTypeFromContent(const DataContentDescription* content);
   virtual bool SetMaxSendBandwidth_w(int max_bandwidth);
   virtual bool SetLocalContent_w(const MediaContentDescription* content,
                                  ContentAction action);
   virtual bool SetRemoteContent_w(const MediaContentDescription* content,
                                   ContentAction action);
   virtual void ChangeState();
+  virtual bool WantsPacket(bool rtcp, talk_base::Buffer* packet);
 
   virtual void OnMessage(talk_base::Message* pmsg);
   virtual void GetSrtpCiphers(std::vector<std::string>* ciphers) const;
@@ -653,6 +680,9 @@ class DataChannel : public BaseChannel {
   void OnSrtpError(uint32 ssrc, SrtpFilter::Mode mode, SrtpFilter::Error error);
 
   talk_base::scoped_ptr<DataMediaMonitor> media_monitor_;
+  // TODO(pthatcher): Make a separate SctpDataChannel and
+  // RtpDataChannel instead of using this.
+  DataChannelType data_channel_type_;
 };
 
 }  // namespace cricket

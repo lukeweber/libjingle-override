@@ -85,10 +85,12 @@ class Thread;
 namespace cricket {
 class PortAllocator;
 class WebRtcVideoDecoderFactory;
+class WebRtcVideoEncoderFactory;
 }
 
 namespace webrtc {
 class AudioDeviceModule;
+class MediaConstraintsInterface;
 
 // MediaStream container interface.
 class StreamCollectionInterface : public talk_base::RefCountInterface {
@@ -158,6 +160,7 @@ class PeerConnectionInterface : public talk_base::RefCountInterface {
 
   struct IceServer {
     std::string uri;
+    std::string username;
     std::string password;
   };
   typedef std::vector<IceServer> IceServers;
@@ -311,13 +314,16 @@ class PortAllocatorFactoryInterface : public talk_base::RefCountInterface {
     TurnConfiguration(const std::string& address,
                       int port,
                       const std::string& username,
-                      const std::string& password)
+                      const std::string& password,
+                      const std::string& transport_type)
         : server(address, port),
           username(username),
-          password(password) {}
+          password(password),
+          transport_type(transport_type) {}
     talk_base::SocketAddress server;
     std::string username;
     std::string password;
+    std::string transport_type;
   };
 
   virtual cricket::PortAllocator* CreatePortAllocator(
@@ -327,6 +333,45 @@ class PortAllocatorFactoryInterface : public talk_base::RefCountInterface {
  protected:
   PortAllocatorFactoryInterface() {}
   ~PortAllocatorFactoryInterface() {}
+};
+
+// Used to receive callbacks of DTLS identity requests.
+class DTLSIdentityRequestObserver : public talk_base::RefCountInterface {
+ public:
+  virtual void OnFailure(int error) = 0;
+  virtual void OnSuccess(const std::string& certificate,
+                         const std::string& private_key) = 0;
+ protected:
+  virtual ~DTLSIdentityRequestObserver() {}
+};
+
+class DTLSIdentityServiceInterface {
+ public:
+  // Asynchronously request a DTLS identity, including a self-signed certificate
+  // and the private key used to sign the certificate, from the identity store
+  // for the given identity name.
+  // DTLSIdentityRequestObserver::OnSuccess will be called with the identity if
+  // the request succeeded; DTLSIdentityRequestObserver::OnFailure will be
+  // called with an error code if the request failed.
+  //
+  // Only one request can be made at a time. If a second request is called
+  // before the first one completes, RequestIdentity will abort and return
+  // false.
+  //
+  // |identity_name| is an internal name selected by the client to identify an
+  // identity within an origin. E.g. an web site may cache the certificates used
+  // to communicate with differnent peers under different identity names.
+  //
+  // |common_name| is the common name used to generate the certificate. If the
+  // certificate already exists in the store, |common_name| is ignored.
+  //
+  // |observer| is the object to receive success or failure callbacks.
+  //
+  // Returns true if either OnFailure or OnSuccess will be called.
+  virtual bool RequestIdentity(
+      const std::string& identity_name,
+      const std::string& common_name,
+      DTLSIdentityRequestObserver* observer) = 0;
 };
 
 // PeerConnectionFactoryInterface is the factory interface use for creating
@@ -344,12 +389,14 @@ class PeerConnectionFactoryInterface : public talk_base::RefCountInterface {
      CreatePeerConnection(
          const PeerConnectionInterface::IceServers& configuration,
          const MediaConstraintsInterface* constraints,
+         DTLSIdentityServiceInterface* dtls_identity_service,
          PeerConnectionObserver* observer) = 0;
   virtual talk_base::scoped_refptr<PeerConnectionInterface>
       CreatePeerConnection(
           const PeerConnectionInterface::IceServers& configuration,
           const MediaConstraintsInterface* constraints,
           PortAllocatorFactoryInterface* allocator_factory,
+          DTLSIdentityServiceInterface* dtls_identity_service,
           PeerConnectionObserver* observer) = 0;
   virtual talk_base::scoped_refptr<MediaStreamInterface>
       CreateLocalMediaStream(const std::string& label) = 0;
@@ -389,16 +436,15 @@ talk_base::scoped_refptr<PeerConnectionFactoryInterface>
 CreatePeerConnectionFactory();
 
 // Create a new instance of PeerConnectionFactoryInterface.
-// Ownership of |factory|, |default_adm|, and |decoder_factory| is transferred
-// to the returned factory.
-// TODO(dwkang): To prevent build break the default value is added for
-// |decoder_factory|. Remove it once Chrome has a value for that.
+// Ownership of |factory|, |default_adm|, and optionally |encoder_factory| and
+// |decoder_factory| transferred to the returned factory.
 talk_base::scoped_refptr<PeerConnectionFactoryInterface>
 CreatePeerConnectionFactory(
     talk_base::Thread* worker_thread,
     talk_base::Thread* signaling_thread,
     AudioDeviceModule* default_adm,
-    cricket::WebRtcVideoDecoderFactory* decoder_factory = NULL);
+    cricket::WebRtcVideoEncoderFactory* encoder_factory,
+    cricket::WebRtcVideoDecoderFactory* decoder_factory);
 
 }  // namespace webrtc
 

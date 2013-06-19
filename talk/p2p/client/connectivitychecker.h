@@ -8,13 +8,13 @@
 #include <string>
 
 #include "talk/base/network.h"
-#include "talk/base/basicpacketsocketfactory.h"
 #include "talk/base/basictypes.h"
 #include "talk/base/messagehandler.h"
 #include "talk/base/proxyinfo.h"
 #include "talk/base/scoped_ptr.h"
 #include "talk/base/sigslot.h"
 #include "talk/base/socketaddress.h"
+#include "talk/p2p/base/basicpacketsocketfactory.h"
 #include "talk/p2p/client/httpportallocator.h"
 
 namespace talk_base {
@@ -239,10 +239,10 @@ class ConnectivityChecker
   void CleanUp();
 
   void OnRequestDone(talk_base::AsyncHttpRequest* request);
-  void OnRelayAddressReady(Port* port);
-  void OnStunAddressReady(Port* port);
-  void OnRelayAddressError(Port* port);
-  void OnStunAddressError(Port* port);
+  void OnRelayPortComplete(Port* port);
+  void OnStunPortComplete(Port* port);
+  void OnRelayPortError(Port* port);
+  void OnStunPortError(Port* port);
   void OnNetworksChanged();
   void OnProxyDetect(talk_base::SignalThread* thread);
   void OnConfigReady(

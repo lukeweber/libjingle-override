@@ -36,6 +36,7 @@
 #include "talk/base/messagequeue.h"
 #include "talk/base/sigslot.h"
 #include "talk/base/socketaddress.h"
+#include "talk/p2p/base/portinterface.h"
 
 namespace talk_base {
 class AsyncPacketSocket;
@@ -82,28 +83,30 @@ class TurnServer : public sigslot::has_slots<> {
   // Sets the authentication callback; does not take ownership.
   void set_auth_hook(TurnAuthInterface* auth_hook) { auth_hook_ = auth_hook; }
 
+  void set_enable_otu_nonce(bool enable) { enable_otu_nonce_ = enable; }
+
   // Starts listening for packets from internal clients.
-  void AddInternalServerSocket(talk_base::AsyncPacketSocket* socket);
+  void AddInternalSocket(talk_base::AsyncPacketSocket* socket,
+                         ProtocolType proto);
+  // Starts listening for the connections on this socket. When someone tries
+  // to connect, the connection will be accepted and a new internal socket
+  // will be added.
+  void AddInternalServerSocket(talk_base::AsyncSocket* socket,
+                               ProtocolType proto);
   // Specifies the factory to use for creating external sockets.
   void SetExternalSocketFactory(talk_base::PacketSocketFactory* factory,
                                 const talk_base::SocketAddress& address);
 
  private:
-  // The protocol used by the client to connect to the server.
-  enum ProtocolType {
-    TURNPROTO_UNKNOWN,
-    TURNPROTO_UDP,
-    TURNPROTO_TCP,
-    TURNPROTO_SSLTCP
-  };
   // Encapsulates the client's connection to the server.
   class Connection {
    public:
-    Connection() : proto_(TURNPROTO_UNKNOWN) {}
+    Connection() : proto_(PROTO_UDP), socket_(NULL) {}
     Connection(const talk_base::SocketAddress& src,
-               const talk_base::SocketAddress& dst, ProtocolType proto);
+               ProtocolType proto,
+               talk_base::AsyncPacketSocket* socket);
     const talk_base::SocketAddress& src() const { return src_; }
-    const talk_base::SocketAddress& dst() const { return dst_; }
+    talk_base::AsyncPacketSocket* socket() { return socket_; }
     bool operator==(const Connection& t) const;
     bool operator<(const Connection& t) const;
     std::string ToString() const;
@@ -111,7 +114,8 @@ class TurnServer : public sigslot::has_slots<> {
    private:
     talk_base::SocketAddress src_;
     talk_base::SocketAddress dst_;
-    ProtocolType proto_;
+    cricket::ProtocolType proto_;
+    talk_base::AsyncPacketSocket* socket_;
   };
   class Allocation;
   class Permission;
@@ -120,38 +124,57 @@ class TurnServer : public sigslot::has_slots<> {
 
   void OnInternalPacket(talk_base::AsyncPacketSocket* socket, const char* data,
                         size_t size, const talk_base::SocketAddress& address);
-  void HandleStunMessage(const Connection& conn, const char* data, size_t size);
-  void HandleBindingRequest(const Connection& conn, const StunMessage* msg);
-  void HandleAllocateRequest(const Connection& conn, const TurnMessage* msg,
+
+  void OnNewInternalConnection(talk_base::AsyncSocket* socket);
+
+  // Accept connections on this server socket.
+  void AcceptConnection(talk_base::AsyncSocket* server_socket);
+  void OnInternalSocketClose(talk_base::AsyncPacketSocket* socket, int err);
+
+  void HandleStunMessage(Connection* conn, const char* data, size_t size);
+  void HandleBindingRequest(Connection* conn, const StunMessage* msg);
+  void HandleAllocateRequest(Connection* conn, const TurnMessage* msg,
                              const std::string& key);
 
   bool GetKey(const StunMessage* msg, std::string* key);
-  bool CheckAuthorization(const Connection& conn, const StunMessage* msg,
+  bool CheckAuthorization(Connection* conn, const StunMessage* msg,
                           const char* data, size_t size,
                           const std::string& key);
   std::string GenerateNonce() const;
   bool ValidateNonce(const std::string& nonce) const;
 
-  Allocation* FindAllocation(const Connection& conn);
-  Allocation* CreateAllocation(const Connection& conn, int proto,
+  Allocation* FindAllocation(Connection* conn);
+  Allocation* CreateAllocation(Connection* conn, int proto,
                                const std::string& key);
 
-  void SendErrorResponse(const Connection& conn, const StunMessage* req,
+  void SendErrorResponse(Connection* conn, const StunMessage* req,
                          int code, const std::string& reason);
-  void SendErrorResponseWithRealmAndNonce(const Connection& conn,
-                                          const StunMessage* req, int code,
+
+  void SendErrorResponseWithRealmAndNonce(Connection* conn,
+                                          const StunMessage* req,
+                                          int code,
                                           const std::string& reason);
-  void SendStun(const Connection& conn, StunMessage* msg);
-  void Send(const Connection& conn, const talk_base::ByteBuffer& buf);
+  void SendStun(Connection* conn, StunMessage* msg);
+  void Send(Connection* conn, const talk_base::ByteBuffer& buf);
 
   void OnAllocationDestroyed(Allocation* allocation);
+  void DestroyInternalSocket(talk_base::AsyncPacketSocket* socket);
+
+  typedef std::map<talk_base::AsyncPacketSocket*,
+                   ProtocolType> InternalSocketMap;
+  typedef std::map<talk_base::AsyncSocket*,
+                   ProtocolType> ServerSocketMap;
 
   talk_base::Thread* thread_;
   std::string nonce_key_;
   std::string realm_;
   std::string software_;
   TurnAuthInterface* auth_hook_;
-  talk_base::scoped_ptr<talk_base::AsyncPacketSocket> server_socket_;
+  // otu - one-time-use. Server will respond with 438 if it's
+  // sees the same nonce in next transaction.
+  bool enable_otu_nonce_;
+  InternalSocketMap server_sockets_;
+  ServerSocketMap server_listen_sockets_;
   talk_base::scoped_ptr<talk_base::PacketSocketFactory>
       external_socket_factory_;
   talk_base::SocketAddress external_addr_;

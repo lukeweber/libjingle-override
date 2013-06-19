@@ -29,7 +29,7 @@
 
 namespace cricket {
 
-bool GetUsbUvcId(const Device& device, std::string* uvc_id) {
+bool GetUsbId(const Device& device, std::string* usb_id) {
   return false;
 }
 

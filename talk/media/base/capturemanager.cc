@@ -30,10 +30,45 @@
 #include <algorithm>
 
 #include "talk/base/logging.h"
+#include "talk/media/base/videocapturer.h"
 #include "talk/media/base/videoprocessor.h"
 #include "talk/media/base/videorenderer.h"
 
 namespace cricket {
+
+// CaptureManager helper class.
+class VideoCapturerState {
+ public:
+  static const VideoFormatPod kDefaultCaptureFormat;
+
+  static VideoCapturerState* Create(VideoCapturer* video_capturer);
+  ~VideoCapturerState() {}
+
+  void AddCaptureResolution(const VideoFormat& desired_format);
+  bool RemoveCaptureResolution(const VideoFormat& format);
+  VideoFormat GetHighestFormat(VideoCapturer* video_capturer) const;
+
+  int IncCaptureStartRef();
+  int DecCaptureStartRef();
+  CaptureRenderAdapter* adapter() { return adapter_.get(); }
+  VideoCapturer* GetVideoCapturer() { return adapter()->video_capturer(); }
+
+  int start_count() const { return start_count_; }
+
+ private:
+  struct CaptureResolutionInfo {
+    VideoFormat video_format;
+    int format_ref_count;
+  };
+  typedef std::vector<CaptureResolutionInfo> CaptureFormats;
+
+  explicit VideoCapturerState(CaptureRenderAdapter* adapter);
+
+  talk_base::scoped_ptr<CaptureRenderAdapter> adapter_;
+
+  int start_count_;
+  CaptureFormats capture_formats_;
+};
 
 const VideoFormatPod VideoCapturerState::kDefaultCaptureFormat = {
   640, 360, FPS_TO_INTERVAL(30), FOURCC_ANY
@@ -164,6 +199,61 @@ bool CaptureManager::StopVideoCapture(VideoCapturer* video_capturer,
   if (capture_state->DecCaptureStartRef() == 0) {
     // Unregistering cannot fail as capture_state is not NULL.
     UnregisterVideoCapturer(capture_state);
+  }
+  return true;
+}
+
+bool CaptureManager::RestartVideoCapture(
+    VideoCapturer* video_capturer,
+    const VideoFormat& previous_format,
+    const VideoFormat& desired_format,
+    CaptureManager::RestartOptions options) {
+  if (!IsCapturerRegistered(video_capturer)) {
+    LOG(LS_ERROR) << "RestartVideoCapture: video_capturer is not registered.";
+    return false;
+  }
+  // Start the new format first. This keeps the capturer running.
+  if (!StartVideoCapture(video_capturer, desired_format)) {
+    LOG(LS_ERROR) << "RestartVideoCapture: unable to start video capture with "
+        "desired_format=" << desired_format.ToString();
+    return false;
+  }
+  // Stop the old format.
+  if (!StopVideoCapture(video_capturer, previous_format)) {
+    LOG(LS_ERROR) << "RestartVideoCapture: unable to stop video capture with "
+        "previous_format=" << previous_format.ToString();
+    // Undo the start request we just performed.
+    StopVideoCapture(video_capturer, desired_format);
+    return false;
+  }
+
+  switch (options) {
+    case kForceRestart: {
+      VideoCapturerState* capture_state = GetCaptureState(video_capturer);
+      ASSERT(capture_state && capture_state->start_count() > 0);
+      // Try a restart using the new best resolution.
+      VideoFormat highest_asked_format =
+          capture_state->GetHighestFormat(video_capturer);
+      VideoFormat capture_format;
+      if (video_capturer->GetBestCaptureFormat(highest_asked_format,
+                                               &capture_format)) {
+        if (!video_capturer->Restart(capture_format)) {
+          LOG(LS_ERROR) << "RestartVideoCapture: Restart failed.";
+        }
+      } else {
+        LOG(LS_WARNING)
+            << "RestartVideoCapture: Couldn't find a best capture format for "
+            << highest_asked_format.ToString();
+      }
+      break;
+    }
+    case kRequestRestart:
+      // TODO(ryanpetrie): Support restart requests. Should this
+      // to-be-implemented logic be used for {Start,Stop}VideoCapture as well?
+      break;
+    default:
+      LOG(LS_ERROR) << "Unknown/unimplemented RestartOption";
+      break;
   }
   return true;
 }

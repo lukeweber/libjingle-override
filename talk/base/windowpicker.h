@@ -32,16 +32,20 @@ class DesktopDescription {
  public:
   DesktopDescription() : id_() {}
   DesktopDescription(const DesktopId& id, const std::string& title)
-      : id_(id), title_(title) {
+      : id_(id), title_(title), primary_(false) {
   }
   const DesktopId& id() const { return id_; }
   void set_id(const DesktopId& id) { id_ = id; }
   const std::string& title() const { return title_; }
   void set_title(const std::string& title) { title_ = title; }
+  // Indicates whether it is the primary desktop in the system.
+  bool primary() const { return primary_; }
+  void set_primary(bool primary) { primary_ = primary; }
 
  private:
   DesktopId id_;
   std::string title_;
+  bool primary_;
 };
 
 typedef std::vector<WindowDescription> WindowDescriptionList;

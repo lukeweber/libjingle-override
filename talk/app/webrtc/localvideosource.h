@@ -51,6 +51,8 @@ class ChannelManager;
 
 namespace webrtc {
 
+class MediaConstraintsInterface;
+
 class LocalVideoSource : public Notifier<VideoSourceInterface>,
                          public sigslot::has_slots<> {
  public:

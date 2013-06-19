@@ -565,6 +565,7 @@ TEST_F(StunTest, MessageTypes) {
     EXPECT_EQ(i == 1, IsStunIndicationType(types[i]));
     EXPECT_EQ(i == 2, IsStunSuccessResponseType(types[i]));
     EXPECT_EQ(i == 3, IsStunErrorResponseType(types[i]));
+    EXPECT_EQ(1, types[i] & 0xFEEF);
   }
 }
 

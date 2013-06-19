@@ -57,15 +57,16 @@ enum {
   MSG_ROLECONFLICT = 15,
   MSG_SETROLE = 16,
   MSG_SETLOCALDESCRIPTION = 17,
-  MSG_SETREMOTEDESCRIPTION = 18
+  MSG_SETREMOTEDESCRIPTION = 18,
+  MSG_GETSTATS = 19
 };
 
 struct ChannelParams : public talk_base::MessageData {
   ChannelParams() : channel(NULL), candidate(NULL) {}
   explicit ChannelParams(int component)
       : component(component), channel(NULL), candidate(NULL) {}
-  explicit ChannelParams(Candidate* candidate) :
-      channel(NULL), candidate(candidate) {
+  explicit ChannelParams(Candidate* candidate)
+      : channel(NULL), candidate(candidate) {
   }
 
   ~ChannelParams() {
@@ -91,6 +92,14 @@ struct TransportRoleParam : public talk_base::MessageData {
   explicit TransportRoleParam(TransportRole role) : role(role) {}
 
   TransportRole role;
+};
+
+struct StatsParam : public talk_base::MessageData {
+  explicit StatsParam(TransportStats* stats)
+      : stats(stats), result(false) {}
+
+  TransportStats* stats;
+  bool result;
 };
 
 Transport::Transport(talk_base::Thread* signaling_thread,
@@ -374,6 +383,31 @@ bool Transport::VerifyCandidate(const Candidate& cand, std::string* error) {
     }
   }
 
+  return true;
+}
+
+
+bool Transport::GetStats(TransportStats* stats) {
+  ASSERT(signaling_thread()->IsCurrent());
+  StatsParam params(stats);
+  worker_thread()->Send(this, MSG_GETSTATS, &params);
+  return params.result;
+}
+
+bool Transport::GetStats_w(TransportStats* stats) {
+  ASSERT(worker_thread()->IsCurrent());
+  stats->content_name = content_name();
+  stats->channel_stats.clear();
+  for (ChannelMap::iterator iter = channels_.begin();
+       iter != channels_.end();
+       ++iter) {
+    TransportChannelStats substats;
+    substats.component = iter->second->component();
+    if (!iter->second->GetStats(&substats.connection_infos)) {
+      return false;
+    }
+    stats->channel_stats.push_back(substats);
+  }
   return true;
 }
 
@@ -760,6 +794,11 @@ void Transport::OnMessage(talk_base::Message* msg) {
             static_cast<TransportDescriptionParams*>(msg->pdata);
         params->result = SetRemoteTransportDescription_w(params->desc,
                                                          params->action);
+      }
+      break;
+    case MSG_GETSTATS: {
+        StatsParam* params = static_cast<StatsParam*>(msg->pdata);
+        params->result = GetStats_w(params->stats);
       }
       break;
   }
