@@ -590,7 +590,7 @@
             'base/unixfilesystem.h',
           ],
           'conditions': [
-            ['OS=="android"', {
+            ['OS=="linux" or OS=="android"', {
               'dependencies': [
                 '<(DEPTH)/third_party/openssl/openssl.gyp:openssl',
               ],

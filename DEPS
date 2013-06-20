@@ -137,6 +137,9 @@ deps_os = {
   "unix": {
     "third_party/gold":
       From("chromium_deps", "src/third_party/gold"),
+
+    "third_party/openssl":
+      From("chromium_deps", "src/third_party/openssl"),
   },
 
   "android": {
