@@ -134,6 +134,12 @@ deps_os = {
       From("chromium_deps", "src/third_party/nss"),
   },
 
+  "ios": {
+    # NSS, for SSLClientSocketNSS.
+    "third_party/nss":
+      From("chromium_deps", "src/third_party/nss"),
+  },
+
   "unix": {
     "third_party/gold":
       From("chromium_deps", "src/third_party/gold"),

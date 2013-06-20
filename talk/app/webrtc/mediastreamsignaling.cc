@@ -176,7 +176,8 @@ MediaStreamSignaling::MediaStreamSignaling(
       stream_observer_(stream_observer),
       local_streams_(StreamCollection::Create()),
       remote_streams_(StreamCollection::Create()),
-      remote_stream_factory_(new RemoteMediaStreamFactory(signaling_thread)) {
+      remote_stream_factory_(new RemoteMediaStreamFactory(signaling_thread)),
+      last_allocated_sctp_id_(0) {
   options_.has_video = false;
   options_.has_audio = false;
 }
@@ -188,6 +189,39 @@ void MediaStreamSignaling::TearDown() {
   OnAudioChannelClose();
   OnVideoChannelClose();
   OnDataChannelClose();
+}
+
+bool MediaStreamSignaling::IsSctpIdAvailable(int id) const {
+  if (id < 0 || id > static_cast<int>(cricket::kMaxSctpSid))
+    return false;
+  for (DataChannels::const_iterator iter = data_channels_.begin();
+       iter != data_channels_.end();
+       ++iter) {
+    if (iter->second->id() == id) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Gets the first id that has not been taken by existing data
+// channels. Starting from 1.
+// Returns false if no id can be allocated.
+// TODO(jiayl): Update to some kind of even/odd random number selection when the
+// rules are fully standardized.
+bool MediaStreamSignaling::AllocateSctpId(int* id) {
+  do {
+    last_allocated_sctp_id_++;
+  } while (last_allocated_sctp_id_ <= static_cast<int>(cricket::kMaxSctpSid) &&
+           !IsSctpIdAvailable(last_allocated_sctp_id_));
+
+  if (last_allocated_sctp_id_ > static_cast<int>(cricket::kMaxSctpSid)) {
+    last_allocated_sctp_id_ = cricket::kMaxSctpSid;
+    return false;
+  }
+
+  *id = last_allocated_sctp_id_;
+  return true;
 }
 
 bool MediaStreamSignaling::AddDataChannel(DataChannel* data_channel) {

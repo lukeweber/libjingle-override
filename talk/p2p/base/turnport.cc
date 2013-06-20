@@ -52,6 +52,10 @@ static const int TURN_PERMISSION_TIMEOUT = 5 * 60 * 1000;  // 5 minutes
 
 static const size_t TURN_CHANNEL_HEADER_SIZE = 4U;
 
+enum {
+  MSG_PORT_ERROR = 1
+};
+
 inline bool IsTurnChannelData(uint16 msg_type) {
   return ((msg_type & 0xC000) == 0x4000);  // MSB are 0b01
 }
@@ -229,6 +233,12 @@ void TurnPort::PrepareAddress() {
       return;
     }
 
+    // Apply options if any.
+    for (SocketOptionsMap::iterator iter = socket_options_.begin();
+         iter != socket_options_.end(); ++iter) {
+      socket_->SetOption(iter->first, iter->second);
+    }
+
     socket_->SignalReadPacket.connect(this, &TurnPort::OnReadPacket);
     socket_->SignalReadyToSend.connect(this, &TurnPort::OnReadyToSend);
 
@@ -279,10 +289,19 @@ Connection* TurnPort::CreateConnection(const Candidate& address,
 }
 
 int TurnPort::SetOption(talk_base::Socket::Option opt, int value) {
+  if (!socket_) {
+    // If socket is not created yet, these options will be applied during socket
+    // creation.
+    socket_options_[opt] = value;
+    return 0;
+  }
   return socket_->SetOption(opt, value);
 }
 
 int TurnPort::GetOption(talk_base::Socket::Option opt, int* value) {
+  if (!socket_)
+    return -1;
+
   return socket_->GetOption(opt, value);
 }
 
@@ -398,7 +417,18 @@ void TurnPort::OnAllocateSuccess(const talk_base::SocketAddress& address) {
 }
 
 void TurnPort::OnAllocateError() {
-  SignalPortError(this);
+  // We will send SignalPortError asynchronously as this can be sent during
+  // port initialization. This way it will not be blocking other port
+  // creation.
+  thread()->Post(this, MSG_PORT_ERROR);
+}
+
+void TurnPort::OnMessage(talk_base::Message* message) {
+  if (message->message_id == MSG_PORT_ERROR) {
+    SignalPortError(this);
+  } else {
+    Port::OnMessage(message);
+  }
 }
 
 void TurnPort::OnAllocateRequestTimeout() {

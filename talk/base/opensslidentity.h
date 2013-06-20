@@ -45,6 +45,10 @@ namespace talk_base {
 // which is reference counted inside the OpenSSL library.
 class OpenSSLKeyPair {
  public:
+  explicit OpenSSLKeyPair(EVP_PKEY* pkey) : pkey_(pkey) {
+    ASSERT(pkey_ != NULL);
+  }
+
   static OpenSSLKeyPair* Generate();
 
   virtual ~OpenSSLKeyPair();
@@ -57,9 +61,6 @@ class OpenSSLKeyPair {
   EVP_PKEY* pkey() const { return pkey_; }
 
  private:
-  explicit OpenSSLKeyPair(EVP_PKEY* pkey) : pkey_(pkey) {
-    ASSERT(pkey_ != NULL);
-  }
   void AddReference();
 
   EVP_PKEY* pkey_;
@@ -73,8 +74,7 @@ class OpenSSLCertificate : public SSLCertificate {
  public:
   static OpenSSLCertificate* Generate(OpenSSLKeyPair* key_pair,
                                       const std::string& common_name);
-  static OpenSSLCertificate* FromPEMString(const std::string& pem_string,
-                                           int* pem_length);
+  static OpenSSLCertificate* FromPEMString(const std::string& pem_string);
 
   virtual ~OpenSSLCertificate();
 
@@ -115,7 +115,8 @@ class OpenSSLCertificate : public SSLCertificate {
 class OpenSSLIdentity : public SSLIdentity {
  public:
   static OpenSSLIdentity* Generate(const std::string& common_name);
-
+  static SSLIdentity* FromPEMStrings(const std::string& private_key,
+                                     const std::string& certificate);
   virtual ~OpenSSLIdentity() { }
 
   virtual const OpenSSLCertificate& certificate() const {

@@ -1029,13 +1029,31 @@ talk_base::scoped_refptr<DataChannel> WebRtcSession::CreateDataChannel(
     LOG(LS_ERROR) << "CreateDataChannel: Data is not supported in this call.";
     return NULL;
   }
+  DataChannelInit new_config = config ? (*config) : DataChannelInit();
+
+  if (data_channel_type_ == cricket::DCT_SCTP) {
+    if (new_config.id < 0) {
+      if (!mediastream_signaling_->AllocateSctpId(&new_config.id)) {
+        LOG(LS_ERROR) << "No id can be allocated for the SCTP data channel.";
+        return NULL;
+      }
+    } else if (!mediastream_signaling_->IsSctpIdAvailable(new_config.id)) {
+      LOG(LS_ERROR) << "Failed to create a SCTP data channel "
+                    << "because the id is already in use or out of range.";
+      return NULL;
+    }
+  }
   talk_base::scoped_refptr<DataChannel> channel(
-      DataChannel::Create(this, label, config));
+      DataChannel::Create(this, label, &new_config));
   if (channel == NULL)
     return NULL;
   if (!mediastream_signaling_->AddDataChannel(channel))
     return NULL;
   return channel;
+}
+
+cricket::DataChannelType WebRtcSession::data_channel_type() const {
+  return data_channel_type_;
 }
 
 void WebRtcSession::SetIceConnectionState(

@@ -62,9 +62,30 @@ DataChannel::DataChannel(WebRtcSession* session, const std::string& label)
 }
 
 bool DataChannel::Init(const DataChannelInit* config) {
-  if (config && config->reliable) {
-    LOG(LS_ERROR) << "reliable data channels are not implemented";
-    return false;
+  if (config) {
+    if (session_->data_channel_type() == cricket::DCT_RTP &&
+        (config->reliable ||
+         config->id != -1 ||
+         config->maxRetransmits != -1 ||
+         config->maxRetransmitTime != -1)) {
+      LOG(LS_ERROR) << "Failed to initialize the RTP data channel due to "
+                    << "invalid DataChannelInit.";
+      return false;
+    } else if (session_->data_channel_type() == cricket::DCT_SCTP) {
+      if (config->id < -1 ||
+          config->maxRetransmits < -1 ||
+          config->maxRetransmitTime < -1) {
+        LOG(LS_ERROR) << "Failed to initialize the SCTP data channel due to "
+                      << "invalid DataChannelInit.";
+        return false;
+      }
+      if (config->maxRetransmits != -1 && config->maxRetransmitTime != -1) {
+        LOG(LS_ERROR) <<
+            "maxRetransmits and maxRetransmitTime should not be both set.";
+        return false;
+      }
+    }
+    config_ = *config;
   }
   return true;
 }
@@ -83,7 +104,12 @@ void DataChannel::UnregisterObserver() {
 }
 
 bool DataChannel::reliable() const {
-  return false;
+  if (session_->data_channel_type() == cricket::DCT_RTP) {
+    return false;
+  } else {
+    return config_.maxRetransmits == -1 &&
+           config_.maxRetransmitTime == -1;
+  }
 }
 
 uint64 DataChannel::buffered_amount() const {
@@ -103,15 +129,18 @@ bool DataChannel::Send(const DataBuffer& buffer) {
   if (state_ != kOpen) {
     return false;
   }
-
-  // TODO(perkj): Implement signaling of binary data once RtpDataEngine has
-  // support for marking text vs. binary.
-  if (buffer.binary) {
-    LOG(LS_ERROR) << "SendBuffer: Sending of binary data is not implemented";
-    return false;
-  }
   cricket::SendDataParams send_params;
-  send_params.ssrc = send_ssrc_;
+
+  if (session_->data_channel_type() == cricket::DCT_RTP) {
+    send_params.ssrc = send_ssrc_;
+  } else {
+    send_params.ssrc = config_.id;
+    send_params.ordered = config_.ordered;
+    send_params.max_rtx_count = config_.maxRetransmits;
+    send_params.max_rtx_ms = config_.maxRetransmitTime;
+  }
+  send_params.type = buffer.binary ? cricket::DMT_BINARY : cricket::DMT_TEXT;
+
   cricket::SendDataResult send_result;
   // TODO(pthatcher): Use send_result.would_block for buffering.
   return session_->data_channel()->SendData(

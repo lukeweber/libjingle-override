@@ -844,6 +844,21 @@ bool ChannelManager::RemoveVideoRenderer(
            capture_manager_.get(), capturer, renderer));
 }
 
+bool ChannelManager::IsScreencastRunning() const {
+  return initialized_ && worker_thread_->Invoke<bool>(
+      Bind(&ChannelManager::IsScreencastRunning_w, this));
+}
+
+bool ChannelManager::IsScreencastRunning_w() const {
+  VideoChannels::const_iterator it = video_channels_.begin();
+  for ( ; it != video_channels_.end(); ++it) {
+    if ((*it) && (*it)->IsScreencasting()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void ChannelManager::OnVideoCaptureStateChange(VideoCapturer* capturer,
                                                CaptureState result) {
   // TODO(whyuan): Check capturer and signal failure only for camera video, not

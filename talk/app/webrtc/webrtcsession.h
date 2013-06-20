@@ -181,6 +181,8 @@ class WebRtcSession : public cricket::BaseSession,
       const std::string& label,
       const DataChannelInit* config);
 
+  cricket::DataChannelType data_channel_type() const;
+
  private:
   // Indicates the type of SessionDescription in a call to SetLocalDescription
   // and SetRemoteDescription.

@@ -56,6 +56,7 @@ class ConnectionRequest;
 
 extern const char LOCAL_PORT_TYPE[];
 extern const char STUN_PORT_TYPE[];
+extern const char PRFLX_PORT_TYPE[];
 extern const char RELAY_PORT_TYPE[];
 
 extern const char UDP_PROTOCOL_NAME[];
@@ -290,6 +291,16 @@ class Port : public PortInterface, public talk_base::MessageHandler,
   // Called when the socket is currently able to send.
   void OnReadyToSend();
 
+  // Called when the Connection discovers a local peer reflexive candidate.
+  // Returns the index of the new local candidate.
+  size_t AddPrflxCandidate(const Candidate& local);
+
+  // Returns if RFC 5245 ICE protocol is used.
+  bool IsStandardIce() const;
+
+  // Returns if Google ICE protocol is used.
+  bool IsGoogleIce() const;
+
  protected:
   void set_type(const std::string& type) { type_ = type; }
   // Fills in the local address of the port.
@@ -327,10 +338,6 @@ class Port : public PortInterface, public talk_base::MessageHandler,
 
   // Checks if this port is useless, and hence, should be destroyed.
   void CheckTimeout();
-
-  std::string ComputeFoundation(const std::string& type,
-      const std::string& protocol,
-      const talk_base::SocketAddress& base_address) const;
 
   talk_base::Thread* thread_;
   talk_base::PacketSocketFactory* factory_;
@@ -551,6 +558,9 @@ class Connection : public talk_base::MessageHandler,
   talk_base::RateTracker send_rate_tracker_;
 
  private:
+  void MaybeAddPrflxCandidate(ConnectionRequest* request,
+                              StunMessage* response);
+
   bool reported_;
   State state_;
 

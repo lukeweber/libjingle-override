@@ -165,6 +165,15 @@ int StunRequest::type() {
   return msg_->type();
 }
 
+const StunMessage* StunRequest::msg() const {
+  return msg_;
+}
+
+uint32 StunRequest::Elapsed() const {
+  return talk_base::TimeSince(tstamp_);
+}
+
+
 void StunRequest::set_manager(StunRequestManager* manager) {
   ASSERT(!manager_);
   manager_ = manager;
@@ -188,10 +197,6 @@ void StunRequest::OnMessage(talk_base::Message* pmsg) {
 
   int delay = GetNextDelay();
   manager_->thread_->PostDelayed(delay, this, MSG_STUN_SEND, NULL);
-}
-
-uint32 StunRequest::Elapsed() const {
-  return talk_base::TimeSince(tstamp_);
 }
 
 int StunRequest::GetNextDelay() {

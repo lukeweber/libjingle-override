@@ -124,7 +124,7 @@ static talk_base::SSLCertificate* ParseCertificate(
     const std::string& pem_cert) {
   if (pem_cert.empty())
     return NULL;
-  return talk_base::SSLCertificate::FromPEMString(pem_cert, NULL);
+  return talk_base::SSLCertificate::FromPEMString(pem_cert);
 }
 
 TunnelSession* SecureTunnelSessionClient::MakeTunnelSession(

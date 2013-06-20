@@ -134,6 +134,7 @@ class P2PTransportChannel : public TransportChannelImpl,
   Connection* FindNextPingableConnection();
   void PingConnection(Connection* conn);
   void AddAllocatorSession(PortAllocatorSession* session);
+  void AddConnection(Connection* connection);
 
   void OnPortReady(PortAllocatorSession *session, PortInterface* port);
   void OnCandidatesReady(PortAllocatorSession *session,

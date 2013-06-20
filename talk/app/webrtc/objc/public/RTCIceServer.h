@@ -1,6 +1,6 @@
 /*
  * libjingle
- * Copyright 2013 Google Inc.
+ * Copyright 2013, Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,52 +25,24 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "talk/media/devices/devicemanager.h"
-#include "webrtc/modules/video_capture/include/video_capture_factory.h"
+#import <Foundation/Foundation.h>
 
-namespace cricket {
+// RTCICEServer allows for the creation of ICEServer structs.
+@interface RTCICEServer : NSObject
 
-class AndroidDeviceManager : public DeviceManager {
- public:
-  AndroidDeviceManager();
-  virtual ~AndroidDeviceManager();
-  virtual bool GetVideoCaptureDevices(std::vector<Device>* devs);
-};
+// The server URI.
+@property(nonatomic, strong, readonly) NSURL *URI;
 
-AndroidDeviceManager::AndroidDeviceManager() {
-  // We don't expect available devices to change on Android, so use a
-  // do-nothing watcher.
-  set_watcher(new DeviceWatcher(this));
-}
+// The server password.
+@property(nonatomic, copy, readonly) NSString *password;
 
-AndroidDeviceManager::~AndroidDeviceManager() {}
+// Initializer for RTCICEServer taking uri and password.
+- (id)initWithURI:(NSString *)URI password:(NSString *)password;
 
-bool AndroidDeviceManager::GetVideoCaptureDevices(std::vector<Device>* devs) {
-  devs->clear();
-  talk_base::scoped_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(
-      webrtc::VideoCaptureFactory::CreateDeviceInfo(0));
-  if (!info)
-    return false;
+#ifndef DOXYGEN_SHOULD_SKIP_THIS
+// Disallow init and don't add to documentation
+- (id)init __attribute__(
+    (unavailable("init is not a supported initializer for this class.")));
+#endif /* DOXYGEN_SHOULD_SKIP_THIS */
 
-  uint32 num_cams = info->NumberOfDevices();
-  char id[256];
-  char name[256];
-  for (uint32 i = 0; i < num_cams; ++i) {
-    if (info->GetDeviceName(i, name, ARRAY_SIZE(name), id, ARRAY_SIZE(id)))
-      continue;
-    devs->push_back(Device(name, id));
-  }
-  return true;
-}
-
-DeviceManagerInterface* DeviceManagerFactory::Create() {
-  return new AndroidDeviceManager();
-}
-
-bool GetUsbId(const Device& device, std::string* usb_id) { return false; }
-
-bool GetUsbVersion(const Device& device, std::string* usb_version) {
-  return false;
-}
-
-}  // namespace cricket
+@end

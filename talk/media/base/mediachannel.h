@@ -164,6 +164,7 @@ struct AudioOptions {
     conference_mode.SetFrom(change.conference_mode);
     adjust_agc_delta.SetFrom(change.adjust_agc_delta);
     experimental_agc.SetFrom(change.experimental_agc);
+    experimental_aec.SetFrom(change.experimental_aec);
     aec_dump.SetFrom(change.aec_dump);
   }
 
@@ -176,6 +177,7 @@ struct AudioOptions {
         typing_detection == o.typing_detection &&
         conference_mode == o.conference_mode &&
         experimental_agc == o.experimental_agc &&
+        experimental_aec == o.experimental_aec &&
         adjust_agc_delta == o.adjust_agc_delta &&
         aec_dump == o.aec_dump;
   }
@@ -192,6 +194,7 @@ struct AudioOptions {
     ost << ToStringIfSet("conference", conference_mode);
     ost << ToStringIfSet("agc_delta", adjust_agc_delta);
     ost << ToStringIfSet("experimental_agc", experimental_agc);
+    ost << ToStringIfSet("experimental_aec", experimental_aec);
     ost << ToStringIfSet("aec_dump", aec_dump);
     ost << "}";
     return ost.str();
@@ -213,6 +216,7 @@ struct AudioOptions {
   Settable<bool> conference_mode;
   Settable<int> adjust_agc_delta;
   Settable<bool> experimental_agc;
+  Settable<bool> experimental_aec;
   Settable<bool> aec_dump;
 };
 

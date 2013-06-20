@@ -148,6 +148,89 @@
         },
       ],
     }],
+    ['libjingle_objc == 1', {
+      'targets': [
+        {
+          'target_name': 'libjingle_peerconnection_objc',
+          'type': 'static_library',
+          'dependencies': [
+            'libjingle_peerconnection',
+          ],
+          'sources': [
+            'app/webrtc/objc/RTCAudioTrack+Internal.h',
+            'app/webrtc/objc/RTCAudioTrack.mm',
+            'app/webrtc/objc/RTCEnumConverter.h',
+            'app/webrtc/objc/RTCEnumConverter.mm',
+            'app/webrtc/objc/RTCI420Frame.mm',
+            'app/webrtc/objc/RTCIceCandidate+Internal.h',
+            'app/webrtc/objc/RTCIceCandidate.mm',
+            'app/webrtc/objc/RTCIceServer+Internal.h',
+            'app/webrtc/objc/RTCIceServer.mm',
+            'app/webrtc/objc/RTCMediaConstraints+Internal.h',
+            'app/webrtc/objc/RTCMediaConstraints.mm',
+            'app/webrtc/objc/RTCMediaConstraintsNative.h',
+            'app/webrtc/objc/RTCMediaSource+Internal.h',
+            'app/webrtc/objc/RTCMediaSource.mm',
+            'app/webrtc/objc/RTCMediaStream+Internal.h',
+            'app/webrtc/objc/RTCMediaStream.mm',
+            'app/webrtc/objc/RTCMediaStreamTrack+Internal.h',
+            'app/webrtc/objc/RTCMediaStreamTrack.mm',
+            'app/webrtc/objc/RTCPair.m',
+            'app/webrtc/objc/RTCPeerConnection+Internal.h',
+            'app/webrtc/objc/RTCPeerConnection.mm',
+            'app/webrtc/objc/RTCPeerConnectionFactory.mm',
+            'app/webrtc/objc/RTCPeerConnectionObserver.h',
+            'app/webrtc/objc/RTCPeerConnectionObserver.mm',
+            'app/webrtc/objc/RTCSessionDescription+Internal.h',
+            'app/webrtc/objc/RTCSessionDescription.mm',
+            'app/webrtc/objc/RTCVideoCapturer+Internal.h',
+            'app/webrtc/objc/RTCVideoCapturer.mm',
+            'app/webrtc/objc/RTCVideoRenderer+Internal.h',
+            'app/webrtc/objc/RTCVideoRenderer.mm',
+            'app/webrtc/objc/RTCVideoSource+Internal.h',
+            'app/webrtc/objc/RTCVideoSource.mm',
+            'app/webrtc/objc/RTCVideoTrack+Internal.h',
+            'app/webrtc/objc/RTCVideoTrack.mm',
+            'app/webrtc/objc/public/RTCAudioSource.h',
+            'app/webrtc/objc/public/RTCAudioTrack.h',
+            'app/webrtc/objc/public/RTCI420Frame.h',
+            'app/webrtc/objc/public/RTCIceCandidate.h',
+            'app/webrtc/objc/public/RTCIceServer.h',
+            'app/webrtc/objc/public/RTCMediaConstraints.h',
+            'app/webrtc/objc/public/RTCMediaSource.h',
+            'app/webrtc/objc/public/RTCMediaStream.h',
+            'app/webrtc/objc/public/RTCMediaStreamTrack.h',
+            'app/webrtc/objc/public/RTCPair.h',
+            'app/webrtc/objc/public/RTCPeerConnection.h',
+            'app/webrtc/objc/public/RTCPeerConnectionDelegate.h',
+            'app/webrtc/objc/public/RTCPeerConnectionFactory.h',
+            'app/webrtc/objc/public/RTCSessionDescription.h',
+            'app/webrtc/objc/public/RTCSessionDescriptonDelegate.h',
+            'app/webrtc/objc/public/RTCTypes.h',
+            'app/webrtc/objc/public/RTCVideoCapturer.h',
+            'app/webrtc/objc/public/RTCVideoRenderer.h',
+            'app/webrtc/objc/public/RTCVideoRendererDelegate.h',
+            'app/webrtc/objc/public/RTCVideoSource.h',
+            'app/webrtc/objc/public/RTCVideoTrack.h',
+          ],
+          'include_dirs': [
+            '<(DEPTH)/talk/app/webrtc',
+            '<(DEPTH)/talk/app/webrtc/objc',
+            '<(DEPTH)/talk/app/webrtc/objc/public',
+          ],
+          'link_settings': {
+            'libraries': [
+              '$(SDKROOT)/System/Library/Frameworks/Foundation.framework',
+            ],
+          },
+          'xcode_settings': {
+            'CLANG_ENABLE_OBJC_ARC': 'YES',
+            'CLANG_WARN_OBJC_MISSING_PROPERTY_SYNTHESIS': 'NO',
+            'CLANG_LINK_OBJC_RUNTIME': 'YES',
+          },
+        }
+      ]
+    }],
   ],
 
   'targets': [
@@ -238,8 +321,8 @@
         'base/linuxfdwalk.h',
         'base/logging.cc',
         'base/logging.h',
-        'base/maccocoasocketserver.h',
         'base/maccocoathreadhelper.h',
+        'base/maccocoathreadhelper.mm',
         'base/mathutils.h',
         'base/md5.cc',
         'base/md5.h',
@@ -448,7 +531,7 @@
         'xmpp/xmppthread.h',
       ],
       'conditions': [
-        ['OS=="mac" or OS=="win"', {
+        ['OS=="mac" or OS=="ios" or OS=="win"', {
           'dependencies': [
             # The chromium copy of nss should NOT be used on platforms that
             # have NSS as system libraries, such as linux.
@@ -503,15 +586,32 @@
           ],
         }],
         ['OS=="mac"', {
+          'conditions': [
+            [ 'libjingle_objc != 1', {
+              'sources': [
+                'base/macasyncsocket.cc',
+                'base/macasyncsocket.h',
+                'base/maccocoasocketserver.h',
+                'base/maccocoasocketserver.mm',
+                'base/macsocketserver.cc',
+                'base/macsocketserver.h',
+              ],
+              'link_settings' :{
+                'xcode_settings': {
+                  'OTHER_LDFLAGS': [
+                    '-framework Carbon',
+                  ],
+                },
+              },
+            }, {
+              'defines': [
+                'CARBON_DEPRECATED=YES',
+              ],
+            }],
+          ],
           'sources': [
-            'base/macasyncsocket.cc',
-            'base/macasyncsocket.h',
-            'base/maccocoasocketserver.mm',
-            'base/maccocoathreadhelper.mm',
             'base/macconversion.cc',
             'base/macconversion.h',
-            'base/macsocketserver.cc',
-            'base/macsocketserver.h',
             'base/macutils.cc',
             'base/macutils.h',
             'base/macwindowpicker.cc',
@@ -525,7 +625,6 @@
             ],
             'xcode_settings': {
               'OTHER_LDFLAGS': [
-                '-framework Carbon',
                 '-framework Cocoa',
                 '-framework IOKit',
                 '-framework Security',
@@ -533,6 +632,28 @@
               ],
             },
           },
+        }],
+        ['OS=="ios"', {
+          # 'dependencies': [
+          #   '<(DEPTH)/third_party/openssl/openssl.gyp:openssl',
+          # ],
+          # 'include_dirs': [
+          #   '<(DEPTH)/third_party/openssl/openssl/include',
+          # ],
+          'sources': [
+            'base/scoped_autorelease_pool.mm',
+          ],
+          'xcode_settings': {
+            'OTHER_LDFLAGS': [
+              '-framework IOKit',
+              '-framework Security',
+              '-framework SystemConfiguration',
+              '-framework UIKit',
+            ],
+          },
+          'defines': [
+	    'SSL_USE_NSS',
+          ],
         }],
         ['OS=="win"', {
           'sources': [
@@ -576,14 +697,6 @@
           'sources': [
             'base/latebindingsymboltable.cc',
             'base/latebindingsymboltable.h',
-            'base/openssladapter.cc',
-            'base/openssladapter.h',
-            'base/openssldigest.cc',
-            'base/openssldigest.h',
-            'base/opensslidentity.cc',
-            'base/opensslidentity.h',
-            'base/opensslstreamadapter.cc',
-            'base/opensslstreamadapter.h',
             'base/posix.cc',
             'base/posix.h',
             'base/unixfilesystem.cc',
@@ -593,6 +706,18 @@
             ['OS=="linux" or OS=="android"', {
               'dependencies': [
                 '<(DEPTH)/third_party/openssl/openssl.gyp:openssl',
+              ],
+            }],
+            ['OS!="ios"', {
+              'sources': [
+                'base/openssladapter.cc',
+                'base/openssladapter.h',
+                'base/openssldigest.cc',
+                'base/openssldigest.h',
+                'base/opensslidentity.cc',
+                'base/opensslidentity.h',
+                'base/opensslstreamadapter.cc',
+                'base/opensslstreamadapter.h',
               ],
             }],
           ],
@@ -779,12 +904,19 @@
         }],
         ['OS=="mac"', {
           'sources': [
-            'media/devices/carbonvideorenderer.cc',
-            'media/devices/carbonvideorenderer.h',
             'media/devices/macdeviceinfo.cc',
             'media/devices/macdevicemanager.cc',
             'media/devices/macdevicemanager.h',
             'media/devices/macdevicemanagermm.mm',
+          ],
+          'conditions': [
+            # TODO(hughv):  Investigate if this is needed.
+            [ 'libjingle_objc != 1', {
+              'sources': [
+                'media/devices/carbonvideorenderer.cc',
+                'media/devices/carbonvideorenderer.h',
+              ],
+            }],
           ],
           'xcode_settings': {
             'WARNING_CFLAGS': [
@@ -805,9 +937,20 @@
             },
           },
         }],
+        ['OS=="ios"', {
+          'sources': [
+            'media/devices/iosdeviceinfo.cc',
+            'media/devices/mobiledevicemanager.cc',
+          ],
+          'include_dirs': [
+            # TODO(sjlee) Remove when vp8 is building for iOS.  vp8 pulls in
+            # libjpeg which pulls in libyuv which currently disabled.
+            '../third_party/libyuv/include',
+          ],
+        }],
         ['OS=="android"', {
           'sources': [
-            'media/devices/androiddevicemanager.cc',
+            'media/devices/mobiledevicemanager.cc',
           ],
         }],
       ],

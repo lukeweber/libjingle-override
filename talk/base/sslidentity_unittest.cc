@@ -73,7 +73,7 @@ class SSLIdentityTest : public testing::Test {
     ASSERT_TRUE(identity2_);
 
     test_cert_.reset(
-        talk_base::SSLCertificate::FromPEMString(kTestCertificate, 0));
+        talk_base::SSLCertificate::FromPEMString(kTestCertificate));
     ASSERT_TRUE(test_cert_);
   }
 
@@ -150,4 +150,41 @@ TEST_F(SSLIdentityTest, DigestSHA384) {
 
 TEST_F(SSLIdentityTest, DigestSHA512) {
   TestDigest(talk_base::DIGEST_SHA_512, 64);
+}
+
+TEST_F(SSLIdentityTest, FromPEMStrings) {
+  static const char kRSA_PRIVATE_KEY_PEM[] =
+      "-----BEGIN RSA PRIVATE KEY-----\n"
+      "MIICXQIBAAKBgQDCueE4a9hDMZ3sbVZdlXOz9ZA+cvzie3zJ9gXnT/BCt9P4b9HE\n"
+      "vD/tr73YBqD3Wr5ZWScmyGYF9EMn0r3rzBxv6oooLU5TdUvOm4rzUjkCLQaQML8o\n"
+      "NxXq+qW/j3zUKGikLhaaAl/amaX2zSWUsRQ1CpngQ3+tmDNH4/25TncNmQIDAQAB\n"
+      "AoGAUcuU0Id0k10fMjYHZk4mCPzot2LD2Tr4Aznl5vFMQipHzv7hhZtx2xzMSRcX\n"
+      "vG+Qr6VkbcUWHgApyWubvZXCh3+N7Vo2aYdMAQ8XqmFpBdIrL5CVdVfqFfEMlgEy\n"
+      "LSZNG5klnrIfl3c7zQVovLr4eMqyl2oGfAqPQz75+fecv1UCQQD6wNHch9NbAG1q\n"
+      "yuFEhMARB6gDXb+5SdzFjjtTWW5uJfm4DcZLoYyaIZm0uxOwsUKd0Rsma+oGitS1\n"
+      "CXmuqfpPAkEAxszyN3vIdpD44SREEtyKZBMNOk5pEIIGdbeMJC5/XHvpxww9xkoC\n"
+      "+39NbvUZYd54uT+rafbx4QZKc0h9xA/HlwJBAL37lYVWy4XpPv1olWCKi9LbUCqs\n"
+      "vvQtyD1N1BkEayy9TQRsO09WKOcmigRqsTJwOx7DLaTgokEuspYvhagWVPUCQE/y\n"
+      "0+YkTbYBD1Xbs9SyBKXCU6uDJRWSdO6aZi2W1XloC9gUwDMiSJjD1Wwt/YsyYPJ+\n"
+      "/Hyc5yFL2l0KZimW/vkCQQCjuZ/lPcH46EuzhdbRfumDOG5N3ld7UhGI1TIRy17W\n"
+      "dGF90cG33/L6BfS8Ll+fkkW/2AMRk8FDvF4CZi2nfW4L\n"
+      "-----END RSA PRIVATE KEY-----\n";
+
+  static const char kCERT_PEM[] =
+      "-----BEGIN CERTIFICATE-----\n"
+      "MIIBmTCCAQICCQCPNJORW/M13DANBgkqhkiG9w0BAQUFADARMQ8wDQYDVQQDDAZ3\n"
+      "ZWJydGMwHhcNMTMwNjE0MjIzMDAxWhcNMTQwNjE0MjIzMDAxWjARMQ8wDQYDVQQD\n"
+      "DAZ3ZWJydGMwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAMK54Thr2EMxnext\n"
+      "Vl2Vc7P1kD5y/OJ7fMn2BedP8EK30/hv0cS8P+2vvdgGoPdavllZJybIZgX0QyfS\n"
+      "vevMHG/qiigtTlN1S86bivNSOQItBpAwvyg3Fer6pb+PfNQoaKQuFpoCX9qZpfbN\n"
+      "JZSxFDUKmeBDf62YM0fj/blOdw2ZAgMBAAEwDQYJKoZIhvcNAQEFBQADgYEAECMt\n"
+      "UZb35H8TnjGx4XPzco/kbnurMLFFWcuve/DwTsuf10Ia9N4md8LY0UtgIgtyNqWc\n"
+      "ZwyRMwxONF6ty3wcaIiPbGqiAa55T3YRuPibkRmck9CjrmM9JAtyvqHnpHd2TsBD\n"
+      "qCV42aXS3onOXDQ1ibuWq0fr0//aj0wo4KV474c=\n"
+      "-----END CERTIFICATE-----\n";
+
+  talk_base::scoped_ptr<talk_base::SSLIdentity> identity(
+      talk_base::SSLIdentity::FromPEMStrings(kRSA_PRIVATE_KEY_PEM, kCERT_PEM));
+  EXPECT_TRUE(identity);
+  EXPECT_EQ(kCERT_PEM, identity->certificate().ToPEMString());
 }

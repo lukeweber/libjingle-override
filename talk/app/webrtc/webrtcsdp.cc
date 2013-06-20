@@ -1437,7 +1437,10 @@ void AddRtcpFbLines(const T& codec, std::string* message) {
        iter != codec.feedback_params.params().end(); ++iter) {
     std::ostringstream os;
     WriteRtcpFbHeader(codec.id, &os);
-    os << " " << iter->id() << " " << iter->param();
+    os << " " << iter->id();
+    if (!iter->param().empty()) {
+      os << " " << iter->param();
+    }
     AddLine(os.str(), message);
   }
 }

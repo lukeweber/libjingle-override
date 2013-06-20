@@ -107,9 +107,6 @@ void VideoCapturer::Construct() {
   SignalFrameCaptured.connect(this, &VideoCapturer::OnFrameCaptured);
   scaled_width_ = 0;
   scaled_height_ = 0;
-  // TODO(fbarchard): Consider removing cores as a factor for scaling.
-  talk_base::SystemInfo system_info;
-  num_cores_ = system_info.GetMaxPhysicalCpus();
   muted_ = false;
   black_frame_count_down_ = kNumBlackFramesOnMute;
 }
@@ -330,8 +327,7 @@ void VideoCapturer::OnFrameCaptured(VideoCapturer*,
         VideoFormat::IntervalToFps(capture_format_->interval) :
         kDefaultScreencastFps;
     ComputeScale(captured_frame->width, captured_frame->height,
-                 desired_screencast_fps, num_cores_,
-                 &scaled_width, &scaled_height);
+                 desired_screencast_fps, &scaled_width, &scaled_height);
 
     if (scaled_width != scaled_width_ || scaled_height != scaled_height_) {
       LOG(LS_VERBOSE) << "Scaling Screencast from "

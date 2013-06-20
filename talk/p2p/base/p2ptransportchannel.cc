@@ -200,6 +200,21 @@ void P2PTransportChannel::AddAllocatorSession(PortAllocatorSession* session) {
   session->StartGettingPorts();
 }
 
+void P2PTransportChannel::AddConnection(Connection* connection) {
+  connections_.push_back(connection);
+  connection->set_remote_ice_mode(remote_ice_mode_);
+  connection->SignalReadPacket.connect(
+      this, &P2PTransportChannel::OnReadPacket);
+  connection->SignalReadyToSend.connect(
+      this, &P2PTransportChannel::OnReadyToSend);
+  connection->SignalStateChange.connect(
+      this, &P2PTransportChannel::OnConnectionStateChange);
+  connection->SignalDestroyed.connect(
+      this, &P2PTransportChannel::OnConnectionDestroyed);
+  connection->SignalUseCandidate.connect(
+      this, &P2PTransportChannel::OnUseCandidate);
+}
+
 void P2PTransportChannel::SetRole(TransportRole role) {
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   if (role_ != role) {
@@ -451,21 +466,21 @@ void P2PTransportChannel::OnUnknownAddress(
   } else {
     // Create a new candidate with this address.
 
-    // Unless the binding request came from a relay port, we use the port
-    // type as the candidate type. If the binding request comes from a relay
-    // port we always set type to STUN_PORT_TYPE.
-    // TODO: Fix this by adding a new type as peer-reflexive
-    // candidate. So that all the new candidates created here will be the
-    // peer-reflexive candidate.
-    std::string type = port->Type();
-    if (type == RELAY_PORT_TYPE || port->SharedSocket()) {
-      type = STUN_PORT_TYPE;
+    std::string type;
+    if (protocol_type_ == ICEPROTO_RFC5245) {
+      type = PRFLX_PORT_TYPE;
+    } else {
+      // G-ICE doesn't support prflx candidate.
+      // We set candidate type to STUN_PORT_TYPE if the binding request comes
+      // from a relay port or the shared socket is used. Otherwise we use the
+      // port's type as the candidate type.
+      if (port->Type() == RELAY_PORT_TYPE || port->SharedSocket()) {
+        type = STUN_PORT_TYPE;
+      } else {
+        type = port->Type();
+      }
     }
 
-    // TODO: Change the preference to the preference of
-    // the peer-reflexive candidate when it's ready.
-    // For now just default to a STUN preference.
-    // TODO(ronghuawu): Use Port::ComputeFoundation to calculate foundation.
     std::string id = talk_base::CreateRandomString(8);
     new_remote_candidate = Candidate(
         id, component(), ProtoToString(proto), address,
@@ -476,10 +491,48 @@ void P2PTransportChannel::OnUnknownAddress(
         new_remote_candidate.GetPriority(ICE_TYPE_PREFERENCE_SRFLX));
   }
 
-  // Check for connectivity to this address. Create connections
-  // to this address across all local ports. First, add this as a new remote
-  // address
-  if (CreateConnections(new_remote_candidate, port, true)) {
+  if (protocol_type_ == ICEPROTO_RFC5245) {
+    // RFC 5245
+    // If the source transport address of the request does not match any
+    // existing remote candidates, it represents a new peer reflexive remote
+    // candidate.
+
+    // The priority of the candidate is set to the PRIORITY attribute
+    // from the request.
+    const StunUInt32Attribute* priority_attr =
+        stun_msg->GetUInt32(STUN_ATTR_PRIORITY);
+    if (!priority_attr) {
+      LOG(LS_WARNING) << "P2PTransportChannel::OnUnknownAddress - "
+                      << "No STUN_ATTR_PRIORITY found in the "
+                      << "stun request message";
+      port->SendBindingErrorResponse(stun_msg, address,
+                                     STUN_ERROR_BAD_REQUEST,
+                                     STUN_ERROR_REASON_BAD_REQUEST);
+      return;
+    }
+    new_remote_candidate.set_priority(priority_attr->value());
+
+    // RFC5245, the agent constructs a pair whose local candidate is equal to
+    // the transport address on which the STUN request was received, and a
+    // remote candidate equal to the source transport address where the
+    // request came from.
+
+    // There shouldn't be an existing connection with this remote address.
+    ASSERT(port->GetConnection(new_remote_candidate.address()) == NULL);
+
+    Connection* connection = port->CreateConnection(
+        new_remote_candidate, cricket::PortInterface::ORIGIN_THIS_PORT);
+    if (!connection) {
+      ASSERT(false);
+      port->SendBindingErrorResponse(stun_msg, address,
+                                     STUN_ERROR_SERVER_ERROR,
+                                     STUN_ERROR_REASON_SERVER_ERROR);
+      return;
+    }
+
+    AddConnection(connection);
+    connection->ReceivedPing();
+
     // Send the pinger a successful stun response.
     port->SendBindingResponse(stun_msg, address);
 
@@ -488,11 +541,25 @@ void P2PTransportChannel::OnUnknownAddress(
     // connection in question.
     SortConnections();
   } else {
-    // Hopefully this won't occur, because changing a destination address
-    // shouldn't cause a new connection to fail
-    ASSERT(false);
-    port->SendBindingErrorResponse(stun_msg, address, STUN_ERROR_SERVER_ERROR,
-        STUN_ERROR_REASON_SERVER_ERROR);
+    // Check for connectivity to this address. Create connections
+    // to this address across all local ports. First, add this as a new remote
+    // address
+    if (!CreateConnections(new_remote_candidate, port, true)) {
+      // Hopefully this won't occur, because changing a destination address
+      // shouldn't cause a new connection to fail
+      ASSERT(false);
+      port->SendBindingErrorResponse(stun_msg, address, STUN_ERROR_SERVER_ERROR,
+          STUN_ERROR_REASON_SERVER_ERROR);
+      return;
+    }
+
+    // Send the pinger a successful stun response.
+    port->SendBindingResponse(stun_msg, address);
+
+    // Update the list of connections since we just added another.  We do this
+    // after sending the response since it could (in principle) delete the
+    // connection in question.
+    SortConnections();
   }
 }
 
@@ -617,18 +684,7 @@ bool P2PTransportChannel::CreateConnection(PortInterface* port,
     if (!connection)
       return false;
 
-    connections_.push_back(connection);
-    connection->set_remote_ice_mode(remote_ice_mode_);
-    connection->SignalReadPacket.connect(
-        this, &P2PTransportChannel::OnReadPacket);
-    connection->SignalReadyToSend.connect(
-        this, &P2PTransportChannel::OnReadyToSend);
-    connection->SignalStateChange.connect(
-        this, &P2PTransportChannel::OnConnectionStateChange);
-    connection->SignalDestroyed.connect(
-        this, &P2PTransportChannel::OnConnectionDestroyed);
-    connection->SignalUseCandidate.connect(
-        this, &P2PTransportChannel::OnUseCandidate);
+    AddConnection(connection);
 
     LOG_J(LS_INFO, this) << "Created connection with origin=" << origin << ", ("
                          << connections_.size() << " total)";

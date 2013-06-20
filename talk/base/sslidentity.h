@@ -51,8 +51,7 @@ class SSLCertificate {
   // stored in *pem_length if it is non-NULL, and only if
   // parsing was successful.
   // Caller is responsible for freeing the returned object.
-  static SSLCertificate* FromPEMString(const std::string& pem_string,
-                                             int* pem_length);
+  static SSLCertificate* FromPEMString(const std::string& pem_string);
   virtual ~SSLCertificate() {}
 
   // Returns a new SSLCertificate object instance wrapping the same
@@ -80,6 +79,10 @@ class SSLIdentity {
   // Returns NULL on failure.
   // Caller is responsible for freeing the returned object.
   static SSLIdentity* Generate(const std::string& common_name);
+
+  // Construct an identity from a private key and a certificate.
+  static SSLIdentity* FromPEMStrings(const std::string& private_key,
+                                     const std::string& certificate);
 
   virtual ~SSLIdentity() {}
 

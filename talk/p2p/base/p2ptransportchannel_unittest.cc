@@ -333,10 +333,16 @@ class P2PTransportChannelTestBase : public testing::Test,
   // Common results.
   static const Result kLocalUdpToLocalUdp;
   static const Result kLocalUdpToStunUdp;
+  static const Result kLocalUdpToPrflxUdp;
+  static const Result kPrflxUdpToLocalUdp;
   static const Result kStunUdpToLocalUdp;
   static const Result kStunUdpToStunUdp;
+  static const Result kPrflxUdpToStunUdp;
   static const Result kLocalUdpToRelayUdp;
+  static const Result kPrflxUdpToRelayUdp;
   static const Result kLocalTcpToLocalTcp;
+  static const Result kLocalTcpToPrflxTcp;
+  static const Result kPrflxTcpToLocalTcp;
 
   static void SetUpTestCase() {
     // Ensure the RNG is inited.
@@ -458,12 +464,15 @@ class P2PTransportChannelTestBase : public testing::Test,
         // and in other cases like NAT -> NAT it will be LUSU. To avoid these
         // mismatches and we are doing comparision in different way.
         // i.e. when don't match its remote type is either local or stun.
+        // TODO(ronghuawu): Refine the test criteria.
+        // https://code.google.com/p/webrtc/issues/detail?id=1953
         if (expected.remote_type2 != RemoteCandidate(ep2_ch1())->type())
           EXPECT_TRUE(expected.remote_type2 == cricket::LOCAL_PORT_TYPE ||
                       expected.remote_type2 == cricket::STUN_PORT_TYPE);
           EXPECT_TRUE(
               RemoteCandidate(ep2_ch1())->type() == cricket::LOCAL_PORT_TYPE ||
-              RemoteCandidate(ep2_ch1())->type() == cricket::STUN_PORT_TYPE);
+              RemoteCandidate(ep2_ch1())->type() == cricket::STUN_PORT_TYPE ||
+              RemoteCandidate(ep2_ch1())->type() == cricket::PRFLX_PORT_TYPE);
       }
 
       converge_time = talk_base::TimeSince(converge_start);
@@ -675,17 +684,35 @@ const P2PTransportChannelTestBase::Result P2PTransportChannelTestBase::
     kLocalUdpToStunUdp("local", "udp", "stun", "udp",
                        "local", "udp", "stun", "udp", 1000);
 const P2PTransportChannelTestBase::Result P2PTransportChannelTestBase::
+    kLocalUdpToPrflxUdp("local", "udp", "prflx", "udp",
+                        "prflx", "udp", "local", "udp", 1000);
+const P2PTransportChannelTestBase::Result P2PTransportChannelTestBase::
+    kPrflxUdpToLocalUdp("prflx", "udp", "local", "udp",
+                        "local", "udp", "prflx", "udp", 1000);
+const P2PTransportChannelTestBase::Result P2PTransportChannelTestBase::
     kStunUdpToLocalUdp("stun", "udp", "local", "udp",
                        "local", "udp", "stun", "udp", 1000);
 const P2PTransportChannelTestBase::Result P2PTransportChannelTestBase::
     kStunUdpToStunUdp("stun", "udp", "stun", "udp",
                       "stun", "udp", "stun", "udp", 1000);
 const P2PTransportChannelTestBase::Result P2PTransportChannelTestBase::
+    kPrflxUdpToStunUdp("prflx", "udp", "stun", "udp",
+                       "local", "udp", "prflx", "udp", 1000);
+const P2PTransportChannelTestBase::Result P2PTransportChannelTestBase::
     kLocalUdpToRelayUdp("local", "udp", "relay", "udp",
                         "relay", "udp", "local", "udp", 2000);
 const P2PTransportChannelTestBase::Result P2PTransportChannelTestBase::
+    kPrflxUdpToRelayUdp("prflx", "udp", "relay", "udp",
+                        "relay", "udp", "prflx", "udp", 2000);
+const P2PTransportChannelTestBase::Result P2PTransportChannelTestBase::
     kLocalTcpToLocalTcp("local", "tcp", "local", "tcp",
                         "local", "tcp", "local", "tcp", 3000);
+const P2PTransportChannelTestBase::Result P2PTransportChannelTestBase::
+    kLocalTcpToPrflxTcp("local", "tcp", "prflx", "tcp",
+                        "prflx", "tcp", "local", "tcp", 3000);
+const P2PTransportChannelTestBase::Result P2PTransportChannelTestBase::
+    kPrflxTcpToLocalTcp("prflx", "tcp", "local", "tcp",
+                        "local", "tcp", "prflx", "tcp", 3000);
 
 // Test the matrix of all the connectivity types we expect to see in the wild.
 // Just test every combination of the configs in the Config enum.
@@ -693,7 +720,8 @@ class P2PTransportChannelTest : public P2PTransportChannelTestBase {
  protected:
   static const Result* kMatrix[NUM_CONFIGS][NUM_CONFIGS];
   static const Result* kMatrixSharedUfrag[NUM_CONFIGS][NUM_CONFIGS];
-  static const Result* kMatrixSharedSocket[NUM_CONFIGS][NUM_CONFIGS];
+  static const Result* kMatrixSharedSocketAsGice[NUM_CONFIGS][NUM_CONFIGS];
+  static const Result* kMatrixSharedSocketAsIce[NUM_CONFIGS][NUM_CONFIGS];
   void ConfigureEndpoints(Config config1, Config config2,
       int allocator_flags1, int allocator_flags2,
       int delay1, int delay2,
@@ -779,10 +807,16 @@ class P2PTransportChannelTest : public P2PTransportChannelTestBase {
 // Shorthands for use in the test matrix.
 #define LULU &kLocalUdpToLocalUdp
 #define LUSU &kLocalUdpToStunUdp
+#define LUPU &kLocalUdpToPrflxUdp
+#define PULU &kPrflxUdpToLocalUdp
 #define SULU &kStunUdpToLocalUdp
 #define SUSU &kStunUdpToStunUdp
+#define PUSU &kPrflxUdpToStunUdp
 #define LURU &kLocalUdpToRelayUdp
+#define PURU &kPrflxUdpToRelayUdp
 #define LTLT &kLocalTcpToLocalTcp
+#define LTPT &kLocalTcpToPrflxTcp
+#define PTLT &kPrflxTcpToLocalTcp
 // TODO: Enable these once TestRelayServer can accept external TCP.
 #define LTRT NULL
 #define LSRS NULL
@@ -855,7 +889,8 @@ const P2PTransportChannelTest::Result*
 /*PR*/ {LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LSRS, NULL, LTRT},
 };
 const P2PTransportChannelTest::Result*
-    P2PTransportChannelTest::kMatrixSharedSocket[NUM_CONFIGS][NUM_CONFIGS] = {
+    P2PTransportChannelTest::kMatrixSharedSocketAsGice
+        [NUM_CONFIGS][NUM_CONFIGS] = {
 //      OPEN  CONE  ADDR  PORT  SYMM  2CON  SCON  !UDP  !TCP  HTTP  PRXH  PRXS
 /*OP*/ {LULU, LUSU, LUSU, LUSU, LUSU, LUSU, LUSU, LTLT, LTLT, LSRS, NULL, LTLT},
 /*CO*/ {LULU, LUSU, LUSU, LUSU, LUSU, LUSU, LUSU, NULL, NULL, LSRS, NULL, LTRT},
@@ -866,6 +901,23 @@ const P2PTransportChannelTest::Result*
 /*SC*/ {LULU, LUSU, LUSU, LURU, LURU, LUSU, LURU, NULL, NULL, LSRS, NULL, LTRT},
 /*!U*/ {LTLT, NULL, NULL, NULL, NULL, NULL, NULL, LTLT, LTLT, LSRS, NULL, LTRT},
 /*!T*/ {LTRT, NULL, NULL, NULL, NULL, NULL, NULL, LTLT, LTRT, LSRS, NULL, LTRT},
+/*HT*/ {LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, NULL, LSRS},
+/*PR*/ {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+/*PR*/ {LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LSRS, NULL, LTRT},
+};
+const P2PTransportChannelTest::Result*
+    P2PTransportChannelTest::kMatrixSharedSocketAsIce
+        [NUM_CONFIGS][NUM_CONFIGS] = {
+//      OPEN  CONE  ADDR  PORT  SYMM  2CON  SCON  !UDP  !TCP  HTTP  PRXH  PRXS
+/*OP*/ {LULU, LUSU, LUSU, LUSU, LUPU, LUSU, LUPU, PTLT, LTPT, LSRS, NULL, PTLT},
+/*CO*/ {LULU, LUSU, LUSU, LUSU, LUPU, LUSU, LUPU, NULL, NULL, LSRS, NULL, LTRT},
+/*AD*/ {LULU, LUSU, LUSU, LUSU, LUPU, LUSU, LUPU, NULL, NULL, LSRS, NULL, LTRT},
+/*PO*/ {LULU, LUSU, LUSU, LUSU, LURU, LUSU, LURU, NULL, NULL, LSRS, NULL, LTRT},
+/*SY*/ {PULU, PUSU, PUSU, PURU, PURU, PUSU, PURU, NULL, NULL, LSRS, NULL, LTRT},
+/*2C*/ {LULU, LUSU, LUSU, LUSU, LUPU, LUSU, LUPU, NULL, NULL, LSRS, NULL, LTRT},
+/*SC*/ {PULU, PUSU, PUSU, PURU, PURU, PUSU, PURU, NULL, NULL, LSRS, NULL, LTRT},
+/*!U*/ {PTLT, NULL, NULL, NULL, NULL, NULL, NULL, PTLT, LTPT, LSRS, NULL, LTRT},
+/*!T*/ {LTRT, NULL, NULL, NULL, NULL, NULL, NULL, PTLT, LTRT, LSRS, NULL, LTRT},
 /*HT*/ {LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, LSRS, NULL, LSRS},
 /*PR*/ {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 /*PR*/ {LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LTRT, LSRS, NULL, LTRT},
@@ -940,8 +992,8 @@ const P2PTransportChannelTest::Result*
                        PORTALLOCATOR_ENABLE_SHARED_SOCKET, \
                        kMinimumStepDelay, kMinimumStepDelay, \
                        cricket::ICEPROTO_GOOGLE); \
-    if (kMatrixSharedSocket[x][y] != NULL) \
-      Test(*kMatrixSharedSocket[x][y]); \
+    if (kMatrixSharedSocketAsGice[x][y] != NULL) \
+      Test(*kMatrixSharedSocketAsGice[x][y]); \
     else \
     LOG(LS_WARNING) << "Not yet implemented"; \
   } \
@@ -952,8 +1004,8 @@ const P2PTransportChannelTest::Result*
                        PORTALLOCATOR_ENABLE_SHARED_SOCKET, \
                        kMinimumStepDelay, kMinimumStepDelay, \
                        cricket::ICEPROTO_RFC5245); \
-    if (kMatrixSharedSocket[x][y] != NULL) \
-      Test(*kMatrixSharedSocket[x][y]); \
+    if (kMatrixSharedSocketAsIce[x][y] != NULL) \
+      Test(*kMatrixSharedSocketAsIce[x][y]); \
     else \
     LOG(LS_WARNING) << "Not yet implemented"; \
   }

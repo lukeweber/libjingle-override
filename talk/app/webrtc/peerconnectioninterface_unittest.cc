@@ -803,6 +803,42 @@ TEST_F(PeerConnectionInterfaceTest, TestDataChannel) {
   EXPECT_EQ_WAIT(data_to_send2, observer2->last_message(), kTimeout);
 }
 
+// This test verifies that sendnig binary data over RTP data channels should
+// fail.
+#ifdef WIN32
+// TODO(perkj): Investigate why the transport channel sometimes don't become
+// writable on Windows when we try to connect in loop back.
+TEST_F(PeerConnectionInterfaceTest, DISABLED_TestSendBinaryOnRtpDataChannel) {
+#else
+TEST_F(PeerConnectionInterfaceTest, TestSendBinaryOnRtpDataChannel) {
+#endif
+  FakeConstraints constraints;
+  constraints.SetAllowRtpDataChannels();
+  CreatePeerConnection(&constraints);
+  scoped_refptr<DataChannelInterface> data1  =
+      pc_->CreateDataChannel("test1", NULL);
+  scoped_refptr<DataChannelInterface> data2  =
+      pc_->CreateDataChannel("test2", NULL);
+  ASSERT_TRUE(data1 != NULL);
+  talk_base::scoped_ptr<MockDataChannelObserver> observer1(
+      new MockDataChannelObserver(data1));
+  talk_base::scoped_ptr<MockDataChannelObserver> observer2(
+      new MockDataChannelObserver(data2));
+
+  EXPECT_EQ(DataChannelInterface::kConnecting, data1->state());
+  EXPECT_EQ(DataChannelInterface::kConnecting, data2->state());
+
+  CreateOfferReceiveAnswer();
+  EXPECT_TRUE_WAIT(observer1->IsOpen(), kTimeout);
+  EXPECT_TRUE_WAIT(observer2->IsOpen(), kTimeout);
+
+  EXPECT_EQ(DataChannelInterface::kOpen, data1->state());
+  EXPECT_EQ(DataChannelInterface::kOpen, data2->state());
+
+  talk_base::Buffer buffer("test", 4);
+  EXPECT_FALSE(data1->Send(DataBuffer(buffer, true)));
+}
+
 // This test setup a RTP data channels in loop back and test that a channel is
 // opened even if the remote end answer with a zero SSRC.
 #ifdef WIN32
@@ -874,7 +910,7 @@ TEST_F(PeerConnectionInterfaceTest, TestReceiveOnlyDataChannel) {
 // This test that no data channel is returned if a reliable channel is
 // requested.
 // TODO(perkj): Remove this test once reliable channels are implemented.
-TEST_F(PeerConnectionInterfaceTest, CreateReliableDataChannel) {
+TEST_F(PeerConnectionInterfaceTest, CreateReliableRtpDataChannelShouldFail) {
   FakeConstraints constraints;
   constraints.SetAllowRtpDataChannels();
   CreatePeerConnection(&constraints);
@@ -884,6 +920,110 @@ TEST_F(PeerConnectionInterfaceTest, CreateReliableDataChannel) {
   config.reliable = true;
   scoped_refptr<DataChannelInterface> channel  =
       pc_->CreateDataChannel(label, &config);
+  EXPECT_TRUE(channel == NULL);
+}
+
+// This tests that a SCTP data channel is returned using different
+// DataChannelInit configurations.
+TEST_F(PeerConnectionInterfaceTest, CreateSctpDataChannel) {
+  FakeConstraints constraints;
+  constraints.SetAllowDtlsSctpDataChannels();
+  CreatePeerConnection(&constraints);
+
+  webrtc::DataChannelInit config;
+
+  scoped_refptr<DataChannelInterface> channel =
+      pc_->CreateDataChannel("1", &config);
+  EXPECT_TRUE(channel != NULL);
+  EXPECT_TRUE(channel->reliable());
+
+  config.ordered = false;
+  channel = pc_->CreateDataChannel("2", &config);
+  EXPECT_TRUE(channel != NULL);
+  EXPECT_TRUE(channel->reliable());
+
+  config.ordered = true;
+  config.maxRetransmits = 0;
+  channel = pc_->CreateDataChannel("3", &config);
+  EXPECT_TRUE(channel != NULL);
+  EXPECT_FALSE(channel->reliable());
+
+  config.maxRetransmits = -1;
+  config.maxRetransmitTime = 0;
+  channel = pc_->CreateDataChannel("4", &config);
+  EXPECT_TRUE(channel != NULL);
+  EXPECT_FALSE(channel->reliable());
+}
+
+// This tests that no data channel is returned if both maxRetransmits and
+// maxRetransmitTime are set for SCTP data channels.
+TEST_F(PeerConnectionInterfaceTest,
+       CreateSctpDataChannelShouldFailForInvalidConfig) {
+  FakeConstraints constraints;
+  constraints.SetAllowDtlsSctpDataChannels();
+  CreatePeerConnection(&constraints);
+
+  std::string label = "test";
+  webrtc::DataChannelInit config;
+  config.maxRetransmits = 0;
+  config.maxRetransmitTime = 0;
+
+  scoped_refptr<DataChannelInterface> channel =
+      pc_->CreateDataChannel(label, &config);
+  EXPECT_TRUE(channel == NULL);
+}
+
+// The test verifies that the first id not used by existing data channels is
+// assigned to a new data channel if no id is specified.
+TEST_F(PeerConnectionInterfaceTest, AssignSctpDataChannelId) {
+  FakeConstraints constraints;
+  constraints.SetAllowDtlsSctpDataChannels();
+  CreatePeerConnection(&constraints);
+
+  webrtc::DataChannelInit config;
+
+  scoped_refptr<DataChannelInterface> channel =
+      pc_->CreateDataChannel("1", &config);
+  EXPECT_TRUE(channel != NULL);
+  EXPECT_EQ(1, channel->id());
+
+  config.id = 4;
+  channel = pc_->CreateDataChannel("4", &config);
+  EXPECT_TRUE(channel != NULL);
+  EXPECT_EQ(config.id, channel->id());
+
+  config.id = -1;
+  channel = pc_->CreateDataChannel("2", &config);
+  EXPECT_TRUE(channel != NULL);
+  EXPECT_EQ(2, channel->id());
+}
+
+// The test verifies that creating a SCTP data channel with an id already in use
+// or out of range should fail.
+TEST_F(PeerConnectionInterfaceTest,
+       CreateSctpDataChannelWithInvalidIdShouldFail) {
+  FakeConstraints constraints;
+  constraints.SetAllowDtlsSctpDataChannels();
+  CreatePeerConnection(&constraints);
+
+  webrtc::DataChannelInit config;
+
+  scoped_refptr<DataChannelInterface> channel =
+      pc_->CreateDataChannel("1", &config);
+  EXPECT_TRUE(channel != NULL);
+  EXPECT_EQ(1, channel->id());
+
+  config.id = 1;
+  channel = pc_->CreateDataChannel("x", &config);
+  EXPECT_TRUE(channel == NULL);
+
+  config.id = cricket::kMaxSctpSid;
+  channel = pc_->CreateDataChannel("max", &config);
+  EXPECT_TRUE(channel != NULL);
+  EXPECT_EQ(config.id, channel->id());
+
+  config.id = cricket::kMaxSctpSid + 1;
+  channel = pc_->CreateDataChannel("x", &config);
   EXPECT_TRUE(channel == NULL);
 }
 

@@ -100,7 +100,7 @@ static float FindLowerScale(int width, int height, int target_num_pixels) {
 
 // Compute a size to scale frames to that is below maximum compression
 // and rendering size with the same aspect ratio.
-void ComputeScale(int frame_width, int frame_height, int fps, int cpus,
+void ComputeScale(int frame_width, int frame_height, int fps,
                   int* scaled_width, int* scaled_height) {
   ASSERT(scaled_width != NULL);
   ASSERT(scaled_height != NULL);
@@ -110,18 +110,11 @@ void ComputeScale(int frame_width, int frame_height, int fps, int cpus,
   const int kMaxWidth = 4096;
   const int kMaxHeight = 3072;
   // Maximum pixels limit is set to Retina MacBookPro 15" resolution of
-  // 2880 x 1800 as of 4/18/2013.  When running high framerate, resolution
-  // limit is reduced to half, so Retina resolution is reduces to 1440 x 900.
-  // On Dual Core, maximum pixels limit is set based on MacBookPro 15"
-  // resolution of 1680 x 1050 as of 4/18/2013.
-  // When running high framerate, resolution limit is reduced to 840 x 525.
-  // A MacBook Air 11" or 13" is 1366 x 668 or 1440 x 900 and will be reduced
-  // to half:
-  // 15" 1680 x 1050 scales to 840 x 525.
-  // 13" 1440 x 900 scales to 720 x 450.
-  // 11" 1366 x 768 scales to 683 x 384.
-  int kMaxPixels = (fps > 5) ? ((cpus <= 2) ? 840 * 525 : 1440 * 900) :
-      2880 * 1800;
+  // 2880 x 1800 as of 4/18/2013.
+  // For high fps, maximum pixels limit is set based on common 24" monitor
+  // resolution of 2048 x 1280 as of 6/13/2013. The Retina resolution is
+  // therefore reduced to 1440 x 900.
+  int kMaxPixels = (fps > 5) ? 2048 * 1280 : 2880 * 1800;
   int new_frame_width = frame_width;
   int new_frame_height = frame_height;
 

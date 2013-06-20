@@ -107,6 +107,9 @@ class TurnPort : public Port {
 
  private:
   typedef std::list<TurnEntry*> EntryList;
+  typedef std::map<talk_base::Socket::Option, int> SocketOptionsMap;
+
+  virtual void OnMessage(talk_base::Message* pmsg);
 
   void set_nonce(const std::string& nonce) { nonce_ = nonce; }
   void set_realm(const std::string& realm) {
@@ -150,6 +153,7 @@ class TurnPort : public Port {
   RelayCredentials credentials_;
 
   talk_base::scoped_ptr<talk_base::AsyncPacketSocket> socket_;
+  SocketOptionsMap socket_options_;
   talk_base::AsyncResolver* resolver_;
   int error_;
 

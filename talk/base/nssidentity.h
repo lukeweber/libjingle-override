@@ -2,26 +2,26 @@
  * libjingle
  * Copyright 2004--2008, Google Inc.
  *
- * Redistribution and use in source and binary forms, with or without 
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
- *  1. Redistributions of source code must retain the above copyright notice, 
+ *  1. Redistributions of source code must retain the above copyright notice,
  *     this list of conditions and the following disclaimer.
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- *  3. The name of the author may not be used to endorse or promote products 
+ *  3. The name of the author may not be used to endorse or promote products
  *     derived from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
- * EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
+ * EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
  * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
  * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR 
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
@@ -44,6 +44,8 @@ namespace talk_base {
 
 class NSSKeyPair {
  public:
+  NSSKeyPair(SECKEYPrivateKey* privkey, SECKEYPublicKey* pubkey) :
+      privkey_(privkey), pubkey_(pubkey) {}
   ~NSSKeyPair();
 
   // Generate a 1024-bit RSA key pair.
@@ -54,9 +56,6 @@ class NSSKeyPair {
   SECKEYPublicKey * pubkey() const { return pubkey_; }
 
  private:
-  NSSKeyPair(SECKEYPrivateKey* privkey, SECKEYPublicKey* pubkey) :
-      privkey_(privkey), pubkey_(pubkey) {}
-
   SECKEYPrivateKey* privkey_;
   SECKEYPublicKey* pubkey_;
 
@@ -66,8 +65,7 @@ class NSSKeyPair {
 
 class NSSCertificate : public SSLCertificate {
  public:
-  static NSSCertificate* FromPEMString(const std::string& pem_string,
-                                       int* pem_length);
+  static NSSCertificate* FromPEMString(const std::string& pem_string);
   explicit NSSCertificate(CERTCertificate* cert) : certificate_(cert) {}
   virtual ~NSSCertificate() {
     if (certificate_)
@@ -104,10 +102,11 @@ class NSSCertificate : public SSLCertificate {
 class NSSIdentity : public SSLIdentity {
  public:
   static NSSIdentity* Generate(const std::string& common_name);
+  static SSLIdentity* FromPEMStrings(const std::string& private_key,
+                                     const std::string& certificate);
   virtual ~NSSIdentity() {
     LOG(LS_INFO) << "Destroying NSS identity";
   }
-
 
   virtual NSSIdentity* GetReference() const;
   virtual NSSCertificate& certificate() const;

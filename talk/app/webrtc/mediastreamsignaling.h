@@ -172,6 +172,13 @@ class MediaStreamSignaling {
     data_channel_factory_ = data_channel_factory;
   }
 
+  // Checks if |id| is available to be assigned to a new SCTP data channel.
+  bool IsSctpIdAvailable(int id) const;
+
+  // Gets the first available SCTP id that is not assigned to any existing
+  // data channels.
+  bool AllocateSctpId(int* id);
+
   // Adds |local_stream| to the collection of known MediaStreams that will be
   // offered in a SessionDescription.
   bool AddLocalStream(MediaStreamInterface* local_stream);
@@ -365,6 +372,7 @@ class MediaStreamSignaling {
   TrackInfos local_audio_tracks_;
   TrackInfos local_video_tracks_;
 
+  int last_allocated_sctp_id_;
   typedef std::map<std::string, talk_base::scoped_refptr<DataChannel> >
       DataChannels;
   DataChannels data_channels_;
