@@ -2,4 +2,25 @@
 # It acts as a place holder for future additions for this project.
 # It must exist for the Python wrapper script to work properly.
 
+{
+   bug_1965_1
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN23RtpDataMediaChannelTest17GetSentDataHeaderEi
+   fun:_ZN37RtpDataMediaChannelTest_SendData_Test8TestBodyEv
+}
+{
+   bug_1965_2
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN23RtpDataMediaChannelTest17GetSentDataHeaderEi
+   fun:_ZN51RtpDataMediaChannelTest_SendDataMultipleClocks_Test8TestBodyEv
+}
+{
+   bug_1965_3
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN23RtpDataMediaChannelTest11GetSentDataEi
+   fun:_ZN37RtpDataMediaChannelTest_SendData_Test8TestBodyEv
+}
 
