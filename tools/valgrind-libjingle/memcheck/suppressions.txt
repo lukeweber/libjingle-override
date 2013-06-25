@@ -23,4 +23,273 @@
    fun:_ZN23RtpDataMediaChannelTest11GetSentDataEi
    fun:_ZN37RtpDataMediaChannelTest_SendData_Test8TestBodyEv
 }
-
+{
+   bug_1972_1
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN9talk_base14SSLFingerprint6CreateERKSsPKNS_11SSLIdentityE
+   ...
+}
+{
+   bug_1972_2
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN4buzz10XmlBuilder12BuildElementEPNS_15XmlParseContextEPKcPS4_
+   ...
+}
+{
+   bug_1972_3
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN9talk_base18AsyncTCPSocketBaseC1EPNS_11AsyncSocketEbm
+   ...
+}
+{
+   bug_1972_4
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN9talk_base19VirtualSocketServer20CreateSocketInternalEii
+   ...
+}
+{
+   bug_1972_5
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN9talk_base13VirtualSocket6AcceptEPNS_13SocketAddressE
+   ...
+}
+{
+   bug_1972_6
+   Memcheck:Uninitialized
+   fun:_ZN14DtlsTestClient28OnTransportChannelReadPacketEPN7cricket16TransportChannelEPKcmi
+   ...
+}
+{
+   bug_1972_7
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN17TestSessionClient12ParseContentEN7cricket17SignalingProtocolEPKN4buzz10XmlElementEPPNS0_18ContentDescriptionEPNS0_10ParseErrorE
+   ...
+}
+{
+   bug_1972_8
+   Memcheck:Uninitialized
+   fun:_ZN7cricket9Transport31NegotiateTransportDescription_wENS_13ContentActionE
+   ...
+}
+{
+   bug_1972_9
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN22MediaSessionClientTest12OnSendStanzaEPN7cricket14SessionManagerEPKN4buzz10XmlElementE
+   ...
+}
+{
+   bug_1972_10
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7cricket12_GLOBAL__N_119CreateVideoViewElemERKSsS2_.constprop.856
+   ...
+}
+{
+   bug_1972_11
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN10TestClient17OnOutgoingMessageEPN7cricket14SessionManagerEPKN4buzz10XmlElementE
+   ...
+}
+{
+   bug_1972_12
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN10TestClient15OnSessionCreateEPN7cricket7SessionEb
+   ...
+}
+{
+   bug_1972_13
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7cricket28HttpPortAllocatorSessionBase22ReceiveSessionResponseERKSs
+   ...
+}
+{
+   bug_1972_14
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_Z11CopyElementPKN4buzz10XmlElementE
+   ...
+}
+{
+   bug_1972_15
+   Memcheck:Leak
+   fun:_Znw*
+   ...
+   fun:XML_ParseBuffer
+   ...
+}
+{
+   bug_1972_16
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN35PortTest_TestLoopbackCallAsIce_Test8TestBodyEv
+}
+{
+   bug_1972_17
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7cricket4Call23CreateVideoStreamUpdateERKNS_12StreamParamsE
+   ...
+}
+{
+   bug_1972_18
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN9talk_base14AsyncTCPSocket24HandleIncomingConnectionEPNS_11AsyncSocketE
+   ...
+}
+{
+   bug_1972_19
+   Memcheck:Uninitialized
+   fun:_ZN7cricket10Connection27OnConnectionRequestResponseEPNS_17ConnectionRequestEPNS_11StunMessageE
+   ...
+}
+{
+   bug_1972_20
+   Memcheck:Uninitialized
+   fun:_ZSt11__push_heapIN9__gnu_cxx17__normal_iteratorIPN9talk_base14DelayedMessageESt6vectorIS3_SaIS3_EEEElS3_St4lessIS3_EEvT_T0_SC_T1_T2_
+   ...
+}
+{
+   bug_1972_21
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7cricket23ParseJingleVideoContentEPKN4buzz10XmlElementEPPNS_18ContentDescriptionEPNS_10ParseErrorE
+   ...
+}
+{
+   bug_1972_22
+   Memcheck:Uninitialized
+   fun:_ZN7cricketL17FindCodecsToOfferINS_10VideoCodecEEEvRKSt6vectorIT_SaIS3_EEPS5_PNS_16UsedPayloadTypesE.constprop.1165
+   ...
+}
+{
+   bug_1972_23
+   Memcheck:Uninitialized
+   fun:_ZN7cricket18MediaSessionClient14OnSessionStateEPNS_11BaseSessionENS1_5StateE
+   ...
+}
+{
+   bug_1972_24
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7testing8internal15TestFactoryImplI44PortAllocatorSessionProxyTest_TestBasic_TestE10CreateTestEv
+}
+{
+   bug_1972_25
+   Memcheck:Uninitialized
+   fun:_ZN7cricket11BaseChannel17ChannelWritable_wEv.part.1339
+   ...
+}
+{
+   bug_1972_26
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7cricket15TestRelayServer8OnAcceptEPN9talk_base11AsyncSocketE
+   ...
+}
+{
+   bug_1972_27
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZNSt8_Rb_treeIPN7cricket13PortInterfaceESt4pairIKS2_PNS0_9PortProxyEESt10_Select1stIS7_ESt4lessIS2_ESaIS7_EE10_M_insert_EPKSt18_Rb_tree_node_baseSG_RKS7_
+   ...
+}
+{
+   bug_1972_28
+   Memcheck:Leak
+   fun:_Zna*
+   fun:_ZN9talk_base14OpenSSLAdapter19InitializeSSLThreadEv
+   ...
+}
+{
+   bug_1972_29
+   Memcheck:Uninitialized
+   fun:_ZN9talk_base12MessageQueue3GetEPNS_7MessageEib.part.109
+   ...
+}
+{
+   bug_1972_30
+   Memcheck:Uninitialized
+   fun:dtls1_process_record
+   fun:dtls1_get_record
+   fun:dtls1_read_bytes
+   fun:ssl3_read_internal
+   ...
+}
+{
+   bug_1972_31
+   Memcheck:Unaddressable
+   fun:srtp_unprotect
+   fun:_ZN7cricket11SrtpSession12UnprotectRtpEPviPi
+   ...
+}
+{
+   bug_1972_32
+   Memcheck:Uninitialized
+   fun:srtp_protect
+   fun:_ZN7cricket11SrtpSession10ProtectRtpEPviiPi
+   ...
+}
+{
+   bug_1972_33
+   Memcheck:Uninitialized
+   fun:aes_icm_encrypt_ismacryp
+   fun:srtp_protect
+   ...
+}
+{
+   bug_1972_34
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7testing8internal15TestFactoryImplI50PortAllocatorSessionProxyTest_TestLateBinding_TestE10CreateTestEv
+}
+{
+   bug_1972_35
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7cricket23ParseJingleAudioContentEPKN4buzz10XmlElementEPPNS_18ContentDescriptionEPNS_10ParseErrorE
+   ...
+}
+{
+   bug_1972_36
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZNSt8_Rb_treeIPN7sigslot22_signal_base_interfaceES2_St9_IdentityIS2_ESt4lessIS2_ESaIS2_EE10_M_insert_EPKSt18_Rb_tree_node_baseSB_RKS2_
+   ...
+}
+{
+   bug_1972_37
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7sigslot7signal1IPN9talk_base11AsyncSocketENS_15single_threadedEE7connectINS1_18AsyncSocketAdapterEEEvPT_MS8_FvS3_E
+   ...
+}
+{
+   bug_1972_38
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7cricket25PortAllocatorSessionMuxer20RegisterSessionProxyEPNS_25PortAllocatorSessionProxyE
+   ...
+}
+{
+   bug_1972_39
+   Memcheck:Uninitialized
+   fun:_ZSt13__adjust_heapIN9__gnu_cxx17__normal_iteratorIPN9talk_base14DelayedMessageESt6vectorIS3_SaIS3_EEEElS3_St4lessIS3_EEvT_T0_SC_T1_T2_
+   ...
+}
+{
+   bug_1972_40
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN50PortAllocatorSessionProxyTest_TestLateBinding_Test8TestBodyEv
+}
