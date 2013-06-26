@@ -189,7 +189,7 @@ class Transport : public talk_base::MessageHandler,
             const std::string& type,
             PortAllocator* allocator);
   virtual ~Transport();
-
+  virtual std::string GetClassname() const { return "Transport"; }
   // Returns the signaling thread. The app talks to Transport on this thread.
   talk_base::Thread* signaling_thread() { return signaling_thread_; }
   // Returns the worker thread. The actual networking is done on this thread.

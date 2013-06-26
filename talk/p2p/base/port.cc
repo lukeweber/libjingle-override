@@ -202,6 +202,7 @@ void Port::Construct() {
   if (ice_username_fragment_.empty()) {
     ASSERT(password_.empty());
     ice_username_fragment_ = talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
+    LOG_CI << "look20:username:" << ice_username_fragment_;
     password_ = talk_base::CreateRandomString(ICE_PWD_LENGTH);
   }
   LOG_J(LS_INFO, this) << "Port created";

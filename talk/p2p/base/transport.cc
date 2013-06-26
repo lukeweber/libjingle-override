@@ -30,6 +30,7 @@
 #include "talk/base/common.h"
 #include "talk/base/logging.h"
 #include "talk/p2p/base/candidate.h"
+#include "talk/p2p/base/common.h"
 #include "talk/p2p/base/constants.h"
 #include "talk/p2p/base/sessionmanager.h"
 #include "talk/p2p/base/parsing.h"
@@ -269,7 +270,7 @@ void Transport::ConnectChannels_w() {
       this, MSG_CANDIDATEREADY, NULL);
 
   if (!local_description_) {
-    ASSERT(false);
+    //ASSERT(false);
     // TOOD(mallinath) : TransportDescription(TD) shouldn't be generated here.
     // As Transport must know TD is offer or answer and cricket::Transport
     // doesn't have the capability to decide it. This should be set by the
@@ -278,9 +279,12 @@ void Transport::ConnectChannels_w() {
     // initiate request initiated by the remote.
     LOG(LS_INFO) << "Transport::ConnectChannels_w: No local description has "
                  << "been set. Will generate one.";
+    std::string username = talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
+    std::string password = talk_base::CreateRandomString(ICE_PWD_LENGTH);
+    LOG_CI << "look20:username:" << username;
     TransportDescription desc(NS_GINGLE_P2P, std::vector<std::string>(),
-                              talk_base::CreateRandomString(ICE_UFRAG_LENGTH),
-                              talk_base::CreateRandomString(ICE_PWD_LENGTH),
+                              username,
+                              password,
                               ICEMODE_FULL, NULL, Candidates());
     //IMPORTANT>>>>
     SetLocalTransportDescription_w(desc, CA_OFFER);

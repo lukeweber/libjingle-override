@@ -48,6 +48,7 @@ class TransportDescriptionFactory {
  public:
   // Default ctor; use methods below to set configuration.
   TransportDescriptionFactory();
+  virtual std::string GetClassname() const { return "TransportDescriptionFactory"; }
   SecurePolicy secure() const { return secure_; }
   // The identity to use when setting up DTLS.
   talk_base::SSLIdentity* identity() const { return identity_; }

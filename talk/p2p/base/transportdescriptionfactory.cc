@@ -33,6 +33,7 @@
 #include "talk/base/scoped_ptr.h"
 #include "talk/base/sslfingerprint.h"
 #include "talk/p2p/base/transportdescription.h"
+#include "talk/p2p/base/common.h"
 
 namespace cricket {
 
@@ -65,6 +66,8 @@ TransportDescription* TransportDescriptionFactory::CreateOffer(
   if (!current_description || options.ice_restart) {
     desc->ice_ufrag = talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
     desc->ice_pwd = talk_base::CreateRandomString(ICE_PWD_LENGTH);
+    LOG_CI << "look20:username:" << desc->ice_ufrag;
+
   } else {
     desc->ice_ufrag = current_description->ice_ufrag;
     desc->ice_pwd = current_description->ice_pwd;
@@ -114,8 +117,10 @@ TransportDescription* TransportDescriptionFactory::CreateAnswer(
   // Generate the ICE credentials if we don't already have them or ice is
   // being restarted.
   if (!current_description || options.ice_restart) {
-    desc->ice_ufrag = talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
+    desc->ice_ufrag =
+     talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
     desc->ice_pwd = talk_base::CreateRandomString(ICE_PWD_LENGTH);
+    LOG_CI << "look20:username:" << desc->ice_ufrag;
   } else {
     desc->ice_ufrag = current_description->ice_ufrag;
     desc->ice_pwd = current_description->ice_pwd;
