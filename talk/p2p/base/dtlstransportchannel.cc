@@ -355,6 +355,7 @@ void DtlsTransportChannelWrapper::OnWritableState(TransportChannel* channel) {
     case STATE_NONE:
     case STATE_OPEN:
       set_writable(channel_->writable());
+
       // Note: SignalWritableState fired by set_writable.
       break;
 

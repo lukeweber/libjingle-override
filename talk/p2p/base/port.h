@@ -55,6 +55,8 @@ namespace cricket {
 class Connection;
 class ConnectionRequest;
 
+extern const char LOCAL_PORT_TYPE_ICE[];
+
 extern const char LOCAL_PORT_TYPE[];
 extern const char STUN_PORT_TYPE[];
 extern const char RELAY_PORT_TYPE[];
@@ -134,9 +136,8 @@ class Port : public PortInterface, public talk_base::MessageHandler,
   // 1. Add / Verify MI attribute in STUN binding requests.
   // 2. Username attribute in STUN binding request will be RFRAF:LFRAG,
   // as opposed to RFRAGLFRAG.
-  virtual void SetIceProtocolType(IceProtocolType protocol) {
-    ice_protocol_ = protocol;
-  }
+  virtual void SetIceProtocolType(IceProtocolType protocol);
+
   virtual IceProtocolType IceProtocol() const { return ice_protocol_; }
 
   // Methods to set/get ICE role and tiebreaker values.

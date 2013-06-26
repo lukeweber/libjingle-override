@@ -129,7 +129,7 @@ void MediaSessionClient::OnSessionState(BaseSession* base_session,
 
     // If our accept would have no codecs, then we must reject this call.
     const SessionDescription* offer = session->remote_description();
-    const SessionDescription* accept = CreateAnswer(offer, CallOptions());
+    const SessionDescription* accept = CreateAnswer(offer, CallOptions(), session->local_description());
     const ContentInfo* audio_content = GetFirstAudioContent(accept);
     bool audio_rejected = (!audio_content) ? true : audio_content->rejected;
     const AudioContentDescription* audio_desc = (!audio_content) ? NULL :

@@ -700,7 +700,7 @@ bool BaseChannel::SendPacket(bool rtcp, talk_base::Buffer* packet) {
     LOG(LS_ERROR) << "Can't send outgoing " << PacketType(rtcp)
                   << " packet when SRTP is inactive and crypto is required";
 
-    ASSERT(false);
+    //ASSERT(false);
     return false;
   }
 

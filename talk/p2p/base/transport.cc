@@ -269,6 +269,7 @@ void Transport::ConnectChannels_w() {
       this, MSG_CANDIDATEREADY, NULL);
 
   if (!local_description_) {
+    ASSERT(false);
     // TOOD(mallinath) : TransportDescription(TD) shouldn't be generated here.
     // As Transport must know TD is offer or answer and cricket::Transport
     // doesn't have the capability to decide it. This should be set by the
@@ -281,6 +282,7 @@ void Transport::ConnectChannels_w() {
                               talk_base::CreateRandomString(ICE_UFRAG_LENGTH),
                               talk_base::CreateRandomString(ICE_PWD_LENGTH),
                               ICEMODE_FULL, NULL, Candidates());
+    //IMPORTANT>>>>
     SetLocalTransportDescription_w(desc, CA_OFFER);
   }
 
@@ -651,7 +653,7 @@ bool Transport::ApplyLocalTransportDescription_w(TransportChannelImpl* ch) {
 
 bool Transport::ApplyRemoteTransportDescription_w(TransportChannelImpl* ch) {
   ch->SetRemoteIceCredentials(remote_description_->ice_ufrag,
-                              remote_description_->ice_ufrag);
+                              remote_description_->ice_pwd);
   return true;
 }
 

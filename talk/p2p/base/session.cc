@@ -288,6 +288,15 @@ bool TransportProxy::OnRemoteCandidates(const Candidates& candidates,
   return true;
 }
 
+
+void BaseSession::set_ice_protocol(TransportProtocol transport_type){
+  if (transport_type == ICEPROTO_RFC5245){
+    transport_type_ = NS_JINGLE_ICE_UDP;
+  } else {//ICEPROTO_GOOGLE or ICEPROTO_HYBRID
+    transport_type_ = NS_GINGLE_P2P;
+  }//fix
+}
+
 std::string BaseSession::StateToString(State state) {
   switch (state) {
     case Session::STATE_INIT:
@@ -347,7 +356,7 @@ BaseSession::BaseSession(talk_base::Thread* signaling_thread,
       port_allocator_(port_allocator),
       sid_(sid),
       content_type_(content_type),
-      transport_type_(NS_GINGLE_P2P),
+      transport_type_(NS_GINGLE_P2P),//NS_JINGLE_ICE_UDP),//TODO...
       initiator_(initiator),
       identity_(NULL),
       local_description_(NULL),
@@ -396,6 +405,7 @@ bool BaseSession::PushdownLocalTransportDescription(
         sdesc, iter->second->content_name(), &tdesc);
     if (ret) {
       if (!iter->second->SetLocalTransportDescription(tdesc, action)) {
+      //if (!iter->second->SetLocalTransportDescription(local_transport_description_.get(), action)) {
         return false;
       }
 
@@ -528,12 +538,13 @@ void BaseSession::DestroyTransportProxy(
   }
 }
 
+//TODO: come back to this
 cricket::Transport* BaseSession::CreateTransport(
     const std::string& content_name) {
-  ASSERT(transport_type_ == NS_GINGLE_P2P);
+  ASSERT(transport_type_ == NS_GINGLE_P2P || transport_type_ == NS_JINGLE_ICE_UDP);
   return new cricket::DtlsTransport<P2PTransport>(
       signaling_thread(), worker_thread(), content_name,
-      port_allocator(), identity_);
+      port_allocator(), identity_, transport_type_);
 }
 
 bool BaseSession::GetStats(SessionStats* stats) {
@@ -628,7 +639,7 @@ bool BaseSession::MaybeEnableMuxingSupport() {
   // Ensure that this is the case, regardless of whether we are going to mux.
   for (TransportMap::iterator iter = transports_.begin();
        iter != transports_.end(); ++iter) {
-    ASSERT(iter->second->negotiated());
+    //ASSERT(iter->second->negotiated());
     if (!iter->second->negotiated())
       return false;
   }
@@ -846,6 +857,18 @@ Session::Session(SessionManager* session_manager,
                   session_manager->port_allocator(),
                   sid, content_type, initiator_name == local_name) {
   ASSERT(client != NULL);
+  //HACK
+  TransportDescription *local_tdesc = new TransportDescription(NS_JINGLE_ICE_UDP, std::vector<std::string>(),
+                              talk_base::CreateRandomString(ICE_UFRAG_LENGTH),
+                              talk_base::CreateRandomString(ICE_PWD_LENGTH),
+                              ICEMODE_FULL, NULL, std::vector<Candidate>());
+ 
+  session_manager->transport_desc_factory()->CreateIdentityDigest(local_tdesc);
+  SessionDescription *sdesc = new SessionDescription();
+  sdesc->AddTransportInfo(TransportInfo(CN_AUDIO, *local_tdesc));
+  set_local_description(sdesc);
+  //END HACK
+  
   session_manager_ = session_manager;
   local_name_ = local_name;
   initiator_name_ = initiator_name;
@@ -854,6 +877,7 @@ Session::Session(SessionManager* session_manager,
   client_ = client;
   initiate_acked_ = false;
   current_protocol_ = PROTOCOL_HYBRID;
+  
 }
 
 Session::~Session() {
@@ -885,9 +909,13 @@ bool Session::Initiate(const std::string &to,
 
   // We need to connect transport proxy and impl here so that we can process
   // the TransportDescriptions.
-  SpeculativelyConnectAllTransportChannels();
-
+  //TODO: this causes a fake sort of local description to be created to early,
+  //which in turn causes the wrong ice-ufrag and pwd to be send in the frist transport stanza.
+  //With this commented out, it works correctly.
+  //SpeculativelyConnectAllTransportChannels();
+  
   PushdownTransportDescription(CS_LOCAL, CA_OFFER);
+
   SetState(Session::STATE_SENTINITIATE);
   return true;
 }
@@ -900,10 +928,18 @@ bool Session::Accept(const SessionDescription* sdesc) {
     return false;
 
   // Setup for signaling.
+  /*for (TransportInfos::iterator tinfo = sdesc->transport_infos().begin();
+        tinfo != sdesc->transport_infos().end(); ++tinfo){
+    
+    //tinfo->description = new TransportDescription(*local_transport_description_.get());
+    tinfo->description.ice_pwd = local_transport_description_.get()->ice_pwd;
+    tinfo->description.ice_ufrag = local_transport_description_.get()->ice_ufrag;
+  }*/
+  
   set_local_description(sdesc);
 
   SessionError error;
-  if (!SendAcceptMessage(sdesc, &error)) {
+  if (!SendAcceptMessage(sdesc, &error)) { 
     LOG(LS_ERROR) << "Could not send accept message: " << error.text;
     return false;
   }
@@ -1005,6 +1041,21 @@ TransportInfos Session::GetEmptyTransportInfos(
   return tinfos;
 }
 
+TransportInfos Session::GetInitialTransportInfos(const ContentInfos& contents,
+    const SessionDescription* sdesc) const {
+  TransportInfos tinfos;
+  for (ContentInfos::const_iterator content = contents.begin();
+       content != contents.end(); ++content) {
+    const TransportDescription* tdesc = sdesc->GetTransportDescriptionByName(content->name);
+    tinfos.push_back(
+        TransportInfo(content->name,
+            TransportDescription(transport_type(), tdesc->ice_ufrag,
+                tdesc->ice_pwd, ICEMODE_FULL, tdesc->identity_fingerprint.get(),
+                Candidates())));
+  }
+  return tinfos;
+}
+
 bool Session::OnRemoteCandidates(
     const TransportInfos& tinfos, ParseError* error) {
   for (TransportInfos::const_iterator tinfo = tinfos.begin();
@@ -1022,7 +1073,8 @@ bool Session::CreateTransportProxies(const TransportInfos& tinfos,
                                      SessionError* error) {
   for (TransportInfos::const_iterator tinfo = tinfos.begin();
        tinfo != tinfos.end(); ++tinfo) {
-    if (tinfo->description.transport_type != transport_type()) {
+    if (tinfo->description.transport_type != NS_JINGLE_ICE_UDP
+        && tinfo->description.transport_type != NS_GINGLE_P2P) {
       error->SetText("No supported transport in offer.");
       return false;
     }
@@ -1283,12 +1335,14 @@ bool Session::OnInitiateMessage(const SessionMessage& msg,
   set_remote_description(new SessionDescription(init.ClearContents(),
                                                 init.transports,
                                                 init.groups));
+
   // Updating transport with TransportDescription.
   PushdownTransportDescription(CS_REMOTE, CA_OFFER);
   SetState(STATE_RECEIVEDINITIATE);
 
   // Users of Session may listen to state change and call Reject().
   if (state() != STATE_SENTREJECT && state() != STATE_SENTBUSY) {
+    //TODO: This sets a bogus local description
     if (!OnRemoteCandidates(init.transports, error))
       return false;
 
@@ -1369,12 +1423,17 @@ bool Session::OnTerminateMessage(const SessionMessage& msg,
 bool Session::OnTransportInfoMessage(const SessionMessage& msg,
                                      MessageError* error) {
   TransportInfos tinfos;
+  if (remote_description() != NULL){
+    tinfos = GetInitialTransportInfos(remote_description()->contents(), remote_description());
+  } else {
+    LOG(LS_ERROR) << "Remote description not set";
+  }
   if (!ParseTransportInfos(msg.protocol, msg.action_elem,
                            initiator_description()->contents(),
                            GetTransportParsers(), GetCandidateTranslators(),
                            &tinfos, error))
     return false;
-
+  
   if (!OnRemoteCandidates(tinfos, error))
     return false;
 
@@ -1523,7 +1582,8 @@ bool Session::SendInitiateMessage(const SessionDescription* sdesc,
                                   SessionError* error) {
   SessionInitiate init;
   init.contents = sdesc->contents();
-  init.transports = GetEmptyTransportInfos(init.contents);
+
+  init.transports = GetInitialTransportInfos(init.contents, sdesc);
   init.groups = sdesc->groups();
   signaling_thread()->Clear(this, MSG_INIT_ACK_TIMEOUT);
   signaling_thread()->PostDelayed(
@@ -1535,6 +1595,7 @@ bool Session::SendInitiateMessage(const SessionDescription* sdesc,
 bool Session::WriteSessionAction(
     SignalingProtocol protocol, const SessionInitiate& init,
     XmlElements* elems, WriteError* error) {
+  //TODO: pass init.transport_description..
   return WriteSessionInitiate(protocol, init.contents, init.transports,
                               GetContentParsers(), GetTransportParsers(),
                               GetCandidateTranslators(), init.groups,
@@ -1546,7 +1607,7 @@ bool Session::SendAcceptMessage(const SessionDescription* sdesc,
   XmlElements elems;
   if (!WriteSessionAccept(current_protocol_,
                           sdesc->contents(),
-                          GetEmptyTransportInfos(sdesc->contents()),
+                          GetInitialTransportInfos(sdesc->contents(), sdesc),
                           GetContentParsers(), GetTransportParsers(),
                           GetCandidateTranslators(), sdesc->groups(),
                           &elems, error)) {
@@ -1583,7 +1644,7 @@ bool Session::SendTransportInfoMessage(const TransportProxy* transproxy,
                                        const Candidates& candidates,
                                        SessionError* error) {
   return SendTransportInfoMessage(TransportInfo(transproxy->content_name(),
-      TransportDescription(transproxy->type(), candidates)), error);
+      TransportDescription(transproxy->type(),  candidates)), error);//TODO, add ice info here to TD if we want it
 }
 
 bool Session::WriteSessionAction(SignalingProtocol protocol,

@@ -52,6 +52,8 @@ class TransportDescriptionFactory {
   // The identity to use when setting up DTLS.
   talk_base::SSLIdentity* identity() const { return identity_; }
 
+  TransportProtocol protocol() const { return protocol_; }
+  
   // Specifies the transport protocol to be use.
   void set_protocol(TransportProtocol protocol) { protocol_ = protocol; }
   // Specifies the transport security policy to use.
@@ -69,9 +71,9 @@ class TransportDescriptionFactory {
       const TransportDescription* offer,
       const TransportOptions& options,
       const TransportDescription* current_description) const;
+  bool CreateIdentityDigest(TransportDescription* description) const;
 
  private:
-  bool CreateIdentityDigest(TransportDescription* description) const;
 
   TransportProtocol protocol_;
   SecurePolicy secure_;
