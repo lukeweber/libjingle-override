@@ -257,9 +257,9 @@
               'action': [
                 'bash', '-ec',
                 'rm -f <(_outputs) && '
-                'mkdir -p examples/android/libs/armeabi-v7a && '
+                'mkdir -p examples/android/libs/<(android_app_abi) && '
                 'cp <(PRODUCT_DIR)/libjingle_peerconnection.jar examples/android/libs/ &&'
-                '../third_party/android_tools/ndk/toolchains/arm-linux-androideabi-4.6/prebuilt/linux-x86_64/bin/arm-linux-androideabi-strip -o examples/android/libs/armeabi-v7a/libjingle_peerconnection_so.so  <(PRODUCT_DIR)/libjingle_peerconnection_so.so &&'
+                '<(android_strip) -o examples/android/libs/<(android_app_abi)/libjingle_peerconnection_so.so  <(PRODUCT_DIR)/libjingle_peerconnection_so.so &&'
                 'cd examples/android && '
                 'ant debug && '
                 'cd - && '
