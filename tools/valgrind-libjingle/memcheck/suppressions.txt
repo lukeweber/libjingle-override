@@ -3,6 +3,79 @@
 # It must exist for the Python wrapper script to work properly.
 
 {
+   bug_1204_1
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN6webrtc24CreateSessionDescriptionERKSsS1_PNS_13SdpParseErrorE
+   ...
+}
+{
+   bug_1204_2
+   Memcheck:Unaddressable
+   fun:_ZN14JsepTestClient9NegotiateEbb
+   ...
+}
+{
+   bug_1204_3
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN9talk_base15OpenSSLIdentity8GenerateERKSs
+   ...
+}
+{
+   bug_1204_4
+   Memcheck:Leak
+   fun:malloc
+   fun:_dl_close_worker
+   fun:_dl_close
+   fun:_dl_catch_error
+   fun:_dlerror_run
+   fun:dlclose
+   ...
+   fun:snd_device_name_hint
+   fun:_ZNK6webrtc20AudioDeviceLinuxALSA14GetDevicesInfoEibiPci
+   ...
+}
+{
+   bug_1204_5
+   Memcheck:Leak
+   fun:_Zna*
+   fun:_ZN9talk_base14OpenSSLAdapter19InitializeSSLThreadEv
+}
+{
+   bug_1204_6
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN6webrtc13WebRtcSession12CreateAnswerEPKNS_25MediaConstraintsInterfaceE
+   ...
+}
+{
+   bug_1204_7
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN17WebRtcSessionTest18CreateRemoteAnswerEPKN6webrtc27SessionDescriptionInterfaceEN7cricket19MediaSessionOptionsENS4_12SecurePolicyE
+   ...
+}
+{
+   bug_1204_8
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN17WebRtcSessionTest18CreateRemoteAnswerEPKN6webrtc27SessionDescriptionInterfaceEN7cricket19MediaSessionOptionsENS4_12SecurePolicyE
+   ...
+}
+{
+   bug_1204_9
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN*WebRtcSessionTest_TestIncorrectMLinesInLocalAnswer_Test8TestBodyEv
+}
+{
+   bug_1204_10
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN*WebRtcSessionTest_TestIncorrectMLinesInRemoteAnswer_Test8TestBodyEv
+}
+{
    bug_1965_1
    Memcheck:Leak
    fun:_Znw*
