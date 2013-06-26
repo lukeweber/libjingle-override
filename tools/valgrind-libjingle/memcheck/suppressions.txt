@@ -293,3 +293,187 @@
    fun:_Znw*
    fun:_ZN50PortAllocatorSessionProxyTest_TestLateBinding_Test8TestBodyEv
 }
+{
+   bug_1976_1
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN*HangoutPubSubClientTestC1Ev
+   ...
+}
+{
+   bug_1976_2
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN*MucRoomConfigTaskTest5SetUpEv
+}
+{
+   bug_1976_3
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7testing8internal15TestFactoryImplI32PubSubTasksTest_TestReceive_TestE10CreateTestEv
+}
+{
+   bug_1976_4
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7testing8internal15TestFactoryImplI32PubSubTasksTest_TestRequest_TestE10CreateTestEv
+}
+{
+   bug_1976_5
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7testing8internal15TestFactoryImplI37PubSubTasksTest_TestPublishError_TestE10CreateTestEv
+}
+{
+   bug_1976_6
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZNK9talk_base19BasicNetworkManager14ConvertIfAddrsEP7ifaddrsbPSt6vectorIPNS_7NetworkESaIS5_EE
+   ...
+}
+{
+   bug_1976_7
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7testing8internal15TestFactoryImplI32PubSubTasksTest_TestPublish_TestE10CreateTestEv
+}
+{
+   bug_1976_8
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN16PubSubClientTestC1Ev
+   ...
+}
+{
+   bug_1976_9
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN9talk_base8HttpBase17GetDocumentStreamEv
+   ...
+}
+{
+   bug_1976_10
+   Memcheck:Leak
+   fun:malloc
+   fun:CRYPTO_malloc
+   fun:BUF_MEM_new
+   fun:mem_new
+   fun:BIO_set
+   fun:BIO_new
+   fun:BIO_new_mem_buf
+   fun:_ZN9talk_base15OpenSSLIdentity14FromPEMStringsERKSsS2_
+   ...
+}
+{
+   bug_1976_11
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN11OwnerThread3RunEv
+   ...
+}
+{
+   bug_1976_12
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_Z20TestPhysicalInternalRKN9talk_base13SocketAddressE
+   ...
+}
+{
+   bug_1976_13
+   Memcheck:Leak
+   fun:malloc
+   fun:CRYPTO_malloc
+   fun:BUF_MEM_new
+   fun:mem_new
+   fun:BIO_set
+   fun:BIO_new
+   fun:BIO_new_mem_buf
+   fun:_ZN9talk_base18OpenSSLCertificate13FromPEMStringERKSs
+   ...
+}
+{
+   bug_1976_14
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN9talk_base33MultipartTest_TestAddAndRead_Test8TestBodyEv
+}
+{
+   bug_1976_15
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN12PingTaskTest5SetUpEv
+}
+{
+   bug_1976_16
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN9talk_base52PosixSignalDeliveryTest_SignalOnDifferentThread_Test8TestBodyEv
+}
+{
+   bug_1976_17
+   Memcheck:Param
+   socketcall.sendto(msg)
+   ...
+   fun:_ZN9talk_base14PhysicalSocket6SendToEPKvmRKNS_13SocketAddressE
+   ...
+}
+{
+   bug_1976_18
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN9talk_base41unstarted_task_test_DoNotDeleteTask2_Test8TestBodyEv
+}
+{
+   bug_1976_19
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_Z19TestVirtualInternali
+   ...
+}
+{
+   bug_1976_20
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN9talk_base10HttpServer10Connection12BeginProcessEPNS_15StreamInterfaceE
+   ...
+}
+{
+   bug_1976_21
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN30MucRoomUniqueHangoutIdTaskTest5SetUpEv
+}
+{
+   bug_1976_22
+   Memcheck:Uninitialized
+   fun:__GI___rawmemchr
+   fun:_IO_str_init_static_internal
+   fun:vsscanf
+   fun:sscanf
+   fun:_ZN9talk_base16HttpResponseData11parseLeaderEPKcm
+   ...
+}
+{
+   bug_1976_23
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7testing8internal15TestFactoryImplI32PubSubTasksTest_TestRetract_TestE10CreateTestEv
+}
+{
+   bug_1976_24
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN7testing8internal15TestFactoryImplI37PubSubTasksTest_TestRequestError_TestE10CreateTestEv
+}
+{
+   bug_1976_25
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN21MucRoomLookupTaskTest5SetUpEv
+}
+{
+   bug_1976_26
+   Memcheck:Leak
+   fun:_Znw*
+   fun:_ZN24MucRoomDiscoveryTaskTest5SetUpEv
+}
