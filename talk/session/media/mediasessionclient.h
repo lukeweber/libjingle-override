@@ -122,12 +122,12 @@ class MediaSessionClient : public SessionClient, public sigslot::has_slots<> {
     return channel_manager_->SetCaptureDevice(cam_device);
   }
 
-  SessionDescription* CreateOffer(const CallOptions& options) {
-    return desc_factory_.CreateOffer(options, NULL);
+  SessionDescription* CreateOffer(const CallOptions& options, const SessionDescription* session_description) {
+    return desc_factory_.CreateOffer(options, session_description);
   }
   SessionDescription* CreateAnswer(const SessionDescription* offer,
-                                   const CallOptions& options) {
-    return desc_factory_.CreateAnswer(offer, options, NULL);
+                                   const CallOptions& options, const SessionDescription* session_description) {
+    return desc_factory_.CreateAnswer(offer, options, session_description);
   }
 
   sigslot::signal2<Call *, Call *> SignalFocus;

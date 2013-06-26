@@ -67,21 +67,21 @@ struct CodecPref {
 };
 
 static const CodecPref kCodecPrefs[] = {
-  //{ "OPUS",   48000,  2, 111, true },
   { "ISAC",   16000,  1, 103, true },
+  { "OPUS",   48000,  2, 111, true },
   //{ "ISAC",   32000,  1, 104, true },
   //{ "CELT",   32000,  1, 109, true },
   //{ "CELT",   32000,  2, 110, true },
   //{ "G722",   16000,  1, 9,   false },
   //{ "ILBC",   8000,   1, 102, false },
-  // { "PCMU",   8000,   1, 0,   false },
-  // { "PCMA",   8000,   1, 8,   false },
-  // { "CN",     48000,  1, 107, false },
+  //{ "PCMU",   8000,   1, 0,   false },
+  //{ "PCMA",   8000,   1, 8,   false },
+  { "CN",     48000,  1, 107, false },
   //{ "CN",     32000,  1, 106, false },
   { "CN",     16000,  1, 105, false },
-  //{ "CN",     8000,   1, 13,  false },
+  { "CN",     8000,   1, 13,  false },
   //{ "red",    8000,   1, 127, false },
-  { "telephone-event", 8000, 1, 126, false },
+  //{ "telephone-event", 8000, 1, 126, false },
 };
 
 // For Linux/Mac, using the default device is done by specifying index 0 for

@@ -87,6 +87,18 @@ struct TransportDescription {
         ice_mode(ice_mode),
         identity_fingerprint(CopyFingerprint(identity_fingerprint)),
         candidates(candidates) {}
+   TransportDescription(const std::string& transport_type,
+                       const std::string& ice_ufrag,
+                       const std::string& ice_pwd,
+                       IceMode ice_mode,
+                       const talk_base::SSLFingerprint* identity_fingerprint,
+                       const Candidates& candidates)
+      : transport_type(transport_type),
+        ice_ufrag(ice_ufrag),
+        ice_pwd(ice_pwd),
+        ice_mode(ice_mode),
+        identity_fingerprint(CopyFingerprint(identity_fingerprint)),
+        candidates(candidates) {}
   TransportDescription(const std::string& transport_type,
                        const Candidates& candidates)
       : transport_type(transport_type),

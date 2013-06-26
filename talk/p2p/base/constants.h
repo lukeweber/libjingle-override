@@ -127,6 +127,10 @@ extern const char GROUP_TYPE_BUNDLE[];
 
 extern const char NS_JINGLE_RTP[];
 extern const buzz::StaticQName QN_JINGLE_RTP_CONTENT;
+extern const buzz::StaticQName QN_JINGLE_TRANSPORT_UDP;
+extern const buzz::StaticQName QN_JINGLE_TRANSPORT_CANDIDATE;
+extern const buzz::StaticQName QN_ICE_PWD;
+extern const buzz::StaticQName QN_ICE_USER_FRAG;
 extern const buzz::StaticQName QN_SSRC;
 extern const buzz::StaticQName QN_JINGLE_RTP_PAYLOADTYPE;
 extern const buzz::StaticQName QN_JINGLE_RTP_BANDWIDTH;
@@ -173,6 +177,7 @@ extern const buzz::StaticQName QN_NETWORK;
 extern const buzz::StaticQName QN_GENERATION;
 extern const buzz::StaticQName QN_PRIORITY;
 extern const buzz::StaticQName QN_PROTOCOL;
+extern const char ICE_CANDIDATE_TYPE_HOST[];
 extern const char ICE_CANDIDATE_TYPE_PEER_STUN[];
 extern const char ICE_CANDIDATE_TYPE_SERVER_STUN[];
 extern const int ICE_UFRAG_LENGTH;
@@ -181,11 +186,11 @@ extern const int ICE_CANDIDATE_COMPONENT_RTP;
 extern const int ICE_CANDIDATE_COMPONENT_RTCP;
 extern const int ICE_CANDIDATE_COMPONENT_DEFAULT;
 
-extern const buzz::StaticQName QN_FINGERPRINT;
-extern const buzz::StaticQName QN_FINGERPRINT_ALGORITHM;
-extern const buzz::StaticQName QN_FINGERPRINT_DIGEST;
+extern const buzz::StaticQName QN_JINGLE_DTLS_FINGERPRINT;
+extern const buzz::StaticQName QN_JINGLE_DTLS_HASH;
 
 extern const char NS_JINGLE_ICE_UDP[];
+extern const char NS_JINGLE_DTLS[];
 
 extern const char ICE_OPTION_GICE[];
 extern const char NS_GINGLE_P2P[];

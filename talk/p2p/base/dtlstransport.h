@@ -47,8 +47,10 @@ class DtlsTransport : public Base {
                 talk_base::Thread* worker_thread,
                 const std::string& content_name,
                 PortAllocator* allocator,
-                talk_base::SSLIdentity* identity)
-      : Base(signaling_thread, worker_thread, content_name, allocator),
+                talk_base::SSLIdentity* identity,
+                const std::string& transport_type
+                )
+      : Base(signaling_thread, worker_thread, content_name, allocator, transport_type),
         identity_(identity) {
   }
 
@@ -96,11 +98,13 @@ class DtlsTransport : public Base {
 
     if (remote_fp && local_fp) {
       remote_fingerprint_.reset(new talk_base::SSLFingerprint(*remote_fp));
+      LOG(LS_ERROR) << "Remote fingerprint set";
     } else if (local_fp && (local_role == CA_ANSWER)) {
       LOG(LS_ERROR)
           << "Local fingerprint supplied when caller didn't offer DTLS";
       return false;
     } else {
+      LOG(LS_ERROR) << "DTLS not happening";
       // We are not doing DTLS
       remote_fingerprint_.reset(new talk_base::SSLFingerprint(
           "", NULL, 0));

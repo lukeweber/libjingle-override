@@ -164,11 +164,12 @@ P2PTransportChannel::P2PTransportChannel(const std::string& content_name,
     pending_best_connection_(NULL),
     sort_dirty_(false),
     was_writable_(false),
-    protocol_type_(ICEPROTO_GOOGLE),
+    protocol_type_(transport->type() == NS_GINGLE_P2P ? ICEPROTO_GOOGLE : ICEPROTO_RFC5245 ),
     remote_ice_mode_(ICEMODE_FULL),
     role_(ROLE_UNKNOWN),
     tiebreaker_(0),
     remote_candidate_generation_(0) {
+    
 }
 
 P2PTransportChannel::~P2PTransportChannel() {
@@ -664,8 +665,8 @@ uint32 P2PTransportChannel::GetRemoteCandidateGeneration(
   // |candidate.generation()| is not signaled in ICEPROTO_RFC5245.
   // Therefore we need to keep track of the remote ice restart so
   // newer connections are prioritized over the older.
-  ASSERT(candidate.generation() == 0 ||
-         candidate.generation() == remote_candidate_generation_);
+  //ASSERT(candidate.generation() == 0 ||
+  //       candidate.generation() == remote_candidate_generation_);
   return remote_candidate_generation_;
 }
 

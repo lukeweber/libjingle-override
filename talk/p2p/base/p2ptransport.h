@@ -39,7 +39,8 @@ class P2PTransport : public Transport {
   P2PTransport(talk_base::Thread* signaling_thread,
                talk_base::Thread* worker_thread,
                const std::string& content_name,
-               PortAllocator* allocator);
+               PortAllocator* allocator,
+               const std::string& transport_type);
   virtual ~P2PTransport();
 
  protected:
@@ -87,6 +88,11 @@ class P2PTransportParser : public TransportParser {
                       Candidate* candidate,
                       ParseError* error);
   bool WriteCandidate(TransportProtocol proto,
+                      const Candidate& candidate,
+                      const CandidateTranslator* translator,
+                      buzz::XmlElement* elem,
+                      WriteError* error);
+  bool WriteCandidateRfc5245(TransportProtocol proto,
                       const Candidate& candidate,
                       const CandidateTranslator* translator,
                       buzz::XmlElement* elem,
