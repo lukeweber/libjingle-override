@@ -405,7 +405,6 @@ bool BaseSession::PushdownLocalTransportDescription(
         sdesc, iter->second->content_name(), &tdesc);
     if (ret) {
       if (!iter->second->SetLocalTransportDescription(tdesc, action)) {
-      //if (!iter->second->SetLocalTransportDescription(local_transport_description_.get(), action)) {
         return false;
       }
 
@@ -926,15 +925,6 @@ bool Session::Accept(const SessionDescription* sdesc) {
   // Only if just received initiate
   if (state() != STATE_RECEIVEDINITIATE)
     return false;
-
-  // Setup for signaling.
-  /*for (TransportInfos::iterator tinfo = sdesc->transport_infos().begin();
-        tinfo != sdesc->transport_infos().end(); ++tinfo){
-    
-    //tinfo->description = new TransportDescription(*local_transport_description_.get());
-    tinfo->description.ice_pwd = local_transport_description_.get()->ice_pwd;
-    tinfo->description.ice_ufrag = local_transport_description_.get()->ice_ufrag;
-  }*/
   
   set_local_description(sdesc);
 
@@ -1337,7 +1327,10 @@ bool Session::OnInitiateMessage(const SessionMessage& msg,
                                                 init.groups));
 
   // Updating transport with TransportDescription.
+  //We want our already valid local offer to be set.
+  PushdownTransportDescription(CS_LOCAL, CA_OFFER);
   PushdownTransportDescription(CS_REMOTE, CA_OFFER);
+  
   SetState(STATE_RECEIVEDINITIATE);
 
   // Users of Session may listen to state change and call Reject().

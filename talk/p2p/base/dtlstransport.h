@@ -98,6 +98,7 @@ class DtlsTransport : public Base {
 
     if (remote_fp && local_fp) {
       remote_fingerprint_.reset(new talk_base::SSLFingerprint(*remote_fp));
+      LOG(LS_ERROR) << "Remote fingerprint set";
     } else if (local_fp && (local_role == CA_ANSWER)) {
       LOG(LS_ERROR)
           << "Local fingerprint supplied when caller didn't offer DTLS";

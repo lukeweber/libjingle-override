@@ -270,7 +270,7 @@ void Transport::ConnectChannels_w() {
       this, MSG_CANDIDATEREADY, NULL);
 
   if (!local_description_) {
-    //ASSERT(false);
+    ASSERT(false);
     // TOOD(mallinath) : TransportDescription(TD) shouldn't be generated here.
     // As Transport must know TD is offer or answer and cricket::Transport
     // doesn't have the capability to decide it. This should be set by the
