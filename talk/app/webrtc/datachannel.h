@@ -94,9 +94,7 @@ class DataChannel : public DataChannelInterface,
   virtual ~DataChannel();
 
   bool Init(const DataChannelInit* config);
-  bool HasNegotiationCompleted() {
-    return send_ssrc_set_ == receive_ssrc_set_;
-  }
+  bool HasNegotiationCompleted();
 
   // Sigslots from cricket::DataChannel
   void OnDataReceived(cricket::DataChannel* channel,

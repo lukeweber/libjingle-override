@@ -38,7 +38,9 @@ static const char kSoftware[] = "libjingle TurnServer";
 
 class TurnFileAuth : public cricket::TurnAuthInterface {
  public:
-  explicit TurnFileAuth(const std::string& path) : file_(path) {}
+  explicit TurnFileAuth(const std::string& path) : file_(path) {
+    file_.Load();
+  }
   virtual bool GetKey(const std::string& username, const std::string& realm,
                       std::string* key) {
     // File is stored as lines of <username>=<HA1>.

@@ -56,6 +56,8 @@ const char* kCodecParamMinPTime = "minptime";
 const char* kCodecParamSPropStereo = "sprop-stereo";
 const char* kCodecParamStereo = "stereo";
 const char* kCodecParamUseInbandFec = "useinbandfec";
+const char* kCodecParamSctpProtocol = "protocol";
+const char* kCodecParamSctpStreams = "streams";
 
 const char* kParamValueTrue = "1";
 const char* kParamValueEmpty = "";

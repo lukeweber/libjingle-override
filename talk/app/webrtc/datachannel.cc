@@ -90,6 +90,11 @@ bool DataChannel::Init(const DataChannelInit* config) {
   return true;
 }
 
+bool DataChannel::HasNegotiationCompleted() {
+  return session_->data_channel_type() != cricket::DCT_RTP ||
+         send_ssrc_set_ == receive_ssrc_set_;
+}
+
 DataChannel::~DataChannel() {
   ClearQueuedData();
 }

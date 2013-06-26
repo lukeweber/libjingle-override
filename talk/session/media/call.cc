@@ -284,7 +284,7 @@ bool Call::AddSession(Session* session, const SessionDescription* offer) {
     } else {
       DataChannelType data_channel_type = DCT_RTP;
       if ((data->protocol() == kMediaProtocolSctp) ||
-          (data->protocol() == kMediaProtocolSctpDtls)) {
+          (data->protocol() == kMediaProtocolDtlsSctp)) {
         data_channel_type = DCT_SCTP;
       }
 

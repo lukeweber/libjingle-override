@@ -1019,7 +1019,7 @@ buzz::XmlElement* CreateJingleRtpDataContentElem(
 
 bool IsSctp(const DataContentDescription* data) {
   return (data->protocol() == kMediaProtocolSctp ||
-    data->protocol() == kMediaProtocolSctpDtls);
+    data->protocol() == kMediaProtocolDtlsSctp);
 }
 
 buzz::XmlElement* CreateJingleDataContentElem(

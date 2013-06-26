@@ -35,6 +35,7 @@
 #include "talk/base/helpers.h"
 #include "talk/base/logging.h"
 #include "talk/base/scoped_ptr.h"
+#include "talk/base/stringutils.h"
 #include "talk/media/base/constants.h"
 #include "talk/media/base/cryptoparams.h"
 #include "talk/p2p/base/constants.h"
@@ -57,8 +58,10 @@ const char kMediaProtocolAvpf[] = "RTP/AVPF";
 // RFC5124
 const char kMediaProtocolSavpf[] = "RTP/SAVPF";
 
+const char kMediaProtocolRtpPrefix[] = "RTP/";
+
 const char kMediaProtocolSctp[] = "SCTP";
-const char kMediaProtocolSctpDtls[] = "SCTP/DTLS";
+const char kMediaProtocolDtlsSctp[] = "DTLS/SCTP";
 
 static bool IsMediaContentOfType(const ContentInfo* content,
                                  MediaType media_type) {
@@ -397,7 +400,7 @@ class UsedRtpHeaderExtensionIds : public UsedIds<RtpHeaderExtension> {
 
 static bool IsSctp(const MediaContentDescription* desc) {
   return ((desc->protocol() == kMediaProtocolSctp) ||
-          (desc->protocol() == kMediaProtocolSctpDtls));
+          (desc->protocol() == kMediaProtocolDtlsSctp));
 }
 
 // Adds a StreamParams for each Stream in Streams with media type
@@ -562,6 +565,23 @@ static void PruneCryptos(const CryptoParamsVec& filter,
                         target_cryptos->end());
 }
 
+static bool IsRtpContent(SessionDescription* sdesc,
+                         const std::string& content_name) {
+  bool is_rtp = false;
+  ContentInfo* content = sdesc->GetContentByName(content_name);
+  if (IsMediaContent(content)) {
+    MediaContentDescription* media_desc =
+        static_cast<MediaContentDescription*>(content->description);
+    if (!media_desc) {
+      return false;
+    }
+    is_rtp = media_desc->protocol().empty() ||
+             talk_base::starts_with(media_desc->protocol().data(),
+                                    kMediaProtocolRtpPrefix);
+  }
+  return is_rtp;
+}
+
 // Updates the crypto parameters of the |sdesc| according to the given
 // |bundle_group|. The crypto parameters of all the contents within the
 // |bundle_group| should be updated to use the common subset of the
@@ -578,6 +598,9 @@ static bool UpdateCryptoParamsForBundle(const ContentGroup& bundle_group,
   CryptoParamsVec common_cryptos;
   for (ContentNames::const_iterator it = content_names.begin();
        it != content_names.end(); ++it) {
+    if (!IsRtpContent(sdesc, *it)) {
+      continue;
+    }
     if (it == content_names.begin()) {
       // Initial the common_cryptos with the first content in the bundle group.
       if (!GetCryptosByName(sdesc, *it, &common_cryptos)) {
@@ -603,6 +626,9 @@ static bool UpdateCryptoParamsForBundle(const ContentGroup& bundle_group,
   // Update to use the common cryptos.
   for (ContentNames::const_iterator it = content_names.begin();
        it != content_names.end(); ++it) {
+    if (!IsRtpContent(sdesc, *it)) {
+      continue;
+    }
     ContentInfo* content = sdesc->GetContentByName(*it);
     if (IsMediaContent(content)) {
       MediaContentDescription* media_desc =
@@ -923,7 +949,7 @@ static bool IsMediaProtocolSupported(MediaType type,
   // Data channels can have a protocol of SCTP or SCTP/DTLS.
   if (type == MEDIA_TYPE_DATA &&
       (protocol == kMediaProtocolSctp ||
-       protocol == kMediaProtocolSctpDtls)) {
+       protocol == kMediaProtocolDtlsSctp)) {
     return true;
   }
   // Since not all applications serialize and deserialize the media protocol,
@@ -1083,7 +1109,7 @@ SessionDescription* MediaSessionDescriptionFactory::CreateOffer(
       // CreateMediaContentOffer won't know this is SCTP and will
       // generate SSRCs rather than SIDs.
       data->set_protocol(
-          secure_transport ? kMediaProtocolSctpDtls : kMediaProtocolSctp);
+          secure_transport ? kMediaProtocolDtlsSctp : kMediaProtocolSctp);
     } else {
       GetSupportedDataCryptoSuites(&crypto_suites);
     }

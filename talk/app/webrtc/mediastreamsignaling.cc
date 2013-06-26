@@ -349,7 +349,11 @@ void MediaStreamSignaling::OnRemoteDescriptionChanged(
     const cricket::DataContentDescription* data_desc =
         static_cast<const cricket::DataContentDescription*>(
             data_content->description);
-    UpdateRemoteDataChannels(data_desc->streams());
+    if (data_desc->protocol() == cricket::kMediaProtocolDtlsSctp) {
+      UpdateSctpDataChannels();
+    } else {
+      UpdateRemoteDataChannels(data_desc->streams());
+    }
   }
 
   // Iterate new_streams and notify the observer about new MediaStreams.
@@ -401,7 +405,11 @@ void MediaStreamSignaling::OnLocalDescriptionChanged(
     const cricket::DataContentDescription* data_desc =
         static_cast<const cricket::DataContentDescription*>(
             data_content->description);
-    UpdateLocalDataChannels(data_desc->streams());
+    if (data_desc->protocol() == cricket::kMediaProtocolDtlsSctp) {
+      UpdateSctpDataChannels();
+    } else {
+      UpdateLocalDataChannels(data_desc->streams());
+    }
   }
 }
 
@@ -854,6 +862,16 @@ void MediaStreamSignaling::CreateRemoteDataChannel(const std::string& label,
       data_channel_factory_->CreateDataChannel(label, NULL));
   channel->SetReceiveSsrc(remote_ssrc);
   stream_observer_->OnAddDataChannel(channel);
+}
+
+void MediaStreamSignaling::UpdateSctpDataChannels() {
+  // TODO(jiayl): replace this hacky way to trigger connecting the DataChannel
+  // to the data engine with a better solution.
+  DataChannels::iterator it = data_channels_.begin();
+  for (; it != data_channels_.end(); ++it) {
+    DataChannel* data_channel = it->second;
+    data_channel->SetSendSsrc(0);
+  }
 }
 
 }  // namespace webrtc

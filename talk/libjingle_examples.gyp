@@ -66,6 +66,17 @@
       ],
     },  # target stunserver
     {
+      'target_name': 'turnserver',
+      'type': 'executable',
+      'dependencies': [
+        'libjingle.gyp:libjingle',
+        'libjingle.gyp:libjingle_p2p',
+      ],
+      'sources': [
+        'p2p/base/turnserver_main.cc',
+      ],
+    },  # target turnserver
+    {
       'target_name': 'login',
       'type': 'executable',
       'dependencies': [

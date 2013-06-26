@@ -731,7 +731,6 @@ bool BaseChannel::WantsPacket(bool rtcp, talk_base::Buffer* packet) {
                   << packet->length();
     return false;
   }
-
   // If this channel is suppose to handle RTP data, that is determined by
   // checking against ssrc filter. This is necessary to do it here to avoid
   // double decryption.
@@ -903,7 +902,7 @@ void BaseChannel::ChannelWritable_w() {
   }
 
   // If we're doing DTLS-SRTP, now is the time.
-  if (!was_ever_writable_) {
+  if (!was_ever_writable_ && ShouldSetupDtlsSrtp()) {
     if (!SetupDtlsSrtp(false)) {
       LOG(LS_ERROR) << "Couldn't finish DTLS-SRTP on RTP channel";
       SessionErrorMessageData data(BaseSession::ERROR_TRANSPORT);
@@ -938,6 +937,10 @@ bool BaseChannel::SetDtlsSrtpCiphers(TransportChannel *tc, bool rtcp) {
     GetSupportedDefaultCryptoSuites(&ciphers);
   }
   return tc->SetSrtpCiphers(ciphers);
+}
+
+bool BaseChannel::ShouldSetupDtlsSrtp() const {
+  return true;
 }
 
 // This function returns true if either DTLS-SRTP is not in use
@@ -2472,7 +2475,7 @@ bool DataChannel::SetDataChannelType(DataChannelType new_data_channel_type) {
 bool DataChannel::SetDataChannelTypeFromContent(
     const DataContentDescription* content) {
   bool is_sctp = ((content->protocol() == kMediaProtocolSctp) ||
-                  (content->protocol() == kMediaProtocolSctpDtls));
+                  (content->protocol() == kMediaProtocolDtlsSctp));
   DataChannelType data_channel_type = is_sctp ? DCT_SCTP : DCT_RTP;
   return SetDataChannelType(data_channel_type);
 }
@@ -2690,9 +2693,12 @@ void DataChannel::OnSrtpError(uint32 ssrc, SrtpFilter::Mode mode,
   }
 }
 
-
 void DataChannel::GetSrtpCiphers(std::vector<std::string>* ciphers) const {
   GetSupportedDataCryptoSuites(ciphers);
+}
+
+bool DataChannel::ShouldSetupDtlsSrtp() const {
+  return (data_channel_type_ == DCT_RTP);
 }
 
 }  // namespace cricket

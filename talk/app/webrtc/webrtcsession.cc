@@ -535,6 +535,10 @@ SessionDescriptionInterface* WebRtcSession::CreateOffer(
     LOG(LS_ERROR) << "CreateOffer called with invalid media streams.";
     return NULL;
   }
+
+  if (data_channel_type_ == cricket::DCT_SCTP) {
+    options.data_channel_type = cricket::DCT_SCTP;
+  }
   SessionDescription* desc(
       session_desc_factory_.CreateOffer(options,
                                         BaseSession::local_description()));
@@ -585,7 +589,9 @@ SessionDescriptionInterface* WebRtcSession::CreateAnswer(
     LOG(LS_ERROR) << "CreateAnswer called with invalid media streams.";
     return NULL;
   }
-
+  if (data_channel_type_ == cricket::DCT_SCTP) {
+    options.data_channel_type = cricket::DCT_SCTP;
+  }
   // According to http://tools.ietf.org/html/rfc5245#section-9.2.1.1
   // an answer should also contain new ice ufrag and password if an offer has
   // been received with new ufrag and password.
@@ -1385,8 +1391,9 @@ bool WebRtcSession::CreateVideoChannel(const SessionDescription* desc) {
 
 bool WebRtcSession::CreateDataChannel(const SessionDescription* desc) {
   const cricket::ContentInfo* data = cricket::GetFirstDataContent(desc);
+  bool rtcp = (data_channel_type_ == cricket::DCT_RTP);
   data_channel_.reset(channel_manager_->CreateDataChannel(
-      this, data->name, true, data_channel_type_));
+      this, data->name, rtcp, data_channel_type_));
   if (!data_channel_.get()) {
     return false;
   }

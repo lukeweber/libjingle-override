@@ -54,6 +54,7 @@ using cricket::ICE_CANDIDATE_COMPONENT_RTCP;
 using cricket::ICE_CANDIDATE_COMPONENT_RTP;
 using cricket::kFecSsrcGroupSemantics;
 using cricket::LOCAL_PORT_TYPE;
+using cricket::NS_JINGLE_DRAFT_SCTP;
 using cricket::NS_JINGLE_ICE_UDP;
 using cricket::NS_JINGLE_RTP;
 using cricket::RtpHeaderExtension;
@@ -146,8 +147,8 @@ static const char kSdpFullString[] =
     "raddr 192.168.1.5 rport 2348 "
     "generation 2\r\n"
     "a=ice-ufrag:ufrag_voice\r\na=ice-pwd:pwd_voice\r\n"
-    "a=sendrecv\r\n"
     "a=mid:audio_content_name\r\n"
+    "a=sendrecv\r\n"
     "a=rtcp-mux\r\n"
     "a=crypto:1 AES_CM_128_HMAC_SHA1_32 "
     "inline:NzB4d1BINUAvLEw6UzF3WSJ+PSdFcGdUJShpX1Zj|2^20|1:32 "
@@ -179,8 +180,8 @@ static const char kSdpFullString[] =
     "a=candidate:a0+B/4 1 udp 2130706432 74.125.224.39 3457 typ relay "
     "generation 2\r\n"
     "a=ice-ufrag:ufrag_video\r\na=ice-pwd:pwd_video\r\n"
-    "a=sendrecv\r\n"
     "a=mid:video_content_name\r\n"
+    "a=sendrecv\r\n"
     "a=crypto:1 AES_CM_128_HMAC_SHA1_80 "
     "inline:d0RmdmcmVCspeEc3QGZiNWpVLFJhQX1cfHAwJSoj|2^20|1:32\r\n"
     "a=rtpmap:120 VP8/90000\r\n"
@@ -213,8 +214,8 @@ static const char kSdpString[] =
     "c=IN IP4 0.0.0.0\r\n"
     "a=rtcp:1 IN IP4 0.0.0.0\r\n"
     "a=ice-ufrag:ufrag_voice\r\na=ice-pwd:pwd_voice\r\n"
-    "a=sendrecv\r\n"
     "a=mid:audio_content_name\r\n"
+    "a=sendrecv\r\n"
     "a=rtcp-mux\r\n"
     "a=crypto:1 AES_CM_128_HMAC_SHA1_32 "
     "inline:NzB4d1BINUAvLEw6UzF3WSJ+PSdFcGdUJShpX1Zj|2^20|1:32 "
@@ -234,8 +235,8 @@ static const char kSdpString[] =
     "c=IN IP4 0.0.0.0\r\n"
     "a=rtcp:1 IN IP4 0.0.0.0\r\n"
     "a=ice-ufrag:ufrag_video\r\na=ice-pwd:pwd_video\r\n"
-    "a=sendrecv\r\n"
     "a=mid:video_content_name\r\n"
+    "a=sendrecv\r\n"
     "a=crypto:1 AES_CM_128_HMAC_SHA1_80 "
     "inline:d0RmdmcmVCspeEc3QGZiNWpVLFJhQX1cfHAwJSoj|2^20|1:32\r\n"
     "a=rtpmap:120 VP8/90000\r\n"
@@ -257,14 +258,14 @@ static const char kSdpString[] =
     "a=ssrc:6 mslabel:local_stream_2\r\n"
     "a=ssrc:6 label:video_track_id_3\r\n";
 
-static const char kSdpDataChannelString[] =
+static const char kSdpRtpDataChannelString[] =
     "m=application 1 RTP/SAVPF 101\r\n"
     "c=IN IP4 0.0.0.0\r\n"
     "a=rtcp:1 IN IP4 0.0.0.0\r\n"
     "a=ice-ufrag:ufrag_data\r\n"
     "a=ice-pwd:pwd_data\r\n"
-    "a=sendrecv\r\n"
     "a=mid:data_content_name\r\n"
+    "a=sendrecv\r\n"
     "a=crypto:1 AES_CM_128_HMAC_SHA1_80 "
     "inline:FvLcvU2P3ZWmQxgPAgcDu7Zl9vftYElFOjEzhWs5\r\n"
     "a=rtpmap:101 google-data/90000\r\n"
@@ -272,6 +273,29 @@ static const char kSdpDataChannelString[] =
     "a=ssrc:10 msid:data_channel data_channeld0\r\n"
     "a=ssrc:10 mslabel:data_channel\r\n"
     "a=ssrc:10 label:data_channeld0\r\n";
+
+static const char kSdpSctpDataChannelString[] =
+    "m=application 1 DTLS/SCTP 5000\r\n"
+    "c=IN IP4 0.0.0.0\r\n"
+    "a=ice-ufrag:ufrag_data\r\n"
+    "a=ice-pwd:pwd_data\r\n"
+    "a=mid:data_content_name\r\n"
+    "a=fmtp:5000 protocol=webrtc-datachannel; streams=10\r\n";
+
+static const char kSdpSctpDataChannelWithCandidatesString[] =
+    "m=application 2345 DTLS/SCTP 5000\r\n"
+    "c=IN IP4 74.125.127.126\r\n"
+    "a=candidate:a0+B/1 1 udp 2130706432 192.168.1.5 1234 typ host "
+    "generation 2\r\n"
+    "a=candidate:a0+B/2 1 udp 2130706432 ::1 1238 typ host "
+    "generation 2\r\n"
+    "a=candidate:a0+B/3 1 udp 2130706432 74.125.127.126 2345 typ srflx "
+    "raddr 192.168.1.5 rport 2346 "
+    "generation 2\r\n"
+    "a=ice-ufrag:ufrag_data\r\n"
+    "a=ice-pwd:pwd_data\r\n"
+    "a=mid:data_content_name\r\n"
+    "a=fmtp:5000 protocol=webrtc-datachannel; streams=10\r\n";
 
 
 // One candidate reference string as per W3c spec.
@@ -950,7 +974,23 @@ class WebRtcSdpTest : public testing::Test {
     return true;
   }
 
-  void AddDataChannel() {
+  void AddSctpDataChannel() {
+    talk_base::scoped_ptr<DataContentDescription> data(
+        new DataContentDescription());
+    data_desc_ = data.get();
+    data_desc_->set_protocol(cricket::kMediaProtocolDtlsSctp);
+    desc_.AddContent(kDataContentName, NS_JINGLE_DRAFT_SCTP, data.release());
+    EXPECT_TRUE(desc_.AddTransportInfo(
+           TransportInfo(kDataContentName,
+                         TransportDescription(NS_JINGLE_ICE_UDP,
+                                              std::vector<std::string>(),
+                                              kCandidateUfragData,
+                                              kCandidatePwdData,
+                                              cricket::ICEMODE_FULL,
+                                              NULL, Candidates()))));
+  }
+
+  void AddRtpDataChannel() {
     talk_base::scoped_ptr<DataContentDescription> data(
         new DataContentDescription());
     data_desc_ = data.get();
@@ -1313,10 +1353,10 @@ TEST_F(WebRtcSdpTest, SerializeSessionDescriptionWithBandwidth) {
                                 jdesc_.session_version()));
   std::string message = webrtc::SdpSerialize(jdesc_);
   std::string sdp_with_bandwidth = kSdpFullString;
-  InjectAfter("a=mid:video_content_name\r\n",
+  InjectAfter("a=mid:video_content_name\r\na=sendrecv\r\n",
               "b=AS:100\r\n",
               &sdp_with_bandwidth);
-  InjectAfter("a=mid:audio_content_name\r\n",
+  InjectAfter("a=mid:audio_content_name\r\na=sendrecv\r\n",
               "b=AS:50\r\n",
               &sdp_with_bandwidth);
   EXPECT_EQ(sdp_with_bandwidth, message);
@@ -1369,15 +1409,27 @@ TEST_F(WebRtcSdpTest, SerializeSessionDescriptionWithAudioVideoRejected) {
   EXPECT_TRUE(TestSerializeRejected(true, true));
 }
 
-TEST_F(WebRtcSdpTest, SerializeSessionDescriptionWithDataChannel) {
-  AddDataChannel();
+TEST_F(WebRtcSdpTest, SerializeSessionDescriptionWithRtpDataChannel) {
+  AddRtpDataChannel();
   JsepSessionDescription jsep_desc(kDummyString);
 
   ASSERT_TRUE(jsep_desc.Initialize(desc_.Copy(), kSessionId, kSessionVersion));
   std::string message = webrtc::SdpSerialize(jsep_desc);
 
   std::string expected_sdp = kSdpString;
-  expected_sdp.append(kSdpDataChannelString);
+  expected_sdp.append(kSdpRtpDataChannelString);
+  EXPECT_EQ(expected_sdp, message);
+}
+
+TEST_F(WebRtcSdpTest, SerializeSessionDescriptionWithSctpDataChannel) {
+  AddSctpDataChannel();
+  JsepSessionDescription jsep_desc(kDummyString);
+
+  ASSERT_TRUE(jsep_desc.Initialize(desc_.Copy(), kSessionId, kSessionVersion));
+  std::string message = webrtc::SdpSerialize(jsep_desc);
+
+  std::string expected_sdp = kSdpString;
+  expected_sdp.append(kSdpSctpDataChannelString);
   EXPECT_EQ(message, expected_sdp);
 }
 
@@ -1389,9 +1441,9 @@ TEST_F(WebRtcSdpTest, SerializeSessionDescriptionWithExtmap) {
   std::string message = webrtc::SdpSerialize(desc_with_extmap);
 
   std::string sdp_with_extmap = kSdpString;
-  InjectAfter(kAttributeIcePwdVoice,
+  InjectAfter("a=mid:audio_content_name\r\n",
               kExtmap, &sdp_with_extmap);
-  InjectAfter(kAttributeIcePwdVideo,
+  InjectAfter("a=mid:video_content_name\r\n",
               kExtmap, &sdp_with_extmap);
 
   EXPECT_EQ(sdp_with_extmap, message);
@@ -1494,10 +1546,10 @@ TEST_F(WebRtcSdpTest, DeserializeSessionDescriptionWithBundle) {
 TEST_F(WebRtcSdpTest, DeserializeSessionDescriptionWithBandwidth) {
   JsepSessionDescription jdesc_with_bandwidth(kDummyString);
   std::string sdp_with_bandwidth = kSdpFullString;
-  InjectAfter("a=mid:video_content_name\r\n",
+  InjectAfter("a=mid:video_content_name\r\na=sendrecv\r\n",
               "b=AS:100\r\n",
               &sdp_with_bandwidth);
-  InjectAfter("a=mid:audio_content_name\r\n",
+  InjectAfter("a=mid:audio_content_name\r\na=sendrecv\r\n",
               "b=AS:50\r\n",
               &sdp_with_bandwidth);
   EXPECT_TRUE(
@@ -1665,18 +1717,31 @@ TEST_F(WebRtcSdpTest, DeserializeRawCandidateAttribute) {
   EXPECT_FALSE(SdpDeserializeCandidate(candidate_attribute, &jcandidate));
 }
 
-TEST_F(WebRtcSdpTest, DeserializeSdpWithDataChannels) {
-  AddDataChannel();
+TEST_F(WebRtcSdpTest, DeserializeSdpWithRtpDataChannels) {
+  AddRtpDataChannel();
   JsepSessionDescription jdesc(kDummyString);
   ASSERT_TRUE(jdesc.Initialize(desc_.Copy(), kSessionId, kSessionVersion));
 
   std::string sdp_with_data = kSdpString;
-  sdp_with_data.append(kSdpDataChannelString);
+  sdp_with_data.append(kSdpRtpDataChannelString);
   JsepSessionDescription jdesc_output(kDummyString);
 
   // Deserialize
   EXPECT_TRUE(SdpDeserialize(sdp_with_data, &jdesc_output));
   // Verify
+  EXPECT_TRUE(CompareSessionDescription(jdesc, jdesc_output));
+}
+
+TEST_F(WebRtcSdpTest, DeserializeSdpWithSctpDataChannels) {
+  AddSctpDataChannel();
+  JsepSessionDescription jdesc(kDummyString);
+  ASSERT_TRUE(jdesc.Initialize(desc_.Copy(), kSessionId, kSessionVersion));
+
+  std::string sdp_with_data = kSdpString;
+  sdp_with_data.append(kSdpSctpDataChannelString);
+  JsepSessionDescription jdesc_output(kDummyString);
+
+  EXPECT_TRUE(SdpDeserialize(sdp_with_data, &jdesc_output));
   EXPECT_TRUE(CompareSessionDescription(jdesc, jdesc_output));
 }
 
@@ -1882,4 +1947,15 @@ TEST_F(WebRtcSdpTest, DeserializeSdpWithIceLite) {
   const cricket::TransportInfo* vtinfo =
         desc->GetTransportInfoByName("video_content_name");
   EXPECT_EQ(cricket::ICEMODE_LITE, vtinfo->description.ice_mode);
+}
+
+// Verifies that the candidates in the input SDP are parsed and serialized
+// correctly in the output SDP.
+TEST_F(WebRtcSdpTest, RoundTripSdpWithSctpDataChannelsWithCandidates) {
+  std::string sdp_with_data = kSdpString;
+  sdp_with_data.append(kSdpSctpDataChannelWithCandidatesString);
+  JsepSessionDescription jdesc_output(kDummyString);
+
+  EXPECT_TRUE(SdpDeserialize(sdp_with_data, &jdesc_output));
+  EXPECT_EQ(sdp_with_data, webrtc::SdpSerialize(jdesc_output));
 }

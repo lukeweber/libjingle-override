@@ -357,6 +357,7 @@ class MediaStreamSignaling {
   void UpdateClosingDataChannels(
       const std::vector<std::string>& active_channels, bool is_local_update);
   void CreateRemoteDataChannel(const std::string& label, uint32 remote_ssrc);
+  void UpdateSctpDataChannels();
 
   RemotePeerInfo remote_info_;
   talk_base::Thread* signaling_thread_;

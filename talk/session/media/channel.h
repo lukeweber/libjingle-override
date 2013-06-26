@@ -277,6 +277,7 @@ class BaseChannel
   void ChannelNotWritable_w();
   bool AddRecvStream_w(const StreamParams& sp);
   bool RemoveRecvStream_w(uint32 ssrc);
+  virtual bool ShouldSetupDtlsSrtp() const;
   // Do the DTLS key expansion and impose it on the SRTP/SRTCP filters.
   // |rtcp_channel| indicates whether to set up the RTP or RTCP filter.
   bool SetupDtlsSrtp(bool rtcp_channel);
@@ -670,6 +671,7 @@ class DataChannel : public BaseChannel {
       SocketMonitor* monitor, const std::vector<ConnectionInfo>& infos);
   virtual void OnMediaMonitorUpdate(
       DataMediaChannel* media_channel, const DataMediaInfo& info);
+  virtual bool ShouldSetupDtlsSrtp() const;
   void OnDataReceived(
       const ReceiveDataParams& params, const char* data, size_t len);
   void OnDataChannelError(uint32 ssrc, DataMediaChannel::Error error);
