@@ -52,6 +52,10 @@ public class MediaConstraints {
     public String getValue() {
       return value;
     }
+
+    public String toString() {
+      return key + ": " + value;
+    }
   }
 
 
@@ -61,5 +65,21 @@ public class MediaConstraints {
   public MediaConstraints() {
     mandatory = new LinkedList<KeyValuePair>();
     optional = new LinkedList<KeyValuePair>();
+  }
+
+  private static String stringifyKeyValuePairList(List<KeyValuePair> list) {
+    StringBuilder builder = new StringBuilder("[");
+    for (KeyValuePair pair : list) {
+      if (builder.length() > 1) {
+        builder.append(", ");
+      }
+      builder.append(pair.toString());
+    }
+    return builder.append("]").toString();
+  }
+
+  public String toString() {
+    return "mandatory: " + stringifyKeyValuePairList(mandatory) +
+        ", optional: " + stringifyKeyValuePairList(optional);
   }
 }
