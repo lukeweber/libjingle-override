@@ -103,8 +103,11 @@ public class AppRTCDemoActivity extends Activity
     abortUnless(PeerConnectionFactory.initializeAndroidGlobals(this),
         "Failed to initializeAndroidGlobals");
 
-    ((AudioManager) getSystemService(AUDIO_SERVICE)).setMode(
-        AudioManager.MODE_IN_COMMUNICATION);
+    AudioManager audioManager =
+        ((AudioManager) getSystemService(AUDIO_SERVICE));
+    audioManager.setMode(audioManager.isWiredHeadsetOn() ?
+        AudioManager.MODE_IN_CALL : AudioManager.MODE_IN_COMMUNICATION);
+    audioManager.setSpeakerphoneOn(!audioManager.isWiredHeadsetOn());
 
     sdpMediaConstraints = new MediaConstraints();
     sdpMediaConstraints.mandatory.add(new MediaConstraints.KeyValuePair(
