@@ -34,6 +34,7 @@ import android.content.Intent;
 import android.graphics.Point;
 import android.media.AudioManager;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.widget.EditText;
@@ -79,6 +80,7 @@ public class AppRTCDemoActivity extends Activity
   // Synchronize on quit[0] to avoid teardown-related crashes.
   private final Boolean[] quit = new Boolean[] { false };
   private MediaConstraints sdpMediaConstraints;
+  private PowerManager.WakeLock wakeLock;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
@@ -94,6 +96,11 @@ public class AppRTCDemoActivity extends Activity
             System.exit(-1);
           }
         });
+
+    PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+    wakeLock = powerManager.newWakeLock(
+        PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "AppRTCDemo");
+    wakeLock.acquire();
 
     Point displaySize = new Point();
     getWindowManager().getDefaultDisplay().getSize(displaySize);
@@ -449,6 +456,7 @@ public class AppRTCDemoActivity extends Activity
         return;
       }
       quit[0] = true;
+      wakeLock.release();
       if (pc != null) {
         pc.dispose();
         pc = null;
