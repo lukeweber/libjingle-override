@@ -32,6 +32,7 @@
 #include "talk/base/logging.h"
 #include "talk/base/scoped_ptr.h"
 #include "talk/base/stringencode.h"
+#include "talk/p2p/base/common.h"
 #include "talk/p2p/base/constants.h"
 #include "talk/p2p/base/timeouts.h"
 #include "talk/p2p/base/session.h"
@@ -98,6 +99,7 @@ Session* SessionManager::CreateSession(
   session->set_ice_protocol(transport_desc_factory()->protocol());
   session->set_identity(transport_desc_factory_.identity());
   session_map_[session->id()] = session;
+  LOG_CI << "Create Session id:" << session->id() << " sid:" << sid;
   session->SignalRequestSignaling.connect(
       this, &SessionManager::OnRequestSignaling);
   session->SignalOutgoingMessage.connect(
@@ -112,6 +114,7 @@ void SessionManager::DestroySession(Session* session) {
   if (session != NULL) {
     SessionMap::iterator it = session_map_.find(session->id());
     if (it != session_map_.end()) {
+      LOG_CI << "Destroy Session id:" << session->id();
       SignalSessionDestroy(session);
       session->client()->OnSessionDestroy(session);
       session_map_.erase(it);

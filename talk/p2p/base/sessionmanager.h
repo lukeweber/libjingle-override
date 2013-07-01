@@ -52,6 +52,8 @@ class SessionClient;
 // SessionManager manages session instances.
 class SessionManager : public sigslot::has_slots<> {
  public:
+  virtual std::string GetClassname() const { return "SessionManager"; }
+
   SessionManager(PortAllocator *allocator,
                  talk_base::Thread *worker_thread = NULL);
   virtual ~SessionManager();
