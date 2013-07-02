@@ -268,9 +268,13 @@ void P2PTransportChannel::SetRemoteIceCredentials(const std::string& ice_ufrag,
                                                   const std::string& ice_pwd) {
   ASSERT(worker_thread_ == talk_base::Thread::Current());
   bool ice_restart = false;
+
+  LOG(LS_ERROR) << "Luke P2PTransportChannel::SetRemoteIceCredentials setting remote credentials" << ice_ufrag;
+  
   if (!remote_ice_ufrag_.empty() && !remote_ice_pwd_.empty()) {
     ice_restart = (remote_ice_ufrag_ != ice_ufrag) ||
                   (remote_ice_pwd_!= ice_pwd);
+    
   }
 
   remote_ice_ufrag_ = ice_ufrag;
@@ -521,7 +525,7 @@ void P2PTransportChannel::OnUnknownAddress(
     Connection* connection = port->CreateConnection(
         new_remote_candidate, cricket::PortInterface::ORIGIN_THIS_PORT);
     if (!connection) {
-      ASSERT(false);
+      //ASSERT(false);
       port->SendBindingErrorResponse(stun_msg, address,
                                      STUN_ERROR_SERVER_ERROR,
                                      STUN_ERROR_REASON_SERVER_ERROR);
@@ -618,6 +622,8 @@ bool P2PTransportChannel::CreateConnections(const Candidate &remote_candidate,
   // the code below this (specifically, ConnectionRequest::Prepare in
   // port.cc) uses the remote candidates's username.  So, we set it
   // here.
+  LOG(LS_ERROR) << "Luke P2PTransportChannel::CreateConnections setting remote credentials" << remote_ice_ufrag_;
+
   if (remote_candidate.username().empty()) {
     new_remote_candidate.set_username(remote_ice_ufrag_);
   }

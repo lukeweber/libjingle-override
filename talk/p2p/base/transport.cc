@@ -120,8 +120,31 @@ Transport::Transport(talk_base::Thread* signaling_thread,
     connect_requested_(false),
     role_(ROLE_UNKNOWN),
     tiebreaker_(0),
-    protocol_(ICEPROTO_HYBRID),
+    protocol_(ICEPROTO_RFC5245),
     remote_ice_mode_(ICEMODE_FULL) {
+}
+
+Transport::Transport(talk_base::Thread* signaling_thread,
+                     talk_base::Thread* worker_thread,
+                     const std::string& content_name,
+                     const std::string& type,
+                     PortAllocator* allocator,
+                     const SessionDescription* local_description)
+  : signaling_thread_(signaling_thread),
+    worker_thread_(worker_thread),
+    content_name_(content_name),
+    type_(type),
+    allocator_(allocator),
+    destroyed_(false),
+    readable_(TRANSPORT_STATE_NONE),
+    writable_(TRANSPORT_STATE_NONE),
+    was_writable_(false),
+    connect_requested_(false),
+    role_(ROLE_UNKNOWN),
+    tiebreaker_(0),
+    protocol_(ICEPROTO_RFC5245),
+    remote_ice_mode_(ICEMODE_FULL) {
+    local_description2_.reset(local_description->GetTransportDescriptionByName("audio"));
 }
 
 Transport::~Transport() {
@@ -186,6 +209,7 @@ TransportChannelImpl* Transport::CreateChannel_w(int component) {
     ApplyLocalTransportDescription_w(impl);
     if (remote_description_) {
       ApplyRemoteTransportDescription_w(impl);
+      //NegotiateTransportDescription_w(CA_OFFER);//TODO: hacked in.
       ApplyNegotiatedTransportDescription_w(impl);
     }
   }
@@ -270,24 +294,26 @@ void Transport::ConnectChannels_w() {
       this, MSG_CANDIDATEREADY, NULL);
 
   if (!local_description_) {
-    ASSERT(false);
+    
+    //ASSERT(false);
     // TOOD(mallinath) : TransportDescription(TD) shouldn't be generated here.
     // As Transport must know TD is offer or answer and cricket::Transport
     // doesn't have the capability to decide it. This should be set by the
     // Session.
     // Session must generate local TD before remote candidates pushed when
     // initiate request initiated by the remote.
-    LOG(LS_INFO) << "Transport::ConnectChannels_w: No local description has "
+    /*LOG(LS_INFO) << "Transport::ConnectChannels_w: No local description has "
                  << "been set. Will generate one.";
     std::string username = talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
     std::string password = talk_base::CreateRandomString(ICE_PWD_LENGTH);
     LOG_CI << "look20:username:" << username;
-    TransportDescription desc(NS_GINGLE_P2P, std::vector<std::string>(),
-                              username,
-                              password,
-                              ICEMODE_FULL, NULL, Candidates());
+    TransportDescription desc(NS_JINGLE_ICE_UDP, std::vector<std::string>(),
+                              "bogusufrag",
+                              "bogusuname",
+                              ICEMODE_FULL, NULL, Candidates());*/
     //IMPORTANT>>>>
-    SetLocalTransportDescription_w(desc, CA_OFFER);
+    
+    SetLocalTransportDescription_w(*local_description2(), CA_OFFER);
   }
 
   CallChannels_w(&TransportChannelImpl::Connect);
@@ -684,6 +710,7 @@ bool Transport::NegotiateTransportDescription_w(ContentAction local_role_) {
   TransportProtocol offer_proto = TransportProtocolFromDescription(offer);
   TransportProtocol answer_proto = TransportProtocolFromDescription(answer);
 
+  ASSERT(offer_proto == ICEPROTO_RFC5245 && answer_proto == ICEPROTO_RFC5245);
   // If offered protocol is gice/ice, then we expect to receive matching
   // protocol in answer, anything else is treated as an error.
   // HYBRID is not an option when offered specific protocol.

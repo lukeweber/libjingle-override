@@ -293,6 +293,7 @@ void BaseSession::set_ice_protocol(TransportProtocol transport_type){
   if (transport_type == ICEPROTO_RFC5245){
     transport_type_ = NS_JINGLE_ICE_UDP;
   } else {//ICEPROTO_GOOGLE or ICEPROTO_HYBRID
+    ASSERT(false);
     transport_type_ = NS_GINGLE_P2P;
   }//fix
 }
@@ -405,9 +406,8 @@ bool BaseSession::PushdownLocalTransportDescription(
         sdesc, iter->second->content_name(), &tdesc);
     if (ret) {
       if (!iter->second->SetLocalTransportDescription(tdesc, action)) {
-        return false;
+          return false;
       }
-
       iter->second->ConnectChannels();
     }
   }
@@ -543,7 +543,7 @@ cricket::Transport* BaseSession::CreateTransport(
   ASSERT(transport_type_ == NS_GINGLE_P2P || transport_type_ == NS_JINGLE_ICE_UDP);
   return new cricket::DtlsTransport<P2PTransport>(
       signaling_thread(), worker_thread(), content_name,
-      port_allocator(), identity_, transport_type_);
+      port_allocator(), identity_, transport_type_, local_description());
 }
 
 bool BaseSession::GetStats(SessionStats* stats) {
@@ -856,7 +856,7 @@ Session::Session(SessionManager* session_manager,
                   session_manager->port_allocator(),
                   sid, content_type, initiator_name == local_name) {
   ASSERT(client != NULL);
-  //HACK
+  //HACK - Pass offer/answer SessionDescription in on construct from MediaSessionDescriptionFactory
   TransportDescription *local_tdesc = new TransportDescription(NS_JINGLE_ICE_UDP, std::vector<std::string>(),
                               talk_base::CreateRandomString(ICE_UFRAG_LENGTH),
                               talk_base::CreateRandomString(ICE_PWD_LENGTH),
@@ -905,14 +905,11 @@ bool Session::Initiate(const std::string &to,
     LOG(LS_ERROR) << "Could not send initiate message: " << error.text;
     return false;
   }
-
+  
   // We need to connect transport proxy and impl here so that we can process
   // the TransportDescriptions.
-  //TODO: this causes a fake sort of local description to be created to early,
-  //which in turn causes the wrong ice-ufrag and pwd to be send in the frist transport stanza.
-  //With this commented out, it works correctly.
-  //SpeculativelyConnectAllTransportChannels();
-  
+  SpeculativelyConnectAllTransportChannels();
+
   PushdownTransportDescription(CS_LOCAL, CA_OFFER);
 
   SetState(Session::STATE_SENTINITIATE);
@@ -935,6 +932,7 @@ bool Session::Accept(const SessionDescription* sdesc) {
   }
   // TODO(juberti): Add BUNDLE support to transport-info messages.
   PushdownTransportDescription(CS_LOCAL, CA_ANSWER);
+
   MaybeEnableMuxingSupport();  // Enable transport channel mux if supported.
   SetState(Session::STATE_SENTACCEPT);
   return true;
@@ -1327,18 +1325,21 @@ bool Session::OnInitiateMessage(const SessionMessage& msg,
                                                 init.groups));
 
   // Updating transport with TransportDescription.
-  //We want our already valid local offer to be set.
-  PushdownTransportDescription(CS_LOCAL, CA_OFFER);
   PushdownTransportDescription(CS_REMOTE, CA_OFFER);
-  
+
   SetState(STATE_RECEIVEDINITIATE);
 
   // Users of Session may listen to state change and call Reject().
   if (state() != STATE_SENTREJECT && state() != STATE_SENTBUSY) {
-    //TODO: This sets a bogus local description
+  
+    //TODO: Make sure local description is passed correctly all the way through to transport.cc
+    //We want our already valid local offer to be set.
+    //DTLS is negotiated after I do this because remote candidates has an identity.
     if (!OnRemoteCandidates(init.transports, error))
       return false;
-
+ 
+    //PushdownTransportDescription(CS_LOCAL, CA_OFFER);
+    //PushdownTransportDescription(CS_LOCAL, CA_PRANSWER);
     // TODO(juberti): Auto-generate and push down the local transport answer.
     // This is necessary for trickling to work with RFC 5245 ICE.
   }
@@ -1366,7 +1367,9 @@ bool Session::OnAcceptMessage(const SessionMessage& msg, MessageError* error) {
                                                 accept.transports,
                                                 accept.groups));
   // Updating transport with TransportDescription.
+  //PushdownTransportDescription(CS_LOCAL, CA_OFFER);//TEMP
   PushdownTransportDescription(CS_REMOTE, CA_ANSWER);
+  
   MaybeEnableMuxingSupport();  // Enable transport channel mux if supported.
   SetState(STATE_RECEIVEDACCEPT);
 
@@ -1419,7 +1422,8 @@ bool Session::OnTransportInfoMessage(const SessionMessage& msg,
   if (remote_description() != NULL){
     tinfos = GetInitialTransportInfos(remote_description()->contents(), remote_description());
   } else {
-    LOG(LS_ERROR) << "Remote description not set";
+    LOG(LS_ERROR) << "Remote description not set ================********************=========================";
+    LOG(LS_ERROR) << "Remote description not set ================********************=========================";
   }
   if (!ParseTransportInfos(msg.protocol, msg.action_elem,
                            initiator_description()->contents(),
@@ -1429,6 +1433,8 @@ bool Session::OnTransportInfoMessage(const SessionMessage& msg,
   
   if (!OnRemoteCandidates(tinfos, error))
     return false;
+
+  //PushdownTransportDescription(CS_LOCAL, CA_PRANSWER);
 
   return true;
 }

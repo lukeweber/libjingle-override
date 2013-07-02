@@ -66,6 +66,17 @@ P2PTransport::P2PTransport(talk_base::Thread* signaling_thread,
                 content_name, transport_type, allocator) {
 }
 
+P2PTransport::P2PTransport(talk_base::Thread* signaling_thread,
+                           talk_base::Thread* worker_thread,
+                           const std::string& content_name,
+                           PortAllocator* allocator,
+                           const std::string& transport_type,
+                           const SessionDescription* local_description)
+    : Transport(signaling_thread, worker_thread,
+                content_name, transport_type, allocator, local_description) {
+}
+
+
 P2PTransport::~P2PTransport() {
   DestroyAllChannels();
 }
@@ -106,13 +117,7 @@ bool P2PTransportParser::ParseTransportDescription(
           transport_elem, translator, &candidate, error)) {
         return false;
       }
-
-      //TODO: once I find out where we use candidate.password()
-      /*if (desc->transport_type == NS_JINGLE_ICE_UDP){
-        candidate.set_username(desc->ice_ufrag);
-        candidate.set_password(desc->ice_pwd);
-      }*/
-
+      
       desc->candidates.push_back(candidate);
     } else if (transport_elem->Name() == QN_JINGLE_DTLS_FINGERPRINT){
       desc->identity_fingerprint.reset(talk_base::SSLFingerprint::CreateFromRfc4572(
@@ -190,6 +195,7 @@ bool P2PTransportParser::WriteGingleCandidate(
 bool P2PTransportParser::VerifyUsernameFormat(TransportProtocol proto,
                                               const std::string& username,
                                               ParseError* error) {
+  ASSERT(proto == ICEPROTO_RFC5245);
   if (proto == ICEPROTO_GOOGLE || proto == ICEPROTO_HYBRID) {
     if (username.size() > kMaxGiceUsernameSize)
       return BadParse("candidate username is too long", error);
