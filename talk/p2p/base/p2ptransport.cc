@@ -60,9 +60,10 @@ static buzz::XmlElement* NewTransportElement(const std::string& name) {
 P2PTransport::P2PTransport(talk_base::Thread* signaling_thread,
                            talk_base::Thread* worker_thread,
                            const std::string& content_name,
-                           PortAllocator* allocator)
+                           PortAllocator* allocator,
+                           const std::string& transport_type)
     : Transport(signaling_thread, worker_thread,
-                content_name, NS_GINGLE_P2P, allocator) {
+                content_name, transport_type, allocator) {
 }
 
 P2PTransport::~P2PTransport() {
@@ -85,22 +86,37 @@ bool P2PTransportParser::ParseTransportDescription(
     ParseError* error) {
   ASSERT(elem->Name().LocalPart() == LN_TRANSPORT);
   desc->transport_type = elem->Name().Namespace();
-  if (desc->transport_type != NS_GINGLE_P2P)
+  if (desc->transport_type != NS_GINGLE_P2P && desc->transport_type != NS_JINGLE_ICE_UDP)
     return BadParse("Unsupported transport type", error);
 
-  for (const buzz::XmlElement* candidate_elem = elem->FirstElement();
-       candidate_elem != NULL;
-       candidate_elem = candidate_elem->NextElement()) {
+  if (desc->transport_type == NS_JINGLE_ICE_UDP && elem->HasAttr(QN_ICE_PWD)){
+    desc->ice_pwd = elem->Attr(QN_ICE_PWD).data();
+    desc->ice_ufrag = elem->Attr(QN_ICE_USER_FRAG).data();
+  }
+
+  for (const buzz::XmlElement* transport_elem = elem->FirstElement();
+       transport_elem != NULL;
+       transport_elem = transport_elem->NextElement()) {
     // Only look at local part because the namespace might (eventually)
     // be NS_GINGLE_P2P or NS_JINGLE_ICE_UDP.
-    if (candidate_elem->Name().LocalPart() == LN_CANDIDATE) {
+    if (transport_elem->Name().LocalPart() == LN_CANDIDATE) {
       Candidate candidate;
-      if (!ParseCandidate(ICEPROTO_GOOGLE, candidate_elem, translator,
-                          &candidate, error)) {
+      if (!ParseCandidate(
+          desc->transport_type == NS_JINGLE_ICE_UDP ? ICEPROTO_RFC5245 : ICEPROTO_GOOGLE,
+          transport_elem, translator, &candidate, error)) {
         return false;
       }
 
+      //TODO: once I find out where we use candidate.password()
+      /*if (desc->transport_type == NS_JINGLE_ICE_UDP){
+        candidate.set_username(desc->ice_ufrag);
+        candidate.set_password(desc->ice_pwd);
+      }*/
+
       desc->candidates.push_back(candidate);
+    } else if (transport_elem->Name() == QN_JINGLE_DTLS_FINGERPRINT){
+      desc->identity_fingerprint.reset(talk_base::SSLFingerprint::CreateFromRfc4572(
+          transport_elem->Attr(QN_JINGLE_DTLS_HASH), transport_elem->BodyText()));
     }
   }
   return true;
@@ -115,20 +131,32 @@ bool P2PTransportParser::WriteTransportDescription(
   talk_base::scoped_ptr<buzz::XmlElement> trans_elem(
       NewTransportElement(desc.transport_type));
 
-  // Fail if we get HYBRID or ICE right now.
-  // TODO(juberti): Add ICE and HYBRID serialization.
-  if (proto != ICEPROTO_GOOGLE) {
-    LOG(LS_ERROR) << "Failed to serialize non-GICE TransportDescription";
+  
+  if (proto != ICEPROTO_RFC5245 && proto != ICEPROTO_GOOGLE) {
+    LOG(LS_ERROR) << "Failed to serialize unknown ice proto into TransportDescription";
     return false;
+  }
+
+  if (proto == ICEPROTO_RFC5245 && desc.ice_ufrag != ""){
+    trans_elem.get()->AddAttr(QN_ICE_USER_FRAG, desc.ice_ufrag);
+    trans_elem.get()->AddAttr(QN_ICE_PWD, desc.ice_pwd);
   }
 
   for (std::vector<Candidate>::const_iterator iter = desc.candidates.begin();
        iter != desc.candidates.end(); ++iter) {
-    talk_base::scoped_ptr<buzz::XmlElement> cand_elem(
-        new buzz::XmlElement(QN_GINGLE_P2P_CANDIDATE));
-    if (!WriteCandidate(proto, *iter, translator, cand_elem.get(), error)) {
-      return false;
+    talk_base::scoped_ptr<buzz::XmlElement> cand_elem;
+    if (proto == ICEPROTO_GOOGLE){
+      cand_elem.reset(new buzz::XmlElement(QN_GINGLE_P2P_CANDIDATE));
+      if (!WriteCandidate(proto, *iter, translator, cand_elem.get(), error)) {
+        return false;
+      }
+    } else if (proto == ICEPROTO_RFC5245){
+      cand_elem.reset(new buzz::XmlElement(QN_JINGLE_TRANSPORT_CANDIDATE));
+      if (!WriteCandidateRfc5245(proto, *iter, translator, cand_elem.get(), error)) {
+        return false;
+      }
     }
+    
     trans_elem->AddElement(cand_elem.release());
   }
 
@@ -180,13 +208,15 @@ bool P2PTransportParser::ParseCandidate(TransportProtocol proto,
                                         const CandidateTranslator* translator,
                                         Candidate* candidate,
                                         ParseError* error) {
-  ASSERT(proto == ICEPROTO_GOOGLE);
+  
+  ASSERT(proto == ICEPROTO_GOOGLE || proto == ICEPROTO_RFC5245);
   ASSERT(translator != NULL);
 
   if (!elem->HasAttr(buzz::QN_NAME) ||
       !elem->HasAttr(QN_ADDRESS) ||
       !elem->HasAttr(QN_PORT) ||
-      !elem->HasAttr(QN_USERNAME) ||
+      // ICEPROTO_RFC5245 gets this from transport ice-ufrag
+      (!elem->HasAttr(QN_USERNAME) && proto == ICEPROTO_GOOGLE) || 
       !elem->HasAttr(QN_PROTOCOL) ||
       !elem->HasAttr(QN_GENERATION)) {
     return BadParse("candidate missing required attribute", error);
@@ -204,19 +234,25 @@ bool P2PTransportParser::ParseCandidate(TransportProtocol proto,
                     error);
   }
 
-  float preference = 0.0;
-  if (!GetXmlAttr(elem, QN_PREFERENCE, 0.0f, &preference)) {
-    return BadParse("candidate has unknown preference", error);
-  }
-
   candidate->set_component(component);
   candidate->set_address(address);
-  candidate->set_username(elem->Attr(QN_USERNAME));
-  candidate->set_preference(preference);
+  if (proto == ICEPROTO_GOOGLE) {
+    float preference = 0.0;
+    if (!GetXmlAttr(elem, QN_PREFERENCE, 0.0f, &preference)) {
+      return BadParse("candidate has unknown preference", error);
+    }
+    candidate->set_preference(preference);
+    candidate->set_username(elem->Attr(QN_USERNAME));
+    if (elem->HasAttr(QN_PASSWORD))
+      candidate->set_password(elem->Attr(QN_PASSWORD));
+  } else if(proto == ICEPROTO_RFC5245) {
+    uint32 priority = GetXmlAttr(elem, QN_PRIORITY, 0);
+    candidate->set_priority(priority);
+  }
+  
   candidate->set_protocol(elem->Attr(QN_PROTOCOL));
   candidate->set_generation_str(elem->Attr(QN_GENERATION));
-  if (elem->HasAttr(QN_PASSWORD))
-    candidate->set_password(elem->Attr(QN_PASSWORD));
+  
   if (elem->HasAttr(buzz::QN_TYPE))
     candidate->set_type(elem->Attr(buzz::QN_TYPE));
   if (elem->HasAttr(QN_NETWORK))
@@ -226,6 +262,35 @@ bool P2PTransportParser::ParseCandidate(TransportProtocol proto,
     return false;
 
   return true;
+}
+
+bool P2PTransportParser::WriteCandidateRfc5245(TransportProtocol proto,
+                                        const Candidate& candidate,
+                                        const CandidateTranslator* translator,
+                                        buzz::XmlElement* elem,
+                                        WriteError* error) {
+  ASSERT(proto == ICEPROTO_RFC5245);
+  ASSERT(translator != NULL);
+  std::string channel_name;
+  if (!translator ||
+      !translator->GetChannelNameFromComponent(
+          candidate.component(), &channel_name)) {
+    return BadWrite("Cannot write candidate because of unknown component.",
+                    error);
+  }
+
+  elem->SetAttr(buzz::QN_NAME, channel_name);
+  elem->SetAttr(QN_ADDRESS, candidate.address().ipaddr().ToString());
+  elem->SetAttr(QN_PORT, candidate.address().PortAsString());
+  AddXmlAttr(elem, QN_PRIORITY, candidate.priority());
+  elem->SetAttr(QN_PROTOCOL, candidate.protocol());
+  elem->SetAttr(QN_GENERATION, candidate.generation_str());
+  elem->SetAttr(buzz::QN_TYPE, candidate.type());
+  if (!candidate.network_name().empty())
+    elem->SetAttr(QN_NETWORK, candidate.network_name());
+
+  return true;
+
 }
 
 bool P2PTransportParser::WriteCandidate(TransportProtocol proto,
@@ -249,10 +314,10 @@ bool P2PTransportParser::WriteCandidate(TransportProtocol proto,
   elem->SetAttr(QN_PORT, candidate.address().PortAsString());
   AddXmlAttr(elem, QN_PREFERENCE, candidate.preference());
   elem->SetAttr(QN_USERNAME, candidate.username());
-  elem->SetAttr(QN_PROTOCOL, candidate.protocol());
-  elem->SetAttr(QN_GENERATION, candidate.generation_str());
   if (!candidate.password().empty())
     elem->SetAttr(QN_PASSWORD, candidate.password());
+  elem->SetAttr(QN_PROTOCOL, candidate.protocol());
+  elem->SetAttr(QN_GENERATION, candidate.generation_str());
   elem->SetAttr(buzz::QN_TYPE, candidate.type());
   if (!candidate.network_name().empty())
     elem->SetAttr(QN_NETWORK, candidate.network_name());

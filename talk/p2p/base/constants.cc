@@ -167,6 +167,8 @@ const buzz::StaticQName QN_NETWORK = { cricket::NS_EMPTY, "network" };
 const buzz::StaticQName QN_GENERATION = { cricket::NS_EMPTY, "generation" };
 const buzz::StaticQName QN_PRIORITY = { cricket::NS_EMPTY, "priority" };
 const buzz::StaticQName QN_PROTOCOL = { cricket::NS_EMPTY, "protocol" };
+
+const char ICE_CANDIDATE_TYPE_HOST[] = "host";
 const char ICE_CANDIDATE_TYPE_PEER_STUN[] = "prflx";
 const char ICE_CANDIDATE_TYPE_SERVER_STUN[] = "srflx";
 // Minimum ufrag length is 4 characters as per RFC5245. We chose 16 because
@@ -181,12 +183,18 @@ const int ICE_CANDIDATE_COMPONENT_RTP = 1;
 const int ICE_CANDIDATE_COMPONENT_RTCP = 2;
 const int ICE_CANDIDATE_COMPONENT_DEFAULT = 1;
 
-const buzz::StaticQName QN_FINGERPRINT = { cricket::NS_EMPTY, "fingerprint" };
-const buzz::StaticQName QN_FINGERPRINT_ALGORITHM =
-    { cricket::NS_EMPTY, "algorithm" };
-const buzz::StaticQName QN_FINGERPRINT_DIGEST = { cricket::NS_EMPTY, "digest" };
-
+const char NS_JINGLE_DTLS[] = "urn:xmpp:tmp:jingle:apps:dtls:0";
+const buzz::StaticQName QN_JINGLE_DTLS_HASH = { cricket::NS_EMPTY, "hash" };
 const char NS_JINGLE_ICE_UDP[] = "urn:xmpp:jingle:transports:ice-udp:1";
+
+const buzz::StaticQName QN_JINGLE_TRANSPORT_UDP =
+    { NS_JINGLE_ICE_UDP, LN_TRANSPORT };
+const buzz::StaticQName QN_JINGLE_DTLS_FINGERPRINT =
+    { NS_JINGLE_DTLS, "fingerprint" };
+const buzz::StaticQName QN_JINGLE_TRANSPORT_CANDIDATE =
+    { NS_JINGLE_ICE_UDP, LN_CANDIDATE };
+const buzz::StaticQName QN_ICE_PWD = { cricket::NS_EMPTY, "pwd" };
+const buzz::StaticQName QN_ICE_USER_FRAG = { cricket::NS_EMPTY, "ufrag" };
 
 const char ICE_OPTION_GICE[] = "google-ice";
 const char NS_GINGLE_P2P[] = "http://www.google.com/transport/p2p";
@@ -194,6 +202,7 @@ const buzz::StaticQName QN_GINGLE_P2P_TRANSPORT =
     { NS_GINGLE_P2P, LN_TRANSPORT };
 const buzz::StaticQName QN_GINGLE_P2P_CANDIDATE =
     { NS_GINGLE_P2P, LN_CANDIDATE };
+
 const buzz::StaticQName QN_GINGLE_P2P_UNKNOWN_CHANNEL_NAME =
     { NS_GINGLE_P2P, "unknown-channel-name" };
 const buzz::StaticQName QN_GINGLE_CANDIDATE = { NS_GINGLE, LN_CANDIDATE };

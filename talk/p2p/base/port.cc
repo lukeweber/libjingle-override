@@ -120,6 +120,7 @@ namespace cricket {
 
 // TODO(ronghuawu): Use "host", "srflx", "prflx" and "relay". But this requires
 // the signaling part be updated correspondingly as well.
+
 const char LOCAL_PORT_TYPE[] = "local";
 const char STUN_PORT_TYPE[] = "stun";
 const char PRFLX_PORT_TYPE[] = "prflx";
@@ -178,7 +179,7 @@ Port::Port(talk_base::Thread* thread, talk_base::Network* network,
       password_(password),
       lifetime_(LT_PRESTART),
       enable_port_packets_(false),
-      ice_protocol_(ICEPROTO_GOOGLE),
+      ice_protocol_(ICEPROTO_GOOGLE), //ICEPROTO_GOOGLE),//RFC5245),
       role_(ROLE_UNKNOWN),
       tiebreaker_(0),
       shared_socket_(true) {
@@ -204,7 +205,7 @@ Port::Port(talk_base::Thread* thread, const std::string& type,
       password_(password),
       lifetime_(LT_PRESTART),
       enable_port_packets_(false),
-      ice_protocol_(ICEPROTO_GOOGLE),
+      ice_protocol_(ICEPROTO_GOOGLE), //ICEPROTO_GOOGLE),
       role_(ROLE_UNKNOWN),
       tiebreaker_(0),
       shared_socket_(false) {
@@ -217,6 +218,7 @@ void Port::Construct() {
   if (ice_username_fragment_.empty()) {
     ASSERT(password_.empty());
     ice_username_fragment_ = talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
+    LOG_CI << "look20:username:" << ice_username_fragment_;
     password_ = talk_base::CreateRandomString(ICE_PWD_LENGTH);
   }
   LOG_J(LS_INFO, this) << "Port created";
@@ -383,7 +385,7 @@ bool Port::GetStunMessage(const char* data, size_t size,
     if (!ParseStunUsername(stun_msg.get(), &local_ufrag, &remote_ufrag) ||
         local_ufrag != username_fragment()) {
       LOG_J(LS_ERROR, this) << "Received STUN request with bad local username "
-                            << local_ufrag << " from "
+                            << local_ufrag << " != " << username_fragment() << " from "
                             << addr.ToSensitiveString();
       SendBindingErrorResponse(stun_msg.get(), addr, STUN_ERROR_UNAUTHORIZED,
                                STUN_ERROR_REASON_UNAUTHORIZED);
@@ -924,6 +926,10 @@ void Connection::OnSendStunPacket(const void* data, size_t size,
     LOG_J(LS_WARNING, this) << "Failed to send STUN ping " << req->id();
   }
 }
+
+  void Port::SetIceProtocolType(IceProtocolType protocol) {
+    ice_protocol_ = protocol;
+  }
 
 void Connection::OnReadPacket(const char* data, size_t size) {
   talk_base::scoped_ptr<IceMessage> msg;

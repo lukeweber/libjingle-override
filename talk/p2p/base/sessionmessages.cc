@@ -429,13 +429,12 @@ bool ParseJingleTransportInfo(const buzz::XmlElement* trans_elem,
                               trans_elem->Name().Namespace(), content_name,
                               &trans_parser, &translator, error))
     return false;
-
-  TransportDescription tdesc;
+  //TransportDescription tdesc;
   if (!trans_parser->ParseTransportDescription(trans_elem, translator,
-                                               &tdesc, error))
+                                               &tinfo->description, error))
     return false;
 
-  *tinfo = TransportInfo(content_name, tdesc);
+  *tinfo = TransportInfo(content_name, tinfo->description);
   return true;
 }
 
@@ -463,11 +462,22 @@ bool ParseJingleTransportInfos(const buzz::XmlElement* jingle,
       return false;
 
     TransportInfo tinfo;
+    //bool found = false;
+    for (TransportInfos::const_iterator trans_info = tinfos->begin(); trans_info != tinfos->end(); ++trans_info){
+      if (trans_info->content_name == content->name){
+        tinfo = *trans_info;
+        //tinfo.content_name = "VIDEO";//trans_info->content_name;
+        //tinfo.description.ice_ufrag = trans_info->description.ice_ufrag;
+        //found = true;
+        break;
+      }
+    }
+    
     if (!ParseJingleTransportInfo(trans_elem, content->name,
                                   trans_parsers, translators,
                                   &tinfo, error))
       return false;
-
+    
     tinfos->push_back(tinfo);
   }
 
@@ -527,6 +537,15 @@ bool WriteJingleTransportInfo(const TransportInfo& tinfo,
                               const CandidateTranslatorMap& translators,
                               XmlElements* elems,
                               WriteError* error) {
+  buzz::XmlElement *fingerprint_elem = NULL;
+  talk_base::SSLFingerprint* fingerprint = tinfo.description.identity_fingerprint.get();
+  if (fingerprint != NULL){
+    fingerprint_elem = new buzz::XmlElement(QN_JINGLE_DTLS_FINGERPRINT, true);
+    fingerprint_elem->AddText(fingerprint->GetRfc4572Fingerprint());
+    AddXmlAttr(fingerprint_elem, QN_JINGLE_DTLS_HASH,
+               fingerprint->algorithm);
+  }
+
   std::string transport_type = tinfo.description.transport_type;
   TransportParser* trans_parser;
   CandidateTranslator* translator;
@@ -539,6 +558,10 @@ bool WriteJingleTransportInfo(const TransportInfo& tinfo,
   if (!trans_parser->WriteTransportDescription(tinfo.description, translator,
                                                &trans_elem, error)) {
     return false;
+  }
+
+  if (fingerprint_elem != NULL) {
+    trans_elem->AddElement(fingerprint_elem);
   }
 
   elems->push_back(trans_elem);
@@ -808,6 +831,7 @@ bool WriteJingleContents(const ContentInfos& contents,
     if (content->rejected) {
       continue;
     }
+    //This is empty... transport Todo a real one
     const TransportInfo* tinfo =
         GetTransportInfoByContentName(tinfos, content->name);
     if (!tinfo)

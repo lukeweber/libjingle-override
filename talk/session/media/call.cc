@@ -93,9 +93,9 @@ Session* Call::InitiateSession(const buzz::Jid& to,
                                const buzz::Jid& initiator,
                                const CallOptions& options,
                                const std::string& call_tracker_id) {
-  const SessionDescription* offer = session_client_->CreateOffer(options);
 
   Session* session = session_client_->CreateSession(this);
+  const SessionDescription* offer = session_client_->CreateOffer(options, session->local_description());
   session->set_initiator_name(initiator.Str());
   session->set_call_tracker_id(call_tracker_id);
 
@@ -129,8 +129,9 @@ void Call::AcceptSession(Session* session,
                          const cricket::CallOptions& options) {
   MediaSessionMap::iterator it = media_session_map_.find(session->id());
   if (it != media_session_map_.end()) {
+    //TODO: this needs to be generated sooner.
     const SessionDescription* answer = session_client_->CreateAnswer(
-        session->remote_description(), options);
+        session->remote_description(), options, session->local_description());
     it->second.session->Accept(answer);
   }
 }
