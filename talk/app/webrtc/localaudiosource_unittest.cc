@@ -43,7 +43,11 @@ using webrtc::MediaSourceInterface;
 TEST(LocalAudioSourceTest, SetValidOptions) {
   webrtc::FakeConstraints constraints;
   constraints.AddMandatory(MediaConstraintsInterface::kEchoCancellation, false);
+  constraints.AddOptional(
+      MediaConstraintsInterface::kExperimentalEchoCancellation, true);
   constraints.AddOptional(MediaConstraintsInterface::kAutoGainControl, true);
+  constraints.AddOptional(
+      MediaConstraintsInterface::kExperimentalAutoGainControl, true);
   constraints.AddMandatory(MediaConstraintsInterface::kNoiseSuppression, false);
   constraints.AddOptional(MediaConstraintsInterface::kHighpassFilter, true);
 
@@ -53,7 +57,11 @@ TEST(LocalAudioSourceTest, SetValidOptions) {
   bool value;
   EXPECT_TRUE(source->options().echo_cancellation.Get(&value));
   EXPECT_FALSE(value);
+  EXPECT_TRUE(source->options().experimental_aec.Get(&value));
+  EXPECT_TRUE(value);
   EXPECT_TRUE(source->options().auto_gain_control.Get(&value));
+  EXPECT_TRUE(value);
+  EXPECT_TRUE(source->options().experimental_agc.Get(&value));
   EXPECT_TRUE(value);
   EXPECT_TRUE(source->options().noise_suppression.Get(&value));
   EXPECT_FALSE(value);

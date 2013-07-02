@@ -34,6 +34,7 @@ import android.content.Intent;
 import android.graphics.Point;
 import android.media.AudioManager;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.widget.EditText;
@@ -79,6 +80,7 @@ public class AppRTCDemoActivity extends Activity
   // Synchronize on quit[0] to avoid teardown-related crashes.
   private final Boolean[] quit = new Boolean[] { false };
   private MediaConstraints sdpMediaConstraints;
+  private PowerManager.WakeLock wakeLock;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
@@ -95,6 +97,11 @@ public class AppRTCDemoActivity extends Activity
           }
         });
 
+    PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+    wakeLock = powerManager.newWakeLock(
+        PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "AppRTCDemo");
+    wakeLock.acquire();
+
     Point displaySize = new Point();
     getWindowManager().getDefaultDisplay().getSize(displaySize);
     vsv = new VideoStreamsView(this, displaySize);
@@ -103,8 +110,11 @@ public class AppRTCDemoActivity extends Activity
     abortUnless(PeerConnectionFactory.initializeAndroidGlobals(this),
         "Failed to initializeAndroidGlobals");
 
-    ((AudioManager) getSystemService(AUDIO_SERVICE)).setMode(
-        AudioManager.MODE_IN_COMMUNICATION);
+    AudioManager audioManager =
+        ((AudioManager) getSystemService(AUDIO_SERVICE));
+    audioManager.setMode(audioManager.isWiredHeadsetOn() ?
+        AudioManager.MODE_IN_CALL : AudioManager.MODE_IN_COMMUNICATION);
+    audioManager.setSpeakerphoneOn(!audioManager.isWiredHeadsetOn());
 
     sdpMediaConstraints = new MediaConstraints();
     sdpMediaConstraints.mandatory.add(new MediaConstraints.KeyValuePair(
@@ -199,7 +209,7 @@ public class AppRTCDemoActivity extends Activity
       logAndToast("Creating local video source...");
       VideoCapturer capturer = getVideoCapturer();
       VideoSource videoSource = factory.createVideoSource(
-          capturer, new MediaConstraints());
+          capturer, appRtcClient.videoConstraints());
       MediaStream lMS = factory.createLocalMediaStream("ARDAMS");
       VideoTrack videoTrack = factory.createVideoTrack("ARDAMSv0", videoSource);
       videoTrack.addRenderer(new VideoRenderer(new VideoCallbacks(
@@ -446,6 +456,7 @@ public class AppRTCDemoActivity extends Activity
         return;
       }
       quit[0] = true;
+      wakeLock.release();
       if (pc != null) {
         pc.dispose();
         pc = null;

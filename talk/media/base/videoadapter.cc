@@ -148,8 +148,12 @@ VideoAdapter::VideoAdapter()
 VideoAdapter::~VideoAdapter() {
 }
 
-// TODO(fbarchard): Consider SetInputFormat and SetOutputFormat without
-// VideoFormat.
+void VideoAdapter::SetInputFormat(const VideoFrame& in_frame) {
+  talk_base::CritScope cs(&critical_section_);
+  input_format_.width = in_frame.GetWidth();
+  input_format_.height = in_frame.GetHeight();
+}
+
 void VideoAdapter::SetInputFormat(const VideoFormat& format) {
   talk_base::CritScope cs(&critical_section_);
   input_format_ = format;
@@ -197,6 +201,10 @@ bool VideoAdapter::AdaptFrame(const VideoFrame* in_frame,
   if (!in_frame || !out_frame) {
     return false;
   }
+
+  // Update input to actual frame dimensions.
+  SetInputFormat(*in_frame);
+
   // Drop the input frame if necessary.
   bool should_drop = false;
   if (!output_num_pixels_) {

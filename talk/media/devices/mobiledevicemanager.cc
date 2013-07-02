@@ -30,22 +30,22 @@
 
 namespace cricket {
 
-class AndroidDeviceManager : public DeviceManager {
+class MobileDeviceManager : public DeviceManager {
  public:
-  AndroidDeviceManager();
-  virtual ~AndroidDeviceManager();
+  MobileDeviceManager();
+  virtual ~MobileDeviceManager();
   virtual bool GetVideoCaptureDevices(std::vector<Device>* devs);
 };
 
-AndroidDeviceManager::AndroidDeviceManager() {
-  // We don't expect available devices to change on Android, so use a
+MobileDeviceManager::MobileDeviceManager() {
+  // We don't expect available devices to change on Android/iOS, so use a
   // do-nothing watcher.
   set_watcher(new DeviceWatcher(this));
 }
 
-AndroidDeviceManager::~AndroidDeviceManager() {}
+MobileDeviceManager::~MobileDeviceManager() {}
 
-bool AndroidDeviceManager::GetVideoCaptureDevices(std::vector<Device>* devs) {
+bool MobileDeviceManager::GetVideoCaptureDevices(std::vector<Device>* devs) {
 #if !defined(HAVE_WEBRTC_VIDEO)
   return false;
 #else
@@ -68,7 +68,7 @@ bool AndroidDeviceManager::GetVideoCaptureDevices(std::vector<Device>* devs) {
 }
 
 DeviceManagerInterface* DeviceManagerFactory::Create() {
-  return new AndroidDeviceManager();
+  return new MobileDeviceManager();
 }
 
 bool GetUsbId(const Device& device, std::string* usb_id) { return false; }

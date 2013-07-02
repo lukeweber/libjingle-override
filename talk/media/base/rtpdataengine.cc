@@ -310,6 +310,11 @@ bool RtpDataMediaChannel::SendData(
     return false;
   }
 
+  if (params.type != cricket::DMT_TEXT) {
+    LOG(LS_WARNING) << "Not sending data because binary type is unsupported.";
+    return false;
+  }
+
   StreamParams found_stream;
   if (!GetStreamBySsrc(send_streams_, params.ssrc, &found_stream)) {
     LOG(LS_WARNING) << "Not sending data because ssrc is unknown: "

@@ -52,8 +52,7 @@ namespace talk_base {
 
 #if SSL_USE_SCHANNEL
 
-SSLCertificate* SSLCertificate::FromPEMString(const std::string& pem_string,
-                                              int* pem_length) {
+SSLCertificate* SSLCertificate::FromPEMString(const std::string& pem_string) {
   return NULL;
 }
 
@@ -61,26 +60,39 @@ SSLIdentity* SSLIdentity::Generate(const std::string& common_name) {
   return NULL;
 }
 
+SSLIdentity* SSLIdentity::FromPEMStrings(const std::string& private_key,
+                                         const std::string& certificate) {
+  return NULL;
+}
+
 #elif SSL_USE_OPENSSL  // !SSL_USE_SCHANNEL
 
-SSLCertificate* SSLCertificate::FromPEMString(const std::string& pem_string,
-                                              int* pem_length) {
-  return OpenSSLCertificate::FromPEMString(pem_string, pem_length);
+SSLCertificate* SSLCertificate::FromPEMString(const std::string& pem_string) {
+  return OpenSSLCertificate::FromPEMString(pem_string);
 }
 
 SSLIdentity* SSLIdentity::Generate(const std::string& common_name) {
   return OpenSSLIdentity::Generate(common_name);
 }
 
+SSLIdentity* SSLIdentity::FromPEMStrings(const std::string& private_key,
+                                         const std::string& certificate) {
+  return OpenSSLIdentity::FromPEMStrings(private_key, certificate);
+}
+
 #elif SSL_USE_NSS  // !SSL_USE_OPENSSL && !SSL_USE_SCHANNEL
 
-SSLCertificate* SSLCertificate::FromPEMString(const std::string& pem_string,
-                                              int* pem_length) {
-  return NSSCertificate::FromPEMString(pem_string, pem_length);
+SSLCertificate* SSLCertificate::FromPEMString(const std::string& pem_string) {
+  return NSSCertificate::FromPEMString(pem_string);
 }
 
 SSLIdentity* SSLIdentity::Generate(const std::string& common_name) {
   return NSSIdentity::Generate(common_name);
+}
+
+SSLIdentity* SSLIdentity::FromPEMStrings(const std::string& private_key,
+                                         const std::string& certificate) {
+  return NSSIdentity::FromPEMStrings(private_key, certificate);
 }
 
 #else  // !SSL_USE_OPENSSL && !SSL_USE_SCHANNEL && !SSL_USE_NSS

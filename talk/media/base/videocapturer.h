@@ -312,7 +312,6 @@ class VideoCapturer
   bool enable_camera_list_;
   int scaled_width_;  // Current output size from ComputeScale.
   int scaled_height_;
-  int num_cores_;  // Number of physical cores.
   bool muted_;
   int black_frame_count_down_;
 

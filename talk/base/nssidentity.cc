@@ -26,7 +26,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif  // HAVE_CONFIG_H
@@ -51,6 +50,48 @@
 
 namespace talk_base {
 
+// Helper function to parse PEM-encoded DER.
+static bool PemToDer(const std::string& pem_type,
+                     const std::string& pem_string,
+                     std::string* der) {
+  // Find the inner body. We need this to fulfill the contract of
+  // returning pem_length.
+  size_t header = pem_string.find("-----BEGIN " + pem_type + "-----");
+  if (header == std::string::npos)
+    return false;
+
+  size_t body = pem_string.find("\n", header);
+  if (body == std::string::npos)
+    return false;
+
+  size_t trailer = pem_string.find("-----END " + pem_type + "-----");
+  if (trailer == std::string::npos)
+    return false;
+
+  std::string inner = pem_string.substr(body + 1, trailer - (body + 1));
+
+  *der = Base64::Decode(inner, Base64::DO_PARSE_WHITE |
+                        Base64::DO_PAD_ANY |
+                        Base64::DO_TERM_BUFFER);
+  return true;
+}
+
+static std::string DerToPem(const std::string& pem_type,
+                            const unsigned char *data,
+                            size_t length) {
+  std::stringstream result;
+
+  result << "-----BEGIN " << pem_type << "-----\n";
+
+  std::string tmp;
+  Base64::EncodeFromArray(data, length, &tmp);
+  result << tmp;
+
+  result << "-----END " << pem_type << "-----\n";
+
+  return result.str();
+}
+
 NSSKeyPair::~NSSKeyPair() {
   if (privkey_)
     SECKEY_DestroyPrivateKey(privkey_);
@@ -67,8 +108,8 @@ NSSKeyPair *NSSKeyPair::Generate() {
 
   privkey = PK11_GenerateKeyPair(NSSContext::GetSlot(),
                                  CKM_RSA_PKCS_KEY_PAIR_GEN,
-                                 &rsaparams, &pubkey, PR_FALSE,
-                                 PR_TRUE, NULL);
+                                 &rsaparams, &pubkey, PR_FALSE /*permanent*/,
+                                 PR_FALSE /*sensitive*/, NULL);
   if (!privkey) {
     LOG(LS_ERROR) << "Couldn't generate key pair";
     return NULL;
@@ -92,28 +133,9 @@ NSSKeyPair *NSSKeyPair::GetReference() {
   return new NSSKeyPair(privkey, pubkey);
 }
 
-NSSCertificate *NSSCertificate::FromPEMString(const std::string &pem_string,
-                                              int *pem_length) {
-  // Find the inner body. We need this to fulfill the contract of
-  // returning pem_length
-  size_t header = pem_string.find("-----BEGIN CERTIFICATE-----");
-  if (header == std::string::npos)
-    return NULL;
-
-  size_t body = pem_string.find("\n", header);
-  if (body == std::string::npos)
-    return NULL;
-
-  size_t trailer = pem_string.find("-----END CERTIFICATE-----");
-  if (trailer == std::string::npos)
-    return NULL;
-
-  std::string inner = pem_string.substr(body + 1, trailer - (body + 1));
-
-  std::string der = Base64::Decode(inner, Base64::DO_PARSE_WHITE |
-                                   Base64::DO_PAD_ANY |
-                                   Base64::DO_TERM_BUFFER);
-  if (der.empty())
+NSSCertificate *NSSCertificate::FromPEMString(const std::string &pem_string) {
+  std::string der;
+  if (!PemToDer("CERTIFICATE", pem_string, &der))
     return NULL;
 
   SECItem der_cert;
@@ -126,9 +148,6 @@ NSSCertificate *NSSCertificate::FromPEMString(const std::string &pem_string,
   if (!cert)
     return NULL;
 
-  // Success
-  if (pem_length)
-    *pem_length = inner.size();
   return new NSSCertificate(cert);
 }
 
@@ -141,7 +160,9 @@ NSSCertificate *NSSCertificate::GetReference() const {
 }
 
 std::string NSSCertificate::ToPEMString() const {
-  return "";
+  return DerToPem("CERTIFICATE",
+                  certificate_->derCert.data,
+                  certificate_->derCert.len);
 }
 
 bool NSSCertificate::GetDigestLength(const std::string &algorithm,
@@ -241,7 +262,7 @@ NSSIdentity *NSSIdentity::Generate(const std::string &common_name) {
   PRTime not_before, not_after;
   PRTime now = PR_Now();
   PRTime one_day;
-  
+
   inner_der.len = 0;
   inner_der.data = NULL;
 
@@ -333,6 +354,53 @@ NSSIdentity *NSSIdentity::Generate(const std::string &common_name) {
   return identity;
 }
 
+SSLIdentity* NSSIdentity::FromPEMStrings(const std::string& private_key,
+                                         const std::string& certificate) {
+  std::string private_key_der;
+  if (!PemToDer(
+      "RSA PRIVATE KEY", private_key, &private_key_der))
+    return NULL;
+
+  SECItem private_key_item;
+  private_key_item.data =
+      reinterpret_cast<unsigned char *>(
+          const_cast<char *>(private_key_der.c_str()));
+  private_key_item.len = private_key_der.size();
+
+  const unsigned int key_usage = KU_KEY_ENCIPHERMENT | KU_DATA_ENCIPHERMENT |
+      KU_DIGITAL_SIGNATURE;
+
+  SECKEYPrivateKey* privkey = NULL;
+  SECStatus rv =
+      PK11_ImportDERPrivateKeyInfoAndReturnKey(NSSContext::GetSlot(),
+                                               &private_key_item,
+                                               NULL, NULL, PR_FALSE, PR_FALSE,
+                                               key_usage, &privkey, NULL);
+  if (rv != SECSuccess) {
+    LOG(LS_ERROR) << "Couldn't import private key";
+    return NULL;
+  }
+
+  SECKEYPublicKey *pubkey = SECKEY_ConvertToPublicKey(privkey);
+  if (rv != SECSuccess) {
+    SECKEY_DestroyPrivateKey(privkey);
+    LOG(LS_ERROR) << "Couldn't convert private key to public key";
+    return NULL;
+  }
+
+  // Assign to a scoped_ptr so we don't leak on error.
+  scoped_ptr<NSSKeyPair> keypair(new NSSKeyPair(privkey, pubkey));
+
+  scoped_ptr<NSSCertificate> cert(NSSCertificate::FromPEMString(certificate));
+  if (!cert) {
+    LOG(LS_ERROR) << "Couldn't parse certificate";
+    return NULL;
+  }
+
+  // TODO(ekr@rtfm.com): Check the public key against the certificate.
+
+  return new NSSIdentity(keypair.release(), cert.release());
+}
 
 NSSIdentity *NSSIdentity::GetReference() const {
   NSSKeyPair *keypair = keypair_->GetReference();

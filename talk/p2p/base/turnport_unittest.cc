@@ -254,6 +254,7 @@ class TurnPortTest : public testing::Test,
 // Do a normal TURN allocation.
 TEST_F(TurnPortTest, TestTurnAllocate) {
   CreateTurnPort(kTurnUsername, kTurnPassword, kTurnUdpProtoAddr);
+  EXPECT_EQ(0, turn_port_->SetOption(talk_base::Socket::OPT_SNDBUF, 10*1024));
   turn_port_->PrepareAddress();
   EXPECT_TRUE_WAIT(turn_ready_, kTimeout);
   ASSERT_EQ(1U, turn_port_->Candidates().size());
@@ -268,6 +269,7 @@ TEST_F(TurnPortTest, TestTurnTcpAllocate) {
   turn_server_.server()->AddInternalServerSocket(
       tcp_server_socket, cricket::PROTO_TCP);
   CreateTurnPort(kTurnUsername, kTurnPassword, kTurnTcpProtoAddr);
+  EXPECT_EQ(0, turn_port_->SetOption(talk_base::Socket::OPT_SNDBUF, 10*1024));
   turn_port_->PrepareAddress();
   EXPECT_TRUE_WAIT(turn_ready_, kTimeout);
   ASSERT_EQ(1U, turn_port_->Candidates().size());

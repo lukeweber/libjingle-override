@@ -72,7 +72,6 @@ public class VideoStreamsView
   public VideoStreamsView(Context c, Point screenDimensions) {
     super(c);
     this.screenDimensions = screenDimensions;
-    setEGLConfigChooser(false);  // Don't need a depth buffer.
     setEGLContextClientVersion(2);
     setRenderer(this);
     setRenderMode(RENDERMODE_WHEN_DIRTY);

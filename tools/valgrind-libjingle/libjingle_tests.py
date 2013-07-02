@@ -62,10 +62,27 @@ class LibjingleTest(chrome_tests.ChromeTests):
   Everything else is inherited from chrome_tests.ChromeTests.
   """
 
+  def __init__(self, test_name, options, args, test_in_chrome_tests):
+    """Create a Libjingle test.
+
+    Args:
+      test_name: Short name for the test executable (no path).
+      options: options to pass to ChromeTests.
+      args: args to pass to ChromeTests.
+      test_in_chrome_tests: The name of the test configuration in ChromeTests.
+    """
+    self._test_name = test_name
+    chrome_tests.ChromeTests.__init__(self, options, args, test_in_chrome_tests)
+
   def _DefaultCommand(self, tool, exe=None, valgrind_test_args=None):
     """Override command-building method so we can add more suppressions."""
     cmd = chrome_tests.ChromeTests._DefaultCommand(self, tool, exe,
                                                    valgrind_test_args)
+
+    # Add gtest filters, if found.
+    chrome_tests.ChromeTests._AppendGtestFilter(self, tool, self._test_name,
+                                                cmd)
+
     # When ChromeTests._DefaultCommand has executed, it has setup suppression
     # files based on what's found in the memcheck/ or tsan/ subdirectories of
     # this script's location. If Mac or Windows is executing, additional
@@ -128,7 +145,7 @@ def main(_):
     test_executable = os.path.join(options.build_dir, test_executable)
   args = [test_executable] + args
 
-  test = LibjingleTest(options, args, 'cmdline')
+  test = LibjingleTest(options.test, options, args, 'cmdline')
   return test.Run()
 
 if __name__ == '__main__':

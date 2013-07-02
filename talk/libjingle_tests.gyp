@@ -320,9 +320,7 @@
         '<(DEPTH)/third_party/libsrtp/srtp',
       ],
       'sources': [
-        # TODO(ronghuawu): reenable once fixed on build bots.
-        # webrtc issue #1541.
-        # 'p2p/base/dtlstransportchannel_unittest.cc',
+        'p2p/base/dtlstransportchannel_unittest.cc',
         'p2p/base/fakesession.h',
         'p2p/base/p2ptransportchannel_unittest.cc',
         'p2p/base/port_unittest.cc',

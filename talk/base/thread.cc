@@ -120,7 +120,6 @@ void ThreadManager::SetCurrentThread(Thread *thread) {
 }
 #endif
 
-// static
 Thread *ThreadManager::WrapCurrentThread() {
   Thread* result = CurrentThread();
   if (NULL == result) {
@@ -130,7 +129,6 @@ Thread *ThreadManager::WrapCurrentThread() {
   return result;
 }
 
-// static
 void ThreadManager::UnwrapCurrentThread() {
   Thread* t = CurrentThread();
   if (t && !(t->IsOwned())) {

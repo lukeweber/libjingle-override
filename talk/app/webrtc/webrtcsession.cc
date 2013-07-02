@@ -535,6 +535,10 @@ SessionDescriptionInterface* WebRtcSession::CreateOffer(
     LOG(LS_ERROR) << "CreateOffer called with invalid media streams.";
     return NULL;
   }
+
+  if (data_channel_type_ == cricket::DCT_SCTP) {
+    options.data_channel_type = cricket::DCT_SCTP;
+  }
   SessionDescription* desc(
       session_desc_factory_.CreateOffer(options,
                                         BaseSession::local_description()));
@@ -585,7 +589,9 @@ SessionDescriptionInterface* WebRtcSession::CreateAnswer(
     LOG(LS_ERROR) << "CreateAnswer called with invalid media streams.";
     return NULL;
   }
-
+  if (data_channel_type_ == cricket::DCT_SCTP) {
+    options.data_channel_type = cricket::DCT_SCTP;
+  }
   // According to http://tools.ietf.org/html/rfc5245#section-9.2.1.1
   // an answer should also contain new ice ufrag and password if an offer has
   // been received with new ufrag and password.
@@ -1029,13 +1035,31 @@ talk_base::scoped_refptr<DataChannel> WebRtcSession::CreateDataChannel(
     LOG(LS_ERROR) << "CreateDataChannel: Data is not supported in this call.";
     return NULL;
   }
+  DataChannelInit new_config = config ? (*config) : DataChannelInit();
+
+  if (data_channel_type_ == cricket::DCT_SCTP) {
+    if (new_config.id < 0) {
+      if (!mediastream_signaling_->AllocateSctpId(&new_config.id)) {
+        LOG(LS_ERROR) << "No id can be allocated for the SCTP data channel.";
+        return NULL;
+      }
+    } else if (!mediastream_signaling_->IsSctpIdAvailable(new_config.id)) {
+      LOG(LS_ERROR) << "Failed to create a SCTP data channel "
+                    << "because the id is already in use or out of range.";
+      return NULL;
+    }
+  }
   talk_base::scoped_refptr<DataChannel> channel(
-      DataChannel::Create(this, label, config));
+      DataChannel::Create(this, label, &new_config));
   if (channel == NULL)
     return NULL;
   if (!mediastream_signaling_->AddDataChannel(channel))
     return NULL;
   return channel;
+}
+
+cricket::DataChannelType WebRtcSession::data_channel_type() const {
+  return data_channel_type_;
 }
 
 void WebRtcSession::SetIceConnectionState(
@@ -1367,8 +1391,9 @@ bool WebRtcSession::CreateVideoChannel(const SessionDescription* desc) {
 
 bool WebRtcSession::CreateDataChannel(const SessionDescription* desc) {
   const cricket::ContentInfo* data = cricket::GetFirstDataContent(desc);
+  bool rtcp = (data_channel_type_ == cricket::DCT_RTP);
   data_channel_.reset(channel_manager_->CreateDataChannel(
-      this, data->name, true, data_channel_type_));
+      this, data->name, rtcp, data_channel_type_));
   if (!data_channel_.get()) {
     return false;
   }

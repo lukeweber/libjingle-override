@@ -103,6 +103,11 @@ class FakeConstraints : public webrtc::MediaConstraintsInterface {
     AddOptional(MediaConstraintsInterface::kVoiceActivityDetection, enable);
   }
 
+  void SetAllowDtlsSctpDataChannels() {
+    AddMandatory(MediaConstraintsInterface::kEnableSctpDataChannels, true);
+    AddMandatory(MediaConstraintsInterface::kEnableDtlsSrtp, true);
+  }
+
  private:
   Constraints mandatory_;
   Constraints optional_;

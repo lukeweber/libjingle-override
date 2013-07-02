@@ -69,6 +69,7 @@ class DataChannel : public DataChannelInterface,
 
   virtual std::string label() const  { return label_; }
   virtual bool reliable() const;
+  virtual int id() const { return config_.id; }
   virtual uint64 buffered_amount() const;
   virtual void Close();
   virtual DataState state() const { return state_; }
@@ -93,9 +94,7 @@ class DataChannel : public DataChannelInterface,
   virtual ~DataChannel();
 
   bool Init(const DataChannelInit* config);
-  bool HasNegotiationCompleted() {
-    return send_ssrc_set_ == receive_ssrc_set_;
-  }
+  bool HasNegotiationCompleted();
 
   // Sigslots from cricket::DataChannel
   void OnDataReceived(cricket::DataChannel* channel,
@@ -114,6 +113,7 @@ class DataChannel : public DataChannelInterface,
   void ClearQueuedData();
 
   std::string label_;
+  DataChannelInit config_;
   DataChannelObserver* observer_;
   DataState state_;
   bool was_ever_writable_;
@@ -142,6 +142,7 @@ BEGIN_PROXY_MAP(DataChannel)
   PROXY_METHOD0(void, UnregisterObserver)
   PROXY_CONSTMETHOD0(std::string, label)
   PROXY_CONSTMETHOD0(bool, reliable)
+  PROXY_CONSTMETHOD0(int, id)
   PROXY_CONSTMETHOD0(DataState, state)
   PROXY_CONSTMETHOD0(uint64, buffered_amount)
   PROXY_METHOD0(void, Close)

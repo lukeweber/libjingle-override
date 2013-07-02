@@ -11,7 +11,7 @@ vars = {
   "chromium_git": "https://chromium.googlesource.com",
 
   "chromium_revision": "205140",
-  "webrtc_revision": "4208",
+  "webrtc_revision": "4240",
 }
 
 # NOTE: Prefer revision numbers to tags for svn deps. Use http rather than
@@ -134,9 +134,18 @@ deps_os = {
       From("chromium_deps", "src/third_party/nss"),
   },
 
+  "ios": {
+    # NSS, for SSLClientSocketNSS.
+    "third_party/nss":
+      From("chromium_deps", "src/third_party/nss"),
+  },
+
   "unix": {
     "third_party/gold":
       From("chromium_deps", "src/third_party/gold"),
+
+    "third_party/openssl":
+      From("chromium_deps", "src/third_party/openssl"),
   },
 
   "android": {
