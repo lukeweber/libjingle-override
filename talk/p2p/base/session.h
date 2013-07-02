@@ -105,7 +105,7 @@ class TransportProxy : public sigslot::has_slots<>,
         this, &TransportProxy::OnTransportCandidatesReady);
   }
   ~TransportProxy();
-
+  virtual std::string GetClassname() const { return "TransportProxy"; }
   std::string content_name() const { return content_name_; }
   // TODO(juberti): It's not good form to expose the object you're wrapping,
   // since callers can mutate it. Can we make this return a const Transport*?
@@ -254,7 +254,7 @@ class BaseSession : public sigslot::has_slots<>,
               const std::string& content_type,
               bool initiator);
   virtual ~BaseSession();
-
+  virtual std::string GetClassname() const { return "BaseSession"; }
   talk_base::Thread* signaling_thread() { return signaling_thread_; }
   talk_base::Thread* worker_thread() { return worker_thread_; }
   PortAllocator* port_allocator() { return port_allocator_; }
@@ -511,6 +511,8 @@ class BaseSession : public sigslot::has_slots<>,
 // A specific Session created by the SessionManager, using XMPP for protocol.
 class Session : public BaseSession {
  public:
+  virtual std::string GetClassname() const { return "Session"; }
+
   // Returns the manager that created and owns this session.
   SessionManager* session_manager() const { return session_manager_; }
 
