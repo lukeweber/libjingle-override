@@ -182,9 +182,9 @@ TransportChannelImpl* Transport::CreateChannel_w(int component) {
   // Push down our transport state to the new channel.
   impl->SetRole(role_);
   impl->SetTiebreaker(tiebreaker_);
-  if (local_description_) {
+  if (local_description_ && local_description_.get()) {
     ApplyLocalTransportDescription_w(impl);
-    if (remote_description_) {
+    if (remote_description_ && remote_description_.get()) {
       ApplyRemoteTransportDescription_w(impl);
       ApplyNegotiatedTransportDescription_w(impl);
     }
