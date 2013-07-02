@@ -52,31 +52,6 @@
 
 namespace cricket {
 
-// Extend AudioOptions to include various WebRtc-specific options.
-struct WebRtcAudioOptions : AudioOptions {
-  WebRtcAudioOptions()
-      : AudioOptions(),
-        ec_mode(webrtc::kEcDefault),
-        aecm_mode(webrtc::kAecmSpeakerphone),
-        agc_mode(webrtc::kAgcDefault),
-        ns_mode(webrtc::kNsDefault) {
-  }
-
-  explicit WebRtcAudioOptions(const AudioOptions& options)
-      : AudioOptions(options),
-        ec_mode(webrtc::kEcDefault),
-        aecm_mode(webrtc::kAecmSpeakerphone),
-        agc_mode(webrtc::kAgcDefault),
-        ns_mode(webrtc::kNsDefault) {
-  }
-
-  webrtc::EcModes ec_mode;
-  webrtc::AecmModes aecm_mode;
-  webrtc::AgcModes agc_mode;
-  webrtc::NsModes ns_mode;
-};
-
-
 // WebRtcSoundclipStream is an adapter object that allows a memory stream to be
 // passed into WebRtc, and support looping.
 class WebRtcSoundclipStream : public webrtc::InStream {
@@ -171,21 +146,12 @@ class WebRtcVoiceEngine
                            MediaProcessorDirection direction);
 
   // Method from webrtc::VoEMediaProcess
-#ifdef USE_WEBRTC_DEV_BRANCH
   virtual void Process(int channel,
                        webrtc::ProcessingTypes type,
                        int16_t audio10ms[],
                        int length,
                        int sampling_freq,
                        bool is_stereo);
-#else
-  virtual void Process(const int channel,
-                       const webrtc::ProcessingTypes type,
-                       int16_t audio10ms[],
-                       const int length,
-                       const int sampling_freq,
-                       const bool is_stereo);
-#endif
 
   // For tracking WebRtc channels. Needed because we have to pause them
   // all when switching devices.
@@ -200,12 +166,6 @@ class WebRtcVoiceEngine
   // Called by WebRtcVoiceMediaChannel to set a gain offset from
   // the default AGC target level.
   bool AdjustAgcLevel(int delta);
-
-  // Called by WebRtcVoiceMediaChannel to configure echo cancellation
-  // and noise suppression modes.
-  bool SetConferenceMode(bool enable);
-
-  bool SetMobileHeadsetMode(bool enable);
 
   VoEWrapper* voe() { return voe_wrapper_.get(); }
   VoEWrapper* voe_sc() { return voe_wrapper_sc_.get(); }
@@ -235,11 +195,7 @@ class WebRtcVoiceEngine
   // at any time.
   bool ApplyOptions(const AudioOptions& options);
   virtual void Print(webrtc::TraceLevel level, const char* trace, int length);
-#ifdef USE_WEBRTC_DEV_BRANCH
   virtual void CallbackOnError(int channel, int errCode);
-#else
-  virtual void CallbackOnError(const int channel, const int errCode);
-#endif
   // Given the device type, name, and id, find device id. Return true and
   // set the output parameter rtc_id if successful.
   bool FindWebRtcAudioDeviceId(

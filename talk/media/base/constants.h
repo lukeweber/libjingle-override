@@ -59,6 +59,8 @@ extern const char* kCodecParamMinPTime;
 extern const char* kCodecParamSPropStereo;
 extern const char* kCodecParamStereo;
 extern const char* kCodecParamUseInbandFec;
+extern const char* kCodecParamSctpProtocol;
+extern const char* kCodecParamSctpStreams;
 
 extern const char* kParamValueTrue;
 // Parameters are stored as parameter/value pairs. For parameters who do not

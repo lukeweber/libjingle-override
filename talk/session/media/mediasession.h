@@ -75,8 +75,10 @@ extern const char kMediaProtocolAvpf[];
 // RFC5124 RTP/SAVPF
 extern const char kMediaProtocolSavpf[];
 
+extern const char kMediaProtocolRtpPrefix[];
+
 extern const char kMediaProtocolSctp[];
-extern const char kMediaProtocolSctpDtls[];
+extern const char kMediaProtocolDtlsSctp[];
 
 // Options to control how session descriptions are generated.
 const int kAutoBandwidth = -1;

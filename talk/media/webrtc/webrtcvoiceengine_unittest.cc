@@ -1467,16 +1467,6 @@ TEST_F(WebRtcVoiceEngineTestFake, SetDevicesWithInitiallyBadDevices) {
 // and start sending/playing out on it.
 TEST_F(WebRtcVoiceEngineTestFake, ConferenceSendAndPlayout) {
   EXPECT_TRUE(SetupEngine());
-
-  bool enabled;
-  webrtc::EcModes ec_mode;
-  webrtc::NsModes ns_mode;
-  EXPECT_EQ(0, voe_.GetEcStatus(enabled, ec_mode));
-  EXPECT_EQ(0, voe_.GetNsStatus(enabled, ns_mode));
-  // Enable state (false) should be unchanged by conference mode.
-  EXPECT_EQ(0, voe_.SetEcStatus(false, ec_mode));
-  EXPECT_EQ(0, voe_.SetNsStatus(false, ns_mode));
-
   int channel_num = voe_.GetLastChannel();
   EXPECT_TRUE(channel_->SetOptions(options_conference_));
   std::vector<cricket::AudioCodec> codecs;
@@ -1484,43 +1474,6 @@ TEST_F(WebRtcVoiceEngineTestFake, ConferenceSendAndPlayout) {
   EXPECT_TRUE(channel_->SetSendCodecs(codecs));
   EXPECT_TRUE(channel_->SetSend(cricket::SEND_MICROPHONE));
   EXPECT_TRUE(voe_.GetSend(channel_num));
-
-  EXPECT_EQ(0, voe_.GetEcStatus(enabled, ec_mode));
-  EXPECT_FALSE(enabled);
-#ifdef CHROMEOS
-  EXPECT_EQ(webrtc::kEcDefault, ec_mode);
-#else
-  EXPECT_EQ(webrtc::kEcConference, ec_mode);
-#endif
-  EXPECT_EQ(0, voe_.GetNsStatus(enabled, ns_mode));
-  EXPECT_FALSE(enabled);
-#ifdef CHROMEOS
-  EXPECT_EQ(webrtc::kNsDefault, ns_mode);
-#else
-  EXPECT_EQ(webrtc::kNsConference, ns_mode);
-#endif
-
-  // Enable state (true) should be unchanged.
-  EXPECT_EQ(0, voe_.SetEcStatus(true, ec_mode));
-  EXPECT_EQ(0, voe_.SetNsStatus(true, ns_mode));
-  EXPECT_TRUE(channel_->SetOptions(options_conference_));
-  EXPECT_EQ(0, voe_.GetEcStatus(enabled, ec_mode));
-  EXPECT_TRUE(enabled);
-  EXPECT_EQ(0, voe_.GetNsStatus(enabled, ns_mode));
-  EXPECT_TRUE(enabled);
-
-  EXPECT_TRUE(channel_->SetPlayout(true));
-  EXPECT_TRUE(voe_.GetPlayout(channel_num));
-  EXPECT_TRUE(channel_->SetSend(cricket::SEND_NOTHING));
-  EXPECT_FALSE(voe_.GetSend(channel_num));
-
-  EXPECT_EQ(0, voe_.GetEcStatus(enabled, ec_mode));
-  EXPECT_EQ(webrtc::kEcDefault, ec_mode);
-  EXPECT_EQ(0, voe_.GetNsStatus(enabled, ns_mode));
-  EXPECT_EQ(webrtc::kNsDefault, ns_mode);
-
-  EXPECT_TRUE(channel_->SetPlayout(false));
-  EXPECT_FALSE(voe_.GetPlayout(channel_num));
 }
 
 // Test that we can create a channel configured for Codian bridges,
@@ -1993,17 +1946,17 @@ TEST_F(WebRtcVoiceEngineTestFake, SetAudioOptions) {
   highpass_filter_enabled = voe_.IsHighPassFilterEnabled();
   stereo_swapping_enabled = voe_.IsStereoChannelSwappingEnabled();
   voe_.GetTypingDetectionStatus(typing_detection_enabled);
-  // AEC is on by default.
   EXPECT_TRUE(ec_enabled);
   EXPECT_TRUE(ec_metrics_enabled);
   EXPECT_FALSE(cng_enabled);
-  // AGC is on by default
   EXPECT_TRUE(agc_enabled);
   EXPECT_EQ(0, agc_config.targetLeveldBOv);
-  EXPECT_FALSE(ns_enabled);
-  EXPECT_FALSE(highpass_filter_enabled);
+  EXPECT_TRUE(ns_enabled);
+  EXPECT_TRUE(highpass_filter_enabled);
   EXPECT_FALSE(stereo_swapping_enabled);
   EXPECT_TRUE(typing_detection_enabled);
+  EXPECT_EQ(ec_mode, webrtc::kEcConference);
+  EXPECT_EQ(ns_mode, webrtc::kNsHighSuppression);
 
   // Nothing set, so all ignored.
   cricket::AudioOptions options;
@@ -2022,10 +1975,12 @@ TEST_F(WebRtcVoiceEngineTestFake, SetAudioOptions) {
   EXPECT_FALSE(cng_enabled);
   EXPECT_TRUE(agc_enabled);
   EXPECT_EQ(0, agc_config.targetLeveldBOv);
-  EXPECT_FALSE(ns_enabled);
-  EXPECT_FALSE(highpass_filter_enabled);
+  EXPECT_TRUE(ns_enabled);
+  EXPECT_TRUE(highpass_filter_enabled);
   EXPECT_FALSE(stereo_swapping_enabled);
   EXPECT_TRUE(typing_detection_enabled);
+  EXPECT_EQ(ec_mode, webrtc::kEcConference);
+  EXPECT_EQ(ns_mode, webrtc::kNsHighSuppression);
 
   // Turn echo cancellation off
   options.echo_cancellation.Set(false);
@@ -2050,10 +2005,12 @@ TEST_F(WebRtcVoiceEngineTestFake, SetAudioOptions) {
   EXPECT_TRUE(ec_metrics_enabled);
   EXPECT_TRUE(agc_enabled);
   EXPECT_EQ(0, agc_config.targetLeveldBOv);
-  EXPECT_FALSE(ns_enabled);
-  EXPECT_FALSE(highpass_filter_enabled);
+  EXPECT_TRUE(ns_enabled);
+  EXPECT_TRUE(highpass_filter_enabled);
   EXPECT_FALSE(stereo_swapping_enabled);
   EXPECT_TRUE(typing_detection_enabled);
+  EXPECT_EQ(ec_mode, webrtc::kEcConference);
+  EXPECT_EQ(ns_mode, webrtc::kNsHighSuppression);
 
   // Turn off AGC
   options.auto_gain_control.Set(false);
@@ -2070,42 +2027,30 @@ TEST_F(WebRtcVoiceEngineTestFake, SetAudioOptions) {
   voe_.GetAgcConfig(agc_config);
   EXPECT_EQ(0, agc_config.targetLeveldBOv);
 
-  // Turn on other options (and typing detection off).
-  options.noise_suppression.Set(true);
-  options.highpass_filter.Set(true);
-  options.stereo_swapping.Set(true);
+  // Turn off other options (and stereo swapping on).
+  options.noise_suppression.Set(false);
+  options.highpass_filter.Set(false);
   options.typing_detection.Set(false);
+  options.stereo_swapping.Set(true);
   ASSERT_TRUE(engine_.SetAudioOptions(options));
   voe_.GetNsStatus(ns_enabled, ns_mode);
   highpass_filter_enabled = voe_.IsHighPassFilterEnabled();
   stereo_swapping_enabled = voe_.IsStereoChannelSwappingEnabled();
   voe_.GetTypingDetectionStatus(typing_detection_enabled);
-  EXPECT_TRUE(ns_enabled);
-  EXPECT_TRUE(highpass_filter_enabled);
-  EXPECT_TRUE(stereo_swapping_enabled);
+  EXPECT_FALSE(ns_enabled);
+  EXPECT_FALSE(highpass_filter_enabled);
   EXPECT_FALSE(typing_detection_enabled);
+  EXPECT_TRUE(stereo_swapping_enabled);
 
-  // Turn on "conference mode"
+  // Turn on "conference mode" to ensure it has no impact.
   options.conference_mode.Set(true);
   ASSERT_TRUE(engine_.SetAudioOptions(options));
   voe_.GetEcStatus(ec_enabled, ec_mode);
   voe_.GetNsStatus(ns_enabled, ns_mode);
   EXPECT_TRUE(ec_enabled);
   EXPECT_EQ(webrtc::kEcConference, ec_mode);
-  EXPECT_TRUE(ns_enabled);
-  EXPECT_EQ(webrtc::kNsConference, ns_mode);
-
-  // Turn on "conference mode" with AEC and NS off.
-  options.echo_cancellation.Set(false);
-  options.noise_suppression.Set(false);
-  options.conference_mode.Set(true);
-  ASSERT_TRUE(engine_.SetAudioOptions(options));
-  voe_.GetEcStatus(ec_enabled, ec_mode);
-  voe_.GetNsStatus(ns_enabled, ns_mode);
-  EXPECT_FALSE(ec_enabled);
-  EXPECT_EQ(webrtc::kEcConference, ec_mode);
   EXPECT_FALSE(ns_enabled);
-  EXPECT_EQ(webrtc::kNsConference, ns_mode);
+  EXPECT_EQ(webrtc::kNsHighSuppression, ns_mode);
 }
 
 TEST_F(WebRtcVoiceEngineTestFake, SetOptions) {
@@ -2637,3 +2582,5 @@ TEST(WebRtcVoiceEngineTest, CoInitialize) {
   CoUninitialize();
 }
 #endif
+
+

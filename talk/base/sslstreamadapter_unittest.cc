@@ -46,6 +46,36 @@ static const char kExporterLabel[] = "label";
 static const unsigned char kExporterContext[] = "context";
 static int kExporterContextLen = sizeof(kExporterContext);
 
+static const char kRSA_PRIVATE_KEY_PEM[] =
+    "-----BEGIN RSA PRIVATE KEY-----\n"
+    "MIICXQIBAAKBgQDCueE4a9hDMZ3sbVZdlXOz9ZA+cvzie3zJ9gXnT/BCt9P4b9HE\n"
+    "vD/tr73YBqD3Wr5ZWScmyGYF9EMn0r3rzBxv6oooLU5TdUvOm4rzUjkCLQaQML8o\n"
+    "NxXq+qW/j3zUKGikLhaaAl/amaX2zSWUsRQ1CpngQ3+tmDNH4/25TncNmQIDAQAB\n"
+    "AoGAUcuU0Id0k10fMjYHZk4mCPzot2LD2Tr4Aznl5vFMQipHzv7hhZtx2xzMSRcX\n"
+    "vG+Qr6VkbcUWHgApyWubvZXCh3+N7Vo2aYdMAQ8XqmFpBdIrL5CVdVfqFfEMlgEy\n"
+    "LSZNG5klnrIfl3c7zQVovLr4eMqyl2oGfAqPQz75+fecv1UCQQD6wNHch9NbAG1q\n"
+    "yuFEhMARB6gDXb+5SdzFjjtTWW5uJfm4DcZLoYyaIZm0uxOwsUKd0Rsma+oGitS1\n"
+    "CXmuqfpPAkEAxszyN3vIdpD44SREEtyKZBMNOk5pEIIGdbeMJC5/XHvpxww9xkoC\n"
+    "+39NbvUZYd54uT+rafbx4QZKc0h9xA/HlwJBAL37lYVWy4XpPv1olWCKi9LbUCqs\n"
+    "vvQtyD1N1BkEayy9TQRsO09WKOcmigRqsTJwOx7DLaTgokEuspYvhagWVPUCQE/y\n"
+    "0+YkTbYBD1Xbs9SyBKXCU6uDJRWSdO6aZi2W1XloC9gUwDMiSJjD1Wwt/YsyYPJ+\n"
+    "/Hyc5yFL2l0KZimW/vkCQQCjuZ/lPcH46EuzhdbRfumDOG5N3ld7UhGI1TIRy17W\n"
+    "dGF90cG33/L6BfS8Ll+fkkW/2AMRk8FDvF4CZi2nfW4L\n"
+    "-----END RSA PRIVATE KEY-----\n";
+
+static const char kCERT_PEM[] =
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIBmTCCAQICCQCPNJORW/M13DANBgkqhkiG9w0BAQUFADARMQ8wDQYDVQQDDAZ3\n"
+    "ZWJydGMwHhcNMTMwNjE0MjIzMDAxWhcNMTQwNjE0MjIzMDAxWjARMQ8wDQYDVQQD\n"
+    "DAZ3ZWJydGMwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAMK54Thr2EMxnext\n"
+    "Vl2Vc7P1kD5y/OJ7fMn2BedP8EK30/hv0cS8P+2vvdgGoPdavllZJybIZgX0QyfS\n"
+    "vevMHG/qiigtTlN1S86bivNSOQItBpAwvyg3Fer6pb+PfNQoaKQuFpoCX9qZpfbN\n"
+    "JZSxFDUKmeBDf62YM0fj/blOdw2ZAgMBAAEwDQYJKoZIhvcNAQEFBQADgYEAECMt\n"
+    "UZb35H8TnjGx4XPzco/kbnurMLFFWcuve/DwTsuf10Ia9N4md8LY0UtgIgtyNqWc\n"
+    "ZwyRMwxONF6ty3wcaIiPbGqiAa55T3YRuPibkRmck9CjrmM9JAtyvqHnpHd2TsBD\n"
+    "qCV42aXS3onOXDQ1ibuWq0fr0//aj0wo4KV474c=\n"
+    "-----END CERTIFICATE-----\n";
+
 #define MAYBE_SKIP_TEST(feature)                    \
   if (!(talk_base::SSLStreamAdapter::feature())) {  \
     LOG(LS_INFO) << "Feature disabled... skipping"; \
@@ -136,11 +166,15 @@ class SSLDummyStream : public talk_base::StreamInterface,
   bool first_packet_;
 };
 
+static const int kFifoBufferSize = 4096;
+
 class SSLStreamAdapterTestBase : public testing::Test,
                                  public sigslot::has_slots<> {
  public:
-  explicit SSLStreamAdapterTestBase(bool dtls) :
-      client_buffer_(4096), server_buffer_(4096),
+  SSLStreamAdapterTestBase(const std::string& client_cert_pem,
+                           const std::string& client_private_key_pem,
+                           bool dtls) :
+      client_buffer_(kFifoBufferSize), server_buffer_(kFifoBufferSize),
       client_stream_(
           new SSLDummyStream(this, "c2s", &client_buffer_, &server_buffer_)),
       server_stream_(
@@ -158,7 +192,12 @@ class SSLStreamAdapterTestBase : public testing::Test,
     client_ssl_->SignalEvent.connect(this, &SSLStreamAdapterTestBase::OnEvent);
     server_ssl_->SignalEvent.connect(this, &SSLStreamAdapterTestBase::OnEvent);
 
-    client_identity_ = talk_base::SSLIdentity::Generate("client");
+    if (!client_cert_pem.empty() && !client_private_key_pem.empty()) {
+      client_identity_ = talk_base::SSLIdentity::FromPEMStrings(
+          client_private_key_pem, client_cert_pem);
+    } else {
+      client_identity_ = talk_base::SSLIdentity::Generate("client");
+    }
     server_identity_ = talk_base::SSLIdentity::Generate("server");
 
     client_ssl_->SetIdentity(client_identity_);
@@ -391,11 +430,10 @@ class SSLStreamAdapterTestBase : public testing::Test,
   bool identities_set_;
 };
 
-
 class SSLStreamAdapterTestTLS : public SSLStreamAdapterTestBase {
  public:
   SSLStreamAdapterTestTLS() :
-      SSLStreamAdapterTestBase(false) {
+      SSLStreamAdapterTestBase("", "", false) {
   };
 
   // Test data transfer for TLS
@@ -495,11 +533,16 @@ class SSLStreamAdapterTestTLS : public SSLStreamAdapterTestBase {
   talk_base::MemoryStream recv_stream_;
 };
 
-
 class SSLStreamAdapterTestDTLS : public SSLStreamAdapterTestBase {
  public:
   SSLStreamAdapterTestDTLS() :
-      SSLStreamAdapterTestBase(true),
+      SSLStreamAdapterTestBase("", "", true),
+      packet_size_(1000), count_(0), sent_(0) {
+  }
+
+  SSLStreamAdapterTestDTLS(const std::string& cert_pem,
+                           const std::string& private_key_pem) :
+      SSLStreamAdapterTestBase(cert_pem, private_key_pem, true),
       packet_size_(1000), count_(0), sent_(0) {
   }
 
@@ -607,6 +650,12 @@ talk_base::StreamResult SSLDummyStream::Write(const void* data, size_t data_len,
   return talk_base::SR_SUCCESS;
 };
 
+class SSLStreamAdapterTestDTLSFromPEMStrings : public SSLStreamAdapterTestDTLS {
+ public:
+  SSLStreamAdapterTestDTLSFromPEMStrings() :
+      SSLStreamAdapterTestDTLS(kCERT_PEM, kRSA_PRIVATE_KEY_PEM) {
+  }
+};
 
 // Basic tests: TLS
 
@@ -827,4 +876,11 @@ TEST_F(SSLStreamAdapterTestDTLS, TestDTLSExporter) {
   ASSERT_TRUE(result);
 
   ASSERT_TRUE(!memcmp(client_out, server_out, sizeof(client_out)));
+}
+
+// Test data transfer using certs created from strings.
+TEST_F(SSLStreamAdapterTestDTLSFromPEMStrings, TestTransfer) {
+  MAYBE_SKIP_TEST(HaveDtls);
+  TestHandshake();
+  TestTransfer(100);
 }

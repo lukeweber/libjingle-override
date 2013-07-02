@@ -655,8 +655,8 @@ TEST_F(WebRtcVideoEngineTestFake, RtpTimestampOffsetHeaderExtensions) {
   EXPECT_EQ(id, vie_.GetSendRtpTimestampOffsetExtensionId(channel_num));
 
   // Remove the extension id.
-  std::vector<cricket::RtpHeaderExtension> emtpy_extensions;
-  EXPECT_TRUE(channel_->SetSendRtpHeaderExtensions(emtpy_extensions));
+  std::vector<cricket::RtpHeaderExtension> empty_extensions;
+  EXPECT_TRUE(channel_->SetSendRtpHeaderExtensions(empty_extensions));
   EXPECT_EQ(0, vie_.GetSendRtpTimestampOffsetExtensionId(channel_num));
 
   // Verify receive extension id.
@@ -670,10 +670,55 @@ TEST_F(WebRtcVideoEngineTestFake, RtpTimestampOffsetHeaderExtensions) {
   EXPECT_EQ(id, vie_.GetReceiveRtpTimestampOffsetExtensionId(new_channel_num));
 
   // Remove the extension id.
-  EXPECT_TRUE(channel_->SetRecvRtpHeaderExtensions(emtpy_extensions));
+  EXPECT_TRUE(channel_->SetRecvRtpHeaderExtensions(empty_extensions));
   EXPECT_EQ(0, vie_.GetReceiveRtpTimestampOffsetExtensionId(channel_num));
   EXPECT_EQ(0, vie_.GetReceiveRtpTimestampOffsetExtensionId(new_channel_num));
 }
+
+#ifdef USE_WEBRTC_DEV_BRANCH
+// Test support for absolute send time header extension.
+TEST_F(WebRtcVideoEngineTestFake, AbsoluteSendTimeHeaderExtensions) {
+  EXPECT_TRUE(SetupEngine());
+  int channel_num = vie_.GetLastChannel();
+  cricket::VideoOptions options;
+  options.conference_mode.Set(true);
+  EXPECT_TRUE(channel_->SetOptions(options));
+
+  // Verify extensions are off by default.
+  EXPECT_EQ(0, vie_.GetSendAbsoluteSendTimeExtensionId(channel_num));
+  EXPECT_EQ(0, vie_.GetReceiveAbsoluteSendTimeExtensionId(channel_num));
+
+  // Enable RTP timestamp extension.
+  const int id = 12;
+  std::vector<cricket::RtpHeaderExtension> extensions;
+  extensions.push_back(cricket::RtpHeaderExtension(
+      "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time", id));
+
+  // Verify the send extension id.
+  EXPECT_TRUE(channel_->SetSendRtpHeaderExtensions(extensions));
+  EXPECT_EQ(id, vie_.GetSendAbsoluteSendTimeExtensionId(channel_num));
+
+  // Remove the extension id.
+  std::vector<cricket::RtpHeaderExtension> empty_extensions;
+  EXPECT_TRUE(channel_->SetSendRtpHeaderExtensions(empty_extensions));
+  EXPECT_EQ(0, vie_.GetSendAbsoluteSendTimeExtensionId(channel_num));
+
+  // Verify receive extension id.
+  EXPECT_TRUE(channel_->SetRecvRtpHeaderExtensions(extensions));
+  EXPECT_EQ(id, vie_.GetReceiveAbsoluteSendTimeExtensionId(channel_num));
+
+  // Add a new receive stream and verify the extension is set.
+  EXPECT_TRUE(channel_->AddRecvStream(cricket::StreamParams::CreateLegacy(2)));
+  int new_channel_num = vie_.GetLastChannel();
+  EXPECT_NE(channel_num, new_channel_num);
+  EXPECT_EQ(id, vie_.GetReceiveAbsoluteSendTimeExtensionId(new_channel_num));
+
+  // Remove the extension id.
+  EXPECT_TRUE(channel_->SetRecvRtpHeaderExtensions(empty_extensions));
+  EXPECT_EQ(0, vie_.GetReceiveAbsoluteSendTimeExtensionId(channel_num));
+  EXPECT_EQ(0, vie_.GetReceiveAbsoluteSendTimeExtensionId(new_channel_num));
+}
+#endif
 
 TEST_F(WebRtcVideoEngineTestFake, LeakyBucketTest) {
   EXPECT_TRUE(SetupEngine());
@@ -1764,6 +1809,27 @@ TEST_F(WebRtcVideoEngineTestFake, DontRegisterEncoderForNonVP8) {
   EXPECT_TRUE(channel_->SetSendCodecs(codecs));
 
   EXPECT_EQ(0, vie_.GetNumExternalEncoderRegistered(channel_num));
+}
+
+// Test that NACK and REMB are enabled for external codec.
+TEST_F(WebRtcVideoEngineTestFake, FeedbackParamsForNonVP8) {
+  encoder_factory_.AddSupportedVideoCodecType(webrtc::kVideoCodecGeneric,
+                                              "GENERIC");
+  engine_.SetExternalEncoderFactory(&encoder_factory_);
+  encoder_factory_.NotifyCodecsAvailable();
+  EXPECT_TRUE(SetupEngine());
+
+  std::vector<cricket::VideoCodec> codecs(engine_.codecs());
+  EXPECT_EQ("GENERIC", codecs[0].name);
+  EXPECT_TRUE(codecs[0].HasFeedbackParam(
+      cricket::FeedbackParam(cricket::kRtcpFbParamNack,
+                             cricket::kParamValueEmpty)));
+  EXPECT_TRUE(codecs[0].HasFeedbackParam(
+      cricket::FeedbackParam(cricket::kRtcpFbParamRemb,
+                             cricket::kParamValueEmpty)));
+  EXPECT_TRUE(codecs[0].HasFeedbackParam(
+      cricket::FeedbackParam(cricket::kRtcpFbParamCcm,
+                             cricket::kRtcpFbCcmParamFir)));
 }
 
 TEST_F(WebRtcVideoEngineTestFake, UpdateEncoderCodecsAfterSetFactory) {

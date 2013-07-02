@@ -100,8 +100,8 @@ public:
   // Returns the STUN type of the request message.
   int type();
 
-  // Handles messages for sending and timeout.
-  void OnMessage(talk_base::Message* pmsg);
+  // Returns a const pointer to |msg_|.
+  const StunMessage* msg() const;
 
   // Time elapsed since last send (in ms)
   uint32 Elapsed() const;
@@ -121,11 +121,14 @@ protected:
   virtual int GetNextDelay();
 
 private:
+  void set_manager(StunRequestManager* manager);
+
+  // Handles messages for sending and timeout.
+  void OnMessage(talk_base::Message* pmsg);
+
   StunRequestManager* manager_;
   StunMessage* msg_;
   uint32 tstamp_;
-
-  void set_manager(StunRequestManager* manager);
 
   friend class StunRequestManager;
 };

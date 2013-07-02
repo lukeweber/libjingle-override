@@ -51,6 +51,7 @@ class VideoDecoder;
 class VideoEncoder;
 class VideoRender;
 class ViEExternalCapture;
+class ViERTP_RTCP;
 }
 
 namespace talk_base {
@@ -322,6 +323,7 @@ class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
  private:
   typedef std::map<uint32, WebRtcVideoChannelRecvInfo*> RecvChannelMap;
   typedef std::map<uint32, WebRtcVideoChannelSendInfo*> SendChannelMap;
+  typedef int (webrtc::ViERTP_RTCP::* ExtensionSetterFunction)(int, bool, int);
 
   enum MediaDirection { MD_RECV, MD_SEND, MD_SENDRECV };
 
@@ -405,6 +407,12 @@ class WebRtcVideoMediaChannel : public talk_base::MessageHandler,
   void FlushBlackFrame(uint32 ssrc, int64 timestamp);
 
   void SetNetworkTransmissionState(bool is_transmitting);
+
+  bool SetHeaderExtension(ExtensionSetterFunction setter, int channel_id,
+                          const RtpHeaderExtension* extension);
+  bool SetHeaderExtension(ExtensionSetterFunction setter, int channel_id,
+                          const std::vector<RtpHeaderExtension>& extensions,
+                          const char header_extension_uri[]);
 
   // Global state.
   WebRtcVideoEngine* engine_;

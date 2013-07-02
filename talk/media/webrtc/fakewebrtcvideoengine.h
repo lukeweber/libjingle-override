@@ -283,6 +283,8 @@ class FakeWebRtcVideoEngine
           remb_bw_partition_(false),
           rtp_offset_send_id_(0),
           rtp_offset_receive_id_(0),
+          rtp_absolute_send_time_send_id_(0),
+          rtp_absolute_send_time_receive_id_(0),
           sender_target_delay_(0),
           receiver_target_delay_(0),
           transmission_smoothing_(false),
@@ -312,6 +314,8 @@ class FakeWebRtcVideoEngine
     bool remb_bw_partition_; // This channel is allocated part of total bw.
     int rtp_offset_send_id_;
     int rtp_offset_receive_id_;
+    int rtp_absolute_send_time_send_id_;
+    int rtp_absolute_send_time_receive_id_;
     int sender_target_delay_;
     int receiver_target_delay_;
     bool transmission_smoothing_;
@@ -462,6 +466,14 @@ class FakeWebRtcVideoEngine
   int GetReceiveRtpTimestampOffsetExtensionId(int channel) {
     WEBRTC_ASSERT_CHANNEL(channel);
     return channels_.find(channel)->second->rtp_offset_receive_id_;
+  }
+  int GetSendAbsoluteSendTimeExtensionId(int channel) {
+    WEBRTC_ASSERT_CHANNEL(channel);
+    return channels_.find(channel)->second->rtp_absolute_send_time_send_id_;
+  }
+  int GetReceiveAbsoluteSendTimeExtensionId(int channel) {
+    WEBRTC_ASSERT_CHANNEL(channel);
+    return channels_.find(channel)->second->rtp_absolute_send_time_receive_id_;
   }
   bool GetTransmissionSmoothingStatus(int channel) {
     WEBRTC_ASSERT_CHANNEL(channel);
@@ -923,10 +935,6 @@ class FakeWebRtcVideoEngine
     channels_[channel]->remb_bw_partition_ = send;
     return 0;
   }
-#ifndef USE_WEBRTC_DEV_BRANCH
-  WEBRTC_STUB(SetBandwidthEstimationMode,
-              (webrtc::BandwidthEstimationMode mode));
-#endif
   WEBRTC_FUNC(SetTMMBRStatus, (const int channel, const bool enable)) {
     WEBRTC_CHECK_CHANNEL(channel);
     channels_[channel]->tmmbr_ = enable;
@@ -942,6 +950,18 @@ class FakeWebRtcVideoEngine
       int id)) {
     WEBRTC_CHECK_CHANNEL(channel);
     channels_[channel]->rtp_offset_receive_id_ = (enable) ? id : 0;
+    return 0;
+  }
+  WEBRTC_FUNC(SetSendAbsoluteSendTimeStatus, (int channel, bool enable,
+      int id)) {
+    WEBRTC_CHECK_CHANNEL(channel);
+    channels_[channel]->rtp_absolute_send_time_send_id_ = (enable) ? id : 0;
+    return 0;
+  }
+  WEBRTC_FUNC(SetReceiveAbsoluteSendTimeStatus, (int channel, bool enable,
+      int id)) {
+    WEBRTC_CHECK_CHANNEL(channel);
+    channels_[channel]->rtp_absolute_send_time_receive_id_ = (enable) ? id : 0;
     return 0;
   }
   WEBRTC_FUNC(SetTransmissionSmoothingStatus, (int channel, bool enable)) {
@@ -997,10 +1017,6 @@ class FakeWebRtcVideoEngine
     }
     return 0;
   }
-#ifndef USE_WEBRTC_DEV_BRANCH
-  WEBRTC_STUB_CONST(SetOverUseDetectorOptions,
-      (const webrtc::OverUseDetectorOptions&));
-#endif
 
   WEBRTC_STUB(StartRTPDump, (const int, const char*, webrtc::RTPDirections));
   WEBRTC_STUB(StopRTPDump, (const int, webrtc::RTPDirections));
@@ -1008,10 +1024,6 @@ class FakeWebRtcVideoEngine
   WEBRTC_STUB(DeregisterRTPObserver, (const int));
   WEBRTC_STUB(RegisterRTCPObserver, (const int, webrtc::ViERTCPObserver&));
   WEBRTC_STUB(DeregisterRTCPObserver, (const int));
-#ifdef USE_WEBRTC_DEV_BRANCH
-  WEBRTC_STUB(SetSendAbsoluteSendTimeStatus, (int, bool, int));
-  WEBRTC_STUB(SetReceiveAbsoluteSendTimeStatus, (int, bool, int));
-#endif
 
   // webrtc::ViEImageProcess
   WEBRTC_STUB(RegisterCaptureEffectFilter, (const int,

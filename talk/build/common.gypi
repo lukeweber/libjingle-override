@@ -36,6 +36,8 @@
     'clang_use_chrome_plugins%': 0,
     'libpeer_target_type%': 'static_library',
     'java_home%': '<!(python -c "import os; print os.getenv(\'JAVA_HOME\');")',
+    # Whether or not to build the ObjectiveC PeerConnection API & tests.
+    'libjingle_objc%' : 0,
   },
   'target_defaults': {
     'include_dirs': [
@@ -89,6 +91,16 @@
         'defines': [
           'OSX',
         ],
+      }],
+      ['OS=="ios"', {
+        'defines': [
+          'IOS',
+          'SSL_USE_NSS',
+          'SSL_USE_NSS_RNG',
+        ],
+        'variables': {
+          'use_nss%': 1,
+        },
       }],
       ['os_posix==1', {
         'defines': [

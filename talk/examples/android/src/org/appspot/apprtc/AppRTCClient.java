@@ -127,6 +127,10 @@ public class AppRTCClient {
     return appRTCSignalingParameters.pcConstraints;
   }
 
+  public MediaConstraints videoConstraints() {
+    return appRTCSignalingParameters.videoConstraints;
+  }
+
   // Struct holding the signaling parameters of an AppRTC room.
   private class AppRTCSignalingParameters {
     public final List<PeerConnection.IceServer> iceServers;
@@ -135,17 +139,20 @@ public class AppRTCClient {
     public final String postMessageUrl;
     public final boolean initiator;
     public final MediaConstraints pcConstraints;
+    public final MediaConstraints videoConstraints;
 
     public AppRTCSignalingParameters(
         List<PeerConnection.IceServer> iceServers,
         String gaeBaseHref, String channelToken, String postMessageUrl,
-        boolean initiator, MediaConstraints pcConstraints) {
+        boolean initiator, MediaConstraints pcConstraints,
+        MediaConstraints videoConstraints) {
       this.iceServers = iceServers;
       this.gaeBaseHref = gaeBaseHref;
       this.channelToken = channelToken;
       this.postMessageUrl = postMessageUrl;
       this.initiator = initiator;
       this.pcConstraints = pcConstraints;
+      this.videoConstraints = videoConstraints;
     }
   }
 
@@ -260,28 +267,49 @@ public class AppRTCClient {
 
       MediaConstraints pcConstraints = constraintsFromJSON(
           getVarValue(roomHtml, "pcConstraints", false));
+      Log.d(TAG, "pcConstraints: " + pcConstraints);
+
+      MediaConstraints videoConstraints = constraintsFromJSON(
+          getVideoConstraints(
+              getVarValue(roomHtml, "mediaConstraints", false)));
+      Log.d(TAG, "videoConstraints: " + videoConstraints);
 
       return new AppRTCSignalingParameters(
           iceServers, gaeBaseHref, token, postMessageUrl, initiator,
-          pcConstraints);
+          pcConstraints, videoConstraints);
+    }
+
+    private String getVideoConstraints(String mediaConstraintsString) {
+      try {
+        JSONObject json = new JSONObject(mediaConstraintsString);
+        JSONObject videoJson = json.optJSONObject("video");
+        if (videoJson == null) {
+          return "";
+        }
+        return videoJson.toString();
+      } catch (JSONException e) {
+        throw new RuntimeException(e);
+      }
     }
 
     private MediaConstraints constraintsFromJSON(String jsonString) {
       try {
         MediaConstraints constraints = new MediaConstraints();
         JSONObject json = new JSONObject(jsonString);
-        if (json.has("mandatory")) {
-          JSONObject mandatoryJSON = json.getJSONObject("mandatory");
+        JSONObject mandatoryJSON = json.optJSONObject("mandatory");
+        if (mandatoryJSON != null) {
           JSONArray mandatoryKeys = mandatoryJSON.names();
-          for (int i = 0; i < mandatoryKeys.length(); ++i) {
-            String key = (String) mandatoryKeys.getString(i);
-            String value = mandatoryJSON.getString(key);
-            constraints.mandatory.add(
-                new MediaConstraints.KeyValuePair(key, value));
+          if (mandatoryKeys != null) {
+            for (int i = 0; i < mandatoryKeys.length(); ++i) {
+              String key = (String) mandatoryKeys.getString(i);
+              String value = mandatoryJSON.getString(key);
+              constraints.mandatory.add(
+                  new MediaConstraints.KeyValuePair(key, value));
+            }
           }
         }
-        if (json.has("optional")) {
-          JSONArray optionalJSON = json.getJSONArray("optional");
+        JSONArray optionalJSON = json.optJSONArray("optional");
+        if (optionalJSON != null) {
           for (int i = 0; i < optionalJSON.length(); ++i) {
             JSONObject keyValueDict = optionalJSON.getJSONObject(i);
             String key = keyValueDict.names().getString(0);

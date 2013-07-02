@@ -202,6 +202,7 @@ class ChannelManager : public talk_base::MessageHandler,
 
   bool AddVideoRenderer(VideoCapturer* capturer, VideoRenderer* renderer);
   bool RemoveVideoRenderer(VideoCapturer* capturer, VideoRenderer* renderer);
+  bool IsScreencastRunning() const;
 
   // The operations below occur on the main thread.
 
@@ -264,6 +265,7 @@ class ChannelManager : public talk_base::MessageHandler,
                                 VideoProcessor* processor);
   bool UnregisterVideoProcessor_w(VideoCapturer* capturer,
                                   VideoProcessor* processor);
+  bool IsScreencastRunning_w() const;
   virtual void OnMessage(talk_base::Message *message);
 
   talk_base::scoped_ptr<MediaEngineInterface> media_engine_;

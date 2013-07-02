@@ -45,6 +45,7 @@ class VideoAdapter {
   VideoAdapter();
   virtual ~VideoAdapter();
 
+  void SetInputFormat(const VideoFrame& in_frame);
   void SetInputFormat(const VideoFormat& format);
   void SetOutputFormat(const VideoFormat& format);
   // Constrain output resolution to this many pixels overall

@@ -689,19 +689,11 @@ class FakeWebRtcVoiceEngine
     }
     return 0;
   }
-#ifdef USE_WEBRTC_DEV_BRANCH
   WEBRTC_STUB(SendApplicationDefinedRTCPPacket, (int channel,
                                                  unsigned char subType,
                                                  unsigned int name,
                                                  const char* data,
                                                  unsigned short dataLength));
-#else
-  WEBRTC_STUB(SendApplicationDefinedRTCPPacket, (int channel,
-                                                 const unsigned char subType,
-                                                 unsigned int name,
-                                                 const char* data,
-                                                 unsigned short dataLength));
-#endif
   WEBRTC_STUB(GetRTPStatistics, (int channel, unsigned int& averageJitterMs,
                                  unsigned int& maxJitterMs,
                                  unsigned int& discardedPackets));
@@ -730,14 +722,12 @@ class FakeWebRtcVoiceEngine
     redPayloadtype = channels_[channel]->fec_type;
     return 0;
   }
-#ifdef USE_WEBRTC_DEV_BRANCH
   WEBRTC_FUNC(SetNACKStatus, (int channel, bool enable, int maxNoPackets)) {
     WEBRTC_CHECK_CHANNEL(channel);
     channels_[channel]->nack = enable;
     channels_[channel]->nack_max_packets = maxNoPackets;
     return 0;
   }
-#endif
   WEBRTC_STUB(StartRTPDump, (int channel, const char* fileNameUTF8,
                              webrtc::RTPDirections direction));
   WEBRTC_STUB(StopRTPDump, (int channel, webrtc::RTPDirections direction));
@@ -758,9 +748,7 @@ class FakeWebRtcVoiceEngine
   WEBRTC_STUB(SetInitialPlayoutDelay, (int channel, int delay_ms));
   WEBRTC_STUB(GetDelayEstimate, (int channel, int* jitter_buffer_delay_ms,
                                  int* playout_buffer_delay_ms));
-#ifdef USE_WEBRTC_DEV_BRANCH
   WEBRTC_STUB_CONST(GetLeastRequiredDelayMs, (int channel));
-#endif
 
   // webrtc::VoEVolumeControl
   WEBRTC_STUB(SetSpeakerVolume, (unsigned int));
@@ -823,11 +811,7 @@ class FakeWebRtcVoiceEngine
     return 0;
   }
 
-#ifdef USE_WEBRTC_DEV_BRANCH
   WEBRTC_FUNC(SetAgcConfig, (webrtc::AgcConfig config)) {
-#else
-  WEBRTC_FUNC(SetAgcConfig, (const webrtc::AgcConfig config)) {
-#endif
     agc_config_ = config;
     return 0;
   }
@@ -866,11 +850,7 @@ class FakeWebRtcVoiceEngine
                                webrtc::AgcModes mode));
   WEBRTC_STUB(GetRxAgcStatus, (int channel, bool& enabled,
                                webrtc::AgcModes& mode));
-#ifdef USE_WEBRTC_DEV_BRANCH
   WEBRTC_STUB(SetRxAgcConfig, (int channel, webrtc::AgcConfig config));
-#else
-  WEBRTC_STUB(SetRxAgcConfig, (int channel, const webrtc::AgcConfig config));
-#endif
   WEBRTC_STUB(GetRxAgcConfig, (int channel, webrtc::AgcConfig& config));
 
   WEBRTC_STUB(RegisterRxVadObserver, (int, webrtc::VoERxVadCallback&));
