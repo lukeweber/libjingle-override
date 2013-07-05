@@ -179,7 +179,7 @@ Port::Port(talk_base::Thread* thread, talk_base::Network* network,
       password_(password),
       lifetime_(LT_PRESTART),
       enable_port_packets_(false),
-      ice_protocol_(ICEPROTO_GOOGLE), //ICEPROTO_GOOGLE),//RFC5245),
+      ice_protocol_(ICEPROTO_RFC5245), //ICEPROTO_GOOGLE),//RFC5245),
       role_(ROLE_UNKNOWN),
       tiebreaker_(0),
       shared_socket_(true) {
@@ -205,7 +205,7 @@ Port::Port(talk_base::Thread* thread, const std::string& type,
       password_(password),
       lifetime_(LT_PRESTART),
       enable_port_packets_(false),
-      ice_protocol_(ICEPROTO_GOOGLE), //ICEPROTO_GOOGLE),
+      ice_protocol_(ICEPROTO_RFC5245), //ICEPROTO_GOOGLE),
       role_(ROLE_UNKNOWN),
       tiebreaker_(0),
       shared_socket_(false) {
@@ -726,6 +726,7 @@ void Port::CheckTimeout() {
 const std::string Port::username_fragment() const {
   if (IsGoogleIce() &&
       component_ == ICE_CANDIDATE_COMPONENT_RTCP) {
+    ASSERT(false);
     // In GICE mode, we should adjust username fragment for rtcp component.
     return GetRtcpUfragFromRtpUfrag(ice_username_fragment_);
   } else {

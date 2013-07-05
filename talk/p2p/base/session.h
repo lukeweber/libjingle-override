@@ -275,8 +275,9 @@ class BaseSession : public sigslot::has_slots<>,
   // Returns the application-level description given by our client.
   // If we are the recipient, this will be NULL until we send an accept.
   const SessionDescription* local_description() const {
-    return local_description_;
+    return local_description_->Copy();
   }
+
   // Returns the application-level description given by the other client.
   // If we are the initiator, this will be NULL until we receive an accept.
   const SessionDescription* remote_description() const {
@@ -454,8 +455,6 @@ class BaseSession : public sigslot::has_slots<>,
 
   // Handles messages posted to us.
   virtual void OnMessage(talk_base::Message *pmsg);
-  
-  talk_base::scoped_ptr<TransportDescription> local_transport_description_;
 
  protected:
   State state_;

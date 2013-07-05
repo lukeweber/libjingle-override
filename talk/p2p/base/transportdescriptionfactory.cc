@@ -37,7 +37,7 @@
 
 namespace cricket {
 
-static TransportProtocol kDefaultProtocol = ICEPROTO_GOOGLE;
+static TransportProtocol kDefaultProtocol = ICEPROTO_RFC5245;
 static const char* kDefaultDigestAlg = talk_base::DIGEST_SHA_256;
 
 TransportDescriptionFactory::TransportDescriptionFactory()
@@ -61,6 +61,8 @@ TransportDescription* TransportDescriptionFactory::CreateOffer(
   } else if (protocol_ == ICEPROTO_GOOGLE) {
     desc->transport_type = NS_GINGLE_P2P;
   }
+
+  ASSERT(desc->transport_type == NS_JINGLE_ICE_UDP);
 
   // Generate the ICE credentials if we don't already have them.
   if (!current_description || options.ice_restart) {
@@ -114,6 +116,7 @@ TransportDescription* TransportDescriptionFactory::CreateAnswer(
     return NULL;
   }
 
+  ASSERT(protocol_ == ICEPROTO_RFC5245 && desc->transport_type == NS_JINGLE_ICE_UDP);
   // Generate the ICE credentials if we don't already have them or ice is
   // being restarted.
   if (!current_description || options.ice_restart) {

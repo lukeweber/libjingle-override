@@ -29,6 +29,8 @@
 
 #include "talk/p2p/base/portallocatorsessionproxy.h"
 
+#include "talk/base/logging.h"
+
 namespace cricket {
 
 PortAllocatorSession::PortAllocatorSession(const std::string& content_name,
@@ -42,8 +44,10 @@ PortAllocatorSession::PortAllocatorSession(const std::string& content_name,
       // If PORTALLOCATOR_ENABLE_SHARED_UFRAG flag is not enabled, ignore the
       // incoming ufrag and pwd, which will cause each Port to generate one
       // by itself.
+     
       username_(flags_ & PORTALLOCATOR_ENABLE_SHARED_UFRAG ? ice_ufrag : ""),
       password_(flags_ & PORTALLOCATOR_ENABLE_SHARED_UFRAG ? ice_pwd : "") {
+      LOG(LS_ERROR) << "luke-PortAllocatorSession: ufrag:" << ice_ufrag << " pwd:" << ice_pwd;
 }
 
 PortAllocator::~PortAllocator() {

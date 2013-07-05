@@ -462,22 +462,27 @@ bool ParseJingleTransportInfos(const buzz::XmlElement* jingle,
       return false;
 
     TransportInfo tinfo;
-    //bool found = false;
     for (TransportInfos::const_iterator trans_info = tinfos->begin(); trans_info != tinfos->end(); ++trans_info){
       if (trans_info->content_name == content->name){
+        tinfo.content_name = content->name;
+        tinfo.description = trans_info->description;
         tinfo = *trans_info;
-        //tinfo.content_name = "VIDEO";//trans_info->content_name;
-        //tinfo.description.ice_ufrag = trans_info->description.ice_ufrag;
-        //found = true;
         break;
       }
     }
-    
+
     if (!ParseJingleTransportInfo(trans_elem, content->name,
                                   trans_parsers, translators,
                                   &tinfo, error))
       return false;
+
     
+    /* Doesn't seem to really help.
+    for (Candidates::iterator candidate = tinfo.description.candidates.begin(); candidate != tinfo.description.candidates.end(); ++candidate){
+      candidate->set_username(tinfo.description.ice_ufrag);
+      candidate->set_password(tinfo.description.ice_pwd);
+    }*/
+
     tinfos->push_back(tinfo);
   }
 

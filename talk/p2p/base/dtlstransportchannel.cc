@@ -244,7 +244,7 @@ bool DtlsTransportChannelWrapper::SetupDtls() {
       return false;
     }
   } else {
-    LOG_J(LS_INFO, this) << "Not using DTLS";
+    LOG_J(LS_INFO, this) << "Not using DTLS-SRTP";
   }
 
   LOG_J(LS_INFO, this) << "DTLS setup complete";

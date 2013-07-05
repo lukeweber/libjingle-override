@@ -188,6 +188,14 @@ class Transport : public talk_base::MessageHandler,
             const std::string& content_name,
             const std::string& type,
             PortAllocator* allocator);
+
+  Transport(talk_base::Thread* signaling_thread,
+            talk_base::Thread* worker_thread,
+            const std::string& content_name,
+            const std::string& type,
+            PortAllocator* allocator,
+            const SessionDescription* local_description);
+
   virtual ~Transport();
   virtual std::string GetClassname() const { return "Transport"; }
   // Returns the signaling thread. The app talks to Transport on this thread.
@@ -329,6 +337,10 @@ class Transport : public talk_base::MessageHandler,
     return local_description_.get();
   }
 
+  const TransportDescription* local_description2() const {
+    return local_description2_.get();
+  }
+
   // The current remote transport description, for use by derived classes
   // when performing transport description negotiation.
   const TransportDescription* remote_description() const {
@@ -460,6 +472,7 @@ class Transport : public talk_base::MessageHandler,
   TransportProtocol protocol_;
   IceMode remote_ice_mode_;
   talk_base::scoped_ptr<TransportDescription> local_description_;
+  talk_base::scoped_ptr<const TransportDescription> local_description2_;
   talk_base::scoped_ptr<TransportDescription> remote_description_;
 
   ChannelMap channels_;

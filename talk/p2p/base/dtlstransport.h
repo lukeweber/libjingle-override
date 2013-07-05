@@ -53,6 +53,17 @@ class DtlsTransport : public Base {
       : Base(signaling_thread, worker_thread, content_name, allocator, transport_type),
         identity_(identity) {
   }
+  DtlsTransport(talk_base::Thread* signaling_thread,
+                talk_base::Thread* worker_thread,
+                const std::string& content_name,
+                PortAllocator* allocator,
+                talk_base::SSLIdentity* identity,
+                const std::string& transport_type,
+                const SessionDescription* local_session_description
+                )
+      : Base(signaling_thread, worker_thread, content_name, allocator, transport_type, local_session_description),
+        identity_(identity) {
+  }
 
   ~DtlsTransport() {
     Base::DestroyAllChannels();
