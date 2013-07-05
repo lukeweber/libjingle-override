@@ -304,8 +304,8 @@ void Transport::ConnectChannels_w() {
     // initiate request initiated by the remote.
     /*LOG(LS_INFO) << "Transport::ConnectChannels_w: No local description has "
                  << "been set. Will generate one.";
-    std::string username = talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
-    std::string password = talk_base::CreateRandomString(ICE_PWD_LENGTH);
+    std::string username = "useruseruseruser";//talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
+    std::string password = "passwordpasswordpassword";//talk_base::CreateRandomString(ICE_PWD_LENGTH);
     LOG_CI << "look20:username:" << username;
     TransportDescription desc(NS_JINGLE_ICE_UDP, std::vector<std::string>(),
                               "bogusufrag",

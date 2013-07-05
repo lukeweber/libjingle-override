@@ -33,6 +33,7 @@
 #include "talk/base/sslstreamadapter.h"
 #include "talk/xmpp/constants.h"
 #include "talk/xmpp/jid.h"
+#include "talk/p2p/base/common.h"
 #include "talk/p2p/base/dtlstransport.h"
 #include "talk/p2p/base/p2ptransport.h"
 #include "talk/p2p/base/sessionclient.h"
@@ -857,9 +858,12 @@ Session::Session(SessionManager* session_manager,
                   sid, content_type, initiator_name == local_name) {
   ASSERT(client != NULL);
   //HACK - Pass offer/answer SessionDescription in on construct from MediaSessionDescriptionFactory
+  std::string username = "useruseruseruser"; //talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
+  std::string password = "passwordpasswordpassword"; //talk_base::CreateRandomString(ICE_PWD_LENGTH);
+  LOG_GI << "look20:username:" + username;
   TransportDescription *local_tdesc = new TransportDescription(NS_JINGLE_ICE_UDP, std::vector<std::string>(),
-                              talk_base::CreateRandomString(ICE_UFRAG_LENGTH),
-                              talk_base::CreateRandomString(ICE_PWD_LENGTH),
+                              username,
+                              password,
                               ICEMODE_FULL, NULL, std::vector<Candidate>());
  
   session_manager->transport_desc_factory()->CreateIdentityDigest(local_tdesc);
