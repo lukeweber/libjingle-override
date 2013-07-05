@@ -464,6 +464,8 @@ bool ParseJingleTransportInfos(const buzz::XmlElement* jingle,
     TransportInfo tinfo;
     for (TransportInfos::const_iterator trans_info = tinfos->begin(); trans_info != tinfos->end(); ++trans_info){
       if (trans_info->content_name == content->name){
+        tinfo.content_name = content->name;
+        tinfo.description = trans_info->description;
         tinfo = *trans_info;
         break;
       }
@@ -475,10 +477,11 @@ bool ParseJingleTransportInfos(const buzz::XmlElement* jingle,
       return false;
 
     
+    /* Doesn't seem to really help.
     for (Candidates::iterator candidate = tinfo.description.candidates.begin(); candidate != tinfo.description.candidates.end(); ++candidate){
       candidate->set_username(tinfo.description.ice_ufrag);
       candidate->set_password(tinfo.description.ice_pwd);
-    }
+    }*/
 
     tinfos->push_back(tinfo);
   }
