@@ -51,6 +51,7 @@ class StreamInterfaceChannel : public talk_base::StreamInterface,
         fifo_(kFifoSize, owner) {
     fifo_.SignalEvent.connect(this, &StreamInterfaceChannel::OnEvent);
   }
+  virtual std::string GetClassname() const { return "StreamInterfaceChannel"; }
 
   // Push in a packet; this gets pulled out from Read().
   bool OnPacketReceived(const char* data, size_t size);
@@ -113,6 +114,20 @@ class DtlsTransportChannelWrapper : public TransportChannelImpl {
       STATE_OPEN,      // Negotiation complete.
       STATE_CLOSED     // Connection closed.
     };
+  
+    struct StateMap : std::map<unsigned int, const char *>
+    {
+      StateMap()
+      {
+        this->operator[]( STATE_NONE ) = "STATE_NONE";
+        this->operator[]( STATE_OFFERED ) = "STATE_OFFERED";
+        this->operator[]( STATE_ACCEPTED ) = "STATE_ACCEPTED";
+        this->operator[]( STATE_STARTED ) = "STATE_STARTED";
+        this->operator[]( STATE_OPEN ) = "STATE_OPEN";
+        this->operator[]( STATE_CLOSED ) = "STATE_CLOSED";
+      };
+      ~StateMap(){};
+    };
 
   // The parameters here are:
   // transport -- the DtlsTransport that created us
@@ -120,7 +135,7 @@ class DtlsTransportChannelWrapper : public TransportChannelImpl {
   DtlsTransportChannelWrapper(Transport* transport,
                               TransportChannelImpl* channel);
   virtual ~DtlsTransportChannelWrapper();
-
+  virtual std::string GetClassname() const { return "DtlsTransportChannelWrapper"; }
   virtual void SetRole(TransportRole role);
   // Returns current transport role of the channel.
   virtual TransportRole GetRole() const {
@@ -236,6 +251,7 @@ class DtlsTransportChannelWrapper : public TransportChannelImpl {
   StreamInterfaceChannel* downward_;  // Wrapper for channel_, owned by dtls_.
   std::vector<std::string> srtp_ciphers_;  // SRTP ciphers to use with DTLS.
   State dtls_state_;
+  StateMap dtls_state_map_;
   talk_base::SSLIdentity* local_identity_;
   talk_base::SSLRole dtls_role_;
   talk_base::Buffer remote_fingerprint_value_;

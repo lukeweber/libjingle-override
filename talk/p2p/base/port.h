@@ -392,7 +392,20 @@ class Connection : public talk_base::MessageHandler,
     STATE_SUCCEEDED,    // Check already done, produced a successful result.
     STATE_FAILED        // Check for this connection failed.
   };
+  
+  struct StateMap : std::map<unsigned int, const char *>
+  {
+    StateMap()
+    {
+      this->operator[]( STATE_WAITING ) = "STATE_WAITING";
+      this->operator[]( STATE_INPROGRESS ) = "STATE_INPROGRESS";
+      this->operator[]( STATE_SUCCEEDED ) = "STATE_SUCCEEDED";
+      this->operator[]( STATE_FAILED ) = "STATE_FAILED";
+    };
+    ~StateMap(){};
+  };
 
+  
   virtual ~Connection();
   virtual std::string GetClassname() const { return "Connection"; }
 

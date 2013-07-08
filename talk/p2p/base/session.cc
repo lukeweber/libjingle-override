@@ -24,7 +24,7 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
+#include <iostream>
 #include "talk/p2p/base/session.h"
 #include "talk/base/common.h"
 #include "talk/base/logging.h"
@@ -56,6 +56,7 @@ TransportProxy::~TransportProxy() {
   for (ChannelMap::iterator iter = channels_.begin();
        iter != channels_.end(); ++iter) {
     iter->second->SignalDestroyed(iter->second);
+    LOG(LS_WARNING) << "deleting " << std::hex << "0x" << reinterpret_cast<size_t>(iter->second) << std::dec << " @ " << __FILE__ << ":" << __LINE__;
     delete iter->second;
   }
 }
@@ -105,6 +106,7 @@ void TransportProxy::DestroyChannel(int component) {
 
     channels_.erase(component);
     channel->SignalDestroyed(channel);
+    LOG(LS_WARNING) << "deleting " << std::hex << "0x" << reinterpret_cast<size_t>(channel) << std::dec << " @ " << __FILE__ << ":" << __LINE__;
     delete channel;
   }
 }
@@ -377,10 +379,12 @@ BaseSession::~BaseSession() {
 
   for (TransportMap::iterator iter = transports_.begin();
        iter != transports_.end(); ++iter) {
+    LOG(LS_WARNING) << "deleting " << std::hex << "0x" << reinterpret_cast<size_t>(iter->second) << std::dec << " @ " << __FILE__ << ":" << __LINE__;
     delete iter->second;
   }
-
+  LOG(LS_WARNING) << "deleting " << std::hex << "0x" << reinterpret_cast<size_t>(remote_description_) << std::dec << " @ " << __FILE__ << ":" << __LINE__;
   delete remote_description_;
+  LOG(LS_WARNING) << "deleting " << std::hex << "0x" << reinterpret_cast<size_t>(local_description_) << std::dec << " @ " << __FILE__ << ":" << __LINE__;
   delete local_description_;
 }
 
@@ -532,6 +536,7 @@ void BaseSession::DestroyTransportProxy(
     const std::string& content_name) {
   TransportMap::iterator iter = transports_.find(content_name);
   if (iter != transports_.end()) {
+    LOG(LS_WARNING) << "deleting " << std::hex << "0x" << reinterpret_cast<size_t>(iter->second) << std::dec << " @ " << __FILE__ << ":" << __LINE__;
     delete iter->second;
     transports_.erase(content_name);
   }
@@ -624,7 +629,7 @@ bool BaseSession::OnRemoteCandidates(const std::string& content_name,
 }
 
 bool BaseSession::MaybeEnableMuxingSupport() {
-  // We need both a local and remote description to decide if we should mux.
+  // We need both a local and remote description to std::decide if we should mux.
   if ((state_ == STATE_SENTINITIATE ||
       state_ == STATE_RECEIVEDINITIATE_ACK ||
       state_ == STATE_RECEIVEDINITIATE) &&
@@ -880,6 +885,7 @@ Session::Session(SessionManager* session_manager,
 }
 
 Session::~Session() {
+  LOG(LS_WARNING) << "deleting" << std::hex << "0x" << reinterpret_cast<size_t>(transport_parser_) << std::dec << "@" << __FILE__ << ":" << __LINE__;
   delete transport_parser_;
 }
 
@@ -908,7 +914,7 @@ bool Session::Initiate(const std::string &to,
   
   // We need to connect transport proxy and impl here so that we can process
   // the TransportDescriptions.
-  SpeculativelyConnectAllTransportChannels();
+  //SpeculativelyConnectAllTransportChannels();
 
   PushdownTransportDescription(CS_LOCAL, CA_OFFER);
 

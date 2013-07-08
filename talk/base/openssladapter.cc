@@ -333,6 +333,7 @@ OpenSSLAdapter::BeginSSL() {
   }
 
   ssl_ = SSL_new(ssl_ctx_);
+  SSL_set_debug(ssl_, 1);
   if (!ssl_) {
     err = -1;
     goto ssl_error;

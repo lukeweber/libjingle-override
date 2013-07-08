@@ -31,7 +31,7 @@
 #include <string>
 #include "talk/p2p/base/transport.h"
 #include "talk/p2p/base/transportchannel.h"
-
+#include "talk/p2p/base/common.h"
 namespace buzz { class XmlElement; }
 
 namespace cricket {
@@ -45,7 +45,7 @@ class TransportChannelImpl : public TransportChannel {
  public:
   explicit TransportChannelImpl(const std::string& content_name, int component)
       : TransportChannel(content_name, component) {}
-
+  virtual std::string GetClassname() const { return "TransportChannelImpl"; }
   // Returns the transport that created this channel.
   virtual Transport* GetTransport() = 0;
 
@@ -101,6 +101,7 @@ class TransportChannelImpl : public TransportChannel {
   virtual bool SetRemoteFingerprint(const std::string& digest_alg,
     const uint8* digest,
     size_t digest_len) {
+    LOG_CI;
     return false;
   }
 

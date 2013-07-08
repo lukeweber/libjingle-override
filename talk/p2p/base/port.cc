@@ -907,7 +907,8 @@ void Connection::set_state(State state) {
   State old_state = state_;
   state_ = state;
   if (state != old_state) {
-    LOG_J(LS_VERBOSE, this) << "set_state";
+    StateMap stateMap;
+    LOG_J(LS_VERBOSE, this) << "set_state " << stateMap[old_state] << " => " << stateMap[state];
   }
 }
 

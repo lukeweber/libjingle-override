@@ -692,6 +692,7 @@ bool Transport::ApplyRemoteTransportDescription_w(TransportChannelImpl* ch) {
 
 void Transport::ApplyNegotiatedTransportDescription_w(
     TransportChannelImpl* channel) {
+  LOG_CI;
   channel->SetIceProtocolType(protocol_);
   channel->SetRemoteIceMode(remote_ice_mode_);
 }

@@ -68,7 +68,7 @@ class DtlsTransport : public Base {
   ~DtlsTransport() {
     Base::DestroyAllChannels();
   }
-
+  virtual std::string GetClassname() const { return "DtlsTransport"; }
   virtual bool ApplyLocalTransportDescription_w(TransportChannelImpl*
                                                 channel) {
     talk_base::SSLFingerprint* local_fp =
@@ -142,6 +142,7 @@ class DtlsTransport : public Base {
  private:
   virtual void ApplyNegotiatedTransportDescription_w(
       TransportChannelImpl* channel) {
+    LOG_CI;
     channel->SetRemoteFingerprint(
         remote_fingerprint_->algorithm,
         reinterpret_cast<const uint8 *>(remote_fingerprint_->

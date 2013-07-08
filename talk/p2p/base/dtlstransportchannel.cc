@@ -103,6 +103,7 @@ DtlsTransportChannelWrapper::DtlsTransportChannelWrapper(
       dtls_state_(STATE_NONE),
       local_identity_(NULL),
       dtls_role_(talk_base::SSL_CLIENT) {
+  LOG_CI;
   channel_->SignalReadableState.connect(this,
       &DtlsTransportChannelWrapper::OnReadableState);
   channel_->SignalWritableState.connect(this,
@@ -121,20 +122,25 @@ DtlsTransportChannelWrapper::DtlsTransportChannelWrapper(
       &DtlsTransportChannelWrapper::OnRoleConflict);
   channel_->SignalRouteChange.connect(this,
       &DtlsTransportChannelWrapper::OnRouteChange);
+    LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
 }
 
 DtlsTransportChannelWrapper::~DtlsTransportChannelWrapper() {
+  LOG_CI;
 }
 
 void DtlsTransportChannelWrapper::Connect() {
+  LOG_CI;
   // We should only get a single call to Connect.
   ASSERT(dtls_state_ == STATE_NONE ||
          dtls_state_ == STATE_OFFERED ||
          dtls_state_ == STATE_ACCEPTED);
+  LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
   channel_->Connect();
 }
 
 void DtlsTransportChannelWrapper::Reset() {
+  LOG_CI;
   channel_->Reset();
   set_writable(false);
   set_readable(false);
@@ -143,23 +149,28 @@ void DtlsTransportChannelWrapper::Reset() {
   if (!SetupDtls()) {
     LOG_J(LS_ERROR, this) << "Error re-initializing DTLS";
     dtls_state_ = STATE_CLOSED;
+    LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
+
     return;
   }
 
   dtls_state_ = STATE_ACCEPTED;
+  LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
 }
 
 bool DtlsTransportChannelWrapper::SetLocalIdentity(talk_base::SSLIdentity*
                                                    identity) {
+  LOG_CI;
   // TODO(ekr@rtfm.com): Forbid this if Connect() has been called.
   if (dtls_state_ != STATE_NONE) {
-    LOG_J(LS_ERROR, this) << "Can't set DTLS local identity in this state";
+    LOG_J(LS_ERROR, this) << "Can't set DTLS local identity in this state ()";
     return false;
   }
 
   if (identity) {
     local_identity_ = identity;
     dtls_state_ = STATE_OFFERED;
+    LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
   } else {
     LOG_J(LS_INFO, this) << "NULL DTLS identity supplied. Not doing DTLS";
   }
@@ -168,16 +179,17 @@ bool DtlsTransportChannelWrapper::SetLocalIdentity(talk_base::SSLIdentity*
 }
 
 void DtlsTransportChannelWrapper::SetRole(TransportRole role) {
+  LOG_CI;
   // TODO(ekr@rtfm.com): Forbid this if Connect() has been called.
   ASSERT(dtls_state_ < STATE_ACCEPTED);
-
+  LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
   // Set the role that is most conformant with RFC 5763, Section 5, bullet 1:
   //     The endpoint that is the offerer MUST [...] be prepared to receive
   //     a client_hello before it receives the answer.
   // (IOW, the offerer is the server, and the answerer is the client).
   dtls_role_ = (role == ROLE_CONTROLLING) ?
       talk_base::SSL_SERVER : talk_base::SSL_CLIENT;
-
+  //ASSERT(role == ROLE_CONTROLLED); //NFHACK: I must be receiving the call
   channel_->SetRole(role);
 }
 
@@ -185,10 +197,12 @@ bool DtlsTransportChannelWrapper::SetRemoteFingerprint(const std::string&
                                                        digest_alg,
                                                        const uint8* digest,
                                                        size_t digest_len) {
+  LOG_CI;
   // Allow SetRemoteFingerprint with a NULL digest even if SetLocalIdentity
   // hasn't been called.
   if (dtls_state_ > STATE_OFFERED ||
       (dtls_state_ == STATE_NONE && !digest_alg.empty())) {
+    LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
     LOG_J(LS_ERROR, this) << "Can't set DTLS remote settings in this state";
     return false;
   }
@@ -196,6 +210,7 @@ bool DtlsTransportChannelWrapper::SetRemoteFingerprint(const std::string&
   if (digest_alg.empty()) {
     LOG_J(LS_INFO, this) << "Other side didn't support DTLS";
     dtls_state_ = STATE_NONE;
+    LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
     return true;
   }
 
@@ -205,14 +220,17 @@ bool DtlsTransportChannelWrapper::SetRemoteFingerprint(const std::string&
 
   if (!SetupDtls()) {
     dtls_state_ = STATE_CLOSED;
+    LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
     return false;
   }
 
   dtls_state_ = STATE_ACCEPTED;
+  LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
   return true;
 }
 
 bool DtlsTransportChannelWrapper::SetupDtls() {
+  LOG_CI;
   StreamInterfaceChannel* downward =
       new StreamInterfaceChannel(worker_thread_, channel_);
 
@@ -253,6 +271,7 @@ bool DtlsTransportChannelWrapper::SetupDtls() {
 
 bool DtlsTransportChannelWrapper::SetSrtpCiphers(const std::vector<std::string>&
                                                  ciphers) {
+  LOG_CI;
   // SRTP ciphers must be set before the DTLS handshake starts.
   // TODO(juberti): In multiplex situations, we may end up calling this function
   // once for each muxed channel. Depending on the order of calls, this may
@@ -262,19 +281,22 @@ bool DtlsTransportChannelWrapper::SetSrtpCiphers(const std::vector<std::string>&
   if (dtls_state_ != STATE_NONE &&
       dtls_state_ != STATE_OFFERED &&
       dtls_state_ != STATE_ACCEPTED) {
+    LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
     ASSERT(false);
     return false;
   }
-
+  LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
+  
   srtp_ciphers_ = ciphers;
   return true;
 }
 
 bool DtlsTransportChannelWrapper::GetSrtpCipher(std::string* cipher) {
   if (dtls_state_ != STATE_OPEN) {
+    LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
     return false;
   }
-
+  LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
   return dtls_->GetDtlsSrtpCipher(cipher);
 }
 
@@ -282,8 +304,9 @@ bool DtlsTransportChannelWrapper::GetSrtpCipher(std::string* cipher) {
 // Called from upper layers to send a media packet.
 int DtlsTransportChannelWrapper::SendPacket(const char* data, size_t size,
                                             int flags) {
+  LOG_CI;
   int result = -1;
-
+  LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
   switch (dtls_state_) {
     case STATE_OFFERED:
       // We don't know if we are doing DTLS yet, so we can't send a packet.
@@ -334,11 +357,12 @@ int DtlsTransportChannelWrapper::SendPacket(const char* data, size_t size,
 //     - Once the DTLS handshake completes, the state is that of the
 //       impl again
 void DtlsTransportChannelWrapper::OnReadableState(TransportChannel* channel) {
+  LOG_CI;
   ASSERT(talk_base::Thread::Current() == worker_thread_);
   ASSERT(channel == channel_);
   LOG_J(LS_VERBOSE, this)
       << "DTLSTransportChannelWrapper: channel readable state changed";
-
+  LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
   if (dtls_state_ == STATE_NONE || dtls_state_ == STATE_OPEN) {
     set_readable(channel_->readable());
     // Note: SignalReadableState fired by set_readable.
@@ -346,11 +370,12 @@ void DtlsTransportChannelWrapper::OnReadableState(TransportChannel* channel) {
 }
 
 void DtlsTransportChannelWrapper::OnWritableState(TransportChannel* channel) {
+  LOG_CI;
   ASSERT(talk_base::Thread::Current() == worker_thread_);
   ASSERT(channel == channel_);
   LOG_J(LS_VERBOSE, this)
       << "DTLSTransportChannelWrapper: channel writable state changed";
-
+  LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
   switch (dtls_state_) {
     case STATE_NONE:
     case STATE_OPEN:
@@ -390,10 +415,11 @@ void DtlsTransportChannelWrapper::OnWritableState(TransportChannel* channel) {
 void DtlsTransportChannelWrapper::OnReadPacket(TransportChannel* channel,
                                                const char* data, size_t size,
                                                int flags) {
+  LOG_CI;
   ASSERT(talk_base::Thread::Current() == worker_thread_);
   ASSERT(channel == channel_);
   ASSERT(flags == 0);
-
+  LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
   switch (dtls_state_) {
     case STATE_NONE:
       // We are not doing DTLS
@@ -426,9 +452,11 @@ void DtlsTransportChannelWrapper::OnReadPacket(TransportChannel* channel,
       } else {
         // Not a DTLS packet; our handshake should be complete by now.
         if (dtls_state_ != STATE_OPEN) {
+          LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
           LOG_J(LS_ERROR, this) << "Received non-DTLS packet before DTLS complete";
           return;
         }
+        LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
 
         // And it had better be a SRTP packet.
         if (!IsRtpPacket(data, size)) {
@@ -450,6 +478,7 @@ void DtlsTransportChannelWrapper::OnReadPacket(TransportChannel* channel,
 }
 
 void DtlsTransportChannelWrapper::OnReadyToSend(TransportChannel* channel) {
+  LOG_CI;
   if (writable()) {
     SignalReadyToSend(this);
   }
@@ -457,11 +486,13 @@ void DtlsTransportChannelWrapper::OnReadyToSend(TransportChannel* channel) {
 
 void DtlsTransportChannelWrapper::OnDtlsEvent(talk_base::StreamInterface* dtls,
                                               int sig, int err) {
+  LOG_CI;
   ASSERT(talk_base::Thread::Current() == worker_thread_);
   ASSERT(dtls == dtls_.get());
   if (sig & talk_base::SE_OPEN) {
     // This is the first time.
     LOG_J(LS_INFO, this) << "DTLS handshake complete";
+    LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
     if (dtls_->GetState() == talk_base::SS_OPEN) {
       // The check for OPEN shouldn't be necessary but let's make
       // sure we don't accidentally frob the state if it's closed.
@@ -490,12 +521,15 @@ void DtlsTransportChannelWrapper::OnDtlsEvent(talk_base::StreamInterface* dtls,
     set_writable(false);
     dtls_state_ = STATE_CLOSED;
   }
+  LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
 }
 
 bool DtlsTransportChannelWrapper::MaybeStartDtls() {
+  LOG_CI;
   if (channel_->writable()) {
     if (dtls_->StartSSLWithPeer()) {
       LOG_J(LS_ERROR, this) << "Couldn't start DTLS handshake";
+      LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
       dtls_state_ = STATE_CLOSED;
       return false;
     }
@@ -504,12 +538,14 @@ bool DtlsTransportChannelWrapper::MaybeStartDtls() {
 
     dtls_state_ = STATE_STARTED;
   }
+  LOG_CI << "dtls_state_ = " << dtls_state_map_[dtls_state_];
   return true;
 }
 
 // Called from OnReadPacket when a DTLS packet is received.
 bool DtlsTransportChannelWrapper::HandleDtlsPacket(const char* data,
                                                    size_t size) {
+  LOG_CI;
   // Sanity check we're not passing junk that
   // just looks like DTLS.
   const uint8* tmp_data = reinterpret_cast<const uint8* >(data);
@@ -533,30 +569,35 @@ bool DtlsTransportChannelWrapper::HandleDtlsPacket(const char* data,
 
 void DtlsTransportChannelWrapper::OnRequestSignaling(
     TransportChannelImpl* channel) {
+  LOG_CI;
   ASSERT(channel == channel_);
   SignalRequestSignaling(this);
 }
 
 void DtlsTransportChannelWrapper::OnCandidateReady(
     TransportChannelImpl* channel, const Candidate& c) {
+  LOG_CI;
   ASSERT(channel == channel_);
   SignalCandidateReady(this, c);
 }
 
 void DtlsTransportChannelWrapper::OnCandidatesAllocationDone(
     TransportChannelImpl* channel) {
+  LOG_CI;
   ASSERT(channel == channel_);
   SignalCandidatesAllocationDone(this);
 }
 
 void DtlsTransportChannelWrapper::OnRoleConflict(
     TransportChannelImpl* channel) {
+  LOG_CI;
   ASSERT(channel == channel_);
   SignalRoleConflict(this);
 }
 
 void DtlsTransportChannelWrapper::OnRouteChange(
     TransportChannel* channel, const Candidate& candidate) {
+  LOG_CI;
   ASSERT(channel == channel_);
   SignalRouteChange(this, candidate);
 }
