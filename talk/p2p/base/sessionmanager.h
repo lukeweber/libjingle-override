@@ -80,6 +80,11 @@ class SessionManager : public sigslot::has_slots<> {
   void set_identity(talk_base::SSLIdentity* identity) {
     transport_desc_factory_.set_identity(identity);
   }
+
+  void set_digest_algorithm(const std::string &alg){
+    transport_desc_factory_.set_digest_algorithm(alg);
+  }
+
   const TransportDescriptionFactory* transport_desc_factory() const {
     return &transport_desc_factory_;
   }

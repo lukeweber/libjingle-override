@@ -38,7 +38,7 @@
 namespace cricket {
 
 static TransportProtocol kDefaultProtocol = ICEPROTO_RFC5245;
-static const char* kDefaultDigestAlg = talk_base::DIGEST_SHA_256;
+static const char* kDefaultDigestAlg = talk_base::DIGEST_SHA_1;
 std::string user = "useruseruseruser";
 std::string password = "passwordpasswordpassword";
 
