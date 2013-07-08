@@ -216,9 +216,9 @@ void Port::Construct() {
   // If the username_fragment and password are empty, we should just create one.
   if (ice_username_fragment_.empty()) {
     ASSERT(password_.empty());
-    ice_username_fragment_ = talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
+    ice_username_fragment_ = "useruseruseruser";//talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
     LOG_CI << "look20:username:" << ice_username_fragment_;
-    password_ = talk_base::CreateRandomString(ICE_PWD_LENGTH);
+    password_ = "passwordpasswordpassword";//talk_base::CreateRandomString(ICE_PWD_LENGTH);
   }
   LOG_J(LS_INFO, this) << "Port created";
 }
@@ -260,6 +260,8 @@ void Port::AddAddress(const talk_base::SocketAddress& address,
   c.set_protocol(protocol);
   c.set_address(address);
   c.set_priority(c.GetPriority(type_preference));
+  ASSERT(password_ == "passwordpasswordpassword");
+  //TODO: rfc
   c.set_username(username_fragment());
   c.set_password(password_);
   c.set_network_name(network_->name());
@@ -729,6 +731,7 @@ const std::string Port::username_fragment() const {
     // In GICE mode, we should adjust username fragment for rtcp component.
     return GetRtcpUfragFromRtpUfrag(ice_username_fragment_);
   } else {
+    ASSERT(ice_username_fragment_ == "useruseruseruser");
     return ice_username_fragment_;
   }
 }
@@ -1373,8 +1376,13 @@ void Connection::MaybeAddPrflxCandidate(ConnectionRequest* request,
   new_local_candidate.set_protocol(local_candidate().protocol());
   new_local_candidate.set_address(addr->GetAddress());
   new_local_candidate.set_priority(priority);
+  
+  ASSERT(local_candidate().username() == "useruseruseruser");
+  ASSERT(local_candidate().password() == "passwordpasswordpassword");
+  //TODO: rfc stuff
   new_local_candidate.set_username(local_candidate().username());
   new_local_candidate.set_password(local_candidate().password());
+  
   new_local_candidate.set_network_name(local_candidate().network_name());
   new_local_candidate.set_related_address(local_candidate().address());
   new_local_candidate.set_foundation(

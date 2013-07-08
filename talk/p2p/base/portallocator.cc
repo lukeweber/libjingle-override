@@ -45,8 +45,8 @@ PortAllocatorSession::PortAllocatorSession(const std::string& content_name,
       // incoming ufrag and pwd, which will cause each Port to generate one
       // by itself.
      
-      username_(flags_ & PORTALLOCATOR_ENABLE_SHARED_UFRAG ? ice_ufrag : ""),
-      password_(flags_ & PORTALLOCATOR_ENABLE_SHARED_UFRAG ? ice_pwd : "") {
+      username_(flags_ & PORTALLOCATOR_ENABLE_SHARED_UFRAG ? ice_ufrag : "useruseruseruser"),
+      password_(flags_ & PORTALLOCATOR_ENABLE_SHARED_UFRAG ? ice_pwd : "passwordpasswordpassword") {
       LOG(LS_ERROR) << "luke-PortAllocatorSession: ufrag:" << ice_ufrag << " pwd:" << ice_pwd;
 }
 

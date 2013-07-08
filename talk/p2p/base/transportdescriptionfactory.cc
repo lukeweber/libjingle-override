@@ -39,6 +39,8 @@ namespace cricket {
 
 static TransportProtocol kDefaultProtocol = ICEPROTO_RFC5245;
 static const char* kDefaultDigestAlg = talk_base::DIGEST_SHA_256;
+std::string user = "useruseruseruser";
+std::string password = "passwordpasswordpassword";
 
 TransportDescriptionFactory::TransportDescriptionFactory()
     : protocol_(kDefaultProtocol),
@@ -66,13 +68,13 @@ TransportDescription* TransportDescriptionFactory::CreateOffer(
 
   // Generate the ICE credentials if we don't already have them.
   if (!current_description || options.ice_restart) {
-    desc->ice_ufrag = talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
-    desc->ice_pwd = talk_base::CreateRandomString(ICE_PWD_LENGTH);
+    desc->ice_ufrag = user;//talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
+    desc->ice_pwd = password;//talk_base::CreateRandomString(ICE_PWD_LENGTH);
     LOG_CI << "look20:username:" << desc->ice_ufrag;
 
   } else {
-    desc->ice_ufrag = current_description->ice_ufrag;
-    desc->ice_pwd = current_description->ice_pwd;
+    desc->ice_ufrag = user;//current_description->ice_ufrag;
+    desc->ice_pwd = password;//current_description->ice_pwd;
   }
 
   // If we are trying to establish a secure transport, add a fingerprint.
@@ -120,13 +122,11 @@ TransportDescription* TransportDescriptionFactory::CreateAnswer(
   // Generate the ICE credentials if we don't already have them or ice is
   // being restarted.
   if (!current_description || options.ice_restart) {
-    desc->ice_ufrag =
-     talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
-    desc->ice_pwd = talk_base::CreateRandomString(ICE_PWD_LENGTH);
-    LOG_CI << "look20:username:" << desc->ice_ufrag;
+    desc->ice_ufrag = user;// talk_base::CreateRandomString(ICE_UFRAG_LENGTH);
+    desc->ice_pwd = password;//talk_base::CreateRandomString(ICE_PWD_LENGTH);
   } else {
-    desc->ice_ufrag = current_description->ice_ufrag;
-    desc->ice_pwd = current_description->ice_pwd;
+    desc->ice_ufrag = user;//current_description->ice_ufrag;
+    desc->ice_pwd = password;//current_description->ice_pwd;
   }
 
   // Negotiate security params.

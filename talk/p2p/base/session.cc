@@ -858,8 +858,8 @@ Session::Session(SessionManager* session_manager,
   ASSERT(client != NULL);
   //HACK - Pass offer/answer SessionDescription in on construct from MediaSessionDescriptionFactory
   TransportDescription *local_tdesc = new TransportDescription(NS_JINGLE_ICE_UDP, std::vector<std::string>(),
-                              talk_base::CreateRandomString(ICE_UFRAG_LENGTH),
-                              talk_base::CreateRandomString(ICE_PWD_LENGTH),
+                              "useruseruseruser"/*talk_base::CreateRandomString(ICE_UFRAG_LENGTH)*/,
+                              "passwordpasswordpassword"/*talk_base::CreateRandomString(ICE_PWD_LENGTH)*/,
                               ICEMODE_FULL, NULL, std::vector<Candidate>());
  
   session_manager->transport_desc_factory()->CreateIdentityDigest(local_tdesc);

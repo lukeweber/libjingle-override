@@ -254,7 +254,7 @@ void P2PTransportChannel::SetIceCredentials(const std::string& ice_ufrag,
     // ice ufrag or password.
     ice_restart = (ice_ufrag_ != ice_ufrag) || (ice_pwd_!= ice_pwd);
   }
-
+  ASSERT(ice_ufrag == "useruseruseruser");
   ice_ufrag_ = ice_ufrag;
   ice_pwd_ = ice_pwd;
 
@@ -270,12 +270,15 @@ void P2PTransportChannel::SetRemoteIceCredentials(const std::string& ice_ufrag,
   bool ice_restart = false;
 
   LOG(LS_ERROR) << "Luke P2PTransportChannel::SetRemoteIceCredentials setting remote credentials" << ice_ufrag;
-  
+
+  ASSERT(ice_ufrag == "useruseruseruser");
   if (!remote_ice_ufrag_.empty() && !remote_ice_pwd_.empty()) {
     ice_restart = (remote_ice_ufrag_ != ice_ufrag) ||
                   (remote_ice_pwd_!= ice_pwd);
-    
+
   }
+
+  ASSERT(ice_ufrag == "useruseruseruser");
 
   remote_ice_ufrag_ = ice_ufrag;
   remote_ice_pwd_ = ice_pwd;
@@ -486,7 +489,7 @@ void P2PTransportChannel::OnUnknownAddress(
     std::string id = talk_base::CreateRandomString(8);
     new_remote_candidate = Candidate(
         id, component(), ProtoToString(proto), address,
-        0, remote_username, remote_password, type,
+        0, /*remote_username*/"useruseruseruser", "passwordpasswordpassword"/*remote_password*/, type,
         port->Network()->name(), 0U,
         talk_base::ToString<uint32>(talk_base::ComputeCrc32(id)));
     new_remote_candidate.set_priority(
@@ -625,10 +628,10 @@ bool P2PTransportChannel::CreateConnections(const Candidate &remote_candidate,
   LOG(LS_ERROR) << "Luke P2PTransportChannel::CreateConnections setting remote credentials" << remote_ice_ufrag_;
 
   if (remote_candidate.username().empty()) {
-    new_remote_candidate.set_username(remote_ice_ufrag_);
+    new_remote_candidate.set_username("useruseruseruser"/*remote_ice_ufrag_*/);
   }
   if (remote_candidate.password().empty()) {
-    new_remote_candidate.set_password(remote_ice_pwd_);
+    new_remote_candidate.set_password("passwordpasswordpassword"/*remote_ice_pwd_*/);
   }
 
   // Add a new connection for this candidate to every port that allows such a
