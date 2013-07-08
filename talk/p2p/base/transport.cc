@@ -144,7 +144,8 @@ Transport::Transport(talk_base::Thread* signaling_thread,
     tiebreaker_(0),
     protocol_(ICEPROTO_RFC5245),
     remote_ice_mode_(ICEMODE_FULL) {
-    local_description2_.reset(local_description->GetTransportDescriptionByName("audio"));
+    TransportDescription *desc = new TransportDescription(*(local_description->GetTransportDescriptionByName("audio")));
+    local_description2_.reset(desc);
 }
 
 Transport::~Transport() {
@@ -311,8 +312,10 @@ void Transport::ConnectChannels_w() {
                               "bogusufrag",
                               "bogusuname",
                               ICEMODE_FULL, NULL, Candidates());*/
-    //IMPORTANT>>>>
     
+    //IMPORTANT>>>>
+    //TransportDescription desc(*local_description2());
+    //SetLocalTransportDescription_w(desc, CA_OFFER);
     SetLocalTransportDescription_w(*local_description2(), CA_OFFER);
   }
 
