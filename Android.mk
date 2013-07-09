@@ -225,9 +225,9 @@ LOCAL_SRC_FILES := \
 LOCAL_C_INCLUDES := \
 	$(MY_THIRD_PARTY_PATH)/openssl/openssl/include \
 	$(MY_THIRD_PARTY_PATH)/openssl/config/android \
-	$(MY_THIRD_PARTY_PATH)/libsrtp/source/config \
-	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp/include \
-	$(MY_THIRD_PARTY_PATH)/libsrtp/source/srtp/crypto/include \
+	$(MY_THIRD_PARTY_PATH)/libsrtp/config \
+	$(MY_THIRD_PARTY_PATH)/libsrtp/srtp/include \
+	$(MY_THIRD_PARTY_PATH)/libsrtp/srtp/crypto/include \
 	$(MY_THIRD_PARTY_PATH) \
 	$(MY_THIRD_PARTY_PATH)/webrtc \
 	$(MY_THIRD_PARTY_PATH)/webrtc/modules/interface \
@@ -269,6 +269,7 @@ LOCAL_CFLAGS += \
 	-DHAVE_UINT8_T \
 	-DHAVE_UINT_T \
 	-DUSE_WEBRTC_313_BRANCH \
+	-DINLINE=inline \
 	-DDISABLE_YUV
 
 include $(BUILD_STATIC_LIBRARY)

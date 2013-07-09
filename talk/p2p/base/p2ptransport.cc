@@ -101,8 +101,8 @@ bool P2PTransportParser::ParseTransportDescription(
     return BadParse("Unsupported transport type", error);
 
   if (desc->transport_type == NS_JINGLE_ICE_UDP && elem->HasAttr(QN_ICE_PWD)){
-    desc->ice_pwd = elem->Attr(QN_ICE_PWD).data();
-    desc->ice_ufrag = elem->Attr(QN_ICE_USER_FRAG).data();
+    desc->ice_pwd = elem->Attr(QN_ICE_PWD);
+    desc->ice_ufrag = elem->Attr(QN_ICE_USER_FRAG);
   }
 
   for (const buzz::XmlElement* transport_elem = elem->FirstElement();
