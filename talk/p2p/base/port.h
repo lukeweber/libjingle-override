@@ -427,6 +427,17 @@ class Connection : public talk_base::MessageHandler,
     STATE_READABLE     = 1,  // we have received pings recently
     STATE_READ_TIMEOUT = 2,  // we haven't received pings in a while
   };
+  
+  struct ReadStateMap : std::map<unsigned int, const char *>
+  {
+    ReadStateMap()
+    {
+      this->operator[]( STATE_READ_INIT ) = "STATE_READ_INIT";
+      this->operator[]( STATE_READABLE ) = "STATE_READABLE";
+      this->operator[]( STATE_READ_TIMEOUT ) = "STATE_READ_TIMEOUT";
+    };
+    ~ReadStateMap(){};
+  };
 
   ReadState read_state() const { return read_state_; }
   bool readable() const { return read_state_ == STATE_READABLE; }
@@ -436,6 +447,18 @@ class Connection : public talk_base::MessageHandler,
     STATE_WRITE_UNRELIABLE  = 1,  // we have had a few ping failures
     STATE_WRITE_INIT        = 2,  // we have yet to receive a ping response
     STATE_WRITE_TIMEOUT     = 3,  // we have had a large number of ping failures
+  };
+  
+  struct WriteStateMap : std::map<unsigned int, const char *>
+  {
+    WriteStateMap()
+    {
+      this->operator[]( STATE_WRITABLE ) = "STATE_WRITABLE";
+      this->operator[]( STATE_WRITE_UNRELIABLE ) = "STATE_WRITE_UNRELIABLE";
+      this->operator[]( STATE_WRITE_INIT ) = "STATE_WRITE_INIT";
+      this->operator[]( STATE_WRITE_TIMEOUT ) = "STATE_WRITE_TIMEOUT";
+    };
+    ~WriteStateMap(){};
   };
 
   WriteState write_state() const { return write_state_; }
