@@ -885,7 +885,8 @@ void Connection::set_read_state(ReadState value) {
   ReadState old_value = read_state_;
   read_state_ = value;
   if (value != old_value) {
-    LOG_J(LS_VERBOSE, this) << "set_read_state";
+    ReadStateMap stateMap;
+    LOG_J(LS_VERBOSE, this) << "set_read_state " <<  stateMap[old_value] << " => " << stateMap[value];;
     SignalStateChange(this);
     CheckTimeout();
     LOG(INFO) << ToString();
@@ -896,7 +897,8 @@ void Connection::set_write_state(WriteState value) {
   WriteState old_value = write_state_;
   write_state_ = value;
   if (value != old_value) {
-    LOG_J(LS_VERBOSE, this) << "set_write_state";
+    WriteStateMap stateMap;
+    LOG_J(LS_VERBOSE, this) << "set_write_state " <<  stateMap[old_value] << " => " << stateMap[value];;
     SignalStateChange(this);
     CheckTimeout();
     LOG(INFO) << ToString();
