@@ -429,12 +429,14 @@ bool ParseJingleTransportInfo(const buzz::XmlElement* trans_elem,
                               trans_elem->Name().Namespace(), content_name,
                               &trans_parser, &translator, error))
     return false;
-  //TransportDescription tdesc;
+  TransportDescription tdesc;
   if (!trans_parser->ParseTransportDescription(trans_elem, translator,
-                                               &tinfo->description, error))
+                                               &tdesc, error))
     return false;
 
-  *tinfo = TransportInfo(content_name, tinfo->description);
+  tinfo->description = tdesc;
+  tinfo->content_name = content_name;
+
   return true;
 }
 
